@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 4.3.2)
+project(litedb VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(internal/src/memory)
+
+enable_testing()
+add_subdirectory(tests)
