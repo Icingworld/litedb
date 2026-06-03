@@ -6,7 +6,7 @@ namespace litedb::core::parser
 Token::Token(TokenType type, std::string_view value, std::size_t line, std::size_t column)
     : type_(type)
     , value_(value)
-    , location_{line, column}
+    , location_({line, column})
 {
 }
 
