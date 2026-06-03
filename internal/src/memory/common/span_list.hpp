@@ -27,7 +27,7 @@ public:
      * @brief 获取上一个页段节点
      * @return 上一个页段节点，如果不存在则返回nullptr
      */
-    [[nodiscard("SpanNode::prev()未使用")]]
+    [[nodiscard]]
     SpanNode * prev() const noexcept;
 
     /**
@@ -40,7 +40,7 @@ public:
      * @brief 获取下一个页段节点
      * @return 下一个页段节点，如果不存在则返回nullptr
      */
-    [[nodiscard("SpanNode::next()未使用")]]
+    [[nodiscard]]
     SpanNode * next() const noexcept;
 
     /**
@@ -53,21 +53,21 @@ public:
      * @brief 获取页段内的空闲内存块链表
      * @return 空闲内存块链表
      */
-    [[nodiscard("SpanNode::free_list()未使用")]]
+    [[nodiscard]]
     FreeList & free_list() noexcept;
 
     /**
      * @brief 获取页段内的空闲内存块链表
      * @return 空闲内存块链表
      */
-    [[nodiscard("SpanNode::free_list()未使用")]]
+    [[nodiscard]]
     const FreeList & free_list() const noexcept;
 
     /**
      * @brief 获取页段逻辑编号
      * @return 页段逻辑编号
      */
-    [[nodiscard("SpanNode::page_id()未使用")]]
+    [[nodiscard]]
     std::size_t page_id() const noexcept;
 
     /**
@@ -80,7 +80,7 @@ public:
      * @brief 获取页段包含的页数
      * @return 页段包含的页数
      */
-    [[nodiscard("SpanNode::page_count()未使用")]]
+    [[nodiscard]]
     std::size_t page_count() const noexcept;
 
     /**
@@ -93,7 +93,7 @@ public:
      * @brief 获取已使用的内存块数量
      * @return 已使用的内存块数量
      */
-    [[nodiscard("SpanNode::used()未使用")]]
+    [[nodiscard]]
     std::size_t used() const noexcept;
 
     /**
@@ -112,17 +112,17 @@ public:
      * @param pointer 内存地址
      * @return 页段逻辑编号
      */
-    [[nodiscard("SpanNode::ptr_to_id()未使用")]]
+    [[nodiscard]]
     static std::size_t ptr_to_id(void * pointer) noexcept;
 
 private:
-    SpanNode * prev_;         // 上一个节点
-    SpanNode * next_;         // 下一个节点
+    SpanNode * prev_;  ///< 上一个节点
+    SpanNode * next_;  ///< 下一个节点
 
-    FreeList free_list_;      // 空闲内存块链表
-    std::size_t page_id_;     // 页段逻辑编号
-    std::size_t page_count_;  // 页段包含的页数
-    std::size_t used_;        // 已使用的内存块数量
+    FreeList free_list_;  ///< 空闲内存块链表
+    std::size_t page_id_;  ///< 页段逻辑编号
+    std::size_t page_count_;  ///< 页段包含的页数
+    std::size_t used_;  ///< 已使用的内存块数量
 };
 
 /**
@@ -150,14 +150,14 @@ public:
      * @brief 解引用迭代器
      * @return 当前页段节点
      */
-    [[nodiscard("SpanListIterator::operator*()未使用")]]
+    [[nodiscard]]
     reference operator*() const noexcept;
 
     /**
      * @brief 访问当前页段节点的成员
      * @return 当前页段节点
      */
-    [[nodiscard("SpanListIterator::operator->()未使用")]]
+    [[nodiscard]]
     pointer operator->() const noexcept;
 
     /**
@@ -177,7 +177,7 @@ public:
      * @param other 另一个迭代器
      * @return 如果两个迭代器指向同一个页段节点，则返回true；否则返回false
      */
-    [[nodiscard("SpanListIterator::operator==()未使用")]]
+    [[nodiscard]]
     bool operator==(const SpanListIterator & other) const noexcept;
 
     /**
@@ -185,11 +185,11 @@ public:
      * @param other 另一个迭代器
      * @return 如果两个迭代器指向不同的页段节点，则返回true；否则返回false
      */
-    [[nodiscard("SpanListIterator::operator!=()未使用")]]
+    [[nodiscard]]
     bool operator!=(const SpanListIterator & other) const noexcept;
 
 private:
-    SpanNode * current_;  // 当前页段节点
+    SpanNode * current_;  ///< 当前页段节点
 };
 
 /**
@@ -223,7 +223,7 @@ public:
      * @return 链表头部的页段节点
      * @warning 不验证链表是否为空，调用者需自行管理
      */
-    [[nodiscard("SpanList::front()未使用")]]
+    [[nodiscard]]
     SpanNode & front() noexcept;
 
     /**
@@ -231,7 +231,7 @@ public:
      * @return 链表尾部的页段节点
      * @warning 不验证链表是否为空，调用者需自行管理
      */
-    [[nodiscard("SpanList::back()未使用")]]
+    [[nodiscard]]
     SpanNode & back() noexcept;
 
     /**
@@ -269,28 +269,28 @@ public:
      * @brief 获取链表起始的迭代器
      * @return 链表起始的迭代器，如果链表为空，则返回end()迭代器
      */
-    [[nodiscard("SpanList::begin()未使用")]]
+    [[nodiscard]]
     iterator begin() noexcept;
 
     /**
      * @brief 获取链表末尾的迭代器
      * @return 链表末尾的迭代器
      */
-    [[nodiscard("SpanList::end()未使用")]]
+    [[nodiscard]]
     iterator end() noexcept;
 
     /**
      * @brief 检查链表是否为空
      * @return 如果链表为空，则返回true；否则返回false
      */
-    [[nodiscard("SpanList::empty()未使用")]]
+    [[nodiscard]]
     bool empty() const noexcept;
 
     /**
      * @brief 获取页段节点数量
      * @return 页段节点数量
      */
-    [[nodiscard("SpanList::size()未使用")]]
+    [[nodiscard]]
     std::size_t size() const noexcept;
 
     /**
@@ -299,8 +299,8 @@ public:
     void clear() noexcept;
 
 private:
-    SpanNode head_;      // 虚拟头节点
-    std::size_t size_;   // 页段节点数量
+    SpanNode head_;     ///< 虚拟头节点
+    std::size_t size_;  ///< 页段节点数量
 };
 
 } // namespace litedb::memory

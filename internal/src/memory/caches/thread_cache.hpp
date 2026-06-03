@@ -35,7 +35,7 @@ public:
      * @param size 要分配的内存大小
      * @return 分配的内存地址，如果分配失败，则返回nullptr
      */
-    [[nodiscard("ThreadCache::allocate()未使用")]]
+    [[nodiscard]]
     void * allocate(std::size_t size) noexcept;
 
     /**
@@ -46,7 +46,7 @@ public:
     void deallocate(void * ptr, std::size_t size) noexcept;
 
 private:
-    std::array<FreeList, MAX_ARRAY_SIZE> free_lists_;  // 自由内存列表
+    std::array<FreeList, MAX_ARRAY_SIZE> free_lists_;  ///< 自由内存列表
 };
 
 } // namespace litedb::memory

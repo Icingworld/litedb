@@ -13,12 +13,12 @@ namespace litedb::memory
 class MemoryPool
 {
 public:
-    [[nodiscard("MemoryPool::allocate()未使用")]]
     /**
      * @brief 从内存池中分配内存
      * @param bytes 要分配的内存大小
      * @param alignment 对齐值
      */
+    [[nodiscard]]
     static void * allocate(std::size_t bytes, std::size_t alignment = alignof(std::max_align_t));
 
     /**
@@ -39,7 +39,7 @@ public:
      * @param alignment 对齐值
      * @return 是否适合
      */
-    [[nodiscard("MemoryPool::is_pool_eligible()未使用")]]
+    [[nodiscard]]
     static bool is_pool_eligible(std::size_t bytes, std::size_t alignment) noexcept;
 };
 
