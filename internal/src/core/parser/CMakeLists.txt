@@ -1,6 +1,7 @@
 set(PARSER_SOURCES
     token.cpp
     lexer.cpp
+    parser.cpp
     ast/ast_node.cpp
     ast/expression/expression_node.cpp
     ast/expression/identifier_expression.cpp
