@@ -3,7 +3,7 @@
 namespace litedb::core::parser::ast
 {
 
-ShowStatement::ShowStatement(TokenType object_type, AstNodeLocation location) noexcept
+ShowStatement::ShowStatement(SchemaObjectType object_type, AstNodeLocation location) noexcept
     : StatementNode(location)
     , object_type_(object_type)
 {
@@ -14,7 +14,7 @@ AstNodeKind ShowStatement::kind() const noexcept
     return AstNodeKind::Show;
 }
 
-TokenType ShowStatement::object_type() const noexcept
+SchemaObjectType ShowStatement::object_type() const noexcept
 {
     return object_type_;
 }

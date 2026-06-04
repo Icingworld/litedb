@@ -17,7 +17,8 @@ set(PARSER_SOURCES
     ast/statement/statement_node.cpp
     ast/statement/select_statement.cpp
     ast/statement/insert_statement.cpp
-    ast/statement/create_statement.cpp
+    ast/statement/create_database_statement.cpp
+    ast/statement/create_collection_statement.cpp
     ast/statement/drop_statement.cpp
     ast/statement/use_statement.cpp
     ast/statement/delete_statement.cpp

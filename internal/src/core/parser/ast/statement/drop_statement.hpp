@@ -2,8 +2,8 @@
 
 #include <string>
 
+#include "core/parser/ast/schema.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
-#include "core/parser/token.hpp"
 
 namespace litedb::core::parser::ast
 {
@@ -11,13 +11,13 @@ namespace litedb::core::parser::ast
 class DropStatement final : public StatementNode
 {
 public:
-    DropStatement(TokenType object_type, std::string name, bool if_exists, AstNodeLocation location) noexcept;
+    DropStatement(SchemaObjectType object_type, std::string name, bool if_exists, AstNodeLocation location) noexcept;
 
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
     [[nodiscard]]
-    TokenType object_type() const noexcept;
+    SchemaObjectType object_type() const noexcept;
 
     [[nodiscard]]
     const std::string & name() const noexcept;
@@ -26,7 +26,7 @@ public:
     bool if_exists() const noexcept;
 
 private:
-    TokenType object_type_;
+    SchemaObjectType object_type_;
     std::string name_;
     bool if_exists_;
 };

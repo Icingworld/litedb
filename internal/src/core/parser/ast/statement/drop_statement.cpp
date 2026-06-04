@@ -5,7 +5,12 @@
 namespace litedb::core::parser::ast
 {
 
-DropStatement::DropStatement(TokenType object_type, std::string name, bool if_exists, AstNodeLocation location) noexcept
+DropStatement::DropStatement(
+    SchemaObjectType object_type,
+    std::string name,
+    bool if_exists,
+    AstNodeLocation location
+) noexcept
     : StatementNode(location)
     , object_type_(object_type)
     , name_(std::move(name))
@@ -18,7 +23,7 @@ AstNodeKind DropStatement::kind() const noexcept
     return AstNodeKind::Drop;
 }
 
-TokenType DropStatement::object_type() const noexcept
+SchemaObjectType DropStatement::object_type() const noexcept
 {
     return object_type_;
 }

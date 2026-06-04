@@ -76,6 +76,14 @@ enum class TokenType : std::uint8_t
     True,               ///< TRUE
     False,              ///< FALSE
 
+    Integer,            ///< INTEGER
+    BigInt,             ///< BIGINT
+    Float,              ///< FLOAT
+    Double,             ///< DOUBLE
+    Varchar,            ///< VARCHAR
+    Boolean,            ///< BOOLEAN
+    Vector,             ///< VECTOR
+
     Identifier,         ///< 标识符
     StringLiteral,      ///< 字符串字面量
     IntegerLiteral,     ///< 整数字面量

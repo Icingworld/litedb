@@ -72,6 +72,13 @@ constexpr auto KEYWORDS = std::to_array<std::pair<std::string_view, TokenType>>(
     {"NULL", TokenType::Null},
     {"TRUE", TokenType::True},
     {"FALSE", TokenType::False},
+    {"INTEGER", TokenType::Integer},
+    {"BIGINT", TokenType::BigInt},
+    {"FLOAT", TokenType::Float},
+    {"DOUBLE", TokenType::Double},
+    {"VARCHAR", TokenType::Varchar},
+    {"BOOLEAN", TokenType::Boolean},
+    {"VECTOR", TokenType::Vector},
 });
 
 /**

@@ -5,7 +5,11 @@
 namespace litedb::core::parser::ast
 {
 
-AlterStatement::AlterStatement(TokenType object_type, std::string name, AstNodeLocation location) noexcept
+AlterStatement::AlterStatement(
+    SchemaObjectType object_type,
+    std::string name,
+    AstNodeLocation location
+) noexcept
     : StatementNode(location)
     , object_type_(object_type)
     , name_(std::move(name))
@@ -17,7 +21,7 @@ AstNodeKind AlterStatement::kind() const noexcept
     return AstNodeKind::Alter;
 }
 
-TokenType AlterStatement::object_type() const noexcept
+SchemaObjectType AlterStatement::object_type() const noexcept
 {
     return object_type_;
 }

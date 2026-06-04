@@ -59,6 +59,25 @@ void test_literals_and_punctuation()
     require_token(lexer.next(), TokenType::Semicolon, ";", 1, 40);
 }
 
+void test_data_type_keywords()
+{
+    Lexer lexer("INTEGER BIGINT FLOAT DOUBLE VARCHAR(64) BOOLEAN VECTOR(128)");
+
+    require_token(lexer.next(), TokenType::Integer, "INTEGER", 1, 1);
+    require_token(lexer.next(), TokenType::BigInt, "BIGINT", 1, 9);
+    require_token(lexer.next(), TokenType::Float, "FLOAT", 1, 16);
+    require_token(lexer.next(), TokenType::Double, "DOUBLE", 1, 22);
+    require_token(lexer.next(), TokenType::Varchar, "VARCHAR", 1, 29);
+    require_token(lexer.next(), TokenType::LeftParen, "(", 1, 36);
+    require_token(lexer.next(), TokenType::IntegerLiteral, "64", 1, 37);
+    require_token(lexer.next(), TokenType::RightParen, ")", 1, 39);
+    require_token(lexer.next(), TokenType::Boolean, "BOOLEAN", 1, 41);
+    require_token(lexer.next(), TokenType::Vector, "VECTOR", 1, 49);
+    require_token(lexer.next(), TokenType::LeftParen, "(", 1, 55);
+    require_token(lexer.next(), TokenType::IntegerLiteral, "128", 1, 56);
+    require_token(lexer.next(), TokenType::RightParen, ")", 1, 59);
+}
+
 void test_operators_and_locations()
 {
     Lexer lexer("a != b\nc <= 10 <> d >= 2");
@@ -90,6 +109,7 @@ int main()
     try {
         test_keywords_identifiers_and_peek();
         test_literals_and_punctuation();
+        test_data_type_keywords();
         test_operators_and_locations();
         test_errors();
     } catch (const std::exception & exception) {

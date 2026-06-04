@@ -21,7 +21,8 @@ struct AstNodeLocation
 enum class AstNodeKind : std::uint8_t
 {
     Alter,                  ///< ALTER
-    Create,                 ///< CREATE
+    CreateDatabase,         ///< CREATE DATABASE
+    CreateCollection,       ///< CREATE COLLECTION
     Delete,                 ///< DELETE
     Describe,               ///< DESCRIBE
     Drop,                   ///< DROP
