@@ -1,6 +1,5 @@
 #include "core/catalog/catalog_entry.hpp"
 
-#include <algorithm>
 #include <cctype>
 #include <utility>
 

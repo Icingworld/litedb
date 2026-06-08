@@ -6,19 +6,33 @@
 namespace litedb::core::parser::ast
 {
 
+/**
+ * @brief SHOW 语句节点
+ * @details 示例：SHOW <object_type>
+ * @note object_type 可以是 DATABASE 或 COLLECTION
+ */
 class ShowStatement final : public StatementNode
 {
 public:
     ShowStatement(SchemaObjectType object_type, AstNodeLocation location) noexcept;
 
+public:
+    /**
+     * @brief 获取节点类型
+     * @return 节点类型
+     */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
+    /**
+     * @brief 获取对象类型
+     * @return 对象类型
+     */
     [[nodiscard]]
     SchemaObjectType object_type() const noexcept;
 
 private:
-    SchemaObjectType object_type_;
+    SchemaObjectType object_type_;      ///< 对象类型
 };
 
 } // namespace litedb::core::parser::ast

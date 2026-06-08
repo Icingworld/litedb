@@ -1,6 +1,5 @@
 #include "core/catalog/in_memory_catalog.hpp"
 
-#include <algorithm>
 #include <unordered_set>
 #include <utility>
 
@@ -10,11 +9,22 @@ namespace litedb::core::catalog
 namespace
 {
 
+/**
+ * @brief 创建错误
+ * @param code 错误码
+ * @param message 错误消息
+ * @return 错误
+ */
 CatalogError make_error(CatalogErrorCode code, std::string message)
 {
     return CatalogError {code, std::move(message)};
 }
 
+/**
+ * @brief 判断字符串是否为空
+ * @param value 字符串
+ * @return 是否为空
+ */
 bool blank(std::string_view value)
 {
     return value.empty();

@@ -6,6 +6,9 @@
 namespace litedb::core::catalog
 {
 
+/**
+ * @brief 目录
+ */
 class Catalog : public CatalogReader, public CatalogWriter
 {
 public:
