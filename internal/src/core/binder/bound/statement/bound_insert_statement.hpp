@@ -62,6 +62,9 @@ public:
     [[nodiscard]]
     const std::vector<std::unique_ptr<BoundExpression>> & values() const noexcept;
 
+    [[nodiscard]]
+    std::vector<std::unique_ptr<BoundExpression>> take_values() noexcept;
+
 private:
     common::DatabaseId database_id_;                            ///< 数据库ID
     common::CollectionId collection_id_;                        ///< 集合ID

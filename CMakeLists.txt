@@ -10,6 +10,7 @@ add_subdirectory(internal/src/memory)
 add_subdirectory(internal/src/core/parser)
 add_subdirectory(internal/src/core/catalog)
 add_subdirectory(internal/src/core/binder)
+add_subdirectory(internal/src/core/planner/logical)
 
 enable_testing()
 add_subdirectory(tests)

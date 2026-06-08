@@ -27,5 +27,6 @@ common::CollectionId BoundInsertStatement::collection_id() const noexcept { retu
 const std::string & BoundInsertStatement::collection_name() const noexcept { return collection_name_; }
 const std::vector<BoundColumn> & BoundInsertStatement::columns() const noexcept { return columns_; }
 const std::vector<std::unique_ptr<BoundExpression>> & BoundInsertStatement::values() const noexcept { return values_; }
+std::vector<std::unique_ptr<BoundExpression>> BoundInsertStatement::take_values() noexcept { return std::move(values_); }
 
 } // namespace litedb::core::binder::bound

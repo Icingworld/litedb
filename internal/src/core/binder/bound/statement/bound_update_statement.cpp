@@ -27,5 +27,7 @@ common::CollectionId BoundUpdateStatement::collection_id() const noexcept { retu
 const std::string & BoundUpdateStatement::collection_name() const noexcept { return collection_name_; }
 const std::vector<BoundAssignment> & BoundUpdateStatement::assignments() const noexcept { return assignments_; }
 const BoundExpression * BoundUpdateStatement::where() const noexcept { return where_.get(); }
+std::vector<BoundAssignment> BoundUpdateStatement::take_assignments() noexcept { return std::move(assignments_); }
+std::unique_ptr<BoundExpression> BoundUpdateStatement::take_where() noexcept { return std::move(where_); }
 
 } // namespace litedb::core::binder::bound

@@ -24,5 +24,6 @@ common::DatabaseId BoundDeleteStatement::database_id() const noexcept { return d
 common::CollectionId BoundDeleteStatement::collection_id() const noexcept { return collection_id_; }
 const std::string & BoundDeleteStatement::collection_name() const noexcept { return collection_name_; }
 const BoundExpression * BoundDeleteStatement::where() const noexcept { return where_.get(); }
+std::unique_ptr<BoundExpression> BoundDeleteStatement::take_where() noexcept { return std::move(where_); }
 
 } // namespace litedb::core::binder::bound

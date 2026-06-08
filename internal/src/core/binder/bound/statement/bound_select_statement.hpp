@@ -97,6 +97,15 @@ public:
     [[nodiscard]]
     std::optional<std::size_t> offset() const noexcept;
 
+    [[nodiscard]]
+    std::vector<std::unique_ptr<BoundExpression>> take_projections() noexcept;
+
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_where() noexcept;
+
+    [[nodiscard]]
+    std::vector<BoundOrderByItem> take_order_by() noexcept;
+
 private:
     common::DatabaseId database_id_;                                ///< 数据库ID
     common::CollectionId collection_id_;                            ///< 集合ID

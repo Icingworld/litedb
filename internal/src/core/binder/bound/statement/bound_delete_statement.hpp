@@ -53,6 +53,9 @@ public:
     [[nodiscard]]
     const BoundExpression * where() const noexcept;
 
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_where() noexcept;
+
 private:
     common::DatabaseId database_id_;                ///< 数据库ID
     common::CollectionId collection_id_;            ///< 集合ID

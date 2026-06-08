@@ -36,5 +36,11 @@ const BoundExpression * BoundSelectStatement::where() const noexcept { return wh
 const std::vector<BoundOrderByItem> & BoundSelectStatement::order_by() const noexcept { return order_by_; }
 std::optional<std::size_t> BoundSelectStatement::limit() const noexcept { return limit_; }
 std::optional<std::size_t> BoundSelectStatement::offset() const noexcept { return offset_; }
+std::vector<std::unique_ptr<BoundExpression>> BoundSelectStatement::take_projections() noexcept
+{
+    return std::move(projections_);
+}
+std::unique_ptr<BoundExpression> BoundSelectStatement::take_where() noexcept { return std::move(where_); }
+std::vector<BoundOrderByItem> BoundSelectStatement::take_order_by() noexcept { return std::move(order_by_); }
 
 } // namespace litedb::core::binder::bound
