@@ -1,13 +1,15 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+
+#include "core/common/ids.hpp"
+#include "core/common/logical_id.hpp"
+#include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定语句类型
- */
 enum class BoundStatementKind : std::uint8_t
 {
     Use,
@@ -22,38 +24,40 @@ enum class BoundStatementKind : std::uint8_t
     AlterDatabase,
     AlterCollection,
     ShowDatabases,
-    ShowCollections
+    ShowCollections,
+    DescribeCollection,
 };
 
-/**
- * @brief 绑定语句
- */
+struct BoundColumn
+{
+    common::ColumnId column_id {0};
+    std::string name;
+    common::LogicalType type;
+    bool nullable {true};
+};
+
 class BoundStatement
 {
 public:
     virtual ~BoundStatement() noexcept = default;
 
     BoundStatement(const BoundStatement &) = delete;
-
     BoundStatement & operator=(const BoundStatement &) = delete;
-
     BoundStatement(BoundStatement &&) noexcept = default;
-
     BoundStatement & operator=(BoundStatement &&) noexcept = default;
 
-protected:
-    explicit BoundStatement(BoundStatementKind kind) noexcept;
-
-public:
-    /**
-     * @brief 获取绑定语句类型
-     * @return 绑定语句类型
-     */
     [[nodiscard]]
     BoundStatementKind kind() const noexcept;
 
+    [[nodiscard]]
+    parser::ast::AstNodeLocation location() const noexcept;
+
+protected:
+    BoundStatement(BoundStatementKind kind, parser::ast::AstNodeLocation location) noexcept;
+
 private:
-    BoundStatementKind kind_;   ///< 绑定语句类型
+    BoundStatementKind kind_;
+    parser::ast::AstNodeLocation location_;
 };
 
 } // namespace litedb::core::binder::bound

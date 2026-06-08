@@ -36,19 +36,19 @@ CollectionId create_users_collection_ok(InMemoryCatalog & catalog, DatabaseId da
     CreateCollectionRequest request;
     request.database_id = database_id;
     request.name = "users";
-    request.columns.push_back(ColumnDefinitionRequest {
+    request.columns.push_back(ColumnDefinition {
         .name = "id",
         .type = type(LogicalTypeId::BigInt),
         .primary_key = true,
         .comment = "primary identifier",
     });
-    request.columns.push_back(ColumnDefinitionRequest {
+    request.columns.push_back(ColumnDefinition {
         .name = "name",
         .type = type(LogicalTypeId::Varchar, 64),
         .unique = true,
         .default_expression = CatalogDefaultExpression::literal(CatalogDefaultLiteralKind::String, "unknown"),
     });
-    request.columns.push_back(ColumnDefinitionRequest {
+    request.columns.push_back(ColumnDefinition {
         .name = "embedding",
         .type = type(LogicalTypeId::Vector, 3),
         .default_expression = CatalogDefaultExpression::vector({
@@ -135,7 +135,7 @@ void test_duplicate_collection_and_column_rules()
     auto duplicate_collection = catalog.create_collection(CreateCollectionRequest {
         .database_id = database_id,
         .name = "USERS",
-        .columns = {ColumnDefinitionRequest {.name = "id", .type = type(LogicalTypeId::BigInt)}},
+        .columns = {ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt)}},
     });
     require(!duplicate_collection.has_value(), "duplicate collection should fail");
     require(duplicate_collection.error().code == CatalogErrorCode::DuplicateCollection, "duplicate collection error mismatch");
@@ -144,7 +144,7 @@ void test_duplicate_collection_and_column_rules()
         .database_id = database_id,
         .name = "Users",
         .if_not_exists = true,
-        .columns = {ColumnDefinitionRequest {.name = "id", .type = type(LogicalTypeId::BigInt)}},
+        .columns = {ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt)}},
     });
     require(if_not_exists.has_value(), "IF NOT EXISTS collection should succeed");
     require(if_not_exists.value() == collection_id, "IF NOT EXISTS collection id mismatch");
@@ -153,8 +153,8 @@ void test_duplicate_collection_and_column_rules()
         .database_id = database_id,
         .name = "events",
         .columns = {
-            ColumnDefinitionRequest {.name = "id", .type = type(LogicalTypeId::BigInt)},
-            ColumnDefinitionRequest {.name = "ID", .type = type(LogicalTypeId::BigInt)},
+            ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt)},
+            ColumnDefinition {.name = "ID", .type = type(LogicalTypeId::BigInt)},
         },
     });
     require(!duplicate_column.has_value(), "duplicate column should fail");
@@ -164,8 +164,8 @@ void test_duplicate_collection_and_column_rules()
         .database_id = database_id,
         .name = "bad_keys",
         .columns = {
-            ColumnDefinitionRequest {.name = "id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
-            ColumnDefinitionRequest {.name = "other_id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
+            ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
+            ColumnDefinition {.name = "other_id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
         },
     });
     require(!multiple_primary_keys.has_value(), "multiple primary keys should fail");

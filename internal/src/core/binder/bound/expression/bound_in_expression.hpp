@@ -1,0 +1,44 @@
+#pragma once
+
+#include <memory>
+#include <vector>
+
+#include "core/binder/bound/expression/bound_expression.hpp"
+
+namespace litedb::core::binder::bound
+{
+
+/**
+ * @brief IN 表达式节点
+ * @details 示例：expression IN (value1, value2, ...)
+ */
+class BoundInExpression final : public BoundExpression
+{
+public:
+    BoundInExpression(
+        std::unique_ptr<BoundExpression> expression,
+        std::vector<std::unique_ptr<BoundExpression>> values,
+        parser::ast::AstNodeLocation location
+    );
+
+public:
+    /**
+     * @brief 获取表达式
+     * @return 表达式
+     */
+    [[nodiscard]]
+    const BoundExpression & expression() const noexcept;
+
+    /**
+     * @brief 获取值列表
+     * @return 值列表
+     */
+    [[nodiscard]]
+    const std::vector<std::unique_ptr<BoundExpression>> & values() const noexcept;
+
+private:
+    std::unique_ptr<BoundExpression> expression_;               ///< 表达式
+    std::vector<std::unique_ptr<BoundExpression>> values_;      ///< 值列表
+};
+
+} // namespace litedb::core::binder::bound

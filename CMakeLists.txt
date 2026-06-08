@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(internal/src/memory)
 add_subdirectory(internal/src/core/parser)
 add_subdirectory(internal/src/core/catalog)
+add_subdirectory(internal/src/core/binder)
 
 enable_testing()
 add_subdirectory(tests)
