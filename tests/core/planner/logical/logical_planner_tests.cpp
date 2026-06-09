@@ -2,8 +2,26 @@
 #include "core/catalog/in_memory_catalog.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
+#include "core/planner/planner.hpp"
+#include "core/planner/logical/logical_filter.hpp"
+#include "core/planner/logical/logical_limit.hpp"
+#include "core/planner/logical/logical_order_by.hpp"
 #include "core/planner/logical/logical_plan_node.hpp"
 #include "core/planner/logical/logical_planner.hpp"
+#include "core/planner/logical/logical_projection.hpp"
+#include "core/planner/logical/logical_scan.hpp"
+#include "core/planner/statement/create_collection_plan.hpp"
+#include "core/planner/statement/create_database_plan.hpp"
+#include "core/planner/statement/delete_plan.hpp"
+#include "core/planner/statement/describe_collection_plan.hpp"
+#include "core/planner/statement/drop_collection_plan.hpp"
+#include "core/planner/statement/drop_database_plan.hpp"
+#include "core/planner/statement/insert_plan.hpp"
+#include "core/planner/statement/query_plan.hpp"
+#include "core/planner/statement/show_collections_plan.hpp"
+#include "core/planner/statement/statement_plan.hpp"
+#include "core/planner/statement/update_plan.hpp"
+#include "core/planner/statement/use_plan.hpp"
 
 #include <exception>
 #include <iostream>
@@ -20,6 +38,7 @@ using namespace litedb::core::binder::bound;
 using namespace litedb::core::catalog;
 using namespace litedb::core::common;
 using namespace litedb::core::parser;
+using namespace litedb::core::planner;
 using namespace litedb::core::planner::logical;
 
 void require(bool condition, const char * message)
@@ -104,14 +123,20 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<LogicalPlanNode> plan_ok(Fixture & fixture, std::string_view sql)
+std::unique_ptr<StatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
 {
-    LogicalPlanner planner;
+    Planner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
     }
     return std::move(result.value());
+}
+
+const LogicalPlanNode & query_root(const StatementPlan & plan)
+{
+    require(plan.kind() == StatementPlanKind::Query, "plan should be query");
+    return static_cast<const QueryPlan &>(plan).root();
 }
 
 void test_select_full_chain()
@@ -122,8 +147,9 @@ void test_select_full_chain()
         "SELECT * FROM users WHERE age >= 18 ORDER BY id DESC LIMIT 10 OFFSET 5;"
     );
 
-    require(plan->kind() == LogicalPlanNodeKind::Limit, "SELECT root should be limit");
-    const auto & limit = static_cast<const LogicalLimit &>(*plan);
+    const auto & root = query_root(*plan);
+    require(root.kind() == LogicalPlanNodeKind::Limit, "SELECT root should be limit");
+    const auto & limit = static_cast<const LogicalLimit &>(root);
     require(limit.limit().value() == 10, "SELECT limit mismatch");
     require(limit.offset().value() == 5, "SELECT offset mismatch");
 
@@ -152,8 +178,9 @@ void test_select_minimal_chain()
     Fixture fixture;
     auto plan = plan_ok(fixture, "SELECT id, name FROM users;");
 
-    require(plan->kind() == LogicalPlanNodeKind::Projection, "minimal SELECT root should be projection");
-    const auto & projection = static_cast<const LogicalProjection &>(*plan);
+    const auto & root = query_root(*plan);
+    require(root.kind() == LogicalPlanNodeKind::Projection, "minimal SELECT root should be projection");
+    const auto & projection = static_cast<const LogicalProjection &>(root);
     require(projection.projections().size() == 2, "minimal SELECT projection count mismatch");
     require(projection.child().kind() == LogicalPlanNodeKind::Scan, "minimal SELECT child should be scan");
 }
@@ -163,8 +190,8 @@ void test_insert_plan()
     Fixture fixture;
     auto plan = plan_ok(fixture, "INSERT INTO users (id, age, embedding) VALUES (1, 18, [0.1, 0.2, 0.3]);");
 
-    require(plan->kind() == LogicalPlanNodeKind::Insert, "INSERT kind mismatch");
-    const auto & insert = static_cast<const LogicalInsert &>(*plan);
+    require(plan->kind() == StatementPlanKind::Insert, "INSERT kind mismatch");
+    const auto & insert = static_cast<const InsertPlan &>(*plan);
     require(insert.database_id() == fixture.database_id, "INSERT database id mismatch");
     require(insert.collection_id() == fixture.users_id, "INSERT collection id mismatch");
     require(insert.columns().size() == 4, "INSERT columns count mismatch");
@@ -175,27 +202,27 @@ void test_update_delete_plans()
 {
     Fixture fixture;
     auto update = plan_ok(fixture, "UPDATE users SET age = age + 1 WHERE id = 1;");
-    require(update->kind() == LogicalPlanNodeKind::Update, "UPDATE kind mismatch");
-    const auto & update_node = static_cast<const LogicalUpdate &>(*update);
+    require(update->kind() == StatementPlanKind::Update, "UPDATE kind mismatch");
+    const auto & update_node = static_cast<const UpdatePlan &>(*update);
     require(update_node.assignments().size() == 1, "UPDATE assignment count mismatch");
-    require(update_node.child().kind() == LogicalPlanNodeKind::Filter, "UPDATE with WHERE should have filter child");
-    const auto & update_filter = static_cast<const LogicalFilter &>(update_node.child());
+    require(update_node.input().kind() == LogicalPlanNodeKind::Filter, "UPDATE with WHERE should have filter input");
+    const auto & update_filter = static_cast<const LogicalFilter &>(update_node.input());
     require(update_filter.child().kind() == LogicalPlanNodeKind::Scan, "UPDATE filter child should be scan");
 
     auto update_without_where = plan_ok(fixture, "UPDATE users SET age = 20;");
-    require(update_without_where->kind() == LogicalPlanNodeKind::Update, "UPDATE without WHERE kind mismatch");
-    const auto & update_without_where_node = static_cast<const LogicalUpdate &>(*update_without_where);
-    require(update_without_where_node.child().kind() == LogicalPlanNodeKind::Scan, "UPDATE without WHERE should scan directly");
+    require(update_without_where->kind() == StatementPlanKind::Update, "UPDATE without WHERE kind mismatch");
+    const auto & update_without_where_node = static_cast<const UpdatePlan &>(*update_without_where);
+    require(update_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "UPDATE without WHERE should scan directly");
 
     auto del = plan_ok(fixture, "DELETE FROM users WHERE id = 1;");
-    require(del->kind() == LogicalPlanNodeKind::Delete, "DELETE kind mismatch");
-    const auto & delete_node = static_cast<const LogicalDelete &>(*del);
-    require(delete_node.child().kind() == LogicalPlanNodeKind::Filter, "DELETE with WHERE should have filter child");
+    require(del->kind() == StatementPlanKind::Delete, "DELETE kind mismatch");
+    const auto & delete_node = static_cast<const DeletePlan &>(*del);
+    require(delete_node.input().kind() == LogicalPlanNodeKind::Filter, "DELETE with WHERE should have filter input");
 
     auto delete_without_where = plan_ok(fixture, "DELETE FROM users;");
-    require(delete_without_where->kind() == LogicalPlanNodeKind::Delete, "DELETE without WHERE kind mismatch");
-    const auto & delete_without_where_node = static_cast<const LogicalDelete &>(*delete_without_where);
-    require(delete_without_where_node.child().kind() == LogicalPlanNodeKind::Scan, "DELETE without WHERE should scan directly");
+    require(delete_without_where->kind() == StatementPlanKind::Delete, "DELETE without WHERE kind mismatch");
+    const auto & delete_without_where_node = static_cast<const DeletePlan &>(*delete_without_where);
+    require(delete_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "DELETE without WHERE should scan directly");
 }
 
 void test_admin_and_ddl_plans()
@@ -203,47 +230,47 @@ void test_admin_and_ddl_plans()
     Fixture fixture;
 
     auto use = plan_ok(fixture, "USE demo;");
-    require(use->kind() == LogicalPlanNodeKind::Use, "USE kind mismatch");
-    require(static_cast<const LogicalUse &>(*use).database_id() == fixture.database_id, "USE database id mismatch");
+    require(use->kind() == StatementPlanKind::Use, "USE kind mismatch");
+    require(static_cast<const UsePlan &>(*use).database_id() == fixture.database_id, "USE database id mismatch");
 
     auto create_database = plan_ok(fixture, "CREATE DATABASE demo2;");
-    require(create_database->kind() == LogicalPlanNodeKind::CreateDatabase, "CREATE DATABASE kind mismatch");
-    require(static_cast<const LogicalCreateDatabase &>(*create_database).database_name() == "demo2", "CREATE DATABASE name mismatch");
+    require(create_database->kind() == StatementPlanKind::CreateDatabase, "CREATE DATABASE kind mismatch");
+    require(static_cast<const CreateDatabasePlan &>(*create_database).database_name() == "demo2", "CREATE DATABASE name mismatch");
 
     auto create_collection = plan_ok(fixture, "CREATE COLLECTION posts (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
-    require(create_collection->kind() == LogicalPlanNodeKind::CreateCollection, "CREATE COLLECTION kind mismatch");
-    const auto & create_collection_node = static_cast<const LogicalCreateCollection &>(*create_collection);
+    require(create_collection->kind() == StatementPlanKind::CreateCollection, "CREATE COLLECTION kind mismatch");
+    const auto & create_collection_node = static_cast<const CreateCollectionPlan &>(*create_collection);
     require(create_collection_node.database_id() == fixture.database_id, "CREATE COLLECTION database id mismatch");
     require(create_collection_node.columns().size() == 2, "CREATE COLLECTION column count mismatch");
 
     auto drop_database = plan_ok(fixture, "DROP DATABASE IF EXISTS missing;");
-    require(drop_database->kind() == LogicalPlanNodeKind::DropDatabase, "DROP DATABASE kind mismatch");
-    const auto & drop_database_node = static_cast<const LogicalDropDatabase &>(*drop_database);
+    require(drop_database->kind() == StatementPlanKind::DropDatabase, "DROP DATABASE kind mismatch");
+    const auto & drop_database_node = static_cast<const DropDatabasePlan &>(*drop_database);
     require(drop_database_node.if_exists(), "DROP DATABASE if exists mismatch");
     require(drop_database_node.database_name() == "missing", "DROP DATABASE name mismatch");
 
     auto drop_collection = plan_ok(fixture, "DROP COLLECTION IF EXISTS missing;");
-    require(drop_collection->kind() == LogicalPlanNodeKind::DropCollection, "DROP COLLECTION kind mismatch");
-    const auto & drop_collection_node = static_cast<const LogicalDropCollection &>(*drop_collection);
+    require(drop_collection->kind() == StatementPlanKind::DropCollection, "DROP COLLECTION kind mismatch");
+    const auto & drop_collection_node = static_cast<const DropCollectionPlan &>(*drop_collection);
     require(drop_collection_node.database_id() == fixture.database_id, "DROP COLLECTION database id mismatch");
     require(drop_collection_node.if_exists(), "DROP COLLECTION if exists mismatch");
 
-    require(plan_ok(fixture, "SHOW DATABASES;")->kind() == LogicalPlanNodeKind::ShowDatabases, "SHOW DATABASES kind mismatch");
+    require(plan_ok(fixture, "SHOW DATABASES;")->kind() == StatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
 
     auto show_collections = plan_ok(fixture, "SHOW COLLECTIONS;");
-    require(show_collections->kind() == LogicalPlanNodeKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
-    require(static_cast<const LogicalShowCollections &>(*show_collections).database_id() == fixture.database_id, "SHOW COLLECTIONS database id mismatch");
+    require(show_collections->kind() == StatementPlanKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
+    require(static_cast<const ShowCollectionsPlan &>(*show_collections).database_id() == fixture.database_id, "SHOW COLLECTIONS database id mismatch");
 
     auto describe = plan_ok(fixture, "DESCRIBE users;");
-    require(describe->kind() == LogicalPlanNodeKind::DescribeCollection, "DESCRIBE kind mismatch");
-    const auto & describe_node = static_cast<const LogicalDescribeCollection &>(*describe);
+    require(describe->kind() == StatementPlanKind::DescribeCollection, "DESCRIBE kind mismatch");
+    const auto & describe_node = static_cast<const DescribeCollectionPlan &>(*describe);
     require(describe_node.database_id() == fixture.database_id, "DESCRIBE database id mismatch");
     require(describe_node.collection_id() == fixture.users_id, "DESCRIBE collection id mismatch");
 }
 
 void test_null_statement_error()
 {
-    LogicalPlanner planner;
+    Planner planner;
     auto result = planner.plan(nullptr);
     require(!result.has_value(), "null statement should fail");
     require(result.error().code == PlannerErrorCode::InvalidArgument, "null statement error code mismatch");
