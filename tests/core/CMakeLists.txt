@@ -1,4 +1,6 @@
 add_subdirectory(parser)
 add_subdirectory(catalog)
+add_subdirectory(schema)
+add_subdirectory(storage)
 add_subdirectory(binder)
 add_subdirectory(planner/logical)
