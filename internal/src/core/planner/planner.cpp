@@ -160,6 +160,8 @@ std::expected<std::unique_ptr<StatementPlan>, logical::PlannerError> Planner::pl
         );
     }
     case BoundStatementKind::AlterDatabase:
+        // 显式提示编译器，fallthrough 是明确的意图
+        [[fallthrough]];
     case BoundStatementKind::AlterCollection:
         return std::unexpected(error(
             logical::PlannerErrorCode::UnsupportedStatement,
