@@ -83,6 +83,38 @@ void test_insert_scan_and_delete()
     require(missing.error().code == StorageErrorCode::RecordNotFound, "missing record error mismatch");
 }
 
+void test_update()
+{
+    InMemoryCollectionStorage storage(users_schema());
+
+    auto inserted = storage.insert(record(1, "alice", 9.5));
+    require(inserted.has_value(), "insert before update failed");
+
+    auto updated = storage.update(inserted.value(), record(1, "alice-updated", 10.0));
+    require(updated.has_value(), "update existing record failed");
+
+    auto cursor = storage.scan();
+    auto scanned = cursor->next();
+    require(scanned.has_value(), "updated record missing");
+    require(scanned->record_id == inserted.value(), "update should keep record id stable");
+    require(std::get<std::string>(scanned->data.values[1].data()) == "alice-updated", "updated name mismatch");
+    require(std::get<double>(scanned->data.values[2].data()) == 10.0, "updated score mismatch");
+    require(!cursor->next().has_value(), "scan should contain one updated record");
+
+    auto invalid = storage.update(inserted.value(), RecordData {.values = {Value {std::int64_t {1}}}});
+    require(!invalid.has_value(), "invalid update should fail");
+    require(invalid.error().code == StorageErrorCode::ValueCountMismatch, "invalid update error mismatch");
+
+    cursor = storage.scan();
+    scanned = cursor->next();
+    require(scanned.has_value(), "record should remain after failed update");
+    require(std::get<std::string>(scanned->data.values[1].data()) == "alice-updated", "failed update should not modify record");
+
+    auto missing = storage.update(999, record(999, "missing", 0.0));
+    require(!missing.has_value(), "update missing record should fail");
+    require(missing.error().code == StorageErrorCode::RecordNotFound, "missing update error mismatch");
+}
+
 void test_insert_validation()
 {
     InMemoryCollectionStorage storage(users_schema());
@@ -150,6 +182,7 @@ int main()
 {
     try {
         test_insert_scan_and_delete();
+        test_update();
         test_insert_validation();
         test_storage_manager();
     } catch (const std::exception & exception) {

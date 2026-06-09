@@ -63,6 +63,25 @@ std::expected<common::RecordId, StorageError> InMemoryCollectionStorage::insert(
     return record_id;
 }
 
+std::expected<void, StorageError> InMemoryCollectionStorage::update(
+    common::RecordId record_id,
+    schema::RecordData record_data
+)
+{
+    auto it = records_.find(record_id);
+    if (it == records_.end()) {
+        return std::unexpected(make_error(StorageErrorCode::RecordNotFound, "Record not found"));
+    }
+
+    auto validation = validate_record(record_data);
+    if (!validation.has_value()) {
+        return std::unexpected(std::move(validation.error()));
+    }
+
+    it->second = std::move(record_data);
+    return {};
+}
+
 std::expected<void, StorageError> InMemoryCollectionStorage::erase(common::RecordId record_id)
 {
     const auto erased = records_.erase(record_id);

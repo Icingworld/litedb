@@ -28,6 +28,17 @@ public:
     virtual std::expected<common::RecordId, StorageError> insert(schema::RecordData record_data) = 0;
 
     /**
+     * @brief 更新记录
+     * @param record_id 记录 ID
+     * @param record_data 新记录数据
+     * @return 结果
+     */
+    virtual std::expected<void, StorageError> update(
+        common::RecordId record_id,
+        schema::RecordData record_data
+    ) = 0;
+
+    /**
      * @brief 删除记录
      * @param record_id 记录 ID
      * @return 结果
