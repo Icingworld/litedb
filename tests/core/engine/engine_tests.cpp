@@ -1,4 +1,5 @@
 #include "core/engine/engine.hpp"
+#include "core/engine/session.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -87,6 +88,25 @@ void test_engine_error_mapping()
     require(binder_error.code == EngineErrorCode::BinderError, "binder error code mismatch");
 }
 
+void test_sessions_share_instance_but_keep_context()
+{
+    DatabaseInstance instance;
+    Session first {instance};
+    Session second {instance};
+
+    auto create_database = first.execute_sql("CREATE DATABASE shared;");
+    require(create_database.has_value(), "CREATE DATABASE should succeed");
+
+    auto first_use = first.execute_sql("USE shared;");
+    require(first_use.has_value(), "first USE should succeed");
+    require(first.current_database_id().has_value(), "first session should select database");
+    require(!second.current_database_id().has_value(), "second session should not inherit selected database");
+
+    auto second_use = second.execute_sql("USE shared;");
+    require(second_use.has_value(), "second USE should see shared database");
+    require(second.current_database_id() == first.current_database_id(), "sessions should select same database id");
+}
+
 } // namespace
 
 int main()
@@ -94,6 +114,7 @@ int main()
     try {
         test_execute_sql_end_to_end();
         test_engine_error_mapping();
+        test_sessions_share_instance_but_keep_context();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

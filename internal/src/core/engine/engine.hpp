@@ -4,9 +4,11 @@
 #include <optional>
 #include <string_view>
 
-#include "core/binder/session_context.hpp"
 #include "core/catalog/in_memory_catalog.hpp"
+#include "core/common/ids.hpp"
+#include "core/engine/database_instance.hpp"
 #include "core/engine/engine_error.hpp"
+#include "core/engine/session.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -19,7 +21,7 @@ namespace litedb::core::engine
 class Engine
 {
 public:
-    Engine() = default;
+    Engine();
 
 public:
     /**
@@ -66,9 +68,8 @@ public:
     const storage::StorageManager & storage() const noexcept;
 
 private:
-    catalog::InMemoryCatalog catalog_;      ///< 内存目录
-    storage::StorageManager storage_;       ///< 存储管理器
-    binder::SessionContext session_;        ///< 会话上下文
+    DatabaseInstance instance_;              ///< 数据库实例
+    Session session_;                        ///< 会话
 };
 
 } // namespace litedb::core::engine
