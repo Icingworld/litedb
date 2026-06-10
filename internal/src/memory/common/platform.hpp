@@ -16,7 +16,7 @@ public:
      * @param bytes 要分配的内存大小
      * @return 分配的内存地址
      */
-    [[nodiscard("SystemAllocator::allocate()未使用")]]
+    [[nodiscard]]
     static void * allocate(std::size_t bytes) noexcept;
 
     /**

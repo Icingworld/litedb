@@ -16,7 +16,7 @@ public:
      * @param index 索引
      * @return 内存块大小
      */
-    [[nodiscard("Size::index_to_size()未使用")]]
+    [[nodiscard]]
     static std::size_t index_to_size(std::size_t index) noexcept;
 
     /**
@@ -24,7 +24,7 @@ public:
      * @param size 对齐后的内存块大小
      * @return 索引
      */
-    [[nodiscard("Size::size_to_index()未使用")]]
+    [[nodiscard]]
     static std::size_t size_to_index(std::size_t size) noexcept;
 
     /**
@@ -32,7 +32,7 @@ public:
      * @param size 内存块大小
      * @return 对齐后的内存块大小
     */
-    [[nodiscard("Size::round_up()未使用")]]
+    [[nodiscard]]
     static std::size_t round_up(std::size_t size) noexcept;
 };
 

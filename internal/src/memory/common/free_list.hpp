@@ -35,7 +35,7 @@ public:
      * @brief 获取下一个空闲内存块
      * @return 下一个空闲内存块
      */
-    [[nodiscard("FreeBlock::next()未使用")]] FreeBlock * next() const noexcept;
+    [[nodiscard]] FreeBlock * next() const noexcept;
 
     /**
      * @brief 设置下一个空闲内存块
@@ -44,7 +44,7 @@ public:
     void set_next(FreeBlock * next) noexcept;
 
 private:
-    FreeBlock * next_;  // 下一个空闲内存块
+    FreeBlock * next_;  ///< 下一个空闲内存块
 };
 
 /**
@@ -72,14 +72,14 @@ public:
      * @brief 解引用迭代器
      * @return 当前空闲内存块
      */
-    [[nodiscard("FreeListIterator::operator*()未使用")]]
+    [[nodiscard]]
     reference operator*() const noexcept;
 
     /**
      * @brief 访问当前空闲内存块的成员
      * @return 当前空闲内存块
      */
-    [[nodiscard("FreeListIterator::operator->()未使用")]]
+    [[nodiscard]]
     pointer operator->() const noexcept;
 
     /**
@@ -99,7 +99,7 @@ public:
      * @param other 另一个迭代器
      * @return 如果两个迭代器指向同一个空闲内存块，则返回true；否则返回false
      */
-    [[nodiscard("FreeListIterator::operator==()未使用")]]
+    [[nodiscard]]
     bool operator==(const FreeListIterator & other) const noexcept;
 
     /**
@@ -107,11 +107,11 @@ public:
      * @param other 另一个迭代器
      * @return 如果两个迭代器指向不同的空闲内存块，则返回true；否则返回false
      */
-    [[nodiscard("FreeListIterator::operator!=()未使用")]]
+    [[nodiscard]]
     bool operator!=(const FreeListIterator & other) const noexcept;
 
 private:
-    FreeBlock * current_;  // 当前空闲内存块
+    FreeBlock * current_;  ///< 当前空闲内存块
 };
 
 /**
@@ -144,7 +144,7 @@ public:
      * @brief 获取链表头部的空闲内存块
      * @return 链表头部的空闲内存块，如果链表为空，则返回nullptr
      */
-    [[nodiscard("FreeList::front()未使用")]]
+    [[nodiscard]]
     FreeBlock * front() noexcept;
 
     /**
@@ -164,35 +164,35 @@ public:
      * @brief 获取链表起始的迭代器
      * @return 链表起始的迭代器，如果链表为空，则返回end()迭代器
      */
-    [[nodiscard("FreeList::begin()未使用")]]
+    [[nodiscard]]
     iterator begin() noexcept;
 
     /**
      * @brief 获取链表末尾的迭代器
      * @return 链表末尾的迭代器
      */
-    [[nodiscard("FreeList::end()未使用")]]
+    [[nodiscard]]
     iterator end() noexcept;
 
     /**
      * @brief 检查链表是否为空
      * @return 如果链表为空，则返回true；否则返回false
      */
-    [[nodiscard("FreeList::empty()未使用")]]
+    [[nodiscard]]
     bool empty() const noexcept;
 
     /**
      * @brief 获取空闲内存块总容量
      * @return 空闲内存块总容量
      */
-    [[nodiscard("FreeList::capacity()未使用")]]
+    [[nodiscard]]
     std::size_t capacity() const noexcept;
 
     /**
      * @brief 获取空闲内存块数量
      * @return 空闲内存块数量
      */
-    [[nodiscard("FreeList::size()未使用")]] std::size_t size() const noexcept;
+    [[nodiscard]] std::size_t size() const noexcept;
 
     /**
      * @brief 清空链表
@@ -206,9 +206,9 @@ public:
     void set_capacity(std::size_t capacity) noexcept;
 
 private:
-    FreeBlock head_;        // 虚拟头节点
-    std::size_t size_;      // 空闲内存块数量
-    std::size_t capacity_;  // 空闲内存块总容量
+    FreeBlock head_;        ///< 虚拟头节点
+    std::size_t size_;      ///< 空闲内存块数量
+    std::size_t capacity_;  ///< 空闲内存块总容量
 };
 
 } // namespace litedb::memory

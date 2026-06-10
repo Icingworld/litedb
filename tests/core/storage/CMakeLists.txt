@@ -1,0 +1,7 @@
+add_executable(in_memory_collection_storage_tests
+    in_memory_collection_storage_tests.cpp
+)
+
+target_link_libraries(in_memory_collection_storage_tests PRIVATE litedb_storage)
+
+add_test(NAME in_memory_collection_storage_tests COMMAND in_memory_collection_storage_tests)
