@@ -15,6 +15,7 @@ add_subdirectory(internal/src/core/binder)
 add_subdirectory(internal/src/core/planner/logical)
 add_subdirectory(internal/src/core/evaluator)
 add_subdirectory(internal/src/core/executor)
+add_subdirectory(internal/src/core/engine)
 
 enable_testing()
 add_subdirectory(tests)
