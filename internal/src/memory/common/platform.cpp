@@ -1,8 +1,10 @@
 #include "memory/common/platform.hpp"
 
 #if defined(_WIN32)
+#    if !defined(NOMINMAX)
+#        define NOMINMAX 1
+#    endif
 #    include <windows.h>
-#    define NOMINMAX
 #else
 #    include <sys/mman.h>
 #endif
