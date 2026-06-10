@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "core/parser/lexer.hpp"
+#include "core/parser/ast/ast_node.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -19,6 +20,7 @@
 #include "core/parser/ast/expression/unary_expression.hpp"
 #include "core/parser/ast/expression/vector_expression.hpp"
 #include "core/parser/ast/expression/wildcard_expression.hpp"
+#include "core/parser/ast/schema.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
@@ -59,17 +61,141 @@ bool is_literal_token(TokenType type) noexcept
         || type == TokenType::Null;
 }
 
+/**
+ * @brief 解析器工作器
+ */
+class ParserWorker
+{
+public:
+    explicit ParserWorker(Lexer & lexer);
+
+public:
+    /**
+     * @brief 解析SQL语句
+     * @return 解析结果
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse();
+
+private:
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_use_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_describe_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_insert_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_update_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_delete_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_select_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_or_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_and_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_not_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_comparison_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_additive_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_multiplicative_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_unary_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_primary_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_column_reference_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_wildcard_or_column_reference();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_literal_expression();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_vector_expression();
+
+    [[nodiscard]]
+    std::expected<std::string, ParserError> parse_identifier_string(std::string_view message);
+
+    [[nodiscard]]
+    std::expected<std::size_t, ParserError> parse_integer_value(std::string_view message);
+
+    [[nodiscard]]
+    std::expected<ast::DataType, ParserError> parse_data_type();
+
+    [[nodiscard]]
+    std::expected<ast::ColumnDefinition, ParserError> parse_column_definition();
+
+    [[nodiscard]]
+    std::expected<ast::SchemaObjectType, ParserError> parse_schema_object_type(bool plural);
+
+    [[nodiscard]]
+    std::expected<bool, ParserError> parse_if_not_exists();
+
+    [[nodiscard]]
+    std::expected<bool, ParserError> parse_if_exists();
+
+    Token advance();
+
+    bool match(TokenType type);
+
+    bool check(TokenType type) const;
+
+    [[nodiscard]]
+    std::expected<Token, ParserError> consume(TokenType type, std::string_view message);
+
+    void skip_semicolon();
+
+    [[nodiscard]]
+    ast::AstNodeLocation ast_location(TokenLocation location) const noexcept;
+
+private:
+    Lexer & lexer_;                 ///< 词法分析器
+    Token current_token_;           ///< 当前词法单元
+};
+
 } // namespace
 
 Parser::Parser(std::string input)
     : lexer_(std::make_unique<Lexer>(std::move(input)))
-    , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
 {
 }
 
 Parser::Parser(std::unique_ptr<Lexer> lexer)
     : lexer_(std::move(lexer))
-    , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
 {
 }
 
@@ -77,7 +203,19 @@ Parser::~Parser() = default;
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse()
 {
-    current_token_ = lexer_->next();
+    ParserWorker worker {*lexer_};
+    return worker.parse();
+}
+
+ParserWorker::ParserWorker(Lexer & lexer)
+    : lexer_(lexer)
+    , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
+{
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse()
+{
+    current_token_ = lexer_.next();
 
     if (current_token_.type() == TokenType::EoF) [[unlikely]] {
         return std::unexpected(ParserError {current_token_.location(), "Empty statement"});
@@ -97,7 +235,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse()
     return std::move(statement.value());
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_statement()
 {
     switch (current_token_.type()) {
     case TokenType::Use:
@@ -124,7 +262,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_st
     }
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_use_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_use_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -140,7 +278,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_us
     );
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_create_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_create_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -209,7 +347,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_cr
     return std::unexpected(ParserError {current_token_.location(), "Expected DATABASE or COLLECTION after CREATE"});
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_drop_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_drop_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -236,7 +374,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_dr
     );
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_show_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_show_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -249,7 +387,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_sh
     return std::make_unique<ast::ShowStatement>(object_type.value(), ast_location(location));
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_describe_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_describe_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -270,7 +408,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_de
     );
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_insert_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_insert_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -347,7 +485,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_in
     );
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_update_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_update_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -406,7 +544,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_up
     );
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_delete_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_delete_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -437,7 +575,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_de
     );
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_select_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_select_statement()
 {
     const TokenLocation location = current_token_.location();
     (void) advance();
@@ -531,12 +669,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse_se
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_expression()
 {
     return parse_or_expression();
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_or_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_or_expression()
 {
     auto left = parse_and_expression();
     if (!left.has_value()) {
@@ -560,7 +698,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_o
     return std::move(left.value());
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_and_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_and_expression()
 {
     auto left = parse_not_expression();
     if (!left.has_value()) {
@@ -584,7 +722,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_a
     return std::move(left.value());
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_not_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_not_expression()
 {
     if (check(TokenType::Not)) {
         const Token op = advance();
@@ -602,7 +740,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_n
     return parse_comparison_expression();
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_comparison_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_comparison_expression()
 {
     auto left = parse_additive_expression();
     if (!left.has_value()) {
@@ -733,7 +871,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_c
     return std::move(left.value());
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_additive_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_additive_expression()
 {
     auto left = parse_multiplicative_expression();
     if (!left.has_value()) {
@@ -757,7 +895,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_a
     return std::move(left.value());
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_multiplicative_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_multiplicative_expression()
 {
     auto left = parse_unary_expression();
     if (!left.has_value()) {
@@ -781,7 +919,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_m
     return std::move(left.value());
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_unary_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_unary_expression()
 {
     if (check(TokenType::Plus) || check(TokenType::Minus)) {
         const Token op = advance();
@@ -799,7 +937,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_u
     return parse_primary_expression();
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_primary_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_primary_expression()
 {
     if (is_literal_token(current_token_.type())) {
         return parse_literal_expression();
@@ -826,7 +964,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_p
     return std::unexpected(ParserError {current_token_.location(), "Expected expression"});
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_column_reference_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_column_reference_expression()
 {
     auto first = consume(TokenType::Identifier, "Expected column name");
     if (!first.has_value()) {
@@ -851,7 +989,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_c
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_wildcard_or_column_reference()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_wildcard_or_column_reference()
 {
     if (check(TokenType::Star)) {
         const Token star = advance();
@@ -889,7 +1027,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_w
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_literal_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_literal_expression()
 {
     if (check(TokenType::LeftBracket)) {
         return parse_vector_expression();
@@ -907,7 +1045,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_l
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_vector_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_vector_expression()
 {
     const Token left_bracket = advance();
     if (check(TokenType::RightBracket)) {
@@ -938,7 +1076,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> Parser::parse_v
     );
 }
 
-std::expected<std::string, ParserError> Parser::parse_identifier_string(std::string_view message)
+std::expected<std::string, ParserError> ParserWorker::parse_identifier_string(std::string_view message)
 {
     auto token = consume(TokenType::Identifier, message);
     if (!token.has_value()) {
@@ -948,7 +1086,7 @@ std::expected<std::string, ParserError> Parser::parse_identifier_string(std::str
     return std::string(token->value());
 }
 
-std::expected<std::size_t, ParserError> Parser::parse_integer_value(std::string_view message)
+std::expected<std::size_t, ParserError> ParserWorker::parse_integer_value(std::string_view message)
 {
     auto token = consume(TokenType::IntegerLiteral, message);
     if (!token.has_value()) {
@@ -967,7 +1105,7 @@ std::expected<std::size_t, ParserError> Parser::parse_integer_value(std::string_
     return value;
 }
 
-std::expected<ast::DataType, ParserError> Parser::parse_data_type()
+std::expected<ast::DataType, ParserError> ParserWorker::parse_data_type()
 {
     if (match(TokenType::Integer)) {
         return ast::DataType {ast::DataTypeKind::Integer, std::nullopt};
@@ -1018,7 +1156,7 @@ std::expected<ast::DataType, ParserError> Parser::parse_data_type()
     return std::unexpected(ParserError {current_token_.location(), "Expected data type"});
 }
 
-std::expected<ast::ColumnDefinition, ParserError> Parser::parse_column_definition()
+std::expected<ast::ColumnDefinition, ParserError> ParserWorker::parse_column_definition()
 {
     auto name = parse_identifier_string("Expected column name");
     if (!name.has_value()) {
@@ -1063,7 +1201,7 @@ std::expected<ast::ColumnDefinition, ParserError> Parser::parse_column_definitio
     return column;
 }
 
-std::expected<ast::SchemaObjectType, ParserError> Parser::parse_schema_object_type(bool plural)
+std::expected<ast::SchemaObjectType, ParserError> ParserWorker::parse_schema_object_type(bool plural)
 {
     if (!plural && match(TokenType::Database)) {
         return ast::SchemaObjectType::Database;
@@ -1084,7 +1222,7 @@ std::expected<ast::SchemaObjectType, ParserError> Parser::parse_schema_object_ty
     });
 }
 
-std::expected<bool, ParserError> Parser::parse_if_not_exists()
+std::expected<bool, ParserError> ParserWorker::parse_if_not_exists()
 {
     if (!match(TokenType::If)) {
         return false;
@@ -1102,7 +1240,7 @@ std::expected<bool, ParserError> Parser::parse_if_not_exists()
     return true;
 }
 
-std::expected<bool, ParserError> Parser::parse_if_exists()
+std::expected<bool, ParserError> ParserWorker::parse_if_exists()
 {
     if (!match(TokenType::If)) {
         return false;
@@ -1116,14 +1254,14 @@ std::expected<bool, ParserError> Parser::parse_if_exists()
     return true;
 }
 
-Token Parser::advance()
+Token ParserWorker::advance()
 {
     const Token previous = current_token_;
-    current_token_ = lexer_->next();
+    current_token_ = lexer_.next();
     return previous;
 }
 
-bool Parser::match(TokenType type)
+bool ParserWorker::match(TokenType type)
 {
     if (!check(type)) {
         return false;
@@ -1133,12 +1271,12 @@ bool Parser::match(TokenType type)
     return true;
 }
 
-bool Parser::check(TokenType type) const
+bool ParserWorker::check(TokenType type) const
 {
     return current_token_.type() == type;
 }
 
-std::expected<Token, ParserError> Parser::consume(TokenType type, std::string_view message)
+std::expected<Token, ParserError> ParserWorker::consume(TokenType type, std::string_view message)
 {
     if (!check(type)) {
         return std::unexpected(ParserError {current_token_.location(), std::string(message)});
@@ -1147,14 +1285,14 @@ std::expected<Token, ParserError> Parser::consume(TokenType type, std::string_vi
     return advance();
 }
 
-void Parser::skip_semicolon()
+void ParserWorker::skip_semicolon()
 {
     if (check(TokenType::Semicolon)) {
         advance();
     }
 }
 
-ast::AstNodeLocation Parser::ast_location(TokenLocation location) const noexcept
+ast::AstNodeLocation ParserWorker::ast_location(TokenLocation location) const noexcept
 {
     return ast::AstNodeLocation {location.line, location.column};
 }
