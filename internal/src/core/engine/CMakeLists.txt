@@ -1,5 +1,7 @@
 set(ENGINE_SOURCES
+    database_instance.cpp
     engine.cpp
+    session.cpp
 )
 
 add_library(litedb_engine ${ENGINE_SOURCES})
