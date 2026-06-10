@@ -23,5 +23,10 @@ add_subdirectory(internal/src/net)
 add_subdirectory(internal/src/server)
 add_subdirectory(internal/src/client)
 
+option(LITEDB_BUILD_EXAMPLES "Build LiteDB examples" ON)
+if(LITEDB_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
 enable_testing()
 add_subdirectory(tests)
