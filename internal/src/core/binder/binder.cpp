@@ -280,6 +280,10 @@ bool can_compare(const LogicalType & left, const LogicalType & right, TokenType 
         return true;
     }
 
+    if (is_varchar(left) && is_varchar(right)) {
+        return true;
+    }
+
     if (same_type(left, right)) {
         if (op == TokenType::Equal || op == TokenType::NotEqual) {
             return true;
