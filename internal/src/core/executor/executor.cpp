@@ -878,9 +878,14 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 
 } // namespace
 
-Executor::Executor(catalog::Catalog & catalog, storage::StorageManager & storage) noexcept
+Executor::Executor(
+    catalog::Catalog & catalog,
+    storage::StorageManager & storage,
+    DdlMutationHandler * ddl_handler
+) noexcept
     : catalog_(catalog)
     , storage_(storage)
+    , ddl_handler_(ddl_handler)
 {
 }
 
@@ -890,12 +895,24 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
     case StatementPlanKind::Use:
         return execute_use(static_cast<const planner::UsePlan &>(plan));
     case StatementPlanKind::CreateDatabase:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_create_database(static_cast<const planner::CreateDatabasePlan &>(plan), catalog_, storage_);
+        }
         return execute_create_database(static_cast<const planner::CreateDatabasePlan &>(plan), catalog_);
     case StatementPlanKind::CreateCollection:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_);
+        }
         return execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_);
     case StatementPlanKind::DropDatabase:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_);
+        }
         return execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_);
     case StatementPlanKind::DropCollection:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_);
+        }
         return execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_);
     case StatementPlanKind::ShowDatabases:
         return execute_show_databases(catalog_);

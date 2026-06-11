@@ -95,7 +95,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_planner_error(std::move(planned.error())));
     }
 
-    executor::Executor executor {instance_->catalog(), instance_->storage()};
+    executor::Executor executor {instance_->catalog(), instance_->storage(), instance_->ddl_handler()};
     auto executed = executor.execute(*planned.value());
     if (!executed.has_value()) {
         return std::unexpected(from_execution_error(std::move(executed.error())));

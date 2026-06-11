@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -81,6 +82,53 @@ asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::strin
     }
 }
 
+asio::awaitable<void> run_persistent_write_flow(Server & server, bool & passed, std::string & failure)
+{
+    try {
+        auto executor = co_await asio::this_coro::executor;
+        auto & io = static_cast<asio::io_context &>(executor.context());
+        Client client {io};
+
+        auto connected = co_await client.connect("127.0.0.1", server.port());
+        require(connected.has_value(), connected.has_value() ? "" : connected.error().message.c_str());
+        require((co_await client.execute_sql("CREATE DATABASE demo;")).has_value(), "CREATE DATABASE should succeed");
+        require((co_await client.execute_sql("USE demo;")).has_value(), "USE should succeed");
+        require((co_await client.execute_sql("CREATE COLLECTION users (id BIGINT PRIMARY KEY, name VARCHAR(64));")).has_value(), "CREATE COLLECTION should succeed");
+        require((co_await client.execute_sql("INSERT INTO users VALUES (1, 'persisted');")).has_value(), "INSERT should succeed");
+
+        client.close();
+        server.close();
+        passed = true;
+    } catch (const std::exception & exception) {
+        failure = exception.what();
+        server.close();
+    }
+}
+
+asio::awaitable<void> run_persistent_read_flow(Server & server, bool & passed, std::string & failure)
+{
+    try {
+        auto executor = co_await asio::this_coro::executor;
+        auto & io = static_cast<asio::io_context &>(executor.context());
+        Client client {io};
+
+        auto connected = co_await client.connect("127.0.0.1", server.port());
+        require(connected.has_value(), connected.has_value() ? "" : connected.error().message.c_str());
+        require((co_await client.execute_sql("USE demo;")).has_value(), "USE after reopen should succeed");
+        auto selected = co_await client.execute_sql("SELECT name FROM users WHERE id = 1;");
+        require(selected.has_value(), selected.has_value() ? "" : selected.error().message.c_str());
+        require(selected->rows.size() == 1, "persistent server row count mismatch");
+        require(get_value<std::string>(selected->rows[0].values[0]) == "persisted", "persistent server value mismatch");
+
+        client.close();
+        server.close();
+        passed = true;
+    } catch (const std::exception & exception) {
+        failure = exception.what();
+        server.close();
+    }
+}
+
 void test_client_server_execute_sql()
 {
     asio::io_context io;
@@ -103,12 +151,59 @@ void test_client_server_execute_sql()
     require(passed, "client/server flow did not complete");
 }
 
+void test_client_server_persistent_reopen()
+{
+    const auto data_dir = std::filesystem::temp_directory_path() / "litedb_client_server_persistence_test";
+    std::filesystem::remove_all(data_dir);
+
+    {
+        asio::io_context io;
+        auto instance = std::make_shared<DatabaseInstance>(DatabaseConfig {.data_dir = data_dir});
+        Server server {
+            io,
+            ServerConfig {.host = "127.0.0.1", .port = 0},
+            instance,
+        };
+
+        bool passed = false;
+        std::string failure;
+        asio::co_spawn(io, server.listen(), asio::detached);
+        asio::co_spawn(io, run_persistent_write_flow(server, passed, failure), asio::detached);
+        io.run();
+        if (!failure.empty()) {
+            throw std::runtime_error(failure);
+        }
+        require(passed, "persistent write flow did not complete");
+    }
+
+    {
+        asio::io_context io;
+        auto instance = std::make_shared<DatabaseInstance>(DatabaseConfig {.data_dir = data_dir});
+        Server server {
+            io,
+            ServerConfig {.host = "127.0.0.1", .port = 0},
+            instance,
+        };
+
+        bool passed = false;
+        std::string failure;
+        asio::co_spawn(io, server.listen(), asio::detached);
+        asio::co_spawn(io, run_persistent_read_flow(server, passed, failure), asio::detached);
+        io.run();
+        if (!failure.empty()) {
+            throw std::runtime_error(failure);
+        }
+        require(passed, "persistent read flow did not complete");
+    }
+}
+
 } // namespace
 
 int main()
 {
     try {
         test_client_server_execute_sql();
+        test_client_server_persistent_reopen();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

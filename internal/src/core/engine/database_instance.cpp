@@ -1,7 +1,24 @@
 #include "core/engine/database_instance.hpp"
 
+#include <stdexcept>
+
 namespace litedb::core::engine
 {
+
+DatabaseInstance::DatabaseInstance(DatabaseConfig config)
+{
+    if (config.data_dir.has_value()) {
+        persistence_ = std::make_unique<persistence::PersistenceController>(
+            config.data_dir.value(),
+            catalog_,
+            storage_
+        );
+        auto initialized = persistence_->initialize();
+        if (!initialized.has_value()) {
+            throw std::runtime_error(initialized.error().message);
+        }
+    }
+}
 
 catalog::InMemoryCatalog & DatabaseInstance::catalog() noexcept
 {
@@ -26,6 +43,11 @@ const storage::StorageManager & DatabaseInstance::storage() const noexcept
 std::mutex & DatabaseInstance::mutex() noexcept
 {
     return mutex_;
+}
+
+executor::DdlMutationHandler * DatabaseInstance::ddl_handler() noexcept
+{
+    return persistence_.get();
 }
 
 } // namespace litedb::core::engine
