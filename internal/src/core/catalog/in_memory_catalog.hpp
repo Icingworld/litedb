@@ -7,6 +7,7 @@
 
 #include "core/catalog/catalog.hpp"
 #include "core/catalog/catalog_entry.hpp"
+#include "core/catalog/catalog_snapshot.hpp"
 
 namespace litedb::core::catalog
 {
@@ -127,6 +128,11 @@ public:
      * @return 结果
      */
     std::expected<void, CatalogError> drop_collection(const DropCollectionRequest & request) override;
+
+    [[nodiscard]]
+    CatalogSnapshot snapshot() const;
+
+    std::expected<void, CatalogError> restore(const CatalogSnapshot & snapshot);
 
 private:
     /**

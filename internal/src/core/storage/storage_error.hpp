@@ -15,7 +15,10 @@ enum class StorageErrorCode
     RecordNotFound,             ///< 记录不存在
     ValueCountMismatch,         ///< 值数量不匹配
     TypeMismatch,               ///< 类型不匹配
-    NullConstraintViolation     ///< 空约束违反
+    NullConstraintViolation,    ///< 空约束违反
+    IoError,                    ///< IO 错误
+    InvalidStorageFormat,       ///< 无效的存储格式
+    InvalidStorageState,        ///< 无效的存储状态
 };
 
 /**

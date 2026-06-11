@@ -1,66 +1,64 @@
 #pragma once
 
+#include <filesystem>
+#include <memory>
 #include <mutex>
+#include <optional>
 
 #include "core/catalog/in_memory_catalog.hpp"
+#include "core/executor/executor.hpp"
+#include "core/persistence/persistence_controller.hpp"
 #include "core/storage/storage_manager.hpp"
 
 namespace litedb::core::engine
 {
 
 /**
+ * @brief 数据库配置
+ */
+struct DatabaseConfig
+{
+    std::optional<std::filesystem::path> data_dir;      ///< 数据目录
+};
+
+/**
  * @brief 数据库实例
- * @details 目前的实现中，所有 session 共享同一个数据库实例
  */
 class DatabaseInstance
 {
 public:
     DatabaseInstance() = default;
 
+    explicit DatabaseInstance(DatabaseConfig config);
+
     DatabaseInstance(const DatabaseInstance &) = delete;
 
     DatabaseInstance & operator=(const DatabaseInstance &) = delete;
 
 public:
-    /**
-     * @brief 获取目录
-     * @return 目录
-     */
     [[nodiscard]]
     catalog::InMemoryCatalog & catalog() noexcept;
 
-    /**
-     * @brief 获取目录
-     * @return 目录
-     */
     [[nodiscard]]
     const catalog::InMemoryCatalog & catalog() const noexcept;
 
-    /**
-     * @brief 获取存储管理器
-     * @return 存储管理器
-     */
     [[nodiscard]]
     storage::StorageManager & storage() noexcept;
 
-    /**
-     * @brief 获取存储管理器
-     * @return 存储管理器
-     */
     [[nodiscard]]
     const storage::StorageManager & storage() const noexcept;
 
-    /**
-     * @brief 获取互斥锁
-     * @return 互斥锁
-     */
     [[nodiscard]]
     std::mutex & mutex() noexcept;
 
+    [[nodiscard]]
+    executor::DdlMutationHandler * ddl_handler() noexcept;
+
 private:
-    catalog::InMemoryCatalog catalog_;      ///< 目录
-    storage::StorageManager storage_;       ///< 存储管理器
-    std::mutex mutex_;                      ///< 互斥锁
+    catalog::InMemoryCatalog catalog_;                                      ///< 目录
+    storage::StorageManager storage_;                                       ///< 存储管理器
+    std::unique_ptr<persistence::PersistenceController> persistence_;       ///< 持久化控制器
+    std::mutex mutex_;                                                      ///< 互斥锁
 };
 
 } // namespace litedb::core::engine

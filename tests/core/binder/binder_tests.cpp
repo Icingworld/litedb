@@ -157,6 +157,11 @@ void test_select_binding()
     auto wildcard = bind_ok(fixture, "SELECT * FROM users;");
     const auto * wildcard_select = static_cast<const BoundSelectStatement *>(wildcard.get());
     require(wildcard_select->projections().size() == 4, "wildcard expansion mismatch");
+
+    auto varchar_comparison = bind_ok(fixture, "SELECT id FROM users WHERE name = 'test';");
+    const auto * varchar_select = static_cast<const BoundSelectStatement *>(varchar_comparison.get());
+    require(varchar_select->where() != nullptr, "VARCHAR comparison where missing");
+    require(varchar_select->where()->type().id == LogicalTypeId::Boolean, "VARCHAR comparison should bind as boolean");
 }
 
 void test_select_errors()

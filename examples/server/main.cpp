@@ -5,8 +5,10 @@
 
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -18,6 +20,7 @@ struct Options
 {
     std::string host {"127.0.0.1"};
     std::uint16_t port {5252};
+    std::optional<std::filesystem::path> data_dir;
 };
 
 [[nodiscard]]
@@ -47,8 +50,13 @@ Options parse_options(int argc, char ** argv)
                 throw std::runtime_error("--port requires a value");
             }
             options.port = parse_port(argv[index]);
+        } else if (arg == "--data-dir") {
+            if (++index >= argc) {
+                throw std::runtime_error("--data-dir requires a value");
+            }
+            options.data_dir = std::filesystem::path {argv[index]};
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "usage: litedb_example_server [--host HOST] [--port PORT]\n";
+            std::cout << "usage: litedb_example_server [--host HOST] [--port PORT] [--data-dir PATH]\n";
             std::exit(0);
         } else {
             throw std::runtime_error("unknown option: " + std::string(arg));
@@ -65,7 +73,11 @@ int main(int argc, char ** argv)
         const auto options = parse_options(argc, argv);
 
         asio::io_context io;
-        auto instance = std::make_shared<litedb::core::engine::DatabaseInstance>();
+        auto instance = options.data_dir.has_value()
+            ? std::make_shared<litedb::core::engine::DatabaseInstance>(
+                  litedb::core::engine::DatabaseConfig {.data_dir = options.data_dir}
+              )
+            : std::make_shared<litedb::core::engine::DatabaseInstance>();
         litedb::server::Server server {
             io,
             litedb::server::ServerConfig {

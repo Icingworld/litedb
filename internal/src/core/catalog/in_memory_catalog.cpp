@@ -1,5 +1,6 @@
 #include "core/catalog/in_memory_catalog.hpp"
 
+#include <algorithm>
 #include <unordered_set>
 #include <utility>
 
@@ -297,6 +298,182 @@ std::expected<void, CatalogError> InMemoryCatalog::drop_collection(const DropCol
 
     database->remove_collection(collection_key, collection_id.value());
     collections_by_id_.erase(collection_id.value());
+    return {};
+}
+
+CatalogSnapshot InMemoryCatalog::snapshot() const
+{
+    CatalogSnapshot result {
+        .next_database_id = next_database_id_,
+        .next_collection_id = next_collection_id_,
+        .next_column_id = next_column_id_,
+        .databases = {},
+    };
+
+    for (const auto database_id : database_ids_) {
+        const auto * database = find_database(database_id);
+        if (database == nullptr) {
+            continue;
+        }
+
+        CatalogSnapshotDatabase database_snapshot {
+            .id = database->id(),
+            .name = database->name(),
+            .collections = {},
+        };
+
+        for (const auto collection_id : database->collection_ids()) {
+            const auto * collection = find_collection(collection_id);
+            if (collection == nullptr) {
+                continue;
+            }
+
+            CatalogSnapshotCollection collection_snapshot {
+                .id = collection->id(),
+                .database_id = collection->database_id(),
+                .name = collection->name(),
+                .columns = {},
+            };
+
+            for (const auto column_id : collection->column_ids()) {
+                const auto * column = find_column(column_id);
+                if (column == nullptr) {
+                    continue;
+                }
+
+                collection_snapshot.columns.push_back(CatalogSnapshotColumn {
+                    .id = column->id(),
+                    .name = column->name(),
+                    .type = column->type(),
+                    .primary_key = column->primary_key(),
+                    .unique = column->unique(),
+                    .nullable = column->nullable(),
+                    .default_expression = column->default_expression(),
+                    .comment = column->comment(),
+                });
+            }
+
+            database_snapshot.collections.push_back(std::move(collection_snapshot));
+        }
+
+        result.databases.push_back(std::move(database_snapshot));
+    }
+
+    return result;
+}
+
+std::expected<void, CatalogError> InMemoryCatalog::restore(const CatalogSnapshot & snapshot)
+{
+    std::unordered_set<common::DatabaseId> database_ids;
+    std::unordered_set<common::CollectionId> collection_ids;
+    std::unordered_set<common::ColumnId> column_ids;
+    std::unordered_set<std::string> database_keys;
+
+    common::DatabaseId max_database_id = 0;
+    common::CollectionId max_collection_id = 0;
+    common::ColumnId max_column_id = 0;
+
+    for (const auto & database_snapshot : snapshot.databases) {
+        if (database_snapshot.id == 0 || blank(database_snapshot.name)) {
+            return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid database in catalog snapshot"));
+        }
+
+        if (!database_ids.insert(database_snapshot.id).second) {
+            return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Duplicate database id in catalog snapshot"));
+        }
+        if (!database_keys.insert(normalize_identifier(database_snapshot.name)).second) {
+            return std::unexpected(make_error(CatalogErrorCode::DuplicateDatabase, "Duplicate database name in catalog snapshot"));
+        }
+        max_database_id = std::max(max_database_id, database_snapshot.id);
+
+        std::unordered_set<std::string> collection_keys;
+        for (const auto & collection_snapshot : database_snapshot.collections) {
+            if (collection_snapshot.id == 0 || collection_snapshot.database_id != database_snapshot.id || blank(collection_snapshot.name)) {
+                return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid collection in catalog snapshot"));
+            }
+            if (!collection_ids.insert(collection_snapshot.id).second) {
+                return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Duplicate collection id in catalog snapshot"));
+            }
+            if (!collection_keys.insert(normalize_identifier(collection_snapshot.name)).second) {
+                return std::unexpected(make_error(CatalogErrorCode::DuplicateCollection, "Duplicate collection name in catalog snapshot"));
+            }
+            if (collection_snapshot.columns.empty()) {
+                return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection snapshot must contain columns"));
+            }
+            max_collection_id = std::max(max_collection_id, collection_snapshot.id);
+
+            std::unordered_set<std::string> column_keys;
+            bool has_primary_key = false;
+            for (const auto & column_snapshot : collection_snapshot.columns) {
+                if (column_snapshot.id == 0 || blank(column_snapshot.name)) {
+                    return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid column in catalog snapshot"));
+                }
+                if (!column_ids.insert(column_snapshot.id).second) {
+                    return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Duplicate column id in catalog snapshot"));
+                }
+                if (!column_keys.insert(normalize_identifier(column_snapshot.name)).second) {
+                    return std::unexpected(make_error(CatalogErrorCode::DuplicateColumn, "Duplicate column name in catalog snapshot"));
+                }
+                if (column_snapshot.primary_key) {
+                    if (has_primary_key) {
+                        return std::unexpected(make_error(CatalogErrorCode::MultiplePrimaryKeys, "Multiple primary keys in catalog snapshot"));
+                    }
+                    has_primary_key = true;
+                }
+                max_column_id = std::max(max_column_id, column_snapshot.id);
+            }
+        }
+    }
+
+    if (snapshot.next_database_id <= max_database_id || snapshot.next_collection_id <= max_collection_id || snapshot.next_column_id <= max_column_id) {
+        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Catalog snapshot next id is behind existing ids"));
+    }
+
+    next_database_id_ = snapshot.next_database_id;
+    next_collection_id_ = snapshot.next_collection_id;
+    next_column_id_ = snapshot.next_column_id;
+    database_ids_.clear();
+    databases_by_id_.clear();
+    databases_by_key_.clear();
+    collections_by_id_.clear();
+    columns_by_id_.clear();
+
+    for (const auto & database_snapshot : snapshot.databases) {
+        auto database = std::make_unique<DatabaseEntry>(database_snapshot.id, database_snapshot.name);
+        auto * database_ptr = database.get();
+        databases_by_key_.emplace(database->key(), database_snapshot.id);
+        databases_by_id_.emplace(database_snapshot.id, std::move(database));
+        database_ids_.push_back(database_snapshot.id);
+
+        for (const auto & collection_snapshot : database_snapshot.collections) {
+            auto collection = std::make_unique<CollectionEntry>(
+                collection_snapshot.id,
+                database_snapshot.id,
+                collection_snapshot.name
+            );
+            auto * collection_ptr = collection.get();
+
+            for (const auto & column_snapshot : collection_snapshot.columns) {
+                auto column = std::make_unique<ColumnEntry>(
+                    column_snapshot.id,
+                    collection_snapshot.id,
+                    column_snapshot.name,
+                    column_snapshot.type,
+                    column_snapshot.primary_key,
+                    column_snapshot.unique,
+                    column_snapshot.nullable,
+                    column_snapshot.default_expression,
+                    column_snapshot.comment
+                );
+                collection_ptr->add_column(column->key(), column_snapshot.id, column->primary_key());
+                columns_by_id_.emplace(column_snapshot.id, std::move(column));
+            }
+
+            database_ptr->add_collection(collection->key(), collection_snapshot.id);
+            collections_by_id_.emplace(collection_snapshot.id, std::move(collection));
+        }
+    }
+
     return {};
 }
 

@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "core/storage/in_memory_collection_storage.hpp"
+
 namespace litedb::core::storage
 {
 
@@ -15,6 +17,20 @@ StorageError make_error(StorageErrorCode code, std::string message)
 
 } // namespace
 
+StorageManager::StorageManager()
+    : StorageManager(
+          [](schema::CollectionSchema collection_schema) {
+              return std::make_unique<InMemoryCollectionStorage>(std::move(collection_schema));
+          }
+      )
+{
+}
+
+StorageManager::StorageManager(CollectionFactory collection_factory)
+    : collection_factory_(std::move(collection_factory))
+{
+}
+
 std::expected<void, StorageError> StorageManager::create_collection(schema::CollectionSchema collection_schema)
 {
     const auto collection_id = collection_schema.collection_id();
@@ -22,10 +38,23 @@ std::expected<void, StorageError> StorageManager::create_collection(schema::Coll
         return std::unexpected(make_error(StorageErrorCode::CollectionAlreadyExists, "Collection storage already exists"));
     }
 
-    collections_.emplace(
-        collection_id,
-        std::make_unique<InMemoryCollectionStorage>(std::move(collection_schema))
-    );
+    collections_.emplace(collection_id, collection_factory_(std::move(collection_schema)));
+    return {};
+}
+
+std::expected<void, StorageError> StorageManager::register_collection(
+    common::CollectionId collection_id,
+    std::unique_ptr<CollectionStorage> collection_storage
+)
+{
+    if (collection_storage == nullptr) {
+        return std::unexpected(make_error(StorageErrorCode::InvalidStorageState, "Collection storage cannot be null"));
+    }
+    if (collections_.contains(collection_id)) {
+        return std::unexpected(make_error(StorageErrorCode::CollectionAlreadyExists, "Collection storage already exists"));
+    }
+
+    collections_.emplace(collection_id, std::move(collection_storage));
     return {};
 }
 
@@ -54,6 +83,11 @@ const CollectionStorage * StorageManager::find_collection(common::CollectionId c
         return nullptr;
     }
     return it->second.get();
+}
+
+void StorageManager::clear() noexcept
+{
+    collections_.clear();
 }
 
 } // namespace litedb::core::storage
