@@ -52,6 +52,24 @@ data/
 
 `collections/<collection_id>.rows` 是某个 collection 的 append-only 行变更日志。启动时，litedb 会 replay 该文件，把记录恢复到内存 collection storage 中。
 
+## 启用方式
+
+持久化能力由服务端启动参数 `--data-dir` 显式启用：
+
+```sh
+./build/examples/server/litedb_example_server --host 127.0.0.1 --port 5252 --data-dir ./data
+```
+
+在 Windows 上：
+
+```powershell
+.\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
+```
+
+不传 `--data-dir` 时，服务端保持纯内存模式，行为与早期版本一致：重启后 catalog 和 record 都不会保留。
+
+传入 `--data-dir` 后，服务端启动时会初始化或读取该目录下的 `manifest.ldb`、`catalog.lcat` 和 `collections/`，并在执行 DDL/DML 时按本文档定义的格式写入磁盘。v0.2 的格式仍然是实验性格式，不承诺与后续版本二进制兼容。
+
 ## 通用编码规则
 
 所有二进制文件统一使用 little-endian 编码。

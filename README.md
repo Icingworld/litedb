@@ -3,19 +3,24 @@
 EN | [简体中文](docs/readme/README_zh_CN.md)
 
 `litedb` is a lightweight experimental database written in modern C++. The
-v0.1.0 release focuses on the first usable database loop: parsing SQL, binding
-it against an in-memory catalog, planning and executing statements, and exposing
-the engine through a small client/server protocol.
+v0.2.0 release focuses on making the first usable database loop restartable:
+parsing SQL, binding it against a catalog, planning and executing statements,
+and optionally persisting catalog and row data through `--data-dir`.
 
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
 storage engine.
 
-## What works in v0.1.0
+## What works in v0.2.0
 
 - SQL lexer, parser, AST, binder, logical planner, evaluator, executor, and
 engine facade.
 - In-memory catalog, schema model, and collection storage.
+- Optional single-node persistence enabled by `--data-dir`.
+- Persistent catalog snapshots and append-only row logs for `INSERT`, `UPDATE`,
+and `DELETE`.
+- Startup recovery for persisted databases, collections, schemas, scalar
+values, and `VECTOR(n)` values.
 - Basic database and collection management:
   - `CREATE DATABASE`, `DROP DATABASE`, `USE`, `SHOW DATABASES`
   - `CREATE COLLECTION`, `DROP COLLECTION`, `SHOW COLLECTIONS`, `DESCRIBE`
@@ -34,10 +39,12 @@ search in later releases.
 
 ## Current limitations
 
-v0.1.0 intentionally keeps the scope small:
+v0.2.0 intentionally keeps the scope small:
 
-- Data is in-memory only. Restarting the server loses catalog and records.
-- No WAL, recovery, snapshots, or durable file format yet.
+- Persistence is opt-in. Without `--data-dir`, the server still runs in
+in-memory mode and restart loses catalog and records.
+- No WAL, checksums, compaction, checkpointing, or crash-consistent commit
+protocol yet.
 - No transactions, MVCC, or isolation guarantees.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
 - No scalar indexes or vector indexes yet.
@@ -77,9 +84,9 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
-The current suite covers parser, catalog, schema, in-memory storage, binder,
-logical planner, evaluator, executor, engine, protocol, memory, and
-client/server behavior.
+The current suite covers parser, catalog, schema, in-memory and persistent
+storage, binder, logical planner, evaluator, executor, engine, protocol,
+memory, and client/server behavior.
 
 ## Quick start
 
@@ -94,6 +101,23 @@ On Windows, the executable is usually:
 ```powershell
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252
 ```
+
+By default the example server is in-memory only. To persist data across
+restarts, pass `--data-dir`:
+
+```sh
+./build/examples/server/litedb_example_server --host 127.0.0.1 --port 5252 --data-dir ./data
+```
+
+On Windows:
+
+```powershell
+.\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
+```
+
+The data directory will contain `manifest.ldb`, `catalog.lcat`, and append-only
+row logs under `collections/`. The v0.2 storage format is experimental and does
+not promise compatibility with future versions.
 
 In another terminal, start the client CLI:
 
@@ -147,7 +171,7 @@ SQL text
   -> Binder
   -> Logical planner
   -> Executor
-  -> In-memory catalog and storage
+  -> In-memory or persistent catalog/storage
   -> Execution result
 ```
 
@@ -158,6 +182,7 @@ internal/src/core/parser       SQL lexer, parser, and AST
 internal/src/core/catalog      Catalog interfaces and in-memory catalog
 internal/src/core/schema       Logical types, values, records, collections
 internal/src/core/storage      Collection storage interface and in-memory storage
+internal/src/core/persistence  Persistent catalog snapshots and row logs
 internal/src/core/binder       Name resolution and semantic binding
 internal/src/core/planner      Logical plan construction
 internal/src/core/evaluator    Expression evaluation
@@ -175,11 +200,11 @@ docs/design_docs/              Design notes and roadmap
 
 ## Roadmap
 
-Near-term work after v0.1.0:
+Near-term work after v0.2.0:
 
-- v0.2: durable single-node storage, catalog recovery, append-only records, and
-brute-force vector TopK search.
-- v0.3: first vector index support, likely starting with an in-memory HNSW
+- v0.2.x: persistence hardening, cleanup/compaction planning, and storage
+format polish.
+- v0.3: vector search and first vector index support, likely starting with an in-memory HNSW
 implementation.
 - v0.4: reliability improvements such as WAL, recovery, checksums, compaction,
 and file format versioning.

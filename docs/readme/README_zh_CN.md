@@ -2,14 +2,17 @@
 
 [EN](../../README.md) | 简体中文
 
-`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.1.0 版本聚焦于第一个可用的数据库闭环：解析 SQL、在内存目录（catalog）上绑定、规划并执行语句，并通过小型客户端/服务端协议对外暴露引擎能力。
+`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.2.0 版本聚焦于让第一个可用的数据库闭环具备可重启能力：解析 SQL、在目录（catalog）上绑定、规划并执行语句，并可通过 `--data-dir` 持久化 catalog 与行数据。
 
 本项目仍处于早期阶段。当前版本更适合作为数据库内核与学习/实验平台，而非可直接用于生产的存储引擎。
 
-## v0.1.0 已实现的功能
+## v0.2.0 已实现的功能
 
 - SQL 词法分析器、解析器、AST、绑定器（binder）、逻辑规划器、求值器（evaluator）、执行器（executor）以及引擎门面（facade）。
 - 内存目录、模式（schema）模型与集合（collection）存储。
+- 通过 `--data-dir` 显式启用的单机持久化能力。
+- 持久化 catalog 快照，以及用于 `INSERT`、`UPDATE`、`DELETE` 的 append-only row log。
+- 启动时恢复已持久化的 database、collection、schema、标量值与 `VECTOR(n)` 值。
 - 基础数据库与集合管理：
   - `CREATE DATABASE`、`DROP DATABASE`、`USE`、`SHOW DATABASES`
   - `CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS`、`DESCRIBE`
@@ -26,10 +29,10 @@
 
 ## 当前限制
 
-v0.1.0 有意保持较小的功能范围：
+v0.2.0 有意保持较小的功能范围：
 
-- 数据仅保存在内存中。重启服务端会丢失目录与记录。
-- 尚无 WAL、恢复、快照或持久化文件格式。
+- 持久化需要显式开启。不传 `--data-dir` 时，服务端仍以纯内存模式运行，重启会丢失目录与记录。
+- 尚无 WAL、checksum、compaction、checkpoint 或 crash-consistent commit 协议。
 - 无事务、MVCC 或隔离性保证。
 - 不支持 SQL 连接（join）、子查询、聚合、`GROUP BY` 或完整 SQL 兼容性。
 - 尚无标量索引或向量索引。
@@ -68,7 +71,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-当前测试覆盖解析器、目录、模式、内存存储、绑定器、逻辑规划器、求值器、执行器、引擎、协议、内存以及客户端/服务端行为。
+当前测试覆盖解析器、目录、模式、内存存储、持久化存储、绑定器、逻辑规划器、求值器、执行器、引擎、协议、内存以及客户端/服务端行为。
 
 ## 快速开始
 
@@ -83,6 +86,20 @@ ctest --test-dir build --output-on-failure
 ```powershell
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252
 ```
+
+默认情况下，示例服务端使用纯内存模式。若希望数据在重启后仍然保留，需要传入 `--data-dir`：
+
+```sh
+./build/examples/server/litedb_example_server --host 127.0.0.1 --port 5252 --data-dir ./data
+```
+
+在 Windows 上：
+
+```powershell
+.\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
+```
+
+该目录中会生成 `manifest.ldb`、`catalog.lcat`，以及位于 `collections/` 下的 append-only row log。v0.2 的存储格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
 
 在另一个终端中启动客户端 CLI：
 
@@ -136,7 +153,7 @@ SQL text
   -> Binder
   -> Logical planner
   -> Executor
-  -> In-memory catalog and storage
+  -> In-memory or persistent catalog/storage
   -> Execution result
 ```
 
@@ -147,6 +164,7 @@ internal/src/core/parser       SQL 词法分析器、解析器与 AST
 internal/src/core/catalog      目录接口与内存目录
 internal/src/core/schema       逻辑类型、值、记录与集合
 internal/src/core/storage      集合存储接口与内存存储
+internal/src/core/persistence  持久化 catalog 快照与 row log
 internal/src/core/binder       名称解析与语义绑定
 internal/src/core/planner      逻辑计划构建
 internal/src/core/evaluator    表达式求值
@@ -164,10 +182,10 @@ docs/design_docs/              设计文档与路线图
 
 ## 路线图
 
-v0.1.0 之后的近期计划：
+v0.2.0 之后的近期计划：
 
-- v0.2：单节点持久化存储、目录恢复、仅追加（append-only）记录，以及暴力向量 TopK 检索。
-- v0.3：首批向量索引支持，可能从内存 HNSW 实现起步。
+- v0.2.x：持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
+- v0.3：向量检索与首批向量索引支持，可能从内存 HNSW 实现起步。
 - v0.4：可靠性改进，如 WAL、恢复、校验和、压缩与文件格式版本管理。
 - v0.5：早期分布式查询架构，包含分片、协调器路由与分布式 TopK 合并。
 
