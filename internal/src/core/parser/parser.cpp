@@ -435,7 +435,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         return std::unexpected(make_current_error(ParserErrorCode::UnexpectedToken, "Unexpected token"));
     }
 
-    return std::move(statement.value());
+    return statement;
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_statement()
