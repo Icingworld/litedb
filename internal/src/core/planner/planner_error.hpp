@@ -4,7 +4,7 @@
 
 #include "core/parser/ast/ast_node.hpp"
 
-namespace litedb::core::planner::logical
+namespace litedb::core::planner
 {
 
 /**
@@ -26,4 +26,4 @@ struct PlannerError
     std::string message;                        ///< 错误消息
 };
 
-} // namespace litedb::core::planner::logical
+} // namespace litedb::core::planner

@@ -6,7 +6,7 @@
 
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/common/ids.hpp"
-#include "core/planner/logical/logical_plan_node.hpp"
+#include "core/planner/logical/node/logical_plan_node.hpp"
 #include "core/planner/statement/statement_plan.hpp"
 
 namespace litedb::core::planner

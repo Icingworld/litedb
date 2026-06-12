@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "core/binder/bound/expression/bound_expression.hpp"
-#include "core/planner/logical/logical_unary_node.hpp"
+#include "core/planner/logical/node/logical_unary_node.hpp"
 
 namespace litedb::core::planner::logical
 {

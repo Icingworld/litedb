@@ -17,8 +17,8 @@ namespace litedb::core::binder::bound
  */
 struct BoundOrderByItem
 {
-    std::unique_ptr<BoundExpression> expression;
-    bool ascending {true};
+    std::unique_ptr<BoundExpression> expression;    ///< 排序表达式
+    bool ascending {true};                          ///< 是否升序
 };
 
 /**

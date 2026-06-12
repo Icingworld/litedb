@@ -1,4 +1,4 @@
-#include "core/planner/logical/logical_projection.hpp"
+#include "core/planner/logical/node/logical_projection.hpp"
 
 #include <utility>
 
@@ -10,8 +10,8 @@ LogicalProjection::LogicalProjection(
     std::vector<std::unique_ptr<binder::bound::BoundExpression>> projections,
     parser::ast::AstNodeLocation location
 )
-    : LogicalUnaryNode(LogicalPlanNodeKind::Projection, std::move(child), location),
-      projections_(std::move(projections))
+    : LogicalUnaryNode(LogicalPlanNodeKind::Projection, std::move(child), location)
+    , projections_(std::move(projections))
 {
 }
 

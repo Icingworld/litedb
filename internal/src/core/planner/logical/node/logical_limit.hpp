@@ -4,7 +4,7 @@
 #include <memory>
 #include <optional>
 
-#include "core/planner/logical/logical_unary_node.hpp"
+#include "core/planner/logical/node/logical_unary_node.hpp"
 
 namespace litedb::core::planner::logical
 {
