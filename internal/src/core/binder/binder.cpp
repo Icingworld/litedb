@@ -70,9 +70,6 @@ using namespace litedb::core::common;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 
-using BoundExpressionResult = std::expected<std::unique_ptr<BoundExpression>, BinderError>;
-using BoundStatementResult = std::expected<std::unique_ptr<BoundStatement>, BinderError>;
-
 /**
  * @brief 绑定集合
  * @details 用于临时管理当前数据库 ID 和集合
@@ -103,9 +100,13 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
  * @return 绑定错误
  */
 [[nodiscard]]
-BinderError error(BinderErrorCode code, AstNodeLocation location, std::string message)
+BinderError make_binder_error(BinderErrorCode code, AstNodeLocation location, std::string message)
 {
-    return BinderError {code, location, std::move(message)};
+    return BinderError {
+        .code = code,
+        .location = location,
+        .message = std::move(message),
+    };
 }
 
 /**
@@ -336,8 +337,8 @@ class BinderWorker
 {
 public:
     BinderWorker(const catalog::CatalogReader & catalog, const SessionContext & session)
-        : catalog_(catalog),
-          session_(session)
+        : catalog_(catalog)
+        , session_(session)
     {
     }
 
@@ -348,8 +349,9 @@ public:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_statement(const StatementNode & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_statement(const StatementNode & statement)
     {
+        // 根据语句类型分发到不同的绑定
         switch (statement.kind()) {
         case AstNodeKind::Use:
             return bind_use(static_cast<const UseStatement &>(statement));
@@ -371,8 +373,8 @@ public:
             return bind_update(static_cast<const UpdateStatement &>(statement));
         case AstNodeKind::Delete:
             return bind_delete(static_cast<const DeleteStatement &>(statement));
-        default:
-            return std::unexpected(error(
+        [[unlikely]] default:
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::UnsupportedStatement,
                 statement.location(),
                 "Unsupported statement"
@@ -387,11 +389,12 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_use(const UseStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_use(const UseStatement & statement)
     {
+        // 查找数据库
         const auto * database = catalog_.find_database(statement.database());
-        if (database == nullptr) {
-            return std::unexpected(error(
+        if (database == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::DatabaseNotFound,
                 statement.location(),
                 "Database not found: " + statement.database()
@@ -407,7 +410,7 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_create_database(const CreateDatabaseStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_create_database(const CreateDatabaseStatement & statement)
     {
         return std::make_unique<BoundCreateDatabaseStatement>(
             statement.database(),
@@ -422,15 +425,15 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_create_collection(const CreateCollectionStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_create_collection(const CreateCollectionStatement & statement)
     {
         const auto database_id = require_database(statement.location());
-        if (!database_id.has_value()) {
+        if (!database_id.has_value()) [[unlikely]] {
             return std::unexpected(std::move(database_id.error()));
         }
 
         auto columns = bind_column_definitions(statement.columns(), statement.location());
-        if (!columns.has_value()) {
+        if (!columns.has_value()) [[unlikely]] {
             return std::unexpected(std::move(columns.error()));
         }
 
@@ -449,12 +452,13 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_drop(const DropStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_drop(const DropStatement & statement)
     {
         if (statement.object_type() == SchemaObjectType::Database) {
+            // DROP DATABASE
             const auto * database = catalog_.find_database(statement.name());
             if (database == nullptr && !statement.if_exists()) {
-                return std::unexpected(error(
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::DatabaseNotFound,
                     statement.location(),
                     "Database not found: " + statement.name()
@@ -470,13 +474,13 @@ private:
         }
 
         const auto database_id = require_database(statement.location());
-        if (!database_id.has_value()) {
+        if (!database_id.has_value()) [[unlikely]] {
             return std::unexpected(std::move(database_id.error()));
         }
 
         const auto * collection = catalog_.find_collection(database_id.value(), statement.name());
-        if (collection == nullptr && !statement.if_exists()) {
-            return std::unexpected(error(
+        if (collection == nullptr && !statement.if_exists()) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::CollectionNotFound,
                 statement.location(),
                 "Collection not found: " + statement.name()
@@ -498,14 +502,14 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_show(const ShowStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_show(const ShowStatement & statement)
     {
         if (statement.object_type() == SchemaObjectType::Database) {
             return std::make_unique<BoundShowDatabasesStatement>(statement.location());
         }
 
         const auto database_id = require_database(statement.location());
-        if (!database_id.has_value()) {
+        if (!database_id.has_value()) [[unlikely]] {
             return std::unexpected(std::move(database_id.error()));
         }
 
@@ -518,10 +522,10 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_describe(const DescribeStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_describe(const DescribeStatement & statement)
     {
-        if (statement.object_type() != SchemaObjectType::Collection) {
-            return std::unexpected(error(
+        if (statement.object_type() != SchemaObjectType::Collection) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::UnsupportedStatement,
                 statement.location(),
                 "Only DESCRIBE COLLECTION is supported"
@@ -529,13 +533,13 @@ private:
         }
 
         const auto database_id = require_database(statement.location());
-        if (!database_id.has_value()) {
+        if (!database_id.has_value()) [[unlikely]] {
             return std::unexpected(std::move(database_id.error()));
         }
 
         const auto * collection = catalog_.find_collection(database_id.value(), statement.name());
-        if (collection == nullptr) {
-            return std::unexpected(error(
+        if (collection == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::CollectionNotFound,
                 statement.location(),
                 "Collection not found: " + statement.name()
@@ -556,18 +560,21 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_select(const SelectStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_select(const SelectStatement & statement)
     {
         auto collection = bind_collection(statement.collection(), statement.location());
-        if (!collection.has_value()) {
+        if (!collection.has_value()) [[unlikely]] {
             return std::unexpected(std::move(collection.error()));
         }
 
+        // 绑定选择列表
         std::vector<std::unique_ptr<BoundExpression>> projections;
+        // 遍历选择列表，binder 不做去重，只负责绑定
         for (const auto & item : statement.select_list()) {
             if (item->kind() == AstNodeKind::Wildcard) {
+                // 展开 * 为所有列
                 auto expanded = expand_wildcard(static_cast<const WildcardExpression &>(*item), collection.value());
-                if (!expanded.has_value()) {
+                if (!expanded.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(expanded.error()));
                 }
                 for (auto & expression : expanded.value()) {
@@ -576,21 +583,23 @@ private:
                 continue;
             }
 
+            // 不是 * ，绑定列引用
             auto expression = bind_expression(*item, collection.value());
-            if (!expression.has_value()) {
+            if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
             projections.push_back(std::move(expression.value()));
         }
 
+        // 绑定条件表达式
         std::unique_ptr<BoundExpression> where;
         if (statement.where() != nullptr) {
             auto bound_where = bind_expression(*statement.where(), collection.value());
-            if (!bound_where.has_value()) {
+            if (!bound_where.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(bound_where.error()));
             }
-            if (!is_boolean(bound_where.value()->type())) {
-                return std::unexpected(error(
+            if (!is_boolean(bound_where.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     statement.where()->location(),
                     "WHERE expression must be BOOLEAN"
@@ -599,10 +608,11 @@ private:
             where = std::move(bound_where.value());
         }
 
+        // 绑定排序列表
         std::vector<BoundOrderByItem> order_by;
         for (const auto & item : statement.order_by()) {
             auto expression = bind_expression(*item.expression, collection.value());
-            if (!expression.has_value()) {
+            if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
             order_by.push_back(BoundOrderByItem {
@@ -630,10 +640,10 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_insert(const InsertStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_insert(const InsertStatement & statement)
     {
         auto collection = bind_collection(statement.collection(), statement.location());
-        if (!collection.has_value()) {
+        if (!collection.has_value()) [[unlikely]] {
             return std::unexpected(std::move(collection.error()));
         }
 
@@ -643,8 +653,9 @@ private:
         std::vector<std::optional<std::size_t>> source_value_by_target;
 
         if (statement.columns().empty()) {
+            // 没有指定列，使用所有列
             if (statement.values().size() != catalog_columns.size()) {
-                return std::unexpected(error(
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidValueCount,
                     statement.location(),
                     "INSERT value count does not match collection column count"
@@ -655,19 +666,21 @@ private:
                 source_value_by_target.emplace_back(index);
             }
         } else {
+            // 指定了列，检查列和值的数量是否匹配
             if (statement.columns().size() != statement.values().size()) {
-                return std::unexpected(error(
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidValueCount,
                     statement.location(),
                     "INSERT column count does not match value count"
                 ));
             }
 
+            // 检查列是否重复
             std::unordered_set<std::string> seen_columns;
             for (std::size_t index = 0; index < statement.columns().size(); ++index) {
                 const auto column_key = catalog::normalize_identifier(statement.columns()[index]);
                 if (!seen_columns.emplace(column_key).second) {
-                    return std::unexpected(error(
+                    return std::unexpected(make_binder_error(
                         BinderErrorCode::DuplicateColumn,
                         statement.location(),
                         "Duplicate INSERT target column: " + statement.columns()[index]
@@ -675,15 +688,17 @@ private:
                 }
             }
 
+            // 使用所有列
             for (const auto * column : catalog_columns) {
                 target_columns.push_back(column);
                 source_value_by_target.emplace_back(std::nullopt);
             }
 
+            // 遍历指定列，绑定列引用
             for (std::size_t index = 0; index < statement.columns().size(); ++index) {
                 const auto * column = catalog_.find_column(collection->collection->id(), statement.columns()[index]);
-                if (column == nullptr) {
-                    return std::unexpected(error(
+                if (column == nullptr) [[unlikely]] {
+                    return std::unexpected(make_binder_error(
                         BinderErrorCode::ColumnNotFound,
                         statement.location(),
                         "Column not found: " + statement.columns()[index]
@@ -695,6 +710,7 @@ private:
             }
         }
 
+        // 绑定列和值
         std::vector<BoundColumn> bound_columns;
         std::vector<std::unique_ptr<BoundExpression>> bound_values;
         bound_columns.reserve(target_columns.size());
@@ -710,28 +726,29 @@ private:
                     *statement.values()[source_value_by_target[target_index].value()],
                     collection.value()
                 );
-                if (!expression.has_value()) {
+                if (!expression.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(expression.error()));
                 }
                 value = std::move(expression.value());
             } else if (column.default_expression().has_value()) {
                 auto expression = bind_default_expression(column.default_expression().value(), statement.location());
-                if (!expression.has_value()) {
+                if (!expression.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(expression.error()));
                 }
                 value = std::move(expression.value());
-            } else if (column.nullable()) {
+            } else if (column.nullable()) [[likely]] {
                 value = std::make_unique<BoundNullExpression>(column.type(), statement.location());
-            } else {
-                return std::unexpected(error(
+            } else [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::NotNullable,
                     statement.location(),
                     "Column requires a value: " + column.name()
                 ));
             }
 
-            if (!can_cast(value->type(), column.type())) {
-                return std::unexpected(error(
+            // 检查值类型是否匹配列类型
+            if (!can_cast(value->type(), column.type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     value->location(),
                     "INSERT value type " + type_name(value->type())
@@ -739,8 +756,9 @@ private:
                         + " type " + type_name(column.type())
                 ));
             }
-            if (value->type().id == LogicalTypeId::Null && !column.nullable()) {
-                return std::unexpected(error(
+            // 检查值是否为 NULL
+            if (value->type().id == LogicalTypeId::Null && !column.nullable()) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::NotNullable,
                     value->location(),
                     "Column cannot be NULL: " + column.name()
@@ -766,10 +784,10 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_update(const UpdateStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_update(const UpdateStatement & statement)
     {
         auto collection = bind_collection(statement.collection(), statement.location());
-        if (!collection.has_value()) {
+        if (!collection.has_value()) [[unlikely]] {
             return std::unexpected(std::move(collection.error()));
         }
 
@@ -777,8 +795,8 @@ private:
         std::unordered_set<std::string> seen_columns;
         for (const auto & assignment : statement.assignments()) {
             const auto column_key = catalog::normalize_identifier(assignment.column);
-            if (!seen_columns.emplace(column_key).second) {
-                return std::unexpected(error(
+            if (!seen_columns.emplace(column_key).second) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::DuplicateColumn,
                     statement.location(),
                     "Duplicate UPDATE target column: " + assignment.column
@@ -786,8 +804,8 @@ private:
             }
 
             const auto * column = catalog_.find_column(collection->collection->id(), assignment.column);
-            if (column == nullptr) {
-                return std::unexpected(error(
+            if (column == nullptr) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::ColumnNotFound,
                     statement.location(),
                     "Column not found: " + assignment.column
@@ -795,18 +813,18 @@ private:
             }
 
             auto value = bind_expression(*assignment.value, collection.value());
-            if (!value.has_value()) {
+            if (!value.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(value.error()));
             }
-            if (!can_cast(value.value()->type(), column->type())) {
-                return std::unexpected(error(
+            if (!can_cast(value.value()->type(), column->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     value.value()->location(),
                     "UPDATE value type does not match column: " + column->name()
                 ));
             }
-            if (value.value()->type().id == LogicalTypeId::Null && !column->nullable()) {
-                return std::unexpected(error(
+            if (value.value()->type().id == LogicalTypeId::Null && !column->nullable()) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::NotNullable,
                     value.value()->location(),
                     "Column cannot be NULL: " + column->name()
@@ -819,14 +837,15 @@ private:
             });
         }
 
+        // 绑定条件表达式
         std::unique_ptr<BoundExpression> where;
         if (statement.where() != nullptr) {
             auto bound_where = bind_expression(*statement.where(), collection.value());
-            if (!bound_where.has_value()) {
+            if (!bound_where.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(bound_where.error()));
             }
-            if (!is_boolean(bound_where.value()->type())) {
-                return std::unexpected(error(
+            if (!is_boolean(bound_where.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     statement.where()->location(),
                     "WHERE expression must be BOOLEAN"
@@ -851,21 +870,21 @@ private:
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    BoundStatementResult bind_delete(const DeleteStatement & statement)
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_delete(const DeleteStatement & statement)
     {
         auto collection = bind_collection(statement.collection(), statement.location());
-        if (!collection.has_value()) {
+        if (!collection.has_value()) [[unlikely]] {
             return std::unexpected(std::move(collection.error()));
         }
 
         std::unique_ptr<BoundExpression> where;
         if (statement.where() != nullptr) {
             auto bound_where = bind_expression(*statement.where(), collection.value());
-            if (!bound_where.has_value()) {
+            if (!bound_where.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(bound_where.error()));
             }
-            if (!is_boolean(bound_where.value()->type())) {
-                return std::unexpected(error(
+            if (!is_boolean(bound_where.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     statement.where()->location(),
                     "WHERE expression must be BOOLEAN"
@@ -886,21 +905,21 @@ private:
     /**
      * @brief 要求数据库
      * @param location 位置
-     * @return 数据库ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     std::expected<DatabaseId, BinderError> require_database(AstNodeLocation location) const
     {
-        if (!session_.current_database_id.has_value()) {
-            return std::unexpected(error(
+        if (!session_.current_database_id.has_value()) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::DatabaseNotSelected,
                 location,
                 "No database selected"
             ));
         }
 
-        if (catalog_.find_database(session_.current_database_id.value()) == nullptr) {
-            return std::unexpected(error(
+        if (catalog_.find_database(session_.current_database_id.value()) == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::DatabaseNotFound,
                 location,
                 "Current database not found"
@@ -923,13 +942,13 @@ private:
     ) const
     {
         const auto database_id = require_database(location);
-        if (!database_id.has_value()) {
+        if (!database_id.has_value()) [[unlikely]] {
             return std::unexpected(database_id.error());
         }
 
         const auto * collection = catalog_.find_collection(database_id.value(), collection_name);
-        if (collection == nullptr) {
-            return std::unexpected(error(
+        if (collection == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::CollectionNotFound,
                 location,
                 "Collection not found: " + collection_name
@@ -949,8 +968,9 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_expression(const ExpressionNode & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_expression(const ExpressionNode & expression, const BindingCollection & collection)
     {
+        // 根据表达式类型分发到不同的绑定
         switch (expression.kind()) {
         case AstNodeKind::Literal:
             return bind_literal(static_cast<const LiteralExpression &>(expression));
@@ -974,13 +994,13 @@ private:
                 expression.location()
             );
         case AstNodeKind::FunctionCall:
-            return std::unexpected(error(
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::UnsupportedExpression,
                 expression.location(),
                 "Function calls are not supported yet"
             ));
-        default:
-            return std::unexpected(error(
+        [[unlikely]] default:
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::UnsupportedExpression,
                 expression.location(),
                 "Unsupported expression"
@@ -994,8 +1014,9 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_literal(const LiteralExpression & expression)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_literal(const LiteralExpression & expression)
     {
+        // 根据字面量类型分发到不同的绑定
         switch (expression.literal_type()) {
         case TokenType::Null:
             return std::make_unique<BoundNullExpression>(type(LogicalTypeId::Null), expression.location());
@@ -1008,8 +1029,8 @@ private:
             return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Double), expression.value(), expression.location());
         case TokenType::StringLiteral:
             return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Varchar), expression.value(), expression.location());
-        default:
-            return std::unexpected(error(
+        [[unlikely]] default:
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 expression.location(),
                 "Unsupported literal"
@@ -1024,14 +1045,15 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_column_reference(
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_column_reference(
         const ColumnReferenceExpression & expression,
         const BindingCollection & collection
     )
     {
+        // 检查限定符是否匹配集合
         if (expression.qualifier().has_value()
-            && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) {
-            return std::unexpected(error(
+            && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidQualifier,
                 expression.location(),
                 "Column qualifier does not match FROM collection: " + expression.qualifier().value()
@@ -1039,8 +1061,8 @@ private:
         }
 
         const auto * column = catalog_.find_column(collection.collection->id(), expression.column());
-        if (column == nullptr) {
-            return std::unexpected(error(
+        if (column == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::ColumnNotFound,
                 expression.location(),
                 "Column not found: " + expression.column()
@@ -1066,16 +1088,16 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_unary(const UnaryExpression & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_unary(const UnaryExpression & expression, const BindingCollection & collection)
     {
         auto operand = bind_expression(expression.operand(), collection);
-        if (!operand.has_value()) {
+        if (!operand.has_value()) [[unlikely]] {
             return std::unexpected(std::move(operand.error()));
         }
 
         if (expression.op() == TokenType::Not) {
-            if (!is_boolean(operand.value()->type())) {
-                return std::unexpected(error(
+            if (!is_boolean(operand.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     expression.location(),
                     "NOT operand must be BOOLEAN"
@@ -1100,7 +1122,7 @@ private:
             );
         }
 
-        return std::unexpected(error(
+        [[unlikely]] return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
             expression.location(),
             "Invalid unary operand type"
@@ -1114,27 +1136,28 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_binary(const BinaryExpression & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_binary(const BinaryExpression & expression, const BindingCollection & collection)
     {
         auto left = bind_expression(expression.left(), collection);
-        if (!left.has_value()) {
+        if (!left.has_value()) [[unlikely]] {
             return std::unexpected(std::move(left.error()));
         }
 
         auto right = bind_expression(expression.right(), collection);
-        if (!right.has_value()) {
+        if (!right.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right.error()));
         }
 
         const auto op = expression.op();
         if (op == TokenType::And || op == TokenType::Or) {
-            if (!is_boolean(left.value()->type()) || !is_boolean(right.value()->type())) {
-                return std::unexpected(error(
+            if (!is_boolean(left.value()->type()) || !is_boolean(right.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     expression.location(),
                     "Logical operands must be BOOLEAN"
                 ));
             }
+
             return std::make_unique<BoundBinaryExpression>(
                 std::move(left.value()),
                 op,
@@ -1146,8 +1169,8 @@ private:
 
         if (op == TokenType::Plus || op == TokenType::Minus || op == TokenType::Star
             || op == TokenType::Slash || op == TokenType::Modulo) {
-            if (!is_numeric(left.value()->type()) || !is_numeric(right.value()->type())) {
-                return std::unexpected(error(
+            if (!is_numeric(left.value()->type()) || !is_numeric(right.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     expression.location(),
                     "Arithmetic operands must be numeric"
@@ -1165,8 +1188,8 @@ private:
 
         if (op == TokenType::Equal || op == TokenType::NotEqual || op == TokenType::LessThan
             || op == TokenType::LessEqual || op == TokenType::GreaterThan || op == TokenType::GreaterEqual) {
-            if (!can_compare(left.value()->type(), right.value()->type(), op)) {
-                return std::unexpected(error(
+            if (!can_compare(left.value()->type(), right.value()->type(), op)) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     expression.location(),
                     "Comparison operands are not compatible"
@@ -1186,7 +1209,7 @@ private:
             );
         }
 
-        return std::unexpected(error(
+        [[unlikely]] return std::unexpected(make_binder_error(
             BinderErrorCode::UnsupportedExpression,
             expression.location(),
             "Unsupported binary operator"
@@ -1200,18 +1223,18 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_vector(const VectorExpression & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_vector(const VectorExpression & expression, const BindingCollection & collection)
     {
         std::vector<std::unique_ptr<BoundExpression>> elements;
         elements.reserve(expression.elements().size());
 
         for (const auto & element : expression.elements()) {
             auto bound_element = bind_expression(*element, collection);
-            if (!bound_element.has_value()) {
+            if (!bound_element.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(bound_element.error()));
             }
-            if (!is_numeric(bound_element.value()->type())) {
-                return std::unexpected(error(
+            if (!is_numeric(bound_element.value()->type())) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     element->location(),
                     "Vector elements must be numeric"
@@ -1234,21 +1257,21 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_in(const InExpression & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_in(const InExpression & expression, const BindingCollection & collection)
     {
         auto target = bind_expression(expression.expression(), collection);
-        if (!target.has_value()) {
+        if (!target.has_value()) [[unlikely]] {
             return std::unexpected(std::move(target.error()));
         }
 
         std::vector<std::unique_ptr<BoundExpression>> values;
         for (const auto & value : expression.values()) {
             auto bound_value = bind_expression(*value, collection);
-            if (!bound_value.has_value()) {
+            if (!bound_value.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(bound_value.error()));
             }
-            if (!can_compare(target.value()->type(), bound_value.value()->type(), TokenType::Equal)) {
-                return std::unexpected(error(
+            if (!can_compare(target.value()->type(), bound_value.value()->type(), TokenType::Equal)) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     value->location(),
                     "IN value is not comparable with target expression"
@@ -1267,24 +1290,24 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_between(const BetweenExpression & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_between(const BetweenExpression & expression, const BindingCollection & collection)
     {
         auto target = bind_expression(expression.expression(), collection);
-        if (!target.has_value()) {
+        if (!target.has_value()) [[unlikely]] {
             return std::unexpected(std::move(target.error()));
         }
         auto lower = bind_expression(expression.lower(), collection);
-        if (!lower.has_value()) {
+        if (!lower.has_value()) [[unlikely]] {
             return std::unexpected(std::move(lower.error()));
         }
         auto upper = bind_expression(expression.upper(), collection);
-        if (!upper.has_value()) {
+        if (!upper.has_value()) [[unlikely]] {
             return std::unexpected(std::move(upper.error()));
         }
 
         if (!can_compare(target.value()->type(), lower.value()->type(), TokenType::GreaterEqual)
-            || !can_compare(target.value()->type(), upper.value()->type(), TokenType::LessEqual)) {
-            return std::unexpected(error(
+            || !can_compare(target.value()->type(), upper.value()->type(), TokenType::LessEqual)) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 expression.location(),
                 "BETWEEN bounds are not comparable with target expression"
@@ -1306,19 +1329,19 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_like(const LikeExpression & expression, const BindingCollection & collection)
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_like(const LikeExpression & expression, const BindingCollection & collection)
     {
         auto target = bind_expression(expression.expression(), collection);
-        if (!target.has_value()) {
+        if (!target.has_value()) [[unlikely]] {
             return std::unexpected(std::move(target.error()));
         }
         auto pattern = bind_expression(expression.pattern(), collection);
-        if (!pattern.has_value()) {
+        if (!pattern.has_value()) [[unlikely]] {
             return std::unexpected(std::move(pattern.error()));
         }
 
-        if (!is_varchar(target.value()->type()) || !is_varchar(pattern.value()->type())) {
-            return std::unexpected(error(
+        if (!is_varchar(target.value()->type()) || !is_varchar(pattern.value()->type())) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 expression.location(),
                 "LIKE operands must be VARCHAR"
@@ -1345,8 +1368,8 @@ private:
     )
     {
         if (expression.qualifier().has_value()
-            && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) {
-            return std::unexpected(error(
+            && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+            return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidQualifier,
                 expression.location(),
                 "Wildcard qualifier does not match FROM collection: " + expression.qualifier().value()
@@ -1376,7 +1399,7 @@ private:
      * @return 绑定后的表达式
      */
     [[nodiscard]]
-    BoundExpressionResult bind_default_expression(
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_default_expression(
         const catalog::CatalogDefaultExpression & expression,
         AstNodeLocation location
     )
@@ -1386,11 +1409,11 @@ private:
             elements.reserve(expression.elements.size());
             for (const auto & element : expression.elements) {
                 auto bound_element = bind_default_expression(element, location);
-                if (!bound_element.has_value()) {
+                if (!bound_element.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(bound_element.error()));
                 }
-                if (!is_numeric(bound_element.value()->type())) {
-                    return std::unexpected(error(
+                if (!is_numeric(bound_element.value()->type())) [[unlikely]] {
+                    return std::unexpected(make_binder_error(
                         BinderErrorCode::InvalidType,
                         location,
                         "Vector default elements must be numeric"
@@ -1418,7 +1441,7 @@ private:
             return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Varchar), expression.value, location);
         }
 
-        return std::unexpected(error(BinderErrorCode::InvalidType, location, "Unsupported default expression"));
+        [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Unsupported default expression"));
     }
 
     /**
@@ -1439,16 +1462,16 @@ private:
         result.reserve(columns.size());
 
         for (const auto & column : columns) {
-            if (!seen_columns.emplace(catalog::normalize_identifier(column.name)).second) {
-                return std::unexpected(error(
+            if (!seen_columns.emplace(catalog::normalize_identifier(column.name)).second) [[unlikely]] {
+                return std::unexpected(make_binder_error(
                     BinderErrorCode::DuplicateColumn,
                     location,
                     "Duplicate column: " + column.name
                 ));
             }
             if (column.primary_key) {
-                if (has_primary_key) {
-                    return std::unexpected(error(
+                if (has_primary_key) [[unlikely]] {
+                    return std::unexpected(make_binder_error(
                         BinderErrorCode::DuplicatePrimaryKey,
                         location,
                         "Collection cannot have multiple primary keys"
@@ -1458,24 +1481,24 @@ private:
             }
 
             auto logical_type = bind_data_type(column.type, location);
-            if (!logical_type.has_value()) {
+            if (!logical_type.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(logical_type.error()));
             }
 
             std::optional<catalog::CatalogDefaultExpression> default_expression;
             if (column.default_value != nullptr) {
                 auto default_snapshot = snapshot_default_expression(*column.default_value);
-                if (!default_snapshot.has_value()) {
+                if (!default_snapshot.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(default_snapshot.error()));
                 }
                 default_expression = std::move(default_snapshot.value());
 
                 auto bound_default = bind_default_expression(default_expression.value(), column.default_value->location());
-                if (!bound_default.has_value()) {
+                if (!bound_default.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(bound_default.error()));
                 }
-                if (!can_cast(bound_default.value()->type(), logical_type.value())) {
-                    return std::unexpected(error(
+                if (!can_cast(bound_default.value()->type(), logical_type.value())) [[unlikely]] {
+                    return std::unexpected(make_binder_error(
                         BinderErrorCode::InvalidType,
                         column.default_value->location(),
                         "DEFAULT value type " + type_name(bound_default.value()->type())
@@ -1483,8 +1506,8 @@ private:
                             + " type " + type_name(logical_type.value())
                     ));
                 }
-                if (bound_default.value()->type().id == LogicalTypeId::Null && column.primary_key) {
-                    return std::unexpected(error(
+                if (bound_default.value()->type().id == LogicalTypeId::Null && column.primary_key) [[unlikely]] {
+                    return std::unexpected(make_binder_error(
                         BinderErrorCode::NotNullable,
                         column.default_value->location(),
                         "PRIMARY KEY column cannot default to NULL: " + column.name
@@ -1527,17 +1550,17 @@ private:
         case DataTypeKind::Boolean:
             return type(LogicalTypeId::Boolean);
         case DataTypeKind::Varchar:
-            if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) {
-                return std::unexpected(error(BinderErrorCode::InvalidType, location, "VARCHAR length must be positive"));
+            if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) [[unlikely]] {
+                return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "VARCHAR length must be positive"));
             }
             return type(LogicalTypeId::Varchar, data_type.parameter);
         case DataTypeKind::Vector:
-            if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) {
-                return std::unexpected(error(BinderErrorCode::InvalidType, location, "VECTOR dimension must be positive"));
+            if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) [[unlikely]] {
+                return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "VECTOR dimension must be positive"));
             }
             return type(LogicalTypeId::Vector, data_type.parameter);
         }
-        return std::unexpected(error(BinderErrorCode::InvalidType, location, "Unsupported data type"));
+        [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Unsupported data type"));
     }
 
     /**
@@ -1556,6 +1579,7 @@ private:
             case TokenType::Null:
                 return catalog::CatalogDefaultExpression::null_literal();
             case TokenType::True:
+                [[fallthrough]];
             case TokenType::False:
                 return catalog::CatalogDefaultExpression::literal(
                     catalog::CatalogDefaultLiteralKind::Boolean,
@@ -1587,7 +1611,7 @@ private:
             elements.reserve(vector.elements().size());
             for (const auto & element : vector.elements()) {
                 auto snapshot = snapshot_default_expression(*element);
-                if (!snapshot.has_value()) {
+                if (!snapshot.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(snapshot.error()));
                 }
                 elements.push_back(std::move(snapshot.value()));
@@ -1595,7 +1619,7 @@ private:
             return catalog::CatalogDefaultExpression::vector(std::move(elements));
         }
 
-        return std::unexpected(error(
+        [[unlikely]] return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
             expression.location(),
             "Unsupported default expression"

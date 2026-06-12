@@ -566,8 +566,10 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         );
     }
 
-    [[unlikely]]
-    return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Expected DATABASE or COLLECTION after CREATE"));
+    [[unlikely]] return std::unexpected(make_current_error(
+        ParserErrorCode::UnsupportedSyntax, 
+        "Expected DATABASE or COLLECTION after CREATE"
+    ));
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_drop_statement()
