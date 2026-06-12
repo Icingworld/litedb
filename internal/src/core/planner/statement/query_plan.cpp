@@ -1,6 +1,7 @@
 #include "core/planner/statement/query_plan.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::planner
 {
@@ -13,6 +14,7 @@ QueryPlan::QueryPlan(std::unique_ptr<logical::LogicalPlanNode> root, parser::ast
 
 const logical::LogicalPlanNode & QueryPlan::root() const noexcept
 {
+    assert(root_ != nullptr);
     return *root_;
 }
 
