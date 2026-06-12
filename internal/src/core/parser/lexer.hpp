@@ -18,35 +18,35 @@ public:
 
 public:
     /**
-     * @brief 获取下一个词法单元
-     * @return 下一个词法单元
+     * @brief 获取下一个 Token
+     * @return 下一个 Token
      */
     Token next();
 
     /**
-     * @brief 不移动位置，查看下一个词法单元
-     * @return 下一个词法单元
+     * @brief 不移动位置，查看下一个 Token
+     * @return 下一个 Token
      */
     const Token & peek();
 
     /**
-     * @brief 是否还有更多词法单元
-     * @return 是否还有更多词法单元
+     * @brief 是否还有更多 Token
+     * @return 是否还有更多 Token
      */
     [[nodiscard]]
     bool has_more() const noexcept;
 
     /**
-     * @brief 获取当前词法单元位置
-     * @return 当前词法单元位置
+     * @brief 获取当前 Token 位置
+     * @return 当前 Token 位置
      */
     [[nodiscard]]
     TokenLocation location() const noexcept;
 
 private:
     /**
-     * @brief 获取下一个词法单元
-     * @return 下一个词法单元
+     * @brief 获取下一个 Token
+     * @return 下一个 Token
      */
     [[nodiscard]]
     Token next_internal();
@@ -119,8 +119,8 @@ private:
 private:
     std::string input_;                     ///< 原始字符串
     std::size_t position_;                  ///< 当前字符位置
-    TokenLocation location_;                ///< 当前词法单元位置
-    std::optional<Token> peeked_token_;     ///< 预读的词法单元
+    TokenLocation location_;                ///< 当前 Token 位置
+    std::optional<Token> peeked_token_;     ///< 预读的 Token
 };
 
 } // namespace litedb::core::parser

@@ -37,13 +37,13 @@ namespace
 
 using namespace litedb::core::binder::bound;
 
-logical::PlannerError error(
-    logical::PlannerErrorCode code,
+PlannerError error(
+    PlannerErrorCode code,
     parser::ast::AstNodeLocation location,
     std::string message
 )
 {
-    return logical::PlannerError {
+    return PlannerError {
         .code = code,
         .location = location,
         .message = std::move(message),
@@ -52,13 +52,13 @@ logical::PlannerError error(
 
 } // namespace
 
-std::expected<std::unique_ptr<StatementPlan>, logical::PlannerError> Planner::plan(
+std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     std::unique_ptr<BoundStatement> statement
 ) const
 {
     if (statement == nullptr) {
         return std::unexpected(error(
-            logical::PlannerErrorCode::InvalidArgument,
+            PlannerErrorCode::InvalidArgument,
             parser::ast::AstNodeLocation {},
             "cannot plan a null bound statement"
         ));
@@ -164,14 +164,14 @@ std::expected<std::unique_ptr<StatementPlan>, logical::PlannerError> Planner::pl
         [[fallthrough]];
     case BoundStatementKind::AlterCollection:
         return std::unexpected(error(
-            logical::PlannerErrorCode::UnsupportedStatement,
+            PlannerErrorCode::UnsupportedStatement,
             statement->location(),
             "unsupported bound statement kind"
         ));
     }
 
     return std::unexpected(error(
-        logical::PlannerErrorCode::UnsupportedStatement,
+        PlannerErrorCode::UnsupportedStatement,
         statement->location(),
         "unknown bound statement kind"
     ));

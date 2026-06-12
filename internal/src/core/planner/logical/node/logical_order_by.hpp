@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "core/binder/bound/statement/bound_select_statement.hpp"
-#include "core/planner/logical/logical_unary_node.hpp"
+#include "core/planner/logical/node/logical_unary_node.hpp"
 
 namespace litedb::core::planner::logical
 {

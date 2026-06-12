@@ -235,17 +235,52 @@ void test_parse_expression_shapes()
 
 void test_parse_failures()
 {
-    require(parse_error("").message == "Empty statement", "empty input error mismatch");
-    require(parse_error("USE demo extra").location.column == 10, "trailing token location mismatch");
-    require(parse_error("USE demo;;").location.column == 10, "multiple semicolon location mismatch");
-    require(parse_error("CREATE DATABASE;").message == "Expected database name", "missing object name error mismatch");
-    require(parse_error("CREATE COLLECTION users ();").message == "Expected at least one column definition", "empty column list error mismatch");
-    require(parse_error("CREATE COLLECTION users (name VARCHAR());").message == "Expected VARCHAR length", "VARCHAR missing length error mismatch");
-    require(parse_error("CREATE COLLECTION users (embedding VECTOR());").message == "Expected VECTOR dimension", "VECTOR missing dimension error mismatch");
-    require(parse_error("CREATE COLLECTION users (age INTEGER DEFAULT age);").message == "Expected literal after DEFAULT", "DEFAULT expression error mismatch");
-    require(parse_error("SELECT name AS username FROM users;").message == "Expected FROM after select list", "AS unsupported error mismatch");
-    require(parse_error("SELECT age FROM users GROUP BY age;").message == "Unexpected token", "GROUP BY unsupported error mismatch");
-    require(parse_error("CREATE INDEX idx_age ON users(age);").message == "Expected DATABASE or COLLECTION after CREATE", "CREATE INDEX unsupported error mismatch");
+    auto empty = parse_error("");
+    require(empty.code == ParserErrorCode::EmptyStatement, "empty input error code mismatch");
+    require(empty.message == "Empty statement", "empty input error mismatch");
+
+    auto trailing = parse_error("USE demo extra");
+    require(trailing.code == ParserErrorCode::UnexpectedToken, "trailing token error code mismatch");
+    require(trailing.location.column == 10, "trailing token location mismatch");
+
+    auto multiple_semicolon = parse_error("USE demo;;");
+    require(multiple_semicolon.code == ParserErrorCode::UnexpectedToken, "multiple semicolon error code mismatch");
+    require(multiple_semicolon.location.column == 10, "multiple semicolon location mismatch");
+
+    auto missing_name = parse_error("CREATE DATABASE;");
+    require(missing_name.code == ParserErrorCode::ExpectedIdentifier, "missing object name error code mismatch");
+    require(missing_name.message == "Expected database name", "missing object name error mismatch");
+
+    auto empty_columns = parse_error("CREATE COLLECTION users ();");
+    require(empty_columns.code == ParserErrorCode::EmptyList, "empty column list error code mismatch");
+    require(empty_columns.message == "Expected at least one column definition", "empty column list error mismatch");
+
+    auto missing_varchar_length = parse_error("CREATE COLLECTION users (name VARCHAR());");
+    require(missing_varchar_length.code == ParserErrorCode::ExpectedToken, "VARCHAR missing length error code mismatch");
+    require(missing_varchar_length.message == "Expected VARCHAR length", "VARCHAR missing length error mismatch");
+
+    auto missing_vector_dimension = parse_error("CREATE COLLECTION users (embedding VECTOR());");
+    require(missing_vector_dimension.code == ParserErrorCode::ExpectedToken, "VECTOR missing dimension error code mismatch");
+    require(missing_vector_dimension.message == "Expected VECTOR dimension", "VECTOR missing dimension error mismatch");
+
+    auto default_expression = parse_error("CREATE COLLECTION users (age INTEGER DEFAULT age);");
+    require(default_expression.code == ParserErrorCode::ExpectedLiteral, "DEFAULT expression error code mismatch");
+    require(default_expression.message == "Expected literal after DEFAULT", "DEFAULT expression error mismatch");
+
+    auto unsupported_as = parse_error("SELECT name AS username FROM users;");
+    require(unsupported_as.code == ParserErrorCode::ExpectedToken, "AS unsupported error code mismatch");
+    require(unsupported_as.message == "Expected FROM after select list", "AS unsupported error mismatch");
+
+    auto unsupported_group_by = parse_error("SELECT age FROM users GROUP BY age;");
+    require(unsupported_group_by.code == ParserErrorCode::UnexpectedToken, "GROUP BY unsupported error code mismatch");
+    require(unsupported_group_by.message == "Unexpected token", "GROUP BY unsupported error mismatch");
+
+    auto unsupported_create_index = parse_error("CREATE INDEX idx_age ON users(age);");
+    require(unsupported_create_index.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX unsupported error code mismatch");
+    require(unsupported_create_index.message == "Expected DATABASE or COLLECTION after CREATE", "CREATE INDEX unsupported error mismatch");
+
+    auto lexical_error = parse_error("SELECT ! FROM users;");
+    require(lexical_error.code == ParserErrorCode::LexicalError, "lexical error code mismatch");
 }
 
 } // namespace

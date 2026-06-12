@@ -2,13 +2,14 @@
 
 #include <memory>
 
-#include "core/planner/logical/logical_plan_node.hpp"
+#include "core/planner/logical/node/logical_plan_node.hpp"
 
 namespace litedb::core::planner::logical
 {
 
 /**
  * @brief 逻辑一元节点
+ * @details 只有一个子节点的节点
  */
 class LogicalUnaryNode : public LogicalPlanNode
 {

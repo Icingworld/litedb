@@ -40,8 +40,8 @@ enum class DataTypeKind
  */
 struct DataType
 {
-    DataTypeKind kind;
-    std::optional<std::size_t> parameter;
+    DataTypeKind kind;                        ///< 数据类型
+    std::optional<std::size_t> parameter;     ///< 参数
 };
 
 /**
@@ -49,14 +49,17 @@ struct DataType
  */
 struct ColumnDefinition
 {
-    std::string name;
-    DataType type;
-    bool primary_key {false};
-    bool unique {false};
-    std::unique_ptr<ExpressionNode> default_value;
-    std::optional<std::string> comment;
+    std::string name;                                 ///< 列名称
+    DataType type;                                    ///< 数据类型
+    bool primary_key {false};                         ///< 是否为主键
+    bool unique {false};                              ///< 是否唯一
+    std::unique_ptr<ExpressionNode> default_value;    ///< 默认值
+    std::optional<std::string> comment;               ///< 注释
 };
 
+/**
+ * @brief 列定义列表
+ */
 using ColumnDefinitionList = std::vector<ColumnDefinition>;
 
 } // namespace litedb::core::parser::ast

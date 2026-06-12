@@ -13,14 +13,14 @@ set(LOGICAL_PLANNER_SOURCES
     ../statement/statement_plan.cpp
     ../statement/update_plan.cpp
     ../statement/use_plan.cpp
-    logical_filter.cpp
-    logical_limit.cpp
-    logical_order_by.cpp
-    logical_plan_node.cpp
     logical_planner.cpp
-    logical_projection.cpp
-    logical_scan.cpp
-    logical_unary_node.cpp
+    node/logical_filter.cpp
+    node/logical_limit.cpp
+    node/logical_order_by.cpp
+    node/logical_plan_node.cpp
+    node/logical_projection.cpp
+    node/logical_scan.cpp
+    node/logical_unary_node.cpp
 )
 
 add_library(litedb_logical_planner ${LOGICAL_PLANNER_SOURCES})

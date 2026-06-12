@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
 #include <string_view>
 
@@ -8,10 +7,9 @@ namespace litedb::core::parser
 {
 
 /**
- * @brief 词法单元类型
- * @note 当词法单元数量超过 256 时，需要更换存储类型
+ * @brief Token 类型
  */
-enum class TokenType : std::uint8_t
+enum class TokenType
 {
     EoF,                ///< 结束标记
 
@@ -109,11 +107,11 @@ enum class TokenType : std::uint8_t
     LeftBracket,        ///< [
     RightBracket,       ///< ]
 
-    Error               ///< 错误标记
+    Error,              ///< 错误标记
 };
 
 /**
- * @brief 词法单元位置
+ * @brief Token 位置
  */
 struct TokenLocation
 {
@@ -133,30 +131,30 @@ public:
 
 public:
     /**
-     * @brief 获取词法单元类型
-     * @return 词法单元类型
+     * @brief 获取 Token 类型
+     * @return Token 类型
      */
     [[nodiscard]]
     TokenType type() const noexcept;
 
     /**
-     * @brief 获取词法单元值
-     * @return 词法单元值
+     * @brief 获取 Token 值
+     * @return Token 值
      */
     [[nodiscard]]
     std::string_view value() const noexcept;
 
     /**
-     * @brief 获取词法单元位置
-     * @return 词法单元位置
+     * @brief 获取 Token 位置
+     * @return Token 位置
      */
     [[nodiscard]]
     TokenLocation location() const noexcept;
 
 private:
-    TokenType type_;            ///< 词法单元类型
-    std::string_view value_;    ///< 词法单元值
-    TokenLocation location_;    ///< 词法单元位置
+    TokenType type_;            ///< Token 类型
+    std::string_view value_;    ///< Token 值
+    TokenLocation location_;    ///< Token 位置
 };
 
 } // namespace litedb::core::parser

@@ -25,4 +25,5 @@ bool CreateDatabasePlan::if_not_exists() const noexcept
 {
     return if_not_exists_;
 }
+
 } // namespace litedb::core::planner

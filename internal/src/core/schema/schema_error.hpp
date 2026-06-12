@@ -11,7 +11,7 @@ namespace litedb::core::schema
 enum class SchemaErrorCode
 {
     DatabaseNotFound,        ///< 数据库不存在
-    CollectionNotFound       ///< 集合不存在
+    CollectionNotFound,      ///< 集合不存在
 };
 
 /**

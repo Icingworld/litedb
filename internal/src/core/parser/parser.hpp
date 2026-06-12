@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "core/parser/token.hpp"
+#include "core/parser/parser_error.hpp"
 
 namespace litedb::core::parser
 {
@@ -17,15 +17,6 @@ namespace ast
 class StatementNode;
 
 } // namespace ast
-
-/**
- * @brief 解析器错误
- */
-struct ParserError
-{
-    TokenLocation location;     ///< 错误位置
-    std::string message;        ///< 错误消息
-};
 
 /**
  * @brief 解析器

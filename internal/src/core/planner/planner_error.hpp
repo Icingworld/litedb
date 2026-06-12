@@ -4,7 +4,7 @@
 
 #include "core/parser/ast/ast_node.hpp"
 
-namespace litedb::core::planner::logical
+namespace litedb::core::planner
 {
 
 /**
@@ -13,7 +13,7 @@ namespace litedb::core::planner::logical
 enum class PlannerErrorCode
 {
     InvalidArgument,                ///< 无效参数
-    UnsupportedStatement            ///< 不支持的语句
+    UnsupportedStatement,           ///< 不支持的语句
 };
 
 /**
@@ -26,4 +26,4 @@ struct PlannerError
     std::string message;                        ///< 错误消息
 };
 
-} // namespace litedb::core::planner::logical
+} // namespace litedb::core::planner

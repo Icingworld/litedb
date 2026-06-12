@@ -3,13 +3,14 @@
 #include <string>
 
 #include "core/common/ids.hpp"
-#include "core/planner/logical/logical_plan_node.hpp"
+#include "core/planner/logical/node/logical_plan_node.hpp"
 
 namespace litedb::core::planner::logical
 {
 
 /**
  * @brief 逻辑扫描节点
+ * @details 叶子节点，没有子节点，直接继承自 LogicalPlanNode
  */
 class LogicalScan final : public LogicalPlanNode
 {

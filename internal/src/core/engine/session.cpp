@@ -47,7 +47,7 @@ EngineError from_binder_error(binder::BinderError error)
 }
 
 [[nodiscard]]
-EngineError from_planner_error(planner::logical::PlannerError error)
+EngineError from_planner_error(planner::PlannerError error)
 {
     return EngineError {
         .code = EngineErrorCode::PlannerError,
