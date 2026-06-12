@@ -382,31 +382,6 @@ private:
 
 } // namespace
 
-Parser::Parser(std::string input)
-    : lexer_(std::make_unique<Lexer>(std::move(input)))
-{
-}
-
-Parser::Parser(std::unique_ptr<Lexer> lexer)
-    : lexer_(std::move(lexer))
-{
-}
-
-Parser::~Parser() = default;
-
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse()
-{
-    // 使用 worker 解析 SQL 语句
-    ParserWorker worker {*lexer_};
-    return worker.parse();
-}
-
-ParserWorker::ParserWorker(Lexer & lexer)
-    : lexer_(lexer)
-    , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
-{
-}
-
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse()
 {
     current_token_ = lexer_.next();
@@ -1742,6 +1717,29 @@ void ParserWorker::skip_semicolon()
 ast::AstNodeLocation ParserWorker::ast_location(TokenLocation location) const noexcept
 {
     return ast::AstNodeLocation {location.line, location.column};
+}
+
+Parser::Parser(std::string input)
+    : lexer_(std::make_unique<Lexer>(std::move(input)))
+{
+}
+
+Parser::Parser(std::unique_ptr<Lexer> lexer)
+    : lexer_(std::move(lexer))
+{
+}
+
+Parser::~Parser() = default;
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> Parser::parse()
+{
+    return ParserWorker(*lexer_).parse();
+}
+
+ParserWorker::ParserWorker(Lexer & lexer)
+    : lexer_(lexer)
+    , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
+{
 }
 
 } // namespace litedb::core::parser
