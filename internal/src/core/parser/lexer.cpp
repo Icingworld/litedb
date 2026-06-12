@@ -12,7 +12,7 @@ namespace litedb::core::parser
 namespace
 {
 
-// 编译器常量表，用于快速查找获取词法单元类型
+// 编译器常量表，用于快速查找获取 Token 类型
 constexpr auto KEYWORDS = std::to_array<std::pair<std::string_view, TokenType>>({
     {"SELECT", TokenType::Select},
     {"CREATE", TokenType::Create},
@@ -82,9 +82,9 @@ constexpr auto KEYWORDS = std::to_array<std::pair<std::string_view, TokenType>>(
 });
 
 /**
- * @brief 获取关键字的词法单元类型
+ * @brief 获取关键字的 Token 类型
  * @param value 关键字
- * @return 关键字的词法单元类型
+ * @return 关键字的 Token 类型
  */
 [[nodiscard]]
 constexpr std::optional<TokenType> keyword_type(std::string_view value) noexcept
@@ -110,14 +110,14 @@ Lexer::Lexer(std::string input)
 
 Token Lexer::next()
 {
-    // 如果已经预读，直接返回预读的词法单元
+    // 如果已经预读，直接返回预读的 Token
     if (peeked_token_.has_value()) {
         const Token token = peeked_token_.value();
         peeked_token_ = std::nullopt;
         return token;
     }
 
-    // 没有预读，尝试获取下一个词法单元
+    // 没有预读，尝试获取下一个 Token
     return next_internal();
 }
 

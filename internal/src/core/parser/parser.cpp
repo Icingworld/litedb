@@ -41,7 +41,7 @@ namespace
 
 /**
  * @brief 是否为比较运算符
- * @param type 词法单元类型
+ * @param type  Token 类型
  * @return 是否为比较运算符
  */
 [[nodiscard]]
@@ -56,9 +56,9 @@ bool is_comparison_operator(TokenType type) noexcept
 }
 
 /**
- * @brief 是否为字面量词法单元
- * @param type 词法单元类型
- * @return 是否为字面量词法单元
+ * @brief 是否为字面量 Token 
+ * @param type  Token 类型
+ * @return 是否为字面量 Token 
  */
 [[nodiscard]]
 bool is_literal_token(TokenType type) noexcept
@@ -319,21 +319,21 @@ private:
     std::expected<bool, ParserError> parse_if_exists();
 
     /**
-     * @brief 前进一个词法单元
-     * @return 前进后的词法单元
+     * @brief 前进一个 Token 
+     * @return 前进后的 Token 
      */
     Token advance();
 
     /**
-     * @brief 匹配词法单元类型
-     * @param type 词法单元类型
+     * @brief 匹配 Token 类型
+     * @param type  Token 类型
      * @return 是否匹配
      */
     bool match(TokenType type);
 
     /**
-     * @brief 检查词法单元类型
-     * @param type 词法单元类型
+     * @brief 检查 Token 类型
+     * @param type  Token 类型
      * @return 是否匹配
      */
     bool check(TokenType type) const;
@@ -348,11 +348,11 @@ private:
     ParserError make_current_error(ParserErrorCode code, std::string_view message) const;
 
     /**
-     * @brief 消费词法单元
-     * @param type 词法单元类型
+     * @brief 消费 Token 
+     * @param type  Token 类型
      * @param message 错误消息
      * @param code 错误码
-     * @return 消费后的词法单元
+     * @return 消费后的 Token 
      */
     [[nodiscard]]
     std::expected<Token, ParserError> consume(
@@ -368,7 +368,7 @@ private:
 
     /**
      * @brief 从 Token 位置创建 AST 节点位置
-     * @param location 词法单元位置
+     * @param location  Token 位置
      * @return AST节点位置
      */
     [[nodiscard]]
@@ -376,7 +376,7 @@ private:
 
 private:
     Lexer & lexer_;                 ///< 词法分析器
-    Token current_token_;           ///< 当前词法单元
+    Token current_token_;           ///< 当前 Token 
 };
 
 } // namespace
@@ -410,7 +410,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 {
     current_token_ = lexer_.next();
 
-    // 检查是否出现空语句或错误词法单元
+    // 检查是否出现空语句或错误 Token 
     if (current_token_.type() == TokenType::EoF) [[unlikely]] {
         return std::unexpected(make_current_error(ParserErrorCode::EmptyStatement, "Empty statement"));
     }
@@ -427,7 +427,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     // 跳过分号
     skip_semicolon();
 
-    // 检查是否出现错误词法单元
+    // 检查是否出现错误 Token 
     if (current_token_.type() == TokenType::Error) [[unlikely]] {
         return std::unexpected(make_current_error(ParserErrorCode::LexicalError, "Invalid token"));
     }
@@ -440,6 +440,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_statement()
 {
+    // 根据当前 Token 类型分发到不同的解析
     switch (current_token_.type()) {
     case TokenType::Use:
         return parse_use_statement();

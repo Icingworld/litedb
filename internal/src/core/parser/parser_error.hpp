@@ -15,8 +15,8 @@ enum class ParserErrorCode
     EmptyStatement,        ///< 空输入
     LexicalError,          ///< 词法错误
     UnexpectedStatement,   ///< 不支持的语句开始
-    UnexpectedToken,       ///< 在有效解析边界后出现意外的词法单元
-    ExpectedToken,         ///< 期望特定的词法单元
+    UnexpectedToken,       ///< 在有效解析边界后出现意外的 Token
+    ExpectedToken,         ///< 期望特定的 Token
     ExpectedIdentifier,    ///< 期望标识符
     ExpectedExpression,    ///< 期望表达式
     ExpectedLiteral,       ///< 期望字面量
