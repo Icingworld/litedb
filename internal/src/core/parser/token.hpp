@@ -107,7 +107,7 @@ enum class TokenType
     LeftBracket,        ///< [
     RightBracket,       ///< ]
 
-    Error               ///< 错误标记
+    Error,              ///< 错误标记
 };
 
 /**

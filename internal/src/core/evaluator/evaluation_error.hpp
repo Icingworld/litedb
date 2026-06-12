@@ -17,7 +17,7 @@ enum class EvaluationErrorCode
     InvalidLiteral,                             ///< 无效的字面量
     InvalidColumnReference,                     ///< 无效的列引用
     DivisionByZero,                             ///< 除以零
-    CastFailed                                  ///< 转换失败
+    CastFailed,                                 ///< 转换失败
 };
 
 /**

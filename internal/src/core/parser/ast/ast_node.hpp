@@ -42,7 +42,7 @@ enum class AstNodeKind : std::uint8_t
     Unary,                  ///< 一元运算符
     In,                     ///< IN
     Between,                ///< BETWEEN
-    Like                    ///< LIKE
+    Like,                   ///< LIKE
 };
 
 /**

@@ -12,7 +12,7 @@ namespace litedb::core::parser
 namespace
 {
 
-// 编译器常量表，用于快速查找获取 Token 类型
+// 编译期常量表，用于快速查找获取 Token 类型
 constexpr auto KEYWORDS = std::to_array<std::pair<std::string_view, TokenType>>({
     {"SELECT", TokenType::Select},
     {"CREATE", TokenType::Create},

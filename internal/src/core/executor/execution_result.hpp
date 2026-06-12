@@ -19,7 +19,7 @@ enum class ExecutionResultKind
 {
     Command,        ///< 命令结果
     RowSet,         ///< 行集结果
-    UseDatabase     ///< 切换数据库结果
+    UseDatabase,    ///< 切换数据库结果
 };
 
 /**

@@ -13,7 +13,7 @@ namespace litedb::core::planner::logical
 enum class PlannerErrorCode
 {
     InvalidArgument,                ///< 无效参数
-    UnsupportedStatement            ///< 不支持的语句
+    UnsupportedStatement,           ///< 不支持的语句
 };
 
 /**

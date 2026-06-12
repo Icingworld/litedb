@@ -15,7 +15,7 @@ enum class EngineErrorCode
     ParserError,        ///< 解析错误
     BinderError,        ///< 绑定错误
     PlannerError,       ///< 计划错误
-    ExecutionError      ///< 执行错误
+    ExecutionError,     ///< 执行错误
 };
 
 /**
