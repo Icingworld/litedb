@@ -13,8 +13,10 @@ enum class StatementPlanKind
     Use,                ///< 使用数据库
     CreateDatabase,     ///< 创建数据库
     CreateCollection,   ///< 创建集合
+    CreateIndex,        ///< 创建索引
     DropDatabase,       ///< 删除数据库
     DropCollection,     ///< 删除集合
+    DropIndex,          ///< 删除索引
     ShowDatabases,      ///< 显示数据库
     ShowCollections,    ///< 显示集合
     DescribeCollection, ///< 描述集合
