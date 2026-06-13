@@ -26,6 +26,9 @@ public:
     [[nodiscard]]
     const schema::CollectionSchema & collection_schema() const noexcept;
 
+    [[nodiscard]]
+    std::expected<schema::Record, storage::StorageError> get(common::RecordId record_id) const override;
+
     std::expected<common::RecordId, storage::StorageError> insert(schema::RecordData record_data) override;
 
     std::expected<void, storage::StorageError> update(

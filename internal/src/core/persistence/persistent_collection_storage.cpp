@@ -61,6 +61,15 @@ const schema::CollectionSchema & PersistentCollectionStorage::collection_schema(
     return collection_schema_;
 }
 
+std::expected<schema::Record, storage::StorageError> PersistentCollectionStorage::get(common::RecordId record_id) const
+{
+    const auto it = records_.find(record_id);
+    if (it == records_.end()) {
+        return std::unexpected(make_error(storage::StorageErrorCode::RecordNotFound, "Record not found"));
+    }
+    return schema::Record {.record_id = record_id, .data = it->second};
+}
+
 std::expected<common::RecordId, storage::StorageError> PersistentCollectionStorage::insert(schema::RecordData record_data)
 {
     auto validation = validate_record(record_data);

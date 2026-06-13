@@ -21,6 +21,14 @@ public:
 
 public:
     /**
+     * @brief 获取记录
+     * @param record_id 记录 ID
+     * @return 记录
+     */
+    [[nodiscard]]
+    virtual std::expected<schema::Record, StorageError> get(common::RecordId record_id) const = 0;
+
+    /**
      * @brief 插入记录
      * @param record_data 记录数据
      * @return 记录 ID

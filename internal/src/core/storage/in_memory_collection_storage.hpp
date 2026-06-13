@@ -26,6 +26,14 @@ public:
     const schema::CollectionSchema & collection_schema() const noexcept;
 
     /**
+     * @brief 获取记录
+     * @param record_id 记录 ID
+     * @return 记录
+     */
+    [[nodiscard]]
+    std::expected<schema::Record, StorageError> get(common::RecordId record_id) const override;
+
+    /**
      * @brief 插入记录
      * @param record_data 记录数据
      * @return 记录 ID

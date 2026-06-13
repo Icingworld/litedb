@@ -3,7 +3,9 @@
 #include "core/persistence/binary_io.hpp"
 #include "core/persistence/catalog_store.hpp"
 #include "core/persistence/manifest_store.hpp"
+#include "core/persistence/persistent_collection_storage.hpp"
 #include "core/persistence/row_log.hpp"
+#include "core/storage/storage_error.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -143,6 +145,59 @@ void test_manifest_and_catalog_store()
     require(loaded->databases[0].collections[0].columns[1].type.parameter == 3, "catalog vector parameter mismatch");
     require(loaded->databases[0].collections[0].indexes.size() == 1, "catalog index count mismatch");
     require(loaded->databases[0].collections[0].indexes[0].name == "idx_id", "catalog index name mismatch");
+}
+
+schema::CollectionSchema simple_users_schema()
+{
+    std::vector<schema::ColumnSchema> columns;
+    columns.emplace_back(1, 1, 0, "id", type(common::LogicalTypeId::BigInt), false, true, true, std::nullopt, std::nullopt);
+    columns.emplace_back(2, 1, 1, "name", type(common::LogicalTypeId::Varchar, 64), true, false, false, std::nullopt, std::nullopt);
+    return schema::CollectionSchema {1, 1, "users", std::move(columns)};
+}
+
+schema::RecordData simple_record(std::int64_t id, std::string name)
+{
+    return schema::RecordData {
+        .values = {
+            schema::Value {id},
+            schema::Value {std::move(name)},
+        },
+    };
+}
+
+void test_persistent_collection_storage_get()
+{
+    const auto dir = make_temp_dir("litedb_persistent_get_test");
+    persistence::RowLog log {dir / "1.rows", 1};
+    auto opened = persistence::PersistentCollectionStorage::open(simple_users_schema(), std::move(log));
+    require(opened.has_value(), "persistent collection storage open failed");
+
+    auto & storage = **opened;
+    auto inserted = storage.insert(simple_record(1, "alice"));
+    require(inserted.has_value(), "persistent insert failed");
+
+    const storage::CollectionStorage & const_storage = storage;
+    auto fetched = const_storage.get(inserted.value());
+    require(fetched.has_value(), "persistent get existing record failed");
+    require(fetched->record_id == inserted.value(), "persistent get record id mismatch");
+    require(get_value<std::int64_t>(fetched->data.values[0]) == 1, "persistent get id mismatch");
+    require(get_value<std::string>(fetched->data.values[1]) == "alice", "persistent get name mismatch");
+
+    auto missing = const_storage.get(999);
+    require(!missing.has_value(), "persistent get missing record should fail");
+    require(missing.error().code == storage::StorageErrorCode::RecordNotFound, "persistent get missing error mismatch");
+
+    auto updated = storage.update(inserted.value(), simple_record(1, "alice-updated"));
+    require(updated.has_value(), "persistent update before get failed");
+    auto after_update = const_storage.get(inserted.value());
+    require(after_update.has_value(), "persistent get after update failed");
+    require(get_value<std::string>(after_update->data.values[1]) == "alice-updated", "persistent get after update mismatch");
+
+    auto erased = storage.erase(inserted.value());
+    require(erased.has_value(), "persistent erase before get failed");
+    auto after_erase = const_storage.get(inserted.value());
+    require(!after_erase.has_value(), "persistent get erased record should fail");
+    require(after_erase.error().code == storage::StorageErrorCode::RecordNotFound, "persistent get after erase error mismatch");
 }
 
 void test_row_log_replay_and_partial_tail()
@@ -308,6 +363,7 @@ int main()
     try {
         test_binary_value_roundtrip();
         test_manifest_and_catalog_store();
+        test_persistent_collection_storage_get();
         test_row_log_replay_and_partial_tail();
         test_database_instance_reopens_persistent_data();
         test_index_ddl_reopen();
