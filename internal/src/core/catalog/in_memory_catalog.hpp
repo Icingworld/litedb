@@ -75,6 +75,26 @@ public:
     const ColumnEntry * find_column(common::ColumnId column_id) const override;
 
     /**
+     * @brief 查找索引
+     * @param collection_id 集合 ID
+     * @param name 索引名
+     * @return 索引
+     */
+    [[nodiscard]]
+    const IndexEntry * find_index(
+        common::CollectionId collection_id,
+        std::string_view name
+    ) const override;
+
+    /**
+     * @brief 查找索引
+     * @param index_id 索引 ID
+     * @return 索引
+     */
+    [[nodiscard]]
+    const IndexEntry * find_index(common::IndexId index_id) const override;
+
+    /**
      * @brief 列出所有数据库
      * @return 数据库列表
      */
@@ -96,6 +116,14 @@ public:
      */
     [[nodiscard]]
     std::vector<const ColumnEntry *> list_columns(common::CollectionId collection_id) const override;
+
+    /**
+     * @brief 列出所有索引
+     * @param collection_id 集合 ID
+     * @return 索引列表
+     */
+    [[nodiscard]]
+    std::vector<const IndexEntry *> list_indexes(common::CollectionId collection_id) const override;
 
     /**
      * @brief 创建数据库
@@ -129,6 +157,20 @@ public:
      */
     std::expected<void, CatalogError> drop_collection(const DropCollectionRequest & request) override;
 
+    /**
+     * @brief 创建索引
+     * @param request 创建索引请求
+     * @return 索引 ID
+     */
+    std::expected<common::IndexId, CatalogError> create_index(const CreateIndexRequest & request) override;
+
+    /**
+     * @brief 删除索引
+     * @param request 删除索引请求
+     * @return 结果
+     */
+    std::expected<void, CatalogError> drop_index(const DropIndexRequest & request) override;
+
     [[nodiscard]]
     CatalogSnapshot snapshot() const;
 
@@ -144,12 +186,28 @@ private:
     DatabaseEntry * find_database_mutable(common::DatabaseId database_id);
 
     /**
+     * @brief 查找集合
+     * @param collection_id 集合 ID
+     * @return 集合
+     */
+    [[nodiscard]]
+    CollectionEntry * find_collection_mutable(common::CollectionId collection_id);
+
+    /**
      * @brief 验证集合请求
      * @param request 集合请求
      * @return 结果
      */
     [[nodiscard]]
     std::expected<void, CatalogError> validate_collection_request(const CreateCollectionRequest & request) const;
+
+    /**
+     * @brief 验证索引请求
+     * @param request 索引请求
+     * @return 结果
+     */
+    [[nodiscard]]
+    std::expected<void, CatalogError> validate_index_request(const CreateIndexRequest & request) const;
 
     /**
      * @brief 获取下一个数据库 ID
@@ -172,10 +230,18 @@ private:
     [[nodiscard]]
     common::ColumnId next_column_id() noexcept;
 
+    /**
+     * @brief 获取下一个索引 ID
+     * @return 下一个索引 ID
+     */
+    [[nodiscard]]
+    common::IndexId next_index_id() noexcept;
+
 private:
     common::DatabaseId next_database_id_ {1};           ///< 下一个数据库 ID
     common::CollectionId next_collection_id_ {1};       ///< 下一个集合 ID
     common::ColumnId next_column_id_ {1};               ///< 下一个列 ID
+    common::IndexId next_index_id_ {1};                 ///< 下一个索引 ID
 
     std::vector<common::DatabaseId> database_ids_;      ///< 数据库 ID 列表
     std::unordered_map<common::DatabaseId, std::unique_ptr<DatabaseEntry>> databases_by_id_;         ///< 数据库 ID 到数据库的映射
@@ -183,6 +249,7 @@ private:
 
     std::unordered_map<common::CollectionId, std::unique_ptr<CollectionEntry>> collections_by_id_;   ///< 集合 ID 到集合的映射
     std::unordered_map<common::ColumnId, std::unique_ptr<ColumnEntry>> columns_by_id_;               ///< 列 ID 到列的映射
+    std::unordered_map<common::IndexId, std::unique_ptr<IndexEntry>> indexes_by_id_;                 ///< 索引 ID 到索引的映射
 };
 
 } // namespace litedb::core::catalog

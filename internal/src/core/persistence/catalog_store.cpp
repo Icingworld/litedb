@@ -120,6 +120,7 @@ void write_snapshot(BinaryWriter & writer, const catalog::CatalogSnapshot & snap
     writer.write_u64(snapshot.next_database_id);
     writer.write_u64(snapshot.next_collection_id);
     writer.write_u64(snapshot.next_column_id);
+    writer.write_u64(snapshot.next_index_id);
     writer.write_u32(static_cast<std::uint32_t>(snapshot.databases.size()));
 
     for (const auto & database : snapshot.databases) {
@@ -141,6 +142,14 @@ void write_snapshot(BinaryWriter & writer, const catalog::CatalogSnapshot & snap
                 write_optional_default_expression(writer, column.default_expression);
                 write_optional_string(writer, column.comment);
             }
+            writer.write_u32(static_cast<std::uint32_t>(collection.indexes.size()));
+            for (const auto & index : collection.indexes) {
+                writer.write_u64(index.id);
+                writer.write_u64(index.column_id);
+                writer.write_string(index.name);
+                writer.write_u8(static_cast<std::uint8_t>(index.index_kind));
+                writer.write_u8(index.unique ? 1U : 0U);
+            }
         }
     }
 }
@@ -153,6 +162,7 @@ catalog::CatalogSnapshot read_snapshot(BinaryReader & reader)
     snapshot.next_database_id = reader.read_u64();
     snapshot.next_collection_id = reader.read_u64();
     snapshot.next_column_id = reader.read_u64();
+    snapshot.next_index_id = reader.read_u64();
 
     const auto database_count = reader.read_u32();
     snapshot.databases.reserve(database_count);
@@ -183,6 +193,18 @@ catalog::CatalogSnapshot read_snapshot(BinaryReader & reader)
                 column.default_expression = read_optional_default_expression(reader);
                 column.comment = read_optional_string(reader);
                 collection.columns.push_back(std::move(column));
+            }
+
+            const auto index_count = reader.read_u32();
+            collection.indexes.reserve(index_count);
+            for (std::uint32_t index_index = 0; index_index < index_count; ++index_index) {
+                catalog::CatalogSnapshotIndex index;
+                index.id = reader.read_u64();
+                index.column_id = reader.read_u64();
+                index.name = reader.read_string();
+                index.index_kind = static_cast<catalog::CatalogIndexKind>(reader.read_u8());
+                index.unique = reader.read_u8() != 0;
+                collection.indexes.push_back(std::move(index));
             }
 
             database.collections.push_back(std::move(collection));

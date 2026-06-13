@@ -39,4 +39,14 @@ const storage::StorageManager & Engine::storage() const noexcept
     return instance_.storage();
 }
 
+index::IndexManager & Engine::index_manager() noexcept
+{
+    return instance_.index_manager();
+}
+
+const index::IndexManager & Engine::index_manager() const noexcept
+{
+    return instance_.index_manager();
+}
+
 } // namespace litedb::core::engine

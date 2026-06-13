@@ -10,6 +10,7 @@
 #include "core/engine/engine_error.hpp"
 #include "core/engine/session.hpp"
 #include "core/executor/execution_result.hpp"
+#include "core/index/index_manager.hpp"
 #include "core/storage/storage_manager.hpp"
 
 namespace litedb::core::engine
@@ -66,6 +67,20 @@ public:
      */
     [[nodiscard]]
     const storage::StorageManager & storage() const noexcept;
+
+    /**
+     * @brief 获取索引管理器
+     * @return 索引管理器
+     */
+    [[nodiscard]]
+    index::IndexManager & index_manager() noexcept;
+
+    /**
+     * @brief 获取索引管理器
+     * @return 索引管理器
+     */
+    [[nodiscard]]
+    const index::IndexManager & index_manager() const noexcept;
 
 private:
     DatabaseInstance instance_;              ///< 数据库实例

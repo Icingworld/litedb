@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 
 namespace litedb::core::catalog
@@ -9,15 +8,18 @@ namespace litedb::core::catalog
 /**
  * @brief 目录错误码
  */
-enum class CatalogErrorCode : std::uint8_t
+enum class CatalogErrorCode
 {
-    InvalidArgument,                  ///< 无效参数
-    DatabaseNotFound,                 ///< 数据库不存在
-    CollectionNotFound,               ///< 集合不存在
-    DuplicateDatabase,                ///< 数据库已存在
-    DuplicateCollection,              ///< 集合已存在
-    DuplicateColumn,                  ///< 列已存在
-    MultiplePrimaryKeys,              ///< 多个主键
+    InvalidArgument,        ///< 无效参数
+    DatabaseNotFound,       ///< 数据库不存在
+    CollectionNotFound,     ///< 集合不存在
+    ColumnNotFound,         ///< 列不存在
+    IndexNotFound,          ///< 索引不存在
+    DuplicateDatabase,      ///< 重复数据库
+    DuplicateCollection,    ///< 重复数据库
+    DuplicateColumn,        ///< 重复列
+    DuplicateIndex,         ///< 重复索引
+    MultiplePrimaryKeys,    ///< 多个主键
 };
 
 /**
@@ -25,8 +27,8 @@ enum class CatalogErrorCode : std::uint8_t
  */
 struct CatalogError
 {
-    CatalogErrorCode code;             ///< 错误码
-    std::string message;               ///< 错误消息
+    CatalogErrorCode code;  ///< 错误码
+    std::string message;    ///< 错误消息
 };
 
 } // namespace litedb::core::catalog

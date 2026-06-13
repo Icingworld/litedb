@@ -23,9 +23,12 @@ enum class AstNodeKind : std::uint8_t
     Alter,                  ///< ALTER
     CreateDatabase,         ///< CREATE DATABASE
     CreateCollection,       ///< CREATE COLLECTION
+    CreateIndex,            ///< CREATE INDEX
     Delete,                 ///< DELETE
     Describe,               ///< DESCRIBE
-    Drop,                   ///< DROP
+    DropDatabase,           ///< DROP DATABASE
+    DropCollection,         ///< DROP COLLECTION
+    DropIndex,              ///< DROP INDEX
     Insert,                 ///< INSERT
     Select,                 ///< SELECT
     Show,                   ///< SHOW

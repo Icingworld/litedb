@@ -6,10 +6,12 @@
 
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_database_statement.hpp"
+#include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
 #include "core/binder/bound/statement/bound_describe_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_database_statement.hpp"
+#include "core/binder/bound/statement/bound_drop_index_statement.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_show_collections_statement.hpp"
@@ -18,10 +20,12 @@
 #include "core/binder/bound/statement/bound_use_statement.hpp"
 #include "core/planner/statement/create_collection_plan.hpp"
 #include "core/planner/statement/create_database_plan.hpp"
+#include "core/planner/statement/create_index_plan.hpp"
 #include "core/planner/statement/delete_plan.hpp"
 #include "core/planner/statement/describe_collection_plan.hpp"
 #include "core/planner/statement/drop_collection_plan.hpp"
 #include "core/planner/statement/drop_database_plan.hpp"
+#include "core/planner/statement/drop_index_plan.hpp"
 #include "core/planner/statement/insert_plan.hpp"
 #include "core/planner/statement/query_plan.hpp"
 #include "core/planner/statement/show_collections_plan.hpp"
@@ -123,6 +127,21 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
             create.location()
         );
     }
+    case BoundStatementKind::CreateIndex: {
+        auto & create = static_cast<BoundCreateIndexStatement &>(*statement);
+        return std::make_unique<CreateIndexPlan>(
+            create.database_id(),
+            create.collection_id(),
+            create.collection_name(),
+            create.column_id(),
+            create.column_name(),
+            create.index_name(),
+            create.index_kind(),
+            create.unique(),
+            create.if_not_exists(),
+            create.location()
+        );
+    }
     case BoundStatementKind::DropDatabase: {
         auto & drop = static_cast<BoundDropDatabaseStatement &>(*statement);
         return std::make_unique<DropDatabasePlan>(
@@ -138,6 +157,17 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
             drop.database_id(),
             drop.collection_id(),
             drop.collection_name(),
+            drop.if_exists(),
+            drop.location()
+        );
+    }
+    case BoundStatementKind::DropIndex: {
+        auto & drop = static_cast<BoundDropIndexStatement &>(*statement);
+        return std::make_unique<DropIndexPlan>(
+            drop.database_id(),
+            drop.collection_id(),
+            drop.collection_name(),
+            drop.index_name(),
             drop.if_exists(),
             drop.location()
         );

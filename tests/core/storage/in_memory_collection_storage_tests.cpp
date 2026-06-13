@@ -156,6 +156,76 @@ void test_insert_validation()
     require(nullable_column.has_value(), "nullable column insert should succeed");
 }
 
+void test_get()
+{
+    InMemoryCollectionStorage storage(users_schema());
+
+    auto first = storage.insert(record(1, "alice", 9.5));
+    auto second = storage.insert(record(2, "bob", 8.0));
+    require(first.has_value(), "first insert failed");
+    require(second.has_value(), "second insert failed");
+
+    const InMemoryCollectionStorage & const_storage = storage;
+    auto fetched = const_storage.get(first.value());
+    require(fetched.has_value(), "get existing record failed");
+    require(fetched->record_id == first.value(), "get record id mismatch");
+    require(std::get<std::int64_t>(fetched->data.values[0].data()) == 1, "get id column mismatch");
+    require(std::get<std::string>(fetched->data.values[1].data()) == "alice", "get name mismatch");
+    require(std::get<double>(fetched->data.values[2].data()) == 9.5, "get score mismatch");
+
+    auto fetched_second = const_storage.get(second.value());
+    require(fetched_second.has_value(), "get second record failed");
+    require(std::get<std::string>(fetched_second->data.values[1].data()) == "bob", "get second name mismatch");
+
+    auto missing = const_storage.get(999);
+    require(!missing.has_value(), "get missing record should fail");
+    require(missing.error().code == StorageErrorCode::RecordNotFound, "get missing error mismatch");
+
+    auto updated = storage.update(first.value(), record(1, "alice-updated", 10.0));
+    require(updated.has_value(), "update before get failed");
+    auto after_update = const_storage.get(first.value());
+    require(after_update.has_value(), "get after update failed");
+    require(std::get<std::string>(after_update->data.values[1].data()) == "alice-updated", "get after update name mismatch");
+    require(std::get<double>(after_update->data.values[2].data()) == 10.0, "get after update score mismatch");
+
+    auto erased = storage.erase(first.value());
+    require(erased.has_value(), "erase before get failed");
+    auto after_erase = const_storage.get(first.value());
+    require(!after_erase.has_value(), "get erased record should fail");
+    require(after_erase.error().code == StorageErrorCode::RecordNotFound, "get after erase error mismatch");
+
+    auto copy_test = storage.insert(record(3, "carol", 7.5));
+    require(copy_test.has_value(), "insert for copy test failed");
+    auto copied = const_storage.get(copy_test.value());
+    require(copied.has_value(), "get for copy test failed");
+    auto mutating_data = copied->data;
+    mutating_data.values[1] = Value {std::string {"mutated"}};
+    auto unchanged = const_storage.get(copy_test.value());
+    require(unchanged.has_value(), "get after local mutation failed");
+    require(std::get<std::string>(unchanged->data.values[1].data()) == "carol", "get should return independent copy");
+}
+
+void test_get_via_storage_manager()
+{
+    StorageManager manager;
+    auto created = manager.create_collection(users_schema());
+    require(created.has_value(), "create collection for get test failed");
+
+    auto * mutable_storage = manager.find_collection(1);
+    require(mutable_storage != nullptr, "collection storage lookup failed");
+
+    auto inserted = mutable_storage->insert(record(10, "manager", 5.5));
+    require(inserted.has_value(), "insert via manager failed");
+
+    const CollectionStorage * const_storage = manager.find_collection(1);
+    require(const_storage != nullptr, "const collection storage lookup failed");
+
+    auto fetched = const_storage->get(inserted.value());
+    require(fetched.has_value(), "get via manager failed");
+    require(fetched->record_id == inserted.value(), "get via manager id mismatch");
+    require(std::get<std::int64_t>(fetched->data.values[0].data()) == 10, "get via manager column mismatch");
+}
+
 void test_storage_manager()
 {
     StorageManager manager;
@@ -183,6 +253,8 @@ int main()
     try {
         test_insert_scan_and_delete();
         test_update();
+        test_get();
+        test_get_via_storage_manager();
         test_insert_validation();
         test_storage_manager();
     } catch (const std::exception & exception) {

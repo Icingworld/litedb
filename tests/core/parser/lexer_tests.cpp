@@ -29,7 +29,7 @@ void require_token(const Token & token, TokenType type, std::string_view value, 
 
 void test_keywords_identifiers_and_peek()
 {
-    Lexer lexer("select name FROM users");
+    Lexer lexer("select name FROM users USING HASH BTREE");
 
     const Token & peeked = lexer.peek();
     require_token(peeked, TokenType::Select, "select", 1, 1);
@@ -37,8 +37,11 @@ void test_keywords_identifiers_and_peek()
     require_token(lexer.next(), TokenType::Identifier, "name", 1, 8);
     require_token(lexer.next(), TokenType::From, "FROM", 1, 13);
     require_token(lexer.next(), TokenType::Identifier, "users", 1, 18);
+    require_token(lexer.next(), TokenType::Using, "USING", 1, 24);
+    require_token(lexer.next(), TokenType::Hash, "HASH", 1, 30);
+    require_token(lexer.next(), TokenType::BTree, "BTREE", 1, 35);
     require(!lexer.has_more(), "lexer should have no more non-whitespace input");
-    require_token(lexer.next(), TokenType::EoF, "", 1, 23);
+    require_token(lexer.next(), TokenType::EoF, "", 1, 40);
 }
 
 void test_literals_and_punctuation()

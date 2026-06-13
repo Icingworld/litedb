@@ -18,12 +18,13 @@ enum class BinderErrorCode
     DatabaseNotFound,          ///< 数据库不存在
     CollectionNotFound,        ///< 集合不存在
     ColumnNotFound,            ///< 列不存在
+    IndexNotFound,             ///< 索引不存在
     DuplicateColumn,           ///< 列已存在
     DuplicatePrimaryKey,       ///< 主键已存在
     InvalidQualifier,          ///< 无效的限定符
     InvalidType,               ///< 无效的类型
     InvalidValueCount,         ///< 无效的值数量
-    NotNullable,               ///< 不能为空
+    NotNullable,               ///< 不能为 NULL
 };
 
 /**

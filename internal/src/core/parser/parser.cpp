@@ -23,9 +23,12 @@
 #include "core/parser/ast/schema.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
+#include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
-#include "core/parser/ast/statement/drop_statement.hpp"
+#include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
+#include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -469,6 +472,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 
     // 尝试匹配 DATABASE 关键字
     if (match(TokenType::Database)) {
+        // 解析 CREATE DATABASE 语句
+
         // 判断是否存在 IF NOT EXISTS 关键字
         auto if_not_exists = parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
@@ -490,6 +495,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 
     // 尝试匹配 COLLECTION 关键字
     if (match(TokenType::Collection)) {
+        // 解析 CREATE COLLECTION 语句
+
         // 判断是否存在 IF NOT EXISTS 关键字
         auto if_not_exists = parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
@@ -541,9 +548,83 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         );
     }
 
+    // 匹配 INDEX 关键字
+    if (match(TokenType::Index)) {
+        // 解析 CREATE INDEX 语句
+
+        // 判断是否存在 IF NOT EXISTS 关键字
+        auto if_not_exists = parse_if_not_exists();
+        if (!if_not_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_not_exists.error());
+        }   
+
+        // 解析索引名称
+        auto index_name = parse_identifier_string("Expected index name");
+        if (!index_name.has_value()) [[unlikely]] {
+            return std::unexpected(index_name.error());
+        }   
+
+        // 期望 ON 关键字
+        auto on = consume(TokenType::On, "Expected ON after index name");
+        if (!on.has_value()) [[unlikely]] {
+            return std::unexpected(on.error());
+        }
+
+        // 解析集合名称
+        auto collection_name = parse_identifier_string("Expected collection name");
+        if (!collection_name.has_value()) [[unlikely]] {
+            return std::unexpected(collection_name.error());
+        }
+
+        // 期望 (
+        auto left_paren = consume(TokenType::LeftParen, "Expected '(' before index column");
+        if (!left_paren.has_value()) [[unlikely]] {
+            return std::unexpected(left_paren.error());
+        }
+
+        // 解析列名称
+        auto column_name = parse_identifier_string("Expected index column name");
+        if (!column_name.has_value()) [[unlikely]] {
+            return std::unexpected(column_name.error());
+        }
+
+        // 期望 )
+        auto right_paren = consume(TokenType::RightParen, "Expected ')' after index column");
+        if (!right_paren.has_value()) [[unlikely]] {
+            return std::unexpected(right_paren.error());
+        }
+
+        // 解析创建索引方法
+        auto method = ast::CreateIndexMethod::Default;
+        // 尝试匹配 USING 关键字
+        if (match(TokenType::Using)) {
+            // 解析创建索引方法
+            if (match(TokenType::Hash)) {
+                method = ast::CreateIndexMethod::Hash;
+            } else if (match(TokenType::BTree)) {
+                method = ast::CreateIndexMethod::BTree;
+            } else [[unlikely]] {
+                return std::unexpected(make_parser_error(
+                    ParserErrorCode::UnsupportedSyntax,
+                    current_token_.location(),
+                    "Expected HASH or BTREE after USING"
+                ));
+            }
+        }
+
+        return std::make_unique<ast::CreateIndexStatement>(
+            std::move(index_name.value()),
+            std::move(collection_name.value()),
+            std::move(column_name.value()),
+            if_not_exists.value(),
+            method,
+            ast_location(location)
+        );
+    }
+
     [[unlikely]] return std::unexpected(make_current_error(
         ParserErrorCode::UnsupportedSyntax, 
-        "Expected DATABASE or COLLECTION after CREATE"
+        "Expected DATABASE, COLLECTION, or INDEX after CREATE"
     ));
 }
 
@@ -553,29 +634,89 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     const TokenLocation location = current_token_.location();
     advance();
 
-    // 解析对象类型
-    auto object_type = parse_schema_object_type(false);
-    if (!object_type.has_value()) [[unlikely]] {
-        return std::unexpected(object_type.error());
+    if (match(TokenType::Database)) {
+        // 解析 DROP DATABASE 语句
+
+        // 判断是否存在 IF EXISTS 关键字
+        auto if_exists = parse_if_exists();
+        if (!if_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_exists.error());
+        }
+
+        // 解析数据库名称
+        auto database = parse_identifier_string("Expected database name");
+        if (!database.has_value()) [[unlikely]] {
+            return std::unexpected(database.error());
+        }
+
+        return std::make_unique<ast::DropDatabaseStatement>(
+            std::move(database.value()),
+            if_exists.value(),
+            ast_location(location)
+        );
     }
 
-    // 判断是否存在 IF EXISTS 关键字
-    auto if_exists = parse_if_exists();
-    if (!if_exists.has_value()) [[unlikely]] {
-        return std::unexpected(if_exists.error());
-    }
-    // 解析对象名称
-    auto name = parse_identifier_string("Expected object name");
-    if (!name.has_value()) [[unlikely]] {
-        return std::unexpected(name.error());
+    if (match(TokenType::Collection)) {
+        // 解析 DROP COLLECTION 语句
+
+        // 判断是否存在 IF EXISTS 关键字
+        auto if_exists = parse_if_exists();
+        if (!if_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_exists.error());
+        }
+
+        // 解析集合名称
+        auto collection = parse_identifier_string("Expected collection name");
+        if (!collection.has_value()) [[unlikely]] {
+            return std::unexpected(collection.error());
+        }
+
+        return std::make_unique<ast::DropCollectionStatement>(
+            std::move(collection.value()),
+            if_exists.value(),
+            ast_location(location)
+        );
     }
 
-    return std::make_unique<ast::DropStatement>(
-        object_type.value(),
-        std::move(name.value()),
-        if_exists.value(),
-        ast_location(location)
-    );
+    if (match(TokenType::Index)) {
+        // 解析 DROP INDEX 语句
+
+        // 判断是否存在 IF EXISTS 关键字
+        auto if_exists = parse_if_exists();
+        if (!if_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_exists.error());
+        }
+
+        // 解析索引名称
+        auto index_name = parse_identifier_string("Expected index name");
+        if (!index_name.has_value()) [[unlikely]] {
+            return std::unexpected(index_name.error());
+        }
+
+        // 期望 ON 关键字
+        auto on = consume(TokenType::On, "Expected ON after index name");
+        if (!on.has_value()) [[unlikely]] {
+            return std::unexpected(on.error());
+        }
+
+        // 解析集合名称
+        auto collection_name = parse_identifier_string("Expected collection name");
+        if (!collection_name.has_value()) [[unlikely]] {
+            return std::unexpected(collection_name.error());
+        }
+
+        return std::make_unique<ast::DropIndexStatement>(
+            std::move(index_name.value()),
+            std::move(collection_name.value()),
+            if_exists.value(),
+            ast_location(location)
+        );
+    }
+
+    return std::unexpected(make_current_error(
+        ParserErrorCode::ExpectedToken,
+        "Expected DATABASE, COLLECTION, or INDEX after DROP"
+    ));
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_show_statement()

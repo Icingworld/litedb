@@ -12,10 +12,12 @@
 #include "core/planner/logical/node/logical_scan.hpp"
 #include "core/planner/statement/create_collection_plan.hpp"
 #include "core/planner/statement/create_database_plan.hpp"
+#include "core/planner/statement/create_index_plan.hpp"
 #include "core/planner/statement/delete_plan.hpp"
 #include "core/planner/statement/describe_collection_plan.hpp"
 #include "core/planner/statement/drop_collection_plan.hpp"
 #include "core/planner/statement/drop_database_plan.hpp"
+#include "core/planner/statement/drop_index_plan.hpp"
 #include "core/planner/statement/insert_plan.hpp"
 #include "core/planner/statement/query_plan.hpp"
 #include "core/planner/statement/show_collections_plan.hpp"
@@ -243,6 +245,18 @@ void test_admin_and_ddl_plans()
     require(create_collection_node.database_id() == fixture.database_id, "CREATE COLLECTION database id mismatch");
     require(create_collection_node.columns().size() == 2, "CREATE COLLECTION column count mismatch");
 
+    auto create_index = plan_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING HASH;");
+    require(create_index->kind() == StatementPlanKind::CreateIndex, "CREATE INDEX kind mismatch");
+    const auto & create_index_node = static_cast<const CreateIndexPlan &>(*create_index);
+    require(create_index_node.database_id() == fixture.database_id, "CREATE INDEX database id mismatch");
+    require(create_index_node.collection_id() == fixture.users_id, "CREATE INDEX collection id mismatch");
+    require(create_index_node.collection_name() == "users", "CREATE INDEX collection name mismatch");
+    require(create_index_node.column_name() == "age", "CREATE INDEX column name mismatch");
+    require(create_index_node.index_name() == "idx_age", "CREATE INDEX index name mismatch");
+    require(create_index_node.index_kind() == CatalogIndexKind::Hash, "CREATE INDEX kind value mismatch");
+    require(create_index_node.if_not_exists(), "CREATE INDEX if not exists mismatch");
+    require(!create_index_node.unique(), "CREATE INDEX unique mismatch");
+
     auto drop_database = plan_ok(fixture, "DROP DATABASE IF EXISTS missing;");
     require(drop_database->kind() == StatementPlanKind::DropDatabase, "DROP DATABASE kind mismatch");
     const auto & drop_database_node = static_cast<const DropDatabasePlan &>(*drop_database);
@@ -254,6 +268,25 @@ void test_admin_and_ddl_plans()
     const auto & drop_collection_node = static_cast<const DropCollectionPlan &>(*drop_collection);
     require(drop_collection_node.database_id() == fixture.database_id, "DROP COLLECTION database id mismatch");
     require(drop_collection_node.if_exists(), "DROP COLLECTION if exists mismatch");
+
+    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    require(age_column != nullptr, "age column lookup failed");
+    auto created_index = fixture.catalog.create_index(CreateIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = age_column->id(),
+        .name = "idx_age",
+        .index_kind = CatalogIndexKind::BTree,
+    });
+    require(created_index.has_value(), "fixture index create failed");
+
+    auto drop_index = plan_ok(fixture, "DROP INDEX idx_age ON users;");
+    require(drop_index->kind() == StatementPlanKind::DropIndex, "DROP INDEX kind mismatch");
+    const auto & drop_index_node = static_cast<const DropIndexPlan &>(*drop_index);
+    require(drop_index_node.database_id() == fixture.database_id, "DROP INDEX database id mismatch");
+    require(drop_index_node.collection_id() == fixture.users_id, "DROP INDEX collection id mismatch");
+    require(drop_index_node.collection_name() == "users", "DROP INDEX collection name mismatch");
+    require(drop_index_node.index_name() == "idx_age", "DROP INDEX index name mismatch");
+    require(!drop_index_node.if_exists(), "DROP INDEX if exists mismatch");
 
     require(plan_ok(fixture, "SHOW DATABASES;")->kind() == StatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
 

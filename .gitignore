@@ -18,7 +18,12 @@ CMakeUserPresets.json
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #cmake-build-*
 
+# Build and Cache
 build/
 .cache/
 .clangd
 .vscode/
+
+# AI
+AGENTS.md
+CLAUDE.md

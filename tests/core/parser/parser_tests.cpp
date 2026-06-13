@@ -10,9 +10,12 @@
 #include "core/parser/ast/expression/wildcard_expression.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
+#include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
-#include "core/parser/ast/statement/drop_statement.hpp"
+#include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
+#include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -106,18 +109,51 @@ void test_parse_create_collection_statement()
     require(create->columns()[4].default_value->kind() == AstNodeKind::Vector, "VECTOR default mismatch");
 }
 
+void test_parse_create_index_statement()
+{
+    auto statement = parse_ok("CREATE INDEX IF NOT EXISTS idx_age ON users(age) USING BTREE;");
+
+    require(statement->kind() == AstNodeKind::CreateIndex, "CREATE INDEX kind mismatch");
+    const auto * create = static_cast<const CreateIndexStatement *>(statement.get());
+    require(create->index_name() == "idx_age", "CREATE INDEX name mismatch");
+    require(create->collection_name() == "users", "CREATE INDEX collection mismatch");
+    require(create->column_name() == "age", "CREATE INDEX column mismatch");
+    require(create->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
+    require(create->method() == CreateIndexMethod::BTree, "CREATE INDEX BTREE method mismatch");
+
+    auto hash_statement = parse_ok("CREATE INDEX idx_name ON users(name) USING HASH;");
+    const auto * hash_create = static_cast<const CreateIndexStatement *>(hash_statement.get());
+    require(hash_create->method() == CreateIndexMethod::Hash, "CREATE INDEX HASH method mismatch");
+
+    auto default_statement = parse_ok("CREATE INDEX idx_id ON users(id);");
+    const auto * default_create = static_cast<const CreateIndexStatement *>(default_statement.get());
+    require(default_create->method() == CreateIndexMethod::Default, "CREATE INDEX default method mismatch");
+}
+
 void test_parse_drop_show_describe_statements()
 {
     auto drop_database = parse_ok("DROP DATABASE IF EXISTS demo;");
-    require(drop_database->kind() == AstNodeKind::Drop, "DROP DATABASE kind mismatch");
-    const auto * drop_db = static_cast<const DropStatement *>(drop_database.get());
-    require(drop_db->object_type() == SchemaObjectType::Database, "DROP DATABASE object type mismatch");
+    require(drop_database->kind() == AstNodeKind::DropDatabase, "DROP DATABASE kind mismatch");
+    const auto * drop_db = static_cast<const DropDatabaseStatement *>(drop_database.get());
+    require(drop_db->database_name() == "demo", "DROP DATABASE name mismatch");
     require(drop_db->if_exists(), "DROP DATABASE IF EXISTS mismatch");
 
     auto drop_collection = parse_ok("DROP COLLECTION users;");
-    const auto * drop_col = static_cast<const DropStatement *>(drop_collection.get());
-    require(drop_col->object_type() == SchemaObjectType::Collection, "DROP COLLECTION object type mismatch");
-    require(drop_col->name() == "users", "DROP COLLECTION name mismatch");
+    require(drop_collection->kind() == AstNodeKind::DropCollection, "DROP COLLECTION kind mismatch");
+    const auto * drop_col = static_cast<const DropCollectionStatement *>(drop_collection.get());
+    require(drop_col->collection_name() == "users", "DROP COLLECTION name mismatch");
+
+    auto drop_index = parse_ok("DROP INDEX idx_age ON users;");
+    require(drop_index->kind() == AstNodeKind::DropIndex, "DROP INDEX kind mismatch");
+    const auto * drop_idx = static_cast<const DropIndexStatement *>(drop_index.get());
+    require(drop_idx->index_name() == "idx_age", "DROP INDEX name mismatch");
+    require(drop_idx->collection_name() == "users", "DROP INDEX collection mismatch");
+    require(!drop_idx->if_exists(), "DROP INDEX IF EXISTS mismatch");
+
+    auto drop_index_if_exists = parse_ok("DROP INDEX IF EXISTS idx_age ON users;");
+    const auto * drop_idx_if_exists = static_cast<const DropIndexStatement *>(drop_index_if_exists.get());
+    require(drop_idx_if_exists->collection_name() == "users", "DROP INDEX IF EXISTS collection mismatch");
+    require(drop_idx_if_exists->if_exists(), "DROP INDEX IF EXISTS mismatch");
 
     auto show_databases = parse_ok("SHOW DATABASES;");
     const auto * show_db = static_cast<const ShowStatement *>(show_databases.get());
@@ -275,9 +311,13 @@ void test_parse_failures()
     require(unsupported_group_by.code == ParserErrorCode::UnexpectedToken, "GROUP BY unsupported error code mismatch");
     require(unsupported_group_by.message == "Unexpected token", "GROUP BY unsupported error mismatch");
 
-    auto unsupported_create_index = parse_error("CREATE INDEX idx_age ON users(age);");
-    require(unsupported_create_index.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX unsupported error code mismatch");
-    require(unsupported_create_index.message == "Expected DATABASE or COLLECTION after CREATE", "CREATE INDEX unsupported error mismatch");
+    auto unsupported_index_method = parse_error("CREATE INDEX idx_age ON users(age) USING gin;");
+    require(unsupported_index_method.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX method error code mismatch");
+    require(unsupported_index_method.message == "Expected HASH or BTREE after USING", "CREATE INDEX method error mismatch");
+
+    auto unsupported_b_tree = parse_error("CREATE INDEX idx_age ON users(age) USING B_TREE;");
+    require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
+    require(unsupported_b_tree.message == "Expected HASH or BTREE after USING", "CREATE INDEX B_TREE error mismatch");
 
     auto lexical_error = parse_error("SELECT ! FROM users;");
     require(lexical_error.code == ParserErrorCode::LexicalError, "lexical error code mismatch");
@@ -291,6 +331,7 @@ int main()
         test_parse_use_statement();
         test_parse_create_database_statement();
         test_parse_create_collection_statement();
+        test_parse_create_index_statement();
         test_parse_drop_show_describe_statements();
         test_parse_insert_statement();
         test_parse_update_delete_statements();

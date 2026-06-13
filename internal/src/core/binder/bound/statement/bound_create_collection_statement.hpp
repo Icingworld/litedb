@@ -26,8 +26,8 @@ public:
 
 public:
     /**
-     * @brief 获取数据库ID
-     * @return 数据库ID
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
@@ -54,7 +54,7 @@ public:
     const std::vector<catalog::ColumnDefinition> & columns() const noexcept;
 
 private:
-    common::DatabaseId database_id_;                    ///< 数据库ID
+    common::DatabaseId database_id_;                    ///< 数据库 ID
     std::string collection_name_;                       ///< 集合名称
     bool if_not_exists_;                                ///< 是否不存在
     std::vector<catalog::ColumnDefinition> columns_;    ///< 列定义列表
