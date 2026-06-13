@@ -143,14 +143,16 @@ void test_parse_drop_show_describe_statements()
     const auto * drop_col = static_cast<const DropCollectionStatement *>(drop_collection.get());
     require(drop_col->collection_name() == "users", "DROP COLLECTION name mismatch");
 
-    auto drop_index = parse_ok("DROP INDEX idx_age;");
+    auto drop_index = parse_ok("DROP INDEX idx_age ON users;");
     require(drop_index->kind() == AstNodeKind::DropIndex, "DROP INDEX kind mismatch");
     const auto * drop_idx = static_cast<const DropIndexStatement *>(drop_index.get());
     require(drop_idx->index_name() == "idx_age", "DROP INDEX name mismatch");
+    require(drop_idx->collection_name() == "users", "DROP INDEX collection mismatch");
     require(!drop_idx->if_exists(), "DROP INDEX IF EXISTS mismatch");
 
-    auto drop_index_if_exists = parse_ok("DROP INDEX IF EXISTS idx_age;");
+    auto drop_index_if_exists = parse_ok("DROP INDEX IF EXISTS idx_age ON users;");
     const auto * drop_idx_if_exists = static_cast<const DropIndexStatement *>(drop_index_if_exists.get());
+    require(drop_idx_if_exists->collection_name() == "users", "DROP INDEX IF EXISTS collection mismatch");
     require(drop_idx_if_exists->if_exists(), "DROP INDEX IF EXISTS mismatch");
 
     auto show_databases = parse_ok("SHOW DATABASES;");

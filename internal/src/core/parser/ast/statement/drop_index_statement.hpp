@@ -9,12 +9,17 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief DROP INDEX 语句节点
- * @details 示例：DROP INDEX [IF EXISTS] <index_name>
+ * @details 示例：DROP INDEX [IF EXISTS] <index_name> ON <collection_name>
  */
 class DropIndexStatement final : public StatementNode
 {
 public:
-    DropIndexStatement(std::string index_name, bool if_exists, AstNodeLocation location) noexcept;
+    DropIndexStatement(
+        std::string index_name,
+        std::string collection_name,
+        bool if_exists,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -32,6 +37,13 @@ public:
     const std::string & index_name() const noexcept;
 
     /**
+     * @brief 获取集合名称
+     * @return 集合名称
+     */
+    [[nodiscard]]
+    const std::string & collection_name() const noexcept;
+
+    /**
      * @brief 是否存在
      * @return 是否存在
      */
@@ -39,8 +51,9 @@ public:
     bool if_exists() const noexcept;
 
 private:
-    std::string index_name_;    ///< 索引名称
-    bool if_exists_;            ///< 是否存在
+    std::string index_name_;        ///< 索引名称
+    std::string collection_name_;   ///< 集合名称
+    bool if_exists_;                ///< 是否存在
 };
 
 } // namespace litedb::core::parser::ast

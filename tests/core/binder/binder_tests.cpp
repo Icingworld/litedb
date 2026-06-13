@@ -1,7 +1,9 @@
 #include "core/binder/binder.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
+#include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
+#include "core/binder/bound/statement/bound_drop_index_statement.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
@@ -259,6 +261,55 @@ void test_ddl_and_metadata_binding()
     require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").code == BinderErrorCode::InvalidType, "default type error mismatch");
 }
 
+void test_index_binding()
+{
+    Fixture fixture;
+    auto create_age = bind_ok(fixture, "CREATE INDEX idx_age ON users (age);");
+    require(create_age->kind() == BoundStatementKind::CreateIndex, "CREATE INDEX kind mismatch");
+    const auto * bound_create_age = static_cast<const BoundCreateIndexStatement *>(create_age.get());
+    require(bound_create_age->database_id() == fixture.database_id, "CREATE INDEX database id mismatch");
+    require(bound_create_age->collection_id() == fixture.users_id, "CREATE INDEX collection id mismatch");
+    require(bound_create_age->collection_name() == "users", "CREATE INDEX collection name mismatch");
+    require(bound_create_age->column_name() == "age", "CREATE INDEX column name mismatch");
+    require(bound_create_age->index_name() == "idx_age", "CREATE INDEX index name mismatch");
+    require(bound_create_age->index_kind() == CatalogIndexKind::BTree, "CREATE INDEX default kind mismatch");
+    require(!bound_create_age->unique(), "CREATE INDEX unique mismatch");
+    require(!bound_create_age->if_not_exists(), "CREATE INDEX if-not-exists mismatch");
+
+    auto create_name = bind_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_name ON users (name) USING HASH;");
+    const auto * bound_create_name = static_cast<const BoundCreateIndexStatement *>(create_name.get());
+    require(bound_create_name->index_kind() == CatalogIndexKind::Hash, "CREATE INDEX hash kind mismatch");
+    require(bound_create_name->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
+
+    require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").code == BinderErrorCode::InvalidType, "vector index type error mismatch");
+    require(bind_error(fixture, "CREATE INDEX idx_missing ON users (missing);").code == BinderErrorCode::ColumnNotFound, "missing index column error mismatch");
+
+    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    require(age_column != nullptr, "age column lookup failed");
+    auto created_index = fixture.catalog.create_index(CreateIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = age_column->id(),
+        .name = "idx_age",
+        .index_kind = CatalogIndexKind::BTree,
+    });
+    require(created_index.has_value(), "fixture index create failed");
+
+    auto drop_age = bind_ok(fixture, "DROP INDEX idx_age ON users;");
+    require(drop_age->kind() == BoundStatementKind::DropIndex, "DROP INDEX kind mismatch");
+    const auto * bound_drop_age = static_cast<const BoundDropIndexStatement *>(drop_age.get());
+    require(bound_drop_age->database_id() == fixture.database_id, "DROP INDEX database id mismatch");
+    require(bound_drop_age->collection_id() == fixture.users_id, "DROP INDEX collection id mismatch");
+    require(bound_drop_age->collection_name() == "users", "DROP INDEX collection name mismatch");
+    require(bound_drop_age->index_name() == "idx_age", "DROP INDEX index name mismatch");
+    require(!bound_drop_age->if_exists(), "DROP INDEX if-exists mismatch");
+
+    require(bind_error(fixture, "DROP INDEX missing ON users;").code == BinderErrorCode::IndexNotFound, "missing index error mismatch");
+
+    auto drop_missing = bind_ok(fixture, "DROP INDEX IF EXISTS missing ON users;");
+    const auto * bound_drop_missing = static_cast<const BoundDropIndexStatement *>(drop_missing.get());
+    require(bound_drop_missing->if_exists(), "DROP INDEX IF EXISTS mismatch");
+}
+
 } // namespace
 
 int main()
@@ -271,6 +322,7 @@ int main()
         test_insert_errors();
         test_update_delete_binding();
         test_ddl_and_metadata_binding();
+        test_index_binding();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

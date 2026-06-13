@@ -693,8 +693,21 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
             return std::unexpected(index_name.error());
         }
 
+        // 期望 ON 关键字
+        auto on = consume(TokenType::On, "Expected ON after index name");
+        if (!on.has_value()) [[unlikely]] {
+            return std::unexpected(on.error());
+        }
+
+        // 解析集合名称
+        auto collection_name = parse_identifier_string("Expected collection name");
+        if (!collection_name.has_value()) [[unlikely]] {
+            return std::unexpected(collection_name.error());
+        }
+
         return std::make_unique<ast::DropIndexStatement>(
             std::move(index_name.value()),
+            std::move(collection_name.value()),
             if_exists.value(),
             ast_location(location)
         );

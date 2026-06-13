@@ -127,9 +127,10 @@ void test_schema_object_type_statements()
     require(drop_collection.collection_name() == "users", "drop collection name mismatch");
     require(drop_collection.if_exists(), "drop collection if-exists mismatch");
 
-    DropIndexStatement drop_index("idx_age", true, AstNodeLocation {1, 1});
+    DropIndexStatement drop_index("idx_age", "users", true, AstNodeLocation {1, 1});
     require(drop_index.kind() == AstNodeKind::DropIndex, "drop index statement kind mismatch");
     require(drop_index.index_name() == "idx_age", "drop index name mismatch");
+    require(drop_index.collection_name() == "users", "drop index collection mismatch");
     require(drop_index.if_exists(), "drop index if-exists mismatch");
 }
 
