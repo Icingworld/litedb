@@ -5,6 +5,8 @@
 
 #include "core/catalog/in_memory_catalog.hpp"
 #include "core/executor/executor.hpp"
+#include "core/index/index_error.hpp"
+#include "core/index/index_manager.hpp"
 #include "core/persistence/catalog_store.hpp"
 #include "core/persistence/manifest_store.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
@@ -20,7 +22,8 @@ public:
     PersistenceController(
         std::filesystem::path data_dir,
         catalog::InMemoryCatalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     );
 
     [[nodiscard]]
@@ -29,37 +32,43 @@ public:
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_database(
         const planner::CreateDatabasePlan & plan,
         catalog::Catalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_collection(
         const planner::CreateCollectionPlan & plan,
         catalog::Catalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_index(
         const planner::CreateIndexPlan & plan,
         catalog::Catalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_database(
         const planner::DropDatabasePlan & plan,
         catalog::Catalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_collection(
         const planner::DropCollectionPlan & plan,
         catalog::Catalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_index(
         const planner::DropIndexPlan & plan,
         catalog::Catalog & catalog,
-        storage::StorageManager & storage
+        storage::StorageManager & storage,
+        index::IndexManager & index_manager
     ) override;
 
 private:
@@ -83,11 +92,15 @@ private:
     [[nodiscard]]
     executor::ExecutionError from_storage_error(storage::StorageError error, parser::ast::AstNodeLocation location) const;
 
+    [[nodiscard]]
+    executor::ExecutionError from_index_error(index::IndexError error, parser::ast::AstNodeLocation location) const;
+
 private:
     ManifestStore manifest_;
     CatalogStore catalog_store_;
     catalog::InMemoryCatalog * catalog_;
     storage::StorageManager * storage_;
+    index::IndexManager * index_manager_;
 };
 
 } // namespace litedb::core::persistence

@@ -1,5 +1,6 @@
 #include "core/engine/database_instance.hpp"
 #include "core/engine/session.hpp"
+#include "core/index/scalar_index_key.hpp"
 #include "core/persistence/binary_io.hpp"
 #include "core/persistence/catalog_store.hpp"
 #include "core/persistence/manifest_store.hpp"
@@ -16,6 +17,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -35,6 +37,23 @@ template <typename T>
 const T & get_value(const schema::Value & value)
 {
     return std::get<T>(value.data());
+}
+
+std::vector<common::RecordId> find_index_equal(
+    engine::DatabaseInstance & instance,
+    common::IndexId index_id,
+    schema::Value value
+)
+{
+    auto key = index::ScalarIndexKey::from_value(std::move(value));
+    require(key.has_value(), "index key creation failed");
+
+    auto index_view = instance.index_manager().find_index(index_id);
+    require(index_view.has_value(), "managed index missing");
+
+    auto found = index_view->index.find_equal(key.value());
+    require(found.has_value(), "index lookup failed");
+    return std::move(found.value());
 }
 
 std::filesystem::path make_temp_dir(std::string name)
@@ -277,6 +296,7 @@ void test_index_ddl_reopen()
         execute_ok(session, "CREATE DATABASE demo;");
         execute_ok(session, "USE demo;");
         execute_ok(session, "CREATE COLLECTION users (id BIGINT PRIMARY KEY, age INTEGER);");
+        execute_ok(session, "INSERT INTO users VALUES (1, 18);");
         auto created = execute_ok(session, "CREATE INDEX idx_age ON users (age) USING HASH;");
         require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
 
@@ -287,6 +307,7 @@ void test_index_ddl_reopen()
         const auto * index = instance.catalog().find_index(collection->id(), "idx_age");
         require(index != nullptr, "created index lookup failed");
         require(index->index_kind() == catalog::CatalogIndexKind::Hash, "created index kind mismatch");
+        require(find_index_equal(instance, index->id(), schema::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
     }
 
     common::CollectionId users_id {0};
@@ -300,12 +321,20 @@ void test_index_ddl_reopen()
         const auto * index = reopened.catalog().find_index(users_id, "idx_age");
         require(index != nullptr, "reopened index missing");
         require(index->index_kind() == catalog::CatalogIndexKind::Hash, "reopened index kind mismatch");
+        const auto index_id = index->id();
+        require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {18}}).size() == 1, "reopened index should be rebuilt");
 
         engine::Session session {reopened};
         execute_ok(session, "USE demo;");
+        execute_ok(session, "UPDATE users SET age = 19 WHERE id = 1;");
+        require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {18}}).empty(), "persistent UPDATE should remove old index key");
+        require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {19}}).size() == 1, "persistent UPDATE should add new index key");
+        execute_ok(session, "DELETE FROM users WHERE id = 1;");
+        require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {19}}).empty(), "persistent DELETE should remove index key");
         auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
         require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
         require(reopened.catalog().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
+        require(!reopened.index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
     }
 
     {

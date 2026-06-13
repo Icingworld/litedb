@@ -11,7 +11,8 @@ DatabaseInstance::DatabaseInstance(DatabaseConfig config)
         persistence_ = std::make_unique<persistence::PersistenceController>(
             config.data_dir.value(),
             catalog_,
-            storage_
+            storage_,
+            index_manager_
         );
         auto initialized = persistence_->initialize();
         if (!initialized.has_value()) {
@@ -38,6 +39,16 @@ storage::StorageManager & DatabaseInstance::storage() noexcept
 const storage::StorageManager & DatabaseInstance::storage() const noexcept
 {
     return storage_;
+}
+
+index::IndexManager & DatabaseInstance::index_manager() noexcept
+{
+    return index_manager_;
+}
+
+const index::IndexManager & DatabaseInstance::index_manager() const noexcept
+{
+    return index_manager_;
 }
 
 std::mutex & DatabaseInstance::mutex() noexcept

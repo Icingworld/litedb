@@ -9,6 +9,7 @@ target_include_directories(litedb_executor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_link_libraries(litedb_executor PUBLIC
     litedb_logical_planner
     litedb_evaluator
+    litedb_index
     litedb_storage
     litedb_catalog
 )

@@ -1,17 +1,21 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/session.hpp"
+#include "core/index/scalar_index_key.hpp"
 
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {
 
 using namespace litedb::core::engine;
 using namespace litedb::core::executor;
+using namespace litedb::core::index;
 using namespace litedb::core::schema;
 
 void require(bool condition, const char * message)
@@ -25,6 +29,19 @@ template <typename T>
 const T & get_value(const Value & value)
 {
     return std::get<T>(value.data());
+}
+
+std::vector<litedb::core::common::RecordId> find_index_equal(Engine & engine, litedb::core::common::IndexId index_id, Value value)
+{
+    auto key = ScalarIndexKey::from_value(std::move(value));
+    require(key.has_value(), "index key creation failed");
+
+    auto index_view = engine.index_manager().find_index(index_id);
+    require(index_view.has_value(), "managed index missing");
+
+    auto found = index_view->index.find_equal(key.value());
+    require(found.has_value(), "index lookup failed");
+    return std::move(found.value());
 }
 
 ExecutionResult execute_ok(Engine & engine, std::string_view sql)
@@ -73,7 +90,9 @@ void test_execute_sql_end_to_end()
     require(create_index.affected_rows == 1, "CREATE INDEX affected rows mismatch");
     const auto * collection = engine.catalog().find_collection(engine.current_database_id().value(), "users");
     require(collection != nullptr, "created collection lookup failed");
-    require(engine.catalog().find_index(collection->id(), "idx_age") != nullptr, "created index missing");
+    const auto * index = engine.catalog().find_index(collection->id(), "idx_age");
+    require(index != nullptr, "created index missing");
+    const auto index_id = index->id();
 
     auto selected = execute_ok(engine, "SELECT name, age FROM users WHERE id = 1;");
     require(selected.kind == ExecutionResultKind::RowSet, "SELECT result kind mismatch");
@@ -81,10 +100,21 @@ void test_execute_sql_end_to_end()
     require(selected.rows.size() == 1, "SELECT row count mismatch");
     require(get_value<std::string>(selected.rows[0].values[0]) == "alice", "SELECT name mismatch");
     require(get_value<std::int32_t>(selected.rows[0].values[1]) == 18, "SELECT age mismatch");
+    require(find_index_equal(engine, index_id, Value {std::int32_t {18}}).size() == 1, "CREATE INDEX should build existing data");
+
+    auto update = execute_ok(engine, "UPDATE users SET age = 19 WHERE id = 1;");
+    require(update.affected_rows == 1, "indexed UPDATE affected rows mismatch");
+    require(find_index_equal(engine, index_id, Value {std::int32_t {18}}).empty(), "UPDATE should remove old index key");
+    require(find_index_equal(engine, index_id, Value {std::int32_t {19}}).size() == 1, "UPDATE should add new index key");
+
+    auto delete_result = execute_ok(engine, "DELETE FROM users WHERE id = 1;");
+    require(delete_result.affected_rows == 1, "indexed DELETE affected rows mismatch");
+    require(find_index_equal(engine, index_id, Value {std::int32_t {19}}).empty(), "DELETE should remove index key");
 
     auto drop_index = execute_ok(engine, "DROP INDEX idx_age ON users;");
     require(drop_index.affected_rows == 1, "DROP INDEX affected rows mismatch");
     require(engine.catalog().find_index(collection->id(), "idx_age") == nullptr, "dropped index should leave catalog");
+    require(!engine.index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
 }
 
 void test_engine_error_mapping()

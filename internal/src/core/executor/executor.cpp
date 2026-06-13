@@ -12,6 +12,7 @@
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/catalog/catalog_entry.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
+#include "core/index/index_manager.hpp"
 #include "core/planner/logical/node/logical_filter.hpp"
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
@@ -96,6 +97,12 @@ ExecutionError from_schema_error(schema::SchemaError error, AstNodeLocation loca
 ExecutionError from_storage_error(storage::StorageError error, AstNodeLocation location)
 {
     return make_error(ExecutionErrorCode::StorageError, location, std::move(error.message));
+}
+
+[[nodiscard]]
+ExecutionError from_index_error(index::IndexError error, AstNodeLocation location)
+{
+    return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
 }
 
 [[nodiscard]]
@@ -609,7 +616,9 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_index(
     const planner::CreateIndexPlan & plan,
-    catalog::Catalog & catalog
+    catalog::Catalog & catalog,
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     const auto * existing = catalog.find_index(plan.collection_id(), plan.index_name());
@@ -625,6 +634,49 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
         return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
     }
 
+    if (existing != nullptr) {
+        return command_result(0);
+    }
+
+    const auto * index_entry = catalog.find_index(created.value());
+    if (index_entry == nullptr) {
+        return std::unexpected(make_error(
+            ExecutionErrorCode::CatalogError,
+            plan.location(),
+            "Created index metadata not found"
+        ));
+    }
+
+    auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
+    if (!collection_schema.has_value()) {
+        (void) catalog.drop_index(catalog::DropIndexRequest {
+            .collection_id = plan.collection_id(),
+            .name = plan.index_name(),
+            .if_exists = true,
+        });
+        return std::unexpected(std::move(collection_schema.error()));
+    }
+
+    auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
+    if (!collection_storage.has_value()) {
+        (void) catalog.drop_index(catalog::DropIndexRequest {
+            .collection_id = plan.collection_id(),
+            .name = plan.index_name(),
+            .if_exists = true,
+        });
+        return std::unexpected(std::move(collection_storage.error()));
+    }
+
+    auto created_index = index_manager.create_index(*index_entry, collection_schema.value(), *collection_storage.value());
+    if (!created_index.has_value()) {
+        (void) catalog.drop_index(catalog::DropIndexRequest {
+            .collection_id = plan.collection_id(),
+            .name = plan.index_name(),
+            .if_exists = true,
+        });
+        return std::unexpected(from_index_error(std::move(created_index.error()), plan.location()));
+    }
+
     return command_result(existing == nullptr ? 1 : 0);
 }
 
@@ -632,7 +684,8 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
     const planner::DropCollectionPlan & plan,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     if (!plan.collection_id().has_value()) {
@@ -655,19 +708,23 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
         return std::unexpected(from_catalog_error(std::move(dropped_catalog.error()), plan.location()));
     }
 
+    index_manager.drop_collection_indexes(plan.collection_id().value());
+
     return command_result(1);
 }
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_index(
     const planner::DropIndexPlan & plan,
-    catalog::Catalog & catalog
+    catalog::Catalog & catalog,
+    index::IndexManager & index_manager
 )
 {
     const auto * existing = catalog.find_index(plan.collection_id(), plan.index_name());
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
+    const auto index_id = existing != nullptr ? std::optional<common::IndexId> {existing->id()} : std::nullopt;
 
     auto dropped = catalog.drop_index(catalog::DropIndexRequest {
         .collection_id = plan.collection_id(),
@@ -678,6 +735,13 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_index(
         return std::unexpected(from_catalog_error(std::move(dropped.error()), plan.location()));
     }
 
+    if (index_id.has_value()) {
+        auto dropped_index = index_manager.drop_index(index_id.value());
+        if (!dropped_index.has_value() && dropped_index.error().code != index::IndexErrorCode::IndexNotFound) {
+            return std::unexpected(from_index_error(std::move(dropped_index.error()), plan.location()));
+        }
+    }
+
     return command_result(1);
 }
 
@@ -685,7 +749,8 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_index(
 std::expected<ExecutionResult, ExecutionError> execute_drop_database(
     const planner::DropDatabasePlan & plan,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     if (!plan.database_id().has_value()) {
@@ -693,7 +758,12 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_database(
     }
 
     const auto collections = catalog.list_collections(plan.database_id().value());
+    std::vector<common::CollectionId> collection_ids;
+    collection_ids.reserve(collections.size());
     for (const auto * collection : collections) {
+        if (collection != nullptr) {
+            collection_ids.push_back(collection->id());
+        }
         if (collection != nullptr && storage.find_collection(collection->id()) != nullptr) {
             auto dropped = storage.drop_collection(collection->id());
             if (!dropped.has_value()) {
@@ -708,6 +778,10 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_database(
     });
     if (!dropped_catalog.has_value()) {
         return std::unexpected(from_catalog_error(std::move(dropped_catalog.error()), plan.location()));
+    }
+
+    for (const auto collection_id : collection_ids) {
+        index_manager.drop_collection_indexes(collection_id);
     }
 
     return command_result(1);
@@ -726,7 +800,8 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const planner::UsePla
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_insert(
     const planner::InsertPlan & plan,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
@@ -746,9 +821,20 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         record_data.values.push_back(std::move(value.value()));
     }
 
+    auto index_bindings = index_manager.prepare_insert(plan.collection_id(), record_data);
+    if (!index_bindings.has_value()) {
+        return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
+    }
+
     auto inserted = collection_storage.value()->insert(std::move(record_data));
     if (!inserted.has_value()) {
         return std::unexpected(from_storage_error(std::move(inserted.error()), plan.location()));
+    }
+
+    auto indexed = index_manager.on_insert(inserted.value(), index_bindings.value());
+    if (!indexed.has_value()) {
+        (void) collection_storage.value()->erase(inserted.value());
+        return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
     }
 
     return command_result(1);
@@ -758,7 +844,8 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 std::expected<ExecutionResult, ExecutionError> execute_delete(
     const planner::DeletePlan & plan,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     auto rows = execute_logical(plan.input(), catalog, storage);
@@ -773,9 +860,19 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
 
     std::size_t affected_rows = 0;
     for (const auto & row : rows->rows) {
+        auto index_bindings = index_manager.prepare_delete(plan.collection_id(), row.source_record.data);
+        if (!index_bindings.has_value()) {
+            return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
+        }
+
         auto erased = collection_storage.value()->erase(row.source_record.record_id);
         if (!erased.has_value()) {
             return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
+        }
+
+        auto indexed = index_manager.on_delete(row.source_record.record_id, index_bindings.value());
+        if (!indexed.has_value()) {
+            return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
         }
         ++affected_rows;
     }
@@ -800,7 +897,8 @@ std::optional<std::size_t> ordinal_for_column(
 std::expected<ExecutionResult, ExecutionError> execute_update(
     const planner::UpdatePlan & plan,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -840,9 +938,20 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
             record_data.values[ordinal.value()] = std::move(value.value());
         }
 
+        auto index_bindings = index_manager.prepare_update(plan.collection_id(), row.source_record.data, record_data);
+        if (!index_bindings.has_value()) {
+            return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
+        }
+
         auto updated = collection_storage.value()->update(row.source_record.record_id, std::move(record_data));
         if (!updated.has_value()) {
             return std::unexpected(from_storage_error(std::move(updated.error()), plan.location()));
+        }
+
+        auto indexed = index_manager.on_update(row.source_record.record_id, index_bindings.value());
+        if (!indexed.has_value()) {
+            (void) collection_storage.value()->update(row.source_record.record_id, row.source_record.data);
+            return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
         }
         ++affected_rows;
     }
@@ -928,10 +1037,12 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 Executor::Executor(
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
+    index::IndexManager & index_manager,
     DdlMutationHandler * ddl_handler
 ) noexcept
     : catalog_(catalog)
     , storage_(storage)
+    , index_manager_(index_manager)
     , ddl_handler_(ddl_handler)
 {
 }
@@ -943,34 +1054,34 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
         return execute_use(static_cast<const planner::UsePlan &>(plan));
     case StatementPlanKind::CreateDatabase:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_database(static_cast<const planner::CreateDatabasePlan &>(plan), catalog_, storage_);
+            return ddl_handler_->execute_create_database(static_cast<const planner::CreateDatabasePlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_database(static_cast<const planner::CreateDatabasePlan &>(plan), catalog_);
     case StatementPlanKind::CreateCollection:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_);
+            return ddl_handler_->execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_);
     case StatementPlanKind::CreateIndex:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_, storage_);
+            return ddl_handler_->execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_);
+        return execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
     case StatementPlanKind::DropDatabase:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_);
+            return ddl_handler_->execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_);
+        return execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
     case StatementPlanKind::DropCollection:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_);
+            return ddl_handler_->execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_);
+        return execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
     case StatementPlanKind::DropIndex:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_, storage_);
+            return ddl_handler_->execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_);
+        return execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_, index_manager_);
     case StatementPlanKind::ShowDatabases:
         return execute_show_databases(catalog_);
     case StatementPlanKind::ShowCollections:
@@ -978,11 +1089,11 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
     case StatementPlanKind::DescribeCollection:
         return execute_describe_collection(static_cast<const planner::DescribeCollectionPlan &>(plan), catalog_);
     case StatementPlanKind::Insert:
-        return execute_insert(static_cast<const planner::InsertPlan &>(plan), storage_);
+        return execute_insert(static_cast<const planner::InsertPlan &>(plan), storage_, index_manager_);
     case StatementPlanKind::Update:
-        return execute_update(static_cast<const planner::UpdatePlan &>(plan), catalog_, storage_);
+        return execute_update(static_cast<const planner::UpdatePlan &>(plan), catalog_, storage_, index_manager_);
     case StatementPlanKind::Delete:
-        return execute_delete(static_cast<const planner::DeletePlan &>(plan), catalog_, storage_);
+        return execute_delete(static_cast<const planner::DeletePlan &>(plan), catalog_, storage_, index_manager_);
     case StatementPlanKind::Query:
         return execute_query(static_cast<const planner::QueryPlan &>(plan), catalog_, storage_);
     }

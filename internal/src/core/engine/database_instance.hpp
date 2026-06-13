@@ -7,6 +7,7 @@
 
 #include "core/catalog/in_memory_catalog.hpp"
 #include "core/executor/executor.hpp"
+#include "core/index/index_manager.hpp"
 #include "core/persistence/persistence_controller.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -49,6 +50,12 @@ public:
     const storage::StorageManager & storage() const noexcept;
 
     [[nodiscard]]
+    index::IndexManager & index_manager() noexcept;
+
+    [[nodiscard]]
+    const index::IndexManager & index_manager() const noexcept;
+
+    [[nodiscard]]
     std::mutex & mutex() noexcept;
 
     [[nodiscard]]
@@ -57,6 +64,7 @@ public:
 private:
     catalog::InMemoryCatalog catalog_;                                      ///< 目录
     storage::StorageManager storage_;                                       ///< 存储管理器
+    index::IndexManager index_manager_;                                     ///< 索引管理器
     std::unique_ptr<persistence::PersistenceController> persistence_;       ///< 持久化控制器
     std::mutex mutex_;                                                      ///< 互斥锁
 };
