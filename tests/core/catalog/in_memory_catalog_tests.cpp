@@ -172,6 +172,145 @@ void test_duplicate_collection_and_column_rules()
     require(multiple_primary_keys.error().code == CatalogErrorCode::MultiplePrimaryKeys, "multiple primary keys error mismatch");
 }
 
+void test_index_catalog_operations()
+{
+    InMemoryCatalog catalog;
+    const auto database_id = create_database_ok(catalog, "demo");
+    const auto collection_id = create_users_collection_ok(catalog, database_id);
+
+    const auto * collection = catalog.find_collection(collection_id);
+    require(collection != nullptr, "collection lookup for index test failed");
+    const auto * id_column = catalog.find_column(collection_id, "id");
+    const auto * name_column = catalog.find_column(collection_id, "name");
+    const auto * embedding_column = catalog.find_column(collection_id, "embedding");
+    require(id_column != nullptr, "id column lookup for index failed");
+    require(name_column != nullptr, "name column lookup for index failed");
+    require(embedding_column != nullptr, "embedding column lookup for index failed");
+
+    auto id_index = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = id_column->id(),
+        .name = "idx_id",
+        .index_kind = CatalogIndexKind::BTree,
+    });
+    require(id_index.has_value(), "create btree index failed");
+
+    auto name_index = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = name_column->id(),
+        .name = "idx_name",
+        .index_kind = CatalogIndexKind::Hash,
+    });
+    require(name_index.has_value(), "create hash index failed");
+
+    const auto * found_id_index = catalog.find_index(collection_id, "IDX_ID");
+    require(found_id_index != nullptr, "case-insensitive index lookup failed");
+    require(found_id_index->id() == id_index.value(), "index id mismatch");
+    require(found_id_index->collection_id() == collection_id, "index collection id mismatch");
+    require(found_id_index->column_id() == id_column->id(), "index column id mismatch");
+    require(found_id_index->index_kind() == CatalogIndexKind::BTree, "index kind mismatch");
+    require(!found_id_index->unique(), "index unique flag mismatch");
+
+    const auto indexes = catalog.list_indexes(collection_id);
+    require(indexes.size() == 2, "index list size mismatch");
+    require(indexes[0]->id() == id_index.value(), "index list order mismatch");
+    require(indexes[1]->id() == name_index.value(), "index list order mismatch");
+
+    auto duplicate = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = id_column->id(),
+        .name = "IDX_ID",
+        .index_kind = CatalogIndexKind::Hash,
+    });
+    require(!duplicate.has_value(), "duplicate index should fail");
+    require(duplicate.error().code == CatalogErrorCode::DuplicateIndex, "duplicate index error mismatch");
+
+    auto if_not_exists = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = id_column->id(),
+        .name = "idx_id",
+        .index_kind = CatalogIndexKind::Hash,
+        .if_not_exists = true,
+    });
+    require(if_not_exists.has_value(), "IF NOT EXISTS index should succeed");
+    require(if_not_exists.value() == id_index.value(), "IF NOT EXISTS index id mismatch");
+
+    auto missing_column = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = 999,
+        .name = "idx_missing",
+    });
+    require(!missing_column.has_value(), "missing index column should fail");
+    require(missing_column.error().code == CatalogErrorCode::ColumnNotFound, "missing index column error mismatch");
+
+    auto vector_index = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = embedding_column->id(),
+        .name = "idx_embedding",
+    });
+    require(!vector_index.has_value(), "scalar index on vector column should fail");
+    require(vector_index.error().code == CatalogErrorCode::InvalidArgument, "vector scalar index error mismatch");
+
+    auto drop_missing = catalog.drop_index(DropIndexRequest {
+        .collection_id = collection_id,
+        .name = "missing",
+    });
+    require(!drop_missing.has_value(), "missing index drop should fail");
+    require(drop_missing.error().code == CatalogErrorCode::IndexNotFound, "missing index drop error mismatch");
+
+    auto drop_missing_if_exists = catalog.drop_index(DropIndexRequest {
+        .collection_id = collection_id,
+        .name = "missing",
+        .if_exists = true,
+    });
+    require(drop_missing_if_exists.has_value(), "DROP INDEX IF EXISTS should succeed");
+
+    auto drop_name = catalog.drop_index(DropIndexRequest {
+        .collection_id = collection_id,
+        .name = "IDX_NAME",
+    });
+    require(drop_name.has_value(), "drop index should succeed");
+    require(catalog.find_index(name_index.value()) == nullptr, "dropped index should not be found by id");
+    require(catalog.find_index(collection_id, "idx_name") == nullptr, "dropped index should not be found by name");
+    require(catalog.list_indexes(collection_id).size() == 1, "index list after drop mismatch");
+
+    auto drop_collection = catalog.drop_collection(DropCollectionRequest {
+        .database_id = database_id,
+        .name = "users",
+    });
+    require(drop_collection.has_value(), "drop indexed collection should succeed");
+    require(catalog.find_index(id_index.value()) == nullptr, "collection drop should remove indexes");
+}
+
+void test_index_snapshot_restore()
+{
+    InMemoryCatalog catalog;
+    const auto database_id = create_database_ok(catalog, "demo");
+    const auto collection_id = create_users_collection_ok(catalog, database_id);
+    const auto * name_column = catalog.find_column(collection_id, "name");
+    require(name_column != nullptr, "name column lookup for snapshot failed");
+
+    auto index_id = catalog.create_index(CreateIndexRequest {
+        .collection_id = collection_id,
+        .column_id = name_column->id(),
+        .name = "idx_name",
+        .index_kind = CatalogIndexKind::Hash,
+        .unique = true,
+    });
+    require(index_id.has_value(), "create snapshot index failed");
+
+    InMemoryCatalog restored;
+    auto restore = restored.restore(catalog.snapshot());
+    require(restore.has_value(), "catalog restore with index failed");
+
+    const auto * restored_index = restored.find_index(collection_id, "IDX_NAME");
+    require(restored_index != nullptr, "restored index lookup failed");
+    require(restored_index->id() == index_id.value(), "restored index id mismatch");
+    require(restored_index->column_id() == name_column->id(), "restored index column mismatch");
+    require(restored_index->index_kind() == CatalogIndexKind::Hash, "restored index kind mismatch");
+    require(restored_index->unique(), "restored index unique mismatch");
+}
+
 void test_list_and_drop()
 {
     InMemoryCatalog catalog;
@@ -233,6 +372,8 @@ int main()
         test_create_database_case_insensitive_lookup();
         test_create_collection_columns_and_defaults();
         test_duplicate_collection_and_column_rules();
+        test_index_catalog_operations();
+        test_index_snapshot_restore();
         test_list_and_drop();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

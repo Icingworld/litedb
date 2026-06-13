@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/catalog/catalog_default_expression.hpp"
+#include "core/catalog/catalog_entry.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_id.hpp"
 
@@ -23,12 +24,22 @@ struct CatalogSnapshotColumn
     std::optional<std::string> comment;
 };
 
+struct CatalogSnapshotIndex
+{
+    common::IndexId id {0};
+    common::ColumnId column_id {0};
+    std::string name;
+    CatalogIndexKind index_kind {CatalogIndexKind::BTree};
+    bool unique {false};
+};
+
 struct CatalogSnapshotCollection
 {
     common::CollectionId id {0};
     common::DatabaseId database_id {0};
     std::string name;
     std::vector<CatalogSnapshotColumn> columns;
+    std::vector<CatalogSnapshotIndex> indexes;
 };
 
 struct CatalogSnapshotDatabase
@@ -43,6 +54,7 @@ struct CatalogSnapshot
     common::DatabaseId next_database_id {1};
     common::CollectionId next_collection_id {1};
     common::ColumnId next_column_id {1};
+    common::IndexId next_index_id {1};
     std::vector<CatalogSnapshotDatabase> databases;
 };
 

@@ -16,7 +16,7 @@ namespace
  * @param message 错误消息
  * @return 错误
  */
-CatalogError make_error(CatalogErrorCode code, std::string message)
+CatalogError make_catalog_error(CatalogErrorCode code, std::string message)
 {
     return CatalogError {code, std::move(message)};
 }
@@ -55,6 +55,15 @@ DatabaseEntry * InMemoryCatalog::find_database_mutable(common::DatabaseId databa
 {
     const auto it = databases_by_id_.find(database_id);
     if (it == databases_by_id_.end()) {
+        return nullptr;
+    }
+    return it->second.get();
+}
+
+CollectionEntry * InMemoryCatalog::find_collection_mutable(common::CollectionId collection_id)
+{
+    const auto it = collections_by_id_.find(collection_id);
+    if (it == collections_by_id_.end()) {
         return nullptr;
     }
     return it->second.get();
@@ -112,6 +121,32 @@ const ColumnEntry * InMemoryCatalog::find_column(common::ColumnId column_id) con
     return it->second.get();
 }
 
+const IndexEntry * InMemoryCatalog::find_index(
+    common::CollectionId collection_id,
+    std::string_view name
+) const
+{
+    const auto * collection = find_collection(collection_id);
+    if (collection == nullptr) {
+        return nullptr;
+    }
+
+    const auto index_id = collection->find_index_id(normalize_identifier(name));
+    if (!index_id.has_value()) {
+        return nullptr;
+    }
+    return find_index(index_id.value());
+}
+
+const IndexEntry * InMemoryCatalog::find_index(common::IndexId index_id) const
+{
+    const auto it = indexes_by_id_.find(index_id);
+    if (it == indexes_by_id_.end()) {
+        return nullptr;
+    }
+    return it->second.get();
+}
+
 std::vector<const DatabaseEntry *> InMemoryCatalog::list_databases() const
 {
     std::vector<const DatabaseEntry *> databases;
@@ -158,12 +193,29 @@ std::vector<const ColumnEntry *> InMemoryCatalog::list_columns(common::Collectio
     return columns;
 }
 
+std::vector<const IndexEntry *> InMemoryCatalog::list_indexes(common::CollectionId collection_id) const
+{
+    const auto * collection = find_collection(collection_id);
+    if (collection == nullptr) {
+        return {};
+    }
+
+    std::vector<const IndexEntry *> indexes;
+    indexes.reserve(collection->index_ids().size());
+    for (const auto index_id : collection->index_ids()) {
+        if (const auto * index = find_index(index_id); index != nullptr) {
+            indexes.push_back(index);
+        }
+    }
+    return indexes;
+}
+
 std::expected<common::DatabaseId, CatalogError> InMemoryCatalog::create_database(
     const CreateDatabaseRequest & request
 )
 {
     if (blank(request.name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Database name cannot be empty"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Database name cannot be empty"));
     }
 
     const auto key = normalize_identifier(request.name);
@@ -172,7 +224,7 @@ std::expected<common::DatabaseId, CatalogError> InMemoryCatalog::create_database
         if (request.if_not_exists) {
             return existing->second;
         }
-        return std::unexpected(make_error(CatalogErrorCode::DuplicateDatabase, "Database already exists: " + request.name));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateDatabase, "Database already exists: " + request.name));
     }
 
     const auto database_id = next_database_id();
@@ -186,7 +238,7 @@ std::expected<common::DatabaseId, CatalogError> InMemoryCatalog::create_database
 std::expected<void, CatalogError> InMemoryCatalog::drop_database(const DropDatabaseRequest & request)
 {
     if (blank(request.name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Database name cannot be empty"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Database name cannot be empty"));
     }
 
     const auto key = normalize_identifier(request.name);
@@ -195,7 +247,7 @@ std::expected<void, CatalogError> InMemoryCatalog::drop_database(const DropDatab
         if (request.if_exists) {
             return {};
         }
-        return std::unexpected(make_error(CatalogErrorCode::DatabaseNotFound, "Database not found: " + request.name));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::DatabaseNotFound, "Database not found: " + request.name));
     }
 
     const auto database_id = database_it->second;
@@ -210,6 +262,9 @@ std::expected<void, CatalogError> InMemoryCatalog::drop_database(const DropDatab
 
             for (const auto column_id : collection->column_ids()) {
                 columns_by_id_.erase(column_id);
+            }
+            for (const auto index_id : collection->index_ids()) {
+                indexes_by_id_.erase(index_id);
             }
             collections_by_id_.erase(collection_id);
         }
@@ -232,7 +287,7 @@ std::expected<common::CollectionId, CatalogError> InMemoryCatalog::create_collec
 
     auto * database = find_database_mutable(request.database_id);
     if (database == nullptr) {
-        return std::unexpected(make_error(CatalogErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::DatabaseNotFound, "Database not found"));
     }
 
     const auto collection_key = normalize_identifier(request.name);
@@ -241,7 +296,7 @@ std::expected<common::CollectionId, CatalogError> InMemoryCatalog::create_collec
         if (request.if_not_exists) {
             return existing.value();
         }
-        return std::unexpected(make_error(CatalogErrorCode::DuplicateCollection, "Collection already exists: " + request.name));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateCollection, "Collection already exists: " + request.name));
     }
 
     const auto collection_id = next_collection_id();
@@ -272,12 +327,12 @@ std::expected<common::CollectionId, CatalogError> InMemoryCatalog::create_collec
 std::expected<void, CatalogError> InMemoryCatalog::drop_collection(const DropCollectionRequest & request)
 {
     if (blank(request.name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection name cannot be empty"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Collection name cannot be empty"));
     }
 
     auto * database = find_database_mutable(request.database_id);
     if (database == nullptr) {
-        return std::unexpected(make_error(CatalogErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::DatabaseNotFound, "Database not found"));
     }
 
     const auto collection_key = normalize_identifier(request.name);
@@ -286,11 +341,14 @@ std::expected<void, CatalogError> InMemoryCatalog::drop_collection(const DropCol
         if (request.if_exists) {
             return {};
         }
-        return std::unexpected(make_error(CatalogErrorCode::CollectionNotFound, "Collection not found: " + request.name));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::CollectionNotFound, "Collection not found: " + request.name));
     }
 
     const auto * collection = find_collection(collection_id.value());
     if (collection != nullptr) {
+        for (const auto index_id : collection->index_ids()) {
+            indexes_by_id_.erase(index_id);
+        }
         for (const auto column_id : collection->column_ids()) {
             columns_by_id_.erase(column_id);
         }
@@ -301,12 +359,75 @@ std::expected<void, CatalogError> InMemoryCatalog::drop_collection(const DropCol
     return {};
 }
 
+std::expected<common::IndexId, CatalogError> InMemoryCatalog::create_index(
+    const CreateIndexRequest & request
+)
+{
+    auto validation = validate_index_request(request);
+    if (!validation.has_value()) {
+        return std::unexpected(std::move(validation.error()));
+    }
+
+    auto * collection = find_collection_mutable(request.collection_id);
+    if (collection == nullptr) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::CollectionNotFound, "Collection not found"));
+    }
+
+    const auto index_key = normalize_identifier(request.name);
+    const auto existing = collection->find_index_id(index_key);
+    if (existing.has_value()) {
+        if (request.if_not_exists) {
+            return existing.value();
+        }
+        return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateIndex, "Index already exists: " + request.name));
+    }
+
+    const auto index_id = next_index_id();
+    auto index = std::make_unique<IndexEntry>(
+        index_id,
+        request.collection_id,
+        request.column_id,
+        request.name,
+        request.index_kind,
+        request.unique
+    );
+    collection->add_index(index->key(), index_id);
+    indexes_by_id_.emplace(index_id, std::move(index));
+    return index_id;
+}
+
+std::expected<void, CatalogError> InMemoryCatalog::drop_index(const DropIndexRequest & request)
+{
+    if (blank(request.name)) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Index name cannot be empty"));
+    }
+
+    auto * collection = find_collection_mutable(request.collection_id);
+    if (collection == nullptr) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::CollectionNotFound, "Collection not found"));
+    }
+
+    const auto index_key = normalize_identifier(request.name);
+    const auto index_id = collection->find_index_id(index_key);
+    if (!index_id.has_value()) {
+        if (request.if_exists) {
+            return {};
+        }
+        return std::unexpected(make_catalog_error(CatalogErrorCode::IndexNotFound, "Index not found: " + request.name));
+    }
+
+    collection->remove_index(index_key, index_id.value());
+    indexes_by_id_.erase(index_id.value());
+    return {};
+}
+
 CatalogSnapshot InMemoryCatalog::snapshot() const
 {
     CatalogSnapshot result {
         .next_database_id = next_database_id_,
         .next_collection_id = next_collection_id_,
         .next_column_id = next_column_id_,
+        .next_index_id = next_index_id_,
         .databases = {},
     };
 
@@ -353,6 +474,21 @@ CatalogSnapshot InMemoryCatalog::snapshot() const
                 });
             }
 
+            for (const auto index_id : collection->index_ids()) {
+                const auto * index = find_index(index_id);
+                if (index == nullptr) {
+                    continue;
+                }
+
+                collection_snapshot.indexes.push_back(CatalogSnapshotIndex {
+                    .id = index->id(),
+                    .column_id = index->column_id(),
+                    .name = index->name(),
+                    .index_kind = index->index_kind(),
+                    .unique = index->unique(),
+                });
+            }
+
             database_snapshot.collections.push_back(std::move(collection_snapshot));
         }
 
@@ -367,76 +503,102 @@ std::expected<void, CatalogError> InMemoryCatalog::restore(const CatalogSnapshot
     std::unordered_set<common::DatabaseId> database_ids;
     std::unordered_set<common::CollectionId> collection_ids;
     std::unordered_set<common::ColumnId> column_ids;
+    std::unordered_set<common::IndexId> index_ids;
     std::unordered_set<std::string> database_keys;
 
     common::DatabaseId max_database_id = 0;
     common::CollectionId max_collection_id = 0;
     common::ColumnId max_column_id = 0;
+    common::IndexId max_index_id = 0;
 
     for (const auto & database_snapshot : snapshot.databases) {
         if (database_snapshot.id == 0 || blank(database_snapshot.name)) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid database in catalog snapshot"));
+            return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Invalid database in catalog snapshot"));
         }
 
         if (!database_ids.insert(database_snapshot.id).second) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Duplicate database id in catalog snapshot"));
+            return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Duplicate database id in catalog snapshot"));
         }
         if (!database_keys.insert(normalize_identifier(database_snapshot.name)).second) {
-            return std::unexpected(make_error(CatalogErrorCode::DuplicateDatabase, "Duplicate database name in catalog snapshot"));
+            return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateDatabase, "Duplicate database name in catalog snapshot"));
         }
         max_database_id = std::max(max_database_id, database_snapshot.id);
 
         std::unordered_set<std::string> collection_keys;
         for (const auto & collection_snapshot : database_snapshot.collections) {
             if (collection_snapshot.id == 0 || collection_snapshot.database_id != database_snapshot.id || blank(collection_snapshot.name)) {
-                return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid collection in catalog snapshot"));
+                return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Invalid collection in catalog snapshot"));
             }
             if (!collection_ids.insert(collection_snapshot.id).second) {
-                return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Duplicate collection id in catalog snapshot"));
+                return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Duplicate collection id in catalog snapshot"));
             }
             if (!collection_keys.insert(normalize_identifier(collection_snapshot.name)).second) {
-                return std::unexpected(make_error(CatalogErrorCode::DuplicateCollection, "Duplicate collection name in catalog snapshot"));
+                return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateCollection, "Duplicate collection name in catalog snapshot"));
             }
             if (collection_snapshot.columns.empty()) {
-                return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection snapshot must contain columns"));
+                return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Collection snapshot must contain columns"));
             }
             max_collection_id = std::max(max_collection_id, collection_snapshot.id);
 
             std::unordered_set<std::string> column_keys;
+            std::unordered_set<std::string> index_keys;
+            std::unordered_set<common::ColumnId> collection_column_ids;
             bool has_primary_key = false;
             for (const auto & column_snapshot : collection_snapshot.columns) {
                 if (column_snapshot.id == 0 || blank(column_snapshot.name)) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid column in catalog snapshot"));
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Invalid column in catalog snapshot"));
                 }
                 if (!column_ids.insert(column_snapshot.id).second) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Duplicate column id in catalog snapshot"));
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Duplicate column id in catalog snapshot"));
                 }
                 if (!column_keys.insert(normalize_identifier(column_snapshot.name)).second) {
-                    return std::unexpected(make_error(CatalogErrorCode::DuplicateColumn, "Duplicate column name in catalog snapshot"));
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateColumn, "Duplicate column name in catalog snapshot"));
                 }
+                collection_column_ids.insert(column_snapshot.id);
                 if (column_snapshot.primary_key) {
                     if (has_primary_key) {
-                        return std::unexpected(make_error(CatalogErrorCode::MultiplePrimaryKeys, "Multiple primary keys in catalog snapshot"));
+                        return std::unexpected(make_catalog_error(CatalogErrorCode::MultiplePrimaryKeys, "Multiple primary keys in catalog snapshot"));
                     }
                     has_primary_key = true;
                 }
                 max_column_id = std::max(max_column_id, column_snapshot.id);
             }
+
+            for (const auto & index_snapshot : collection_snapshot.indexes) {
+                if (index_snapshot.id == 0 || blank(index_snapshot.name)) {
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Invalid index in catalog snapshot"));
+                }
+                if (!index_ids.insert(index_snapshot.id).second) {
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Duplicate index id in catalog snapshot"));
+                }
+                if (!index_keys.insert(normalize_identifier(index_snapshot.name)).second) {
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateIndex, "Duplicate index name in catalog snapshot"));
+                }
+                if (!collection_column_ids.contains(index_snapshot.column_id)) {
+                    return std::unexpected(make_catalog_error(CatalogErrorCode::ColumnNotFound, "Index column not found in catalog snapshot"));
+                }
+                max_index_id = std::max(max_index_id, index_snapshot.id);
+            }
         }
     }
 
-    if (snapshot.next_database_id <= max_database_id || snapshot.next_collection_id <= max_collection_id || snapshot.next_column_id <= max_column_id) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Catalog snapshot next id is behind existing ids"));
+    if (snapshot.next_database_id <= max_database_id
+        || snapshot.next_collection_id <= max_collection_id
+        || snapshot.next_column_id <= max_column_id
+        || snapshot.next_index_id <= max_index_id) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Catalog snapshot next id is behind existing ids"));
     }
 
     next_database_id_ = snapshot.next_database_id;
     next_collection_id_ = snapshot.next_collection_id;
     next_column_id_ = snapshot.next_column_id;
+    next_index_id_ = snapshot.next_index_id;
     database_ids_.clear();
     databases_by_id_.clear();
     databases_by_key_.clear();
     collections_by_id_.clear();
     columns_by_id_.clear();
+    indexes_by_id_.clear();
 
     for (const auto & database_snapshot : snapshot.databases) {
         auto database = std::make_unique<DatabaseEntry>(database_snapshot.id, database_snapshot.name);
@@ -469,9 +631,47 @@ std::expected<void, CatalogError> InMemoryCatalog::restore(const CatalogSnapshot
                 columns_by_id_.emplace(column_snapshot.id, std::move(column));
             }
 
+            for (const auto & index_snapshot : collection_snapshot.indexes) {
+                auto index = std::make_unique<IndexEntry>(
+                    index_snapshot.id,
+                    collection_snapshot.id,
+                    index_snapshot.column_id,
+                    index_snapshot.name,
+                    index_snapshot.index_kind,
+                    index_snapshot.unique
+                );
+                collection_ptr->add_index(index->key(), index_snapshot.id);
+                indexes_by_id_.emplace(index_snapshot.id, std::move(index));
+            }
+
             database_ptr->add_collection(collection->key(), collection_snapshot.id);
             collections_by_id_.emplace(collection_snapshot.id, std::move(collection));
         }
+    }
+
+    return {};
+}
+
+std::expected<void, CatalogError> InMemoryCatalog::validate_index_request(
+    const CreateIndexRequest & request
+) const
+{
+    if (blank(request.name)) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Index name cannot be empty"));
+    }
+
+    const auto * collection = find_collection(request.collection_id);
+    if (collection == nullptr) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::CollectionNotFound, "Collection not found"));
+    }
+
+    const auto * column = find_column(request.column_id);
+    if (column == nullptr || column->collection_id() != request.collection_id) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::ColumnNotFound, "Index column not found"));
+    }
+
+    if (column->type().id == common::LogicalTypeId::Vector) {
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Scalar index cannot be created on VECTOR column"));
     }
 
     return {};
@@ -482,28 +682,28 @@ std::expected<void, CatalogError> InMemoryCatalog::validate_collection_request(
 ) const
 {
     if (blank(request.name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection name cannot be empty"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Collection name cannot be empty"));
     }
 
     if (request.columns.empty()) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection must have at least one column"));
+        return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Collection must have at least one column"));
     }
 
     std::unordered_set<std::string> column_keys;
     bool has_primary_key = false;
     for (const auto & column : request.columns) {
         if (blank(column.name)) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Column name cannot be empty"));
+            return std::unexpected(make_catalog_error(CatalogErrorCode::InvalidArgument, "Column name cannot be empty"));
         }
 
         const auto [_, inserted] = column_keys.emplace(normalize_identifier(column.name));
         if (!inserted) {
-            return std::unexpected(make_error(CatalogErrorCode::DuplicateColumn, "Duplicate column: " + column.name));
+            return std::unexpected(make_catalog_error(CatalogErrorCode::DuplicateColumn, "Duplicate column: " + column.name));
         }
 
         if (column.primary_key) {
             if (has_primary_key) {
-                return std::unexpected(make_error(CatalogErrorCode::MultiplePrimaryKeys, "Collection cannot have multiple primary keys"));
+                return std::unexpected(make_catalog_error(CatalogErrorCode::MultiplePrimaryKeys, "Collection cannot have multiple primary keys"));
             }
             has_primary_key = true;
         }
@@ -525,6 +725,11 @@ common::CollectionId InMemoryCatalog::next_collection_id() noexcept
 common::ColumnId InMemoryCatalog::next_column_id() noexcept
 {
     return next_column_id_++;
+}
+
+common::IndexId InMemoryCatalog::next_index_id() noexcept
+{
+    return next_index_id_++;
 }
 
 } // namespace litedb::core::catalog

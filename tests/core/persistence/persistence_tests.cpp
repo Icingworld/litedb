@@ -89,6 +89,7 @@ void test_manifest_and_catalog_store()
     snapshot.next_database_id = 2;
     snapshot.next_collection_id = 2;
     snapshot.next_column_id = 3;
+    snapshot.next_index_id = 2;
     snapshot.databases.push_back(catalog::CatalogSnapshotDatabase {
         .id = 1,
         .name = "demo",
@@ -119,6 +120,15 @@ void test_manifest_and_catalog_store()
                         .comment = std::nullopt,
                     },
                 },
+                .indexes = {
+                    catalog::CatalogSnapshotIndex {
+                        .id = 1,
+                        .column_id = 1,
+                        .name = "idx_id",
+                        .index_kind = catalog::CatalogIndexKind::BTree,
+                        .unique = false,
+                    },
+                },
             },
         },
     });
@@ -131,6 +141,8 @@ void test_manifest_and_catalog_store()
     require(loaded->databases.size() == 1, "catalog database count mismatch");
     require(loaded->databases[0].collections[0].columns.size() == 2, "catalog column count mismatch");
     require(loaded->databases[0].collections[0].columns[1].type.parameter == 3, "catalog vector parameter mismatch");
+    require(loaded->databases[0].collections[0].indexes.size() == 1, "catalog index count mismatch");
+    require(loaded->databases[0].collections[0].indexes[0].name == "idx_id", "catalog index name mismatch");
 }
 
 void test_row_log_replay_and_partial_tail()

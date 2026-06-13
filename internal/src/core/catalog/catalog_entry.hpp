@@ -17,13 +17,22 @@ namespace litedb::core::catalog
 /**
  * @brief 目录项类型
  */
-enum class CatalogEntryKind : std::uint8_t
+enum class CatalogEntryKind
 {
-    Database,
-    Collection,
-    Column,
-    Index,
-    VectorIndex,
+    Database,             ///< 数据库
+    Collection,           ///< 集合
+    Column,               ///< 列
+    Index,                ///< 索引
+    VectorIndex,          ///< 向量索引
+};
+
+/**
+ * @brief 索引类型
+ */
+enum class CatalogIndexKind
+{
+    Hash,                 ///< 哈希索引
+    BTree,                ///< B+ 树索引
 };
 
 /**
@@ -140,8 +149,8 @@ public:
     void remove_collection(std::string_view collection_key, common::CollectionId collection_id);
 
 private:
-    std::vector<common::CollectionId> collection_ids_; ///< 数据库包含的集合 ID 列表
-    std::unordered_map<std::string, common::CollectionId> collections_by_key_; ///< 数据库包含的集合键到 ID 的映射
+    std::vector<common::CollectionId> collection_ids_;                          ///< 数据库包含的集合 ID 列表
+    std::unordered_map<std::string, common::CollectionId> collections_by_key_;  ///< 数据库包含的集合键到 ID 的映射
 };
 
 /**
@@ -175,6 +184,13 @@ public:
     const std::vector<common::ColumnId> & column_ids() const noexcept;
 
     /**
+     * @brief 获取集合包含的索引 ID 列表
+     * @return 集合包含的索引 ID 列表
+     */
+    [[nodiscard]]
+    const std::vector<common::IndexId> & index_ids() const noexcept;
+
+    /**
      * @brief 获取集合主键列 ID
      * @return 集合主键列 ID
      */
@@ -190,6 +206,14 @@ public:
     std::optional<common::ColumnId> find_column_id(std::string_view column_key) const;
 
     /**
+     * @brief 查找索引 ID
+     * @param index_key 索引键
+     * @return 索引 ID
+     */
+    [[nodiscard]]
+    std::optional<common::IndexId> find_index_id(std::string_view index_key) const;
+
+    /**
      * @brief 添加列
      * @param column_key 列键
      * @param column_id 列 ID
@@ -197,11 +221,27 @@ public:
      */
     void add_column(std::string_view column_key, common::ColumnId column_id, bool primary_key);
 
+    /**
+     * @brief 添加索引
+     * @param index_key 索引键
+     * @param index_id 索引 ID
+     */
+    void add_index(std::string_view index_key, common::IndexId index_id);
+
+    /**
+     * @brief 删除索引
+     * @param index_key 索引键
+     * @param index_id 索引 ID
+     */
+    void remove_index(std::string_view index_key, common::IndexId index_id);
+
 private:
-    common::DatabaseId database_id_;                            ///< 数据库 ID
-    std::vector<common::ColumnId> column_ids_;                  ///< 集合包含的列 ID 列表
+    common::DatabaseId database_id_;                                    ///< 数据库 ID
+    std::vector<common::ColumnId> column_ids_;                          ///< 集合包含的列 ID 列表
+    std::vector<common::IndexId> index_ids_;                            ///< 集合包含的索引 ID 列表
     std::unordered_map<std::string, common::ColumnId> columns_by_key_;  ///< 集合包含的列键到 ID 的映射
-    std::optional<common::ColumnId> primary_key_column_id_;     ///< 集合主键列 ID
+    std::unordered_map<std::string, common::IndexId> indexes_by_key_;   ///< 集合包含的索引键到 ID 的映射
+    std::optional<common::ColumnId> primary_key_column_id_;             ///< 集合主键列 ID
 };
 
 /**
@@ -299,6 +339,73 @@ private:
     bool nullable_;                         ///< 是否可为空
     std::optional<CatalogDefaultExpression> default_expression_;  ///< 默认值表达式
     std::optional<std::string> comment_;    ///< 注释
+};
+
+/**
+ * @brief 索引目录项
+ */
+class IndexEntry final : public CatalogEntry
+{
+public:
+    /**
+     * @brief 构造索引目录项
+     * @param id 索引 ID
+     * @param collection_id 集合 ID
+     * @param column_id 列 ID
+     * @param name 索引名称
+     * @param index_kind 索引类型
+     * @param unique 是否唯一
+     */
+    IndexEntry(
+        common::IndexId id,
+        common::CollectionId collection_id,
+        common::ColumnId column_id,
+        std::string name,
+        CatalogIndexKind index_kind,
+        bool unique
+    );
+
+public:
+    /**
+     * @brief 获取索引 ID
+     * @return 索引 ID
+     */
+    [[nodiscard]]
+    common::IndexId id() const noexcept;
+
+    /**
+     * @brief 获取集合 ID
+     * @return 集合 ID
+     */
+    [[nodiscard]]
+    common::CollectionId collection_id() const noexcept;
+
+    /**
+     * @brief 获取列 ID
+     * @return 列 ID
+     */
+    [[nodiscard]]
+    common::ColumnId column_id() const noexcept;
+
+    /**
+     * @brief 获取索引类型
+     * @return 索引类型
+     */
+    [[nodiscard]]
+    CatalogIndexKind index_kind() const noexcept;
+
+    /**
+     * @brief 是否唯一
+     * @return 是否唯一
+     */
+    [[nodiscard]]
+    bool unique() const noexcept;
+
+private:
+    common::CollectionId collection_id_;    ///< 集合 ID
+    common::ColumnId column_id_;            ///< 列 ID
+    CatalogIndexKind index_kind_;           ///< 索引类型
+    bool unique_;                           ///< 是否唯一
 };
 
 } // namespace litedb::core::catalog

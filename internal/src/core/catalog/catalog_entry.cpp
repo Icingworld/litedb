@@ -101,6 +101,11 @@ const std::vector<common::ColumnId> & CollectionEntry::column_ids() const noexce
     return column_ids_;
 }
 
+const std::vector<common::IndexId> & CollectionEntry::index_ids() const noexcept
+{
+    return index_ids_;
+}
+
 std::optional<common::ColumnId> CollectionEntry::primary_key_column_id() const noexcept
 {
     return primary_key_column_id_;
@@ -115,6 +120,15 @@ std::optional<common::ColumnId> CollectionEntry::find_column_id(std::string_view
     return it->second;
 }
 
+std::optional<common::IndexId> CollectionEntry::find_index_id(std::string_view index_key) const
+{
+    const auto it = indexes_by_key_.find(std::string(index_key));
+    if (it == indexes_by_key_.end()) {
+        return std::nullopt;
+    }
+    return it->second;
+}
+
 void CollectionEntry::add_column(std::string_view column_key, common::ColumnId column_id, bool primary_key)
 {
     columns_by_key_.emplace(std::string(column_key), column_id);
@@ -122,6 +136,18 @@ void CollectionEntry::add_column(std::string_view column_key, common::ColumnId c
     if (primary_key) {
         primary_key_column_id_ = column_id;
     }
+}
+
+void CollectionEntry::add_index(std::string_view index_key, common::IndexId index_id)
+{
+    indexes_by_key_.emplace(std::string(index_key), index_id);
+    index_ids_.push_back(index_id);
+}
+
+void CollectionEntry::remove_index(std::string_view index_key, common::IndexId index_id)
+{
+    indexes_by_key_.erase(std::string(index_key));
+    std::erase(index_ids_, index_id);
 }
 
 ColumnEntry::ColumnEntry(
@@ -184,6 +210,47 @@ const std::optional<CatalogDefaultExpression> & ColumnEntry::default_expression(
 const std::optional<std::string> & ColumnEntry::comment() const noexcept
 {
     return comment_;
+}
+
+IndexEntry::IndexEntry(
+    common::IndexId id,
+    common::CollectionId collection_id,
+    common::ColumnId column_id,
+    std::string name,
+    CatalogIndexKind index_kind,
+    bool unique
+)
+    : CatalogEntry(CatalogEntryKind::Index, id, std::move(name)),
+      collection_id_(collection_id),
+      column_id_(column_id),
+      index_kind_(index_kind),
+      unique_(unique)
+{
+}
+
+common::IndexId IndexEntry::id() const noexcept
+{
+    return raw_id();
+}
+
+common::CollectionId IndexEntry::collection_id() const noexcept
+{
+    return collection_id_;
+}
+
+common::ColumnId IndexEntry::column_id() const noexcept
+{
+    return column_id_;
+}
+
+CatalogIndexKind IndexEntry::index_kind() const noexcept
+{
+    return index_kind_;
+}
+
+bool IndexEntry::unique() const noexcept
+{
+    return unique_;
 }
 
 } // namespace litedb::core::catalog
