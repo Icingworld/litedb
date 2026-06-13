@@ -38,6 +38,12 @@ public:
         storage::StorageManager & storage
     ) override;
 
+    std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_index(
+        const planner::CreateIndexPlan & plan,
+        catalog::Catalog & catalog,
+        storage::StorageManager & storage
+    ) override;
+
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_database(
         const planner::DropDatabasePlan & plan,
         catalog::Catalog & catalog,
@@ -46,6 +52,12 @@ public:
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_collection(
         const planner::DropCollectionPlan & plan,
+        catalog::Catalog & catalog,
+        storage::StorageManager & storage
+    ) override;
+
+    std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_index(
+        const planner::DropIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage
     ) override;

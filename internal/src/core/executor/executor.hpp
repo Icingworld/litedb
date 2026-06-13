@@ -13,8 +13,10 @@ namespace litedb::core::planner
 
 class CreateCollectionPlan;
 class CreateDatabasePlan;
+class CreateIndexPlan;
 class DropCollectionPlan;
 class DropDatabasePlan;
+class DropIndexPlan;
 
 } // namespace litedb::core::planner
 
@@ -41,6 +43,12 @@ public:
         storage::StorageManager & storage
     ) = 0;
 
+    virtual std::expected<ExecutionResult, ExecutionError> execute_create_index(
+        const planner::CreateIndexPlan & plan,
+        catalog::Catalog & catalog,
+        storage::StorageManager & storage
+    ) = 0;
+
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_database(
         const planner::DropDatabasePlan & plan,
         catalog::Catalog & catalog,
@@ -49,6 +57,12 @@ public:
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
         const planner::DropCollectionPlan & plan,
+        catalog::Catalog & catalog,
+        storage::StorageManager & storage
+    ) = 0;
+
+    virtual std::expected<ExecutionResult, ExecutionError> execute_drop_index(
+        const planner::DropIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage
     ) = 0;

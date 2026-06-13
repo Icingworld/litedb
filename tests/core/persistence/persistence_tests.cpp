@@ -212,6 +212,58 @@ void test_database_instance_reopens_persistent_data()
     }
 }
 
+void test_index_ddl_reopen()
+{
+    const auto dir = make_temp_dir("litedb_index_ddl_reopen_test");
+
+    {
+        engine::DatabaseInstance instance {engine::DatabaseConfig {.data_dir = dir}};
+        engine::Session session {instance};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        execute_ok(session, "CREATE COLLECTION users (id BIGINT PRIMARY KEY, age INTEGER);");
+        auto created = execute_ok(session, "CREATE INDEX idx_age ON users (age) USING HASH;");
+        require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
+
+        const auto * database = instance.catalog().find_database("demo");
+        require(database != nullptr, "created database lookup failed");
+        const auto * collection = instance.catalog().find_collection(database->id(), "users");
+        require(collection != nullptr, "created collection lookup failed");
+        const auto * index = instance.catalog().find_index(collection->id(), "idx_age");
+        require(index != nullptr, "created index lookup failed");
+        require(index->index_kind() == catalog::CatalogIndexKind::Hash, "created index kind mismatch");
+    }
+
+    common::CollectionId users_id {0};
+    {
+        engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
+        const auto * database = reopened.catalog().find_database("demo");
+        require(database != nullptr, "reopened database missing");
+        const auto * collection = reopened.catalog().find_collection(database->id(), "users");
+        require(collection != nullptr, "reopened collection missing");
+        users_id = collection->id();
+        const auto * index = reopened.catalog().find_index(users_id, "idx_age");
+        require(index != nullptr, "reopened index missing");
+        require(index->index_kind() == catalog::CatalogIndexKind::Hash, "reopened index kind mismatch");
+
+        engine::Session session {reopened};
+        execute_ok(session, "USE demo;");
+        auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
+        require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
+        require(reopened.catalog().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
+    }
+
+    {
+        engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
+        const auto * database = reopened.catalog().find_database("demo");
+        require(database != nullptr, "second reopen database missing");
+        const auto * collection = reopened.catalog().find_collection(database->id(), "users");
+        require(collection != nullptr, "second reopen collection missing");
+        require(collection->id() == users_id, "second reopen collection id mismatch");
+        require(reopened.catalog().find_index(users_id, "idx_age") == nullptr, "dropped index should not reappear");
+    }
+}
+
 void test_drop_collection_reopen()
 {
     const auto dir = make_temp_dir("litedb_drop_reopen_test");
@@ -258,6 +310,7 @@ int main()
         test_manifest_and_catalog_store();
         test_row_log_replay_and_partial_tail();
         test_database_instance_reopens_persistent_data();
+        test_index_ddl_reopen();
         test_drop_collection_reopen();
         test_default_instance_is_still_memory_only();
     } catch (const std::exception & exception) {

@@ -279,6 +279,38 @@ void test_drop_collection_removes_storage()
     require(fixture.storage.find_collection(fixture.users_id) == nullptr, "dropped collection should leave storage");
 }
 
+void test_index_ddl_updates_catalog()
+{
+    Fixture fixture;
+
+    auto created = execute_ok(fixture.catalog, fixture.storage, "CREATE INDEX idx_age ON users (age);", fixture.database_id);
+    require(created.kind == ExecutionResultKind::Command, "CREATE INDEX result kind mismatch");
+    require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
+
+    const auto * index = fixture.catalog.find_index(fixture.users_id, "idx_age");
+    require(index != nullptr, "created index missing");
+    require(index->index_kind() == CatalogIndexKind::BTree, "created index kind mismatch");
+    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    require(age_column != nullptr, "age column lookup failed");
+    require(index->column_id() == age_column->id(), "created index column mismatch");
+
+    auto duplicate_if_not_exists = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING HASH;",
+        fixture.database_id
+    );
+    require(duplicate_if_not_exists.affected_rows == 0, "CREATE INDEX IF NOT EXISTS affected rows mismatch");
+    require(fixture.catalog.find_index(fixture.users_id, "idx_age")->index_kind() == CatalogIndexKind::BTree, "existing index should not be replaced");
+
+    auto dropped = execute_ok(fixture.catalog, fixture.storage, "DROP INDEX idx_age ON users;", fixture.database_id);
+    require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
+    require(fixture.catalog.find_index(fixture.users_id, "idx_age") == nullptr, "dropped index should leave catalog");
+
+    auto drop_missing = execute_ok(fixture.catalog, fixture.storage, "DROP INDEX IF EXISTS idx_age ON users;", fixture.database_id);
+    require(drop_missing.affected_rows == 0, "DROP INDEX IF EXISTS affected rows mismatch");
+}
+
 void test_error_mapping()
 {
     Fixture fixture;
@@ -320,6 +352,7 @@ int main()
         test_insert_select_update_and_delete();
         test_order_by_keeps_null_last();
         test_drop_collection_removes_storage();
+        test_index_ddl_updates_catalog();
         test_error_mapping();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

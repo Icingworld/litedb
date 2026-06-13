@@ -69,12 +69,22 @@ void test_execute_sql_end_to_end()
     auto insert = execute_ok(engine, "INSERT INTO users VALUES (1, 'alice', 18);");
     require(insert.affected_rows == 1, "INSERT affected rows mismatch");
 
+    auto create_index = execute_ok(engine, "CREATE INDEX idx_age ON users (age);");
+    require(create_index.affected_rows == 1, "CREATE INDEX affected rows mismatch");
+    const auto * collection = engine.catalog().find_collection(engine.current_database_id().value(), "users");
+    require(collection != nullptr, "created collection lookup failed");
+    require(engine.catalog().find_index(collection->id(), "idx_age") != nullptr, "created index missing");
+
     auto selected = execute_ok(engine, "SELECT name, age FROM users WHERE id = 1;");
     require(selected.kind == ExecutionResultKind::RowSet, "SELECT result kind mismatch");
     require(selected.columns.size() == 2, "SELECT column count mismatch");
     require(selected.rows.size() == 1, "SELECT row count mismatch");
     require(get_value<std::string>(selected.rows[0].values[0]) == "alice", "SELECT name mismatch");
     require(get_value<std::int32_t>(selected.rows[0].values[1]) == 18, "SELECT age mismatch");
+
+    auto drop_index = execute_ok(engine, "DROP INDEX idx_age ON users;");
+    require(drop_index.affected_rows == 1, "DROP INDEX affected rows mismatch");
+    require(engine.catalog().find_index(collection->id(), "idx_age") == nullptr, "dropped index should leave catalog");
 }
 
 void test_engine_error_mapping()

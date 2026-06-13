@@ -19,10 +19,12 @@
 #include "core/planner/logical/node/logical_scan.hpp"
 #include "core/planner/statement/create_collection_plan.hpp"
 #include "core/planner/statement/create_database_plan.hpp"
+#include "core/planner/statement/create_index_plan.hpp"
 #include "core/planner/statement/delete_plan.hpp"
 #include "core/planner/statement/describe_collection_plan.hpp"
 #include "core/planner/statement/drop_collection_plan.hpp"
 #include "core/planner/statement/drop_database_plan.hpp"
+#include "core/planner/statement/drop_index_plan.hpp"
 #include "core/planner/statement/insert_plan.hpp"
 #include "core/planner/statement/query_plan.hpp"
 #include "core/planner/statement/show_collections_plan.hpp"
@@ -605,6 +607,28 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
 }
 
 [[nodiscard]]
+std::expected<ExecutionResult, ExecutionError> execute_create_index(
+    const planner::CreateIndexPlan & plan,
+    catalog::Catalog & catalog
+)
+{
+    const auto * existing = catalog.find_index(plan.collection_id(), plan.index_name());
+    auto created = catalog.create_index(catalog::CreateIndexRequest {
+        .collection_id = plan.collection_id(),
+        .column_id = plan.column_id(),
+        .name = plan.index_name(),
+        .index_kind = plan.index_kind(),
+        .unique = plan.unique(),
+        .if_not_exists = plan.if_not_exists(),
+    });
+    if (!created.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+    }
+
+    return command_result(existing == nullptr ? 1 : 0);
+}
+
+[[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
     const planner::DropCollectionPlan & plan,
     catalog::Catalog & catalog,
@@ -629,6 +653,29 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
     });
     if (!dropped_catalog.has_value()) {
         return std::unexpected(from_catalog_error(std::move(dropped_catalog.error()), plan.location()));
+    }
+
+    return command_result(1);
+}
+
+[[nodiscard]]
+std::expected<ExecutionResult, ExecutionError> execute_drop_index(
+    const planner::DropIndexPlan & plan,
+    catalog::Catalog & catalog
+)
+{
+    const auto * existing = catalog.find_index(plan.collection_id(), plan.index_name());
+    if (existing == nullptr && plan.if_exists()) {
+        return command_result(0);
+    }
+
+    auto dropped = catalog.drop_index(catalog::DropIndexRequest {
+        .collection_id = plan.collection_id(),
+        .name = plan.index_name(),
+        .if_exists = plan.if_exists(),
+    });
+    if (!dropped.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(dropped.error()), plan.location()));
     }
 
     return command_result(1);
@@ -904,6 +951,11 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
             return ddl_handler_->execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_);
         }
         return execute_create_collection(static_cast<const planner::CreateCollectionPlan &>(plan), catalog_, storage_);
+    case StatementPlanKind::CreateIndex:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_, storage_);
+        }
+        return execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_);
     case StatementPlanKind::DropDatabase:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_);
@@ -914,6 +966,11 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
             return ddl_handler_->execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_);
         }
         return execute_drop_collection(static_cast<const planner::DropCollectionPlan &>(plan), catalog_, storage_);
+    case StatementPlanKind::DropIndex:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_, storage_);
+        }
+        return execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_);
     case StatementPlanKind::ShowDatabases:
         return execute_show_databases(catalog_);
     case StatementPlanKind::ShowCollections:
