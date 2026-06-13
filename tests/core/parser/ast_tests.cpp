@@ -3,7 +3,8 @@
 #include "core/parser/ast/expression/literal_expression.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
-#include "core/parser/ast/statement/drop_statement.hpp"
+#include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 
 #include <exception>
@@ -115,12 +116,15 @@ void test_create_collection_statement()
 
 void test_schema_object_type_statements()
 {
-    DropStatement statement(SchemaObjectType::Collection, "users", true, AstNodeLocation {1, 1});
+    DropDatabaseStatement drop_database("demo", true, AstNodeLocation {1, 1});
+    require(drop_database.kind() == AstNodeKind::DropDatabase, "drop database statement kind mismatch");
+    require(drop_database.database_name() == "demo", "drop database name mismatch");
+    require(drop_database.if_exists(), "drop database if-exists mismatch");
 
-    require(statement.kind() == AstNodeKind::Drop, "drop statement kind mismatch");
-    require(statement.object_type() == SchemaObjectType::Collection, "drop object type mismatch");
-    require(statement.name() == "users", "drop object name mismatch");
-    require(statement.if_exists(), "drop if-exists mismatch");
+    DropCollectionStatement drop_collection("users", true, AstNodeLocation {1, 1});
+    require(drop_collection.kind() == AstNodeKind::DropCollection, "drop collection statement kind mismatch");
+    require(drop_collection.collection_name() == "users", "drop collection name mismatch");
+    require(drop_collection.if_exists(), "drop collection if-exists mismatch");
 }
 
 } // namespace

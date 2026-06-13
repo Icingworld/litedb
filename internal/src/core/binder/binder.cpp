@@ -51,7 +51,8 @@
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
-#include "core/parser/ast/statement/drop_statement.hpp"
+#include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -373,12 +374,20 @@ private:
     std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_create_collection(const CreateCollectionStatement & statement);
 
     /**
-     * @brief 绑定 DROP 语句
-     * @param statement DROP 语句
+     * @brief 绑定 DROP DATABASE 语句
+     * @param statement DROP DATABASE 语句
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_drop(const DropStatement & statement);
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_drop_database(const DropDatabaseStatement & statement);
+
+    /**
+     * @brief 绑定 DROP COLLECTION 语句
+     * @param statement DROP COLLECTION 语句
+     * @return 绑定后的语句
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_drop_collection(const DropCollectionStatement & statement);
 
     /**
      * @brief 绑定 SHOW 语句
@@ -613,8 +622,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_s
         return bind_create_database(static_cast<const CreateDatabaseStatement &>(statement));
     case AstNodeKind::CreateCollection:
         return bind_create_collection(static_cast<const CreateCollectionStatement &>(statement));
-    case AstNodeKind::Drop:
-        return bind_drop(static_cast<const DropStatement &>(statement));
+    case AstNodeKind::DropDatabase:
+        return bind_drop_database(static_cast<const DropDatabaseStatement &>(statement));
+    case AstNodeKind::DropCollection:
+        return bind_drop_collection(static_cast<const DropCollectionStatement &>(statement));
     case AstNodeKind::Show:
         return bind_show(static_cast<const ShowStatement &>(statement));
     case AstNodeKind::Describe:
@@ -697,49 +708,58 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_c
 }
 
 /**
-* @brief 绑定 DROP 语句
-* @param statement DROP 语句
+* @brief 绑定 DROP DATABASE 语句
+* @param statement DROP DATABASE 语句
 * @return 绑定后的语句
 */
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_drop(const DropStatement & statement)
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_drop_database(
+    const DropDatabaseStatement & statement
+)
 {
-    if (statement.object_type() == SchemaObjectType::Database) {
-        // DROP DATABASE
-        const auto * database = catalog_.find_database(statement.name());
-        if (database == nullptr && !statement.if_exists()) {
-            return std::unexpected(make_binder_error(
-                BinderErrorCode::DatabaseNotFound,
-                statement.location(),
-                "Database not found: " + statement.name()
-            ));
-        }
-
-        return std::make_unique<BoundDropDatabaseStatement>(
-            database == nullptr ? std::nullopt : std::optional<DatabaseId>(database->id()),
-            statement.name(),
-            statement.if_exists(),
-            statement.location()
-        );
+    const auto * database = catalog_.find_database(statement.database_name());
+    if (database == nullptr && !statement.if_exists()) {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::DatabaseNotFound,
+            statement.location(),
+            "Database not found: " + statement.database_name()
+        ));
     }
 
+    return std::make_unique<BoundDropDatabaseStatement>(
+        database == nullptr ? std::nullopt : std::optional<DatabaseId>(database->id()),
+        statement.database_name(),
+        statement.if_exists(),
+        statement.location()
+    );
+}
+
+/**
+* @brief 绑定 DROP COLLECTION 语句
+* @param statement DROP COLLECTION 语句
+* @return 绑定后的语句
+*/
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_drop_collection(
+    const DropCollectionStatement & statement
+)
+{
     const auto database_id = require_database(statement.location());
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = catalog_.find_collection(database_id.value(), statement.name());
+    const auto * collection = catalog_.find_collection(database_id.value(), statement.collection_name());
     if (collection == nullptr && !statement.if_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
             statement.location(),
-            "Collection not found: " + statement.name()
+            "Collection not found: " + statement.collection_name()
         ));
     }
 
     return std::make_unique<BoundDropCollectionStatement>(
         database_id.value(),
         collection == nullptr ? std::nullopt : std::optional<CollectionId>(collection->id()),
-        statement.name(),
+        statement.collection_name(),
         statement.if_exists(),
         statement.location()
     );

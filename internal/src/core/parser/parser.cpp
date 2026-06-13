@@ -26,7 +26,8 @@
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
-#include "core/parser/ast/statement/drop_statement.hpp"
+#include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -632,29 +633,50 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     const TokenLocation location = current_token_.location();
     advance();
 
-    // 解析对象类型
-    auto object_type = parse_schema_object_type(false);
-    if (!object_type.has_value()) [[unlikely]] {
-        return std::unexpected(object_type.error());
+    if (match(TokenType::Database)) {
+        // 判断是否存在 IF EXISTS 关键字
+        auto if_exists = parse_if_exists();
+        if (!if_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_exists.error());
+        }
+
+        // 解析数据库名称
+        auto database = parse_identifier_string("Expected database name");
+        if (!database.has_value()) [[unlikely]] {
+            return std::unexpected(database.error());
+        }
+
+        return std::make_unique<ast::DropDatabaseStatement>(
+            std::move(database.value()),
+            if_exists.value(),
+            ast_location(location)
+        );
     }
 
-    // 判断是否存在 IF EXISTS 关键字
-    auto if_exists = parse_if_exists();
-    if (!if_exists.has_value()) [[unlikely]] {
-        return std::unexpected(if_exists.error());
-    }
-    // 解析对象名称
-    auto name = parse_identifier_string("Expected object name");
-    if (!name.has_value()) [[unlikely]] {
-        return std::unexpected(name.error());
+    if (match(TokenType::Collection)) {
+        // 判断是否存在 IF EXISTS 关键字
+        auto if_exists = parse_if_exists();
+        if (!if_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_exists.error());
+        }
+
+        // 解析集合名称
+        auto collection = parse_identifier_string("Expected collection name");
+        if (!collection.has_value()) [[unlikely]] {
+            return std::unexpected(collection.error());
+        }
+
+        return std::make_unique<ast::DropCollectionStatement>(
+            std::move(collection.value()),
+            if_exists.value(),
+            ast_location(location)
+        );
     }
 
-    return std::make_unique<ast::DropStatement>(
-        object_type.value(),
-        std::move(name.value()),
-        if_exists.value(),
-        ast_location(location)
-    );
+    return std::unexpected(make_current_error(
+        ParserErrorCode::ExpectedToken,
+        "Expected DATABASE or COLLECTION after DROP"
+    ));
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_show_statement()

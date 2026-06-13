@@ -13,7 +13,8 @@
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
-#include "core/parser/ast/statement/drop_statement.hpp"
+#include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -131,15 +132,15 @@ void test_parse_create_index_statement()
 void test_parse_drop_show_describe_statements()
 {
     auto drop_database = parse_ok("DROP DATABASE IF EXISTS demo;");
-    require(drop_database->kind() == AstNodeKind::Drop, "DROP DATABASE kind mismatch");
-    const auto * drop_db = static_cast<const DropStatement *>(drop_database.get());
-    require(drop_db->object_type() == SchemaObjectType::Database, "DROP DATABASE object type mismatch");
+    require(drop_database->kind() == AstNodeKind::DropDatabase, "DROP DATABASE kind mismatch");
+    const auto * drop_db = static_cast<const DropDatabaseStatement *>(drop_database.get());
+    require(drop_db->database_name() == "demo", "DROP DATABASE name mismatch");
     require(drop_db->if_exists(), "DROP DATABASE IF EXISTS mismatch");
 
     auto drop_collection = parse_ok("DROP COLLECTION users;");
-    const auto * drop_col = static_cast<const DropStatement *>(drop_collection.get());
-    require(drop_col->object_type() == SchemaObjectType::Collection, "DROP COLLECTION object type mismatch");
-    require(drop_col->name() == "users", "DROP COLLECTION name mismatch");
+    require(drop_collection->kind() == AstNodeKind::DropCollection, "DROP COLLECTION kind mismatch");
+    const auto * drop_col = static_cast<const DropCollectionStatement *>(drop_collection.get());
+    require(drop_col->collection_name() == "users", "DROP COLLECTION name mismatch");
 
     auto show_databases = parse_ok("SHOW DATABASES;");
     const auto * show_db = static_cast<const ShowStatement *>(show_databases.get());
@@ -304,6 +305,10 @@ void test_parse_failures()
     auto unsupported_b_tree = parse_error("CREATE INDEX idx_age ON users(age) USING B_TREE;");
     require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
     require(unsupported_b_tree.message == "Expected HASH or BTREE after USING", "CREATE INDEX B_TREE error mismatch");
+
+    auto unsupported_drop_index = parse_error("DROP INDEX idx_age;");
+    require(unsupported_drop_index.code == ParserErrorCode::ExpectedToken, "DROP INDEX unsupported error code mismatch");
+    require(unsupported_drop_index.message == "Expected DATABASE or COLLECTION after DROP", "DROP INDEX unsupported error mismatch");
 
     auto lexical_error = parse_error("SELECT ! FROM users;");
     require(lexical_error.code == ParserErrorCode::LexicalError, "lexical error code mismatch");
