@@ -28,6 +28,7 @@
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
+#include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -634,6 +635,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     advance();
 
     if (match(TokenType::Database)) {
+        // 解析 DROP DATABASE 语句
+
         // 判断是否存在 IF EXISTS 关键字
         auto if_exists = parse_if_exists();
         if (!if_exists.has_value()) [[unlikely]] {
@@ -654,6 +657,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     }
 
     if (match(TokenType::Collection)) {
+        // 解析 DROP COLLECTION 语句
+
         // 判断是否存在 IF EXISTS 关键字
         auto if_exists = parse_if_exists();
         if (!if_exists.has_value()) [[unlikely]] {
@@ -673,9 +678,31 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         );
     }
 
+    if (match(TokenType::Index)) {
+        // 解析 DROP INDEX 语句
+
+        // 判断是否存在 IF EXISTS 关键字
+        auto if_exists = parse_if_exists();
+        if (!if_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_exists.error());
+        }
+
+        // 解析索引名称
+        auto index_name = parse_identifier_string("Expected index name");
+        if (!index_name.has_value()) [[unlikely]] {
+            return std::unexpected(index_name.error());
+        }
+
+        return std::make_unique<ast::DropIndexStatement>(
+            std::move(index_name.value()),
+            if_exists.value(),
+            ast_location(location)
+        );
+    }
+
     return std::unexpected(make_current_error(
         ParserErrorCode::ExpectedToken,
-        "Expected DATABASE or COLLECTION after DROP"
+        "Expected DATABASE, COLLECTION, or INDEX after DROP"
     ));
 }
 

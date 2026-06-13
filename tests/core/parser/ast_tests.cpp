@@ -5,6 +5,7 @@
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
+#include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 
 #include <exception>
@@ -125,6 +126,11 @@ void test_schema_object_type_statements()
     require(drop_collection.kind() == AstNodeKind::DropCollection, "drop collection statement kind mismatch");
     require(drop_collection.collection_name() == "users", "drop collection name mismatch");
     require(drop_collection.if_exists(), "drop collection if-exists mismatch");
+
+    DropIndexStatement drop_index("idx_age", true, AstNodeLocation {1, 1});
+    require(drop_index.kind() == AstNodeKind::DropIndex, "drop index statement kind mismatch");
+    require(drop_index.index_name() == "idx_age", "drop index name mismatch");
+    require(drop_index.if_exists(), "drop index if-exists mismatch");
 }
 
 } // namespace

@@ -28,6 +28,7 @@ enum class AstNodeKind : std::uint8_t
     Describe,               ///< DESCRIBE
     DropDatabase,           ///< DROP DATABASE
     DropCollection,         ///< DROP COLLECTION
+    DropIndex,              ///< DROP INDEX
     Insert,                 ///< INSERT
     Select,                 ///< SELECT
     Show,                   ///< SHOW

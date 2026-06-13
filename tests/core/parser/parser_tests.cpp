@@ -15,6 +15,7 @@
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
+#include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -141,6 +142,16 @@ void test_parse_drop_show_describe_statements()
     require(drop_collection->kind() == AstNodeKind::DropCollection, "DROP COLLECTION kind mismatch");
     const auto * drop_col = static_cast<const DropCollectionStatement *>(drop_collection.get());
     require(drop_col->collection_name() == "users", "DROP COLLECTION name mismatch");
+
+    auto drop_index = parse_ok("DROP INDEX idx_age;");
+    require(drop_index->kind() == AstNodeKind::DropIndex, "DROP INDEX kind mismatch");
+    const auto * drop_idx = static_cast<const DropIndexStatement *>(drop_index.get());
+    require(drop_idx->index_name() == "idx_age", "DROP INDEX name mismatch");
+    require(!drop_idx->if_exists(), "DROP INDEX IF EXISTS mismatch");
+
+    auto drop_index_if_exists = parse_ok("DROP INDEX IF EXISTS idx_age;");
+    const auto * drop_idx_if_exists = static_cast<const DropIndexStatement *>(drop_index_if_exists.get());
+    require(drop_idx_if_exists->if_exists(), "DROP INDEX IF EXISTS mismatch");
 
     auto show_databases = parse_ok("SHOW DATABASES;");
     const auto * show_db = static_cast<const ShowStatement *>(show_databases.get());
@@ -305,10 +316,6 @@ void test_parse_failures()
     auto unsupported_b_tree = parse_error("CREATE INDEX idx_age ON users(age) USING B_TREE;");
     require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
     require(unsupported_b_tree.message == "Expected HASH or BTREE after USING", "CREATE INDEX B_TREE error mismatch");
-
-    auto unsupported_drop_index = parse_error("DROP INDEX idx_age;");
-    require(unsupported_drop_index.code == ParserErrorCode::ExpectedToken, "DROP INDEX unsupported error code mismatch");
-    require(unsupported_drop_index.message == "Expected DATABASE or COLLECTION after DROP", "DROP INDEX unsupported error mismatch");
 
     auto lexical_error = parse_error("SELECT ! FROM users;");
     require(lexical_error.code == ParserErrorCode::LexicalError, "lexical error code mismatch");

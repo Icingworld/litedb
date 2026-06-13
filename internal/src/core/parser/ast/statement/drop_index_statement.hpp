@@ -1,0 +1,46 @@
+#pragma once
+
+#include <string>
+
+#include "core/parser/ast/statement/statement_node.hpp"
+
+namespace litedb::core::parser::ast
+{
+
+/**
+ * @brief DROP INDEX 语句节点
+ * @details 示例：DROP INDEX [IF EXISTS] <index_name>
+ */
+class DropIndexStatement final : public StatementNode
+{
+public:
+    DropIndexStatement(std::string index_name, bool if_exists, AstNodeLocation location) noexcept;
+
+public:
+    /**
+     * @brief 获取节点类型
+     * @return 节点类型
+     */
+    [[nodiscard]]
+    AstNodeKind kind() const noexcept override;
+
+    /**
+     * @brief 获取索引名称
+     * @return 索引名称
+     */
+    [[nodiscard]]
+    const std::string & index_name() const noexcept;
+
+    /**
+     * @brief 是否存在
+     * @return 是否存在
+     */
+    [[nodiscard]]
+    bool if_exists() const noexcept;
+
+private:
+    std::string index_name_;    ///< 索引名称
+    bool if_exists_;            ///< 是否存在
+};
+
+} // namespace litedb::core::parser::ast
