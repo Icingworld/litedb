@@ -56,6 +56,8 @@ enum class TokenType
     Default,            ///< DEFAULT
     Comment,            ///< COMMENT
     Using,              ///< USING
+    Hash,               ///< HASH
+    BTree,              ///< BTREE
     With,               ///< WITH
     From,               ///< FROM
     Where,              ///< WHERE

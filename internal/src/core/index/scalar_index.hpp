@@ -56,6 +56,22 @@ public:
     static IndexRange closed(ScalarIndexKey lower, ScalarIndexKey upper);
 
     /**
+     * @brief 创建任意开闭区间
+     * @param lower 下界
+     * @param lower_inclusive 下界是否包含
+     * @param upper 上界
+     * @param upper_inclusive 上界是否包含
+     * @return 索引范围
+     */
+    [[nodiscard]]
+    static IndexRange between(
+        ScalarIndexKey lower,
+        bool lower_inclusive,
+        ScalarIndexKey upper,
+        bool upper_inclusive
+    );
+
+    /**
      * @brief 创建下界范围索引
      * @param key 键
      * @param inclusive 是否包含边界

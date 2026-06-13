@@ -138,10 +138,12 @@ void test_btree_index_equal_lookup_and_ranges()
         "btree closed range mismatch"
     );
     require_ids(
-        ids(index.scan_range(IndexRange {
-            .lower = IndexBound {.key = key(Value {std::int32_t {1}}), .inclusive = false},
-            .upper = IndexBound {.key = key(Value {3.0}), .inclusive = false},
-        })),
+        ids(index.scan_range(IndexRange::between(
+            key(Value {std::int32_t {1}}),
+            false,
+            key(Value {3.0}),
+            false
+        ))),
         {20},
         "btree open range mismatch"
     );
@@ -161,10 +163,12 @@ void test_btree_index_equal_lookup_and_ranges()
         "btree reversed range should be empty"
     );
     require(
-        ids(index.scan_range(IndexRange {
-            .lower = IndexBound {.key = key(Value {std::int32_t {1}}), .inclusive = false},
-            .upper = IndexBound {.key = key(Value {1.0}), .inclusive = true},
-        })).empty(),
+        ids(index.scan_range(IndexRange::between(
+            key(Value {std::int32_t {1}}),
+            false,
+            key(Value {1.0}),
+            true
+        ))).empty(),
         "btree equal open range should be empty"
     );
 }

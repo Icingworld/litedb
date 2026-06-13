@@ -55,6 +55,8 @@ constexpr auto KEYWORDS = std::to_array<std::pair<std::string_view, TokenType>>(
     {"DEFAULT", TokenType::Default},
     {"COMMENT", TokenType::Comment},
     {"USING", TokenType::Using},
+    {"HASH", TokenType::Hash},
+    {"BTREE", TokenType::BTree},
     {"WITH", TokenType::With},
     {"FROM", TokenType::From},
     {"WHERE", TokenType::Where},

@@ -23,6 +23,7 @@
 #include "core/parser/ast/schema.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
+#include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/parser/ast/statement/drop_statement.hpp"
@@ -469,6 +470,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 
     // 尝试匹配 DATABASE 关键字
     if (match(TokenType::Database)) {
+        // 解析 CREATE DATABASE 语句
+
         // 判断是否存在 IF NOT EXISTS 关键字
         auto if_not_exists = parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
@@ -490,6 +493,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 
     // 尝试匹配 COLLECTION 关键字
     if (match(TokenType::Collection)) {
+        // 解析 CREATE COLLECTION 语句
+
         // 判断是否存在 IF NOT EXISTS 关键字
         auto if_not_exists = parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
@@ -541,9 +546,83 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         );
     }
 
+    // 匹配 INDEX 关键字
+    if (match(TokenType::Index)) {
+        // 解析 CREATE INDEX 语句
+
+        // 判断是否存在 IF NOT EXISTS 关键字
+        auto if_not_exists = parse_if_not_exists();
+        if (!if_not_exists.has_value()) [[unlikely]] {
+            return std::unexpected(if_not_exists.error());
+        }   
+
+        // 解析索引名称
+        auto index_name = parse_identifier_string("Expected index name");
+        if (!index_name.has_value()) [[unlikely]] {
+            return std::unexpected(index_name.error());
+        }   
+
+        // 期望 ON 关键字
+        auto on = consume(TokenType::On, "Expected ON after index name");
+        if (!on.has_value()) [[unlikely]] {
+            return std::unexpected(on.error());
+        }
+
+        // 解析集合名称
+        auto collection_name = parse_identifier_string("Expected collection name");
+        if (!collection_name.has_value()) [[unlikely]] {
+            return std::unexpected(collection_name.error());
+        }
+
+        // 期望 (
+        auto left_paren = consume(TokenType::LeftParen, "Expected '(' before index column");
+        if (!left_paren.has_value()) [[unlikely]] {
+            return std::unexpected(left_paren.error());
+        }
+
+        // 解析列名称
+        auto column_name = parse_identifier_string("Expected index column name");
+        if (!column_name.has_value()) [[unlikely]] {
+            return std::unexpected(column_name.error());
+        }
+
+        // 期望 )
+        auto right_paren = consume(TokenType::RightParen, "Expected ')' after index column");
+        if (!right_paren.has_value()) [[unlikely]] {
+            return std::unexpected(right_paren.error());
+        }
+
+        // 解析创建索引方法
+        auto method = ast::CreateIndexMethod::Default;
+        // 尝试匹配 USING 关键字
+        if (match(TokenType::Using)) {
+            // 解析创建索引方法
+            if (match(TokenType::Hash)) {
+                method = ast::CreateIndexMethod::Hash;
+            } else if (match(TokenType::BTree)) {
+                method = ast::CreateIndexMethod::BTree;
+            } else [[unlikely]] {
+                return std::unexpected(make_parser_error(
+                    ParserErrorCode::UnsupportedSyntax,
+                    current_token_.location(),
+                    "Expected HASH or BTREE after USING"
+                ));
+            }
+        }
+
+        return std::make_unique<ast::CreateIndexStatement>(
+            std::move(index_name.value()),
+            std::move(collection_name.value()),
+            std::move(column_name.value()),
+            if_not_exists.value(),
+            method,
+            ast_location(location)
+        );
+    }
+
     [[unlikely]] return std::unexpected(make_current_error(
         ParserErrorCode::UnsupportedSyntax, 
-        "Expected DATABASE or COLLECTION after CREATE"
+        "Expected DATABASE, COLLECTION, or INDEX after CREATE"
     ));
 }
 
