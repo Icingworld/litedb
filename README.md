@@ -3,15 +3,16 @@
 EN | [简体中文](docs/readme/README_zh_CN.md)
 
 `litedb` is a lightweight experimental database written in modern C++. The
-v0.2.0 release focuses on making the first usable database loop restartable:
+v0.2.2 release focuses on making the first usable database loop restartable:
 parsing SQL, binding it against a catalog, planning and executing statements,
-and optionally persisting catalog and row data through `--data-dir`.
+optionally persisting catalog and row data through `--data-dir`, and maintaining
+in-memory scalar indexes for faster future query paths.
 
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
 storage engine.
 
-## What works in v0.2.0
+## What works in v0.2.2
 
 - SQL lexer, parser, AST, binder, logical planner, evaluator, executor, and
 engine facade.
@@ -19,8 +20,19 @@ engine facade.
 - Optional single-node persistence enabled by `--data-dir`.
 - Persistent catalog snapshots and append-only row logs for `INSERT`, `UPDATE`,
 and `DELETE`.
-- Startup recovery for persisted databases, collections, schemas, scalar
-values, and `VECTOR(n)` values.
+- Startup recovery for persisted databases, collections, schemas, index
+definitions, scalar values, and `VECTOR(n)` values.
+- In-memory scalar indexes with `HashIndex` (equality lookup) and `BTreeIndex`
+(range and equality lookup).
+- Index metadata in the catalog, persisted in `catalog.lcat`, and rebuilt from
+existing rows on startup.
+- Index DDL:
+  - `CREATE INDEX ... ON collection(column) [USING HASH | USING BTREE]`
+  - `CREATE INDEX IF NOT EXISTS ...`
+  - `DROP INDEX ... ON collection`
+  - `DROP INDEX IF EXISTS ... ON collection`
+- Automatic index maintenance on `INSERT`, `UPDATE`, and `DELETE` through
+`IndexManager`.
 - Basic database and collection management:
   - `CREATE DATABASE`, `DROP DATABASE`, `USE`, `SHOW DATABASES`
   - `CREATE COLLECTION`, `DROP COLLECTION`, `SHOW COLLECTIONS`, `DESCRIBE`
@@ -39,7 +51,7 @@ search in later releases.
 
 ## Current limitations
 
-v0.2.0 intentionally keeps the scope small:
+v0.2.2 intentionally keeps the scope small:
 
 - Persistence is opt-in. Without `--data-dir`, the server still runs in
 in-memory mode and restart loses catalog and records.
@@ -47,7 +59,14 @@ in-memory mode and restart loses catalog and records.
 protocol yet.
 - No transactions, MVCC, or isolation guarantees.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
-- No scalar indexes or vector indexes yet.
+- Scalar indexes are in-memory only. Index definitions are persisted, but index
+data is rebuilt from row logs on startup rather than stored in separate index
+files.
+- Queries still use sequential scan plus filter. `IndexScan` and index-based
+query planning are not implemented yet.
+- No `SHOW INDEXES`, unique indexes, composite indexes, or expression indexes
+yet.
+- No vector indexes yet.
 - Vector values can be stored and queried as data, but similarity search is not
 implemented in this release.
 
@@ -84,9 +103,9 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
-The current suite covers parser, catalog, schema, in-memory and persistent
-storage, binder, logical planner, evaluator, executor, engine, protocol,
-memory, and client/server behavior.
+The current suite covers parser, catalog, schema, scalar indexes, in-memory and
+persistent storage, binder, logical planner, evaluator, executor, engine,
+protocol, memory, and client/server behavior.
 
 ## Quick start
 
@@ -156,6 +175,9 @@ FROM users
 WHERE active = true
 ORDER BY age DESC
 LIMIT 10;
+
+CREATE INDEX idx_age ON users (age) USING BTREE;
+CREATE INDEX idx_name ON users (name) USING HASH;
 ```
 
 Use `.quit` or `.exit` to leave the client.
@@ -181,6 +203,7 @@ Repository layout:
 internal/src/core/parser       SQL lexer, parser, and AST
 internal/src/core/catalog      Catalog interfaces and in-memory catalog
 internal/src/core/schema       Logical types, values, records, collections
+internal/src/core/index        In-memory scalar indexes and IndexManager
 internal/src/core/storage      Collection storage interface and in-memory storage
 internal/src/core/persistence  Persistent catalog snapshots and row logs
 internal/src/core/binder       Name resolution and semantic binding
@@ -200,10 +223,10 @@ docs/design_docs/              Design notes and roadmap
 
 ## Roadmap
 
-Near-term work after v0.2.0:
+Near-term work after v0.2.2:
 
-- v0.2.x: persistence hardening, cleanup/compaction planning, and storage
-format polish.
+- v0.2.x: `IndexScan` and simple index-based query planning, `SHOW INDEXES`,
+persistence hardening, cleanup/compaction planning, and storage format polish.
 - v0.3: vector search and first vector index support, likely starting with an in-memory HNSW
 implementation.
 - v0.4: reliability improvements such as WAL, recovery, checksums, compaction,

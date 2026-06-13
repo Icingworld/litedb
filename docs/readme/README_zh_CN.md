@@ -2,17 +2,25 @@
 
 [EN](../../README.md) | 简体中文
 
-`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.2.0 版本聚焦于让第一个可用的数据库闭环具备可重启能力：解析 SQL、在目录（catalog）上绑定、规划并执行语句，并可通过 `--data-dir` 持久化 catalog 与行数据。
+`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.2.2 版本聚焦于让第一个可用的数据库闭环具备可重启能力：解析 SQL、在目录（catalog）上绑定、规划并执行语句，可通过 `--data-dir` 持久化 catalog 与行数据，并维护内存标量索引，为后续查询加速打下基础。
 
 本项目仍处于早期阶段。当前版本更适合作为数据库内核与学习/实验平台，而非可直接用于生产的存储引擎。
 
-## v0.2.0 已实现的功能
+## v0.2.2 已实现的功能
 
 - SQL 词法分析器、解析器、AST、绑定器（binder）、逻辑规划器、求值器（evaluator）、执行器（executor）以及引擎门面（facade）。
 - 内存目录、模式（schema）模型与集合（collection）存储。
 - 通过 `--data-dir` 显式启用的单机持久化能力。
 - 持久化 catalog 快照，以及用于 `INSERT`、`UPDATE`、`DELETE` 的 append-only row log。
-- 启动时恢复已持久化的 database、collection、schema、标量值与 `VECTOR(n)` 值。
+- 启动时恢复已持久化的 database、collection、schema、索引定义、标量值与 `VECTOR(n)` 值。
+- 内存标量索引：`HashIndex`（等值查找）与 `BTreeIndex`（范围与等值查找）。
+- catalog 中的索引元数据，写入 `catalog.lcat` 持久化，并在启动时从已有行数据重建内存索引。
+- 索引 DDL：
+  - `CREATE INDEX ... ON collection(column) [USING HASH | USING BTREE]`
+  - `CREATE INDEX IF NOT EXISTS ...`
+  - `DROP INDEX ... ON collection`
+  - `DROP INDEX IF EXISTS ... ON collection`
+- 通过 `IndexManager` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
 - 基础数据库与集合管理：
   - `CREATE DATABASE`、`DROP DATABASE`、`USE`、`SHOW DATABASES`
   - `CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS`、`DESCRIBE`
@@ -29,13 +37,16 @@
 
 ## 当前限制
 
-v0.2.0 有意保持较小的功能范围：
+v0.2.2 有意保持较小的功能范围：
 
 - 持久化需要显式开启。不传 `--data-dir` 时，服务端仍以纯内存模式运行，重启会丢失目录与记录。
 - 尚无 WAL、checksum、compaction、checkpoint 或 crash-consistent commit 协议。
 - 无事务、MVCC 或隔离性保证。
 - 不支持 SQL 连接（join）、子查询、聚合、`GROUP BY` 或完整 SQL 兼容性。
-- 尚无标量索引或向量索引。
+- 标量索引目前为纯内存实现。索引定义会持久化，但索引数据在启动时从 row log 重建，而非写入独立索引文件。
+- 查询仍使用顺序扫描加过滤，`IndexScan` 与基于索引的查询规划尚未实现。
+- 尚无 `SHOW INDEXES`、唯一索引、联合索引或表达式索引。
+- 尚无向量索引。
 - 向量值可作为数据存储与查询，但本版本尚未实现相似度检索。
 
 ## 环境要求
@@ -71,7 +82,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-当前测试覆盖解析器、目录、模式、内存存储、持久化存储、绑定器、逻辑规划器、求值器、执行器、引擎、协议、内存以及客户端/服务端行为。
+当前测试覆盖解析器、目录、模式、标量索引、内存存储、持久化存储、绑定器、逻辑规划器、求值器、执行器、引擎、协议、内存以及客户端/服务端行为。
 
 ## 快速开始
 
@@ -138,6 +149,9 @@ FROM users
 WHERE active = true
 ORDER BY age DESC
 LIMIT 10;
+
+CREATE INDEX idx_age ON users (age) USING BTREE;
+CREATE INDEX idx_name ON users (name) USING HASH;
 ```
 
 使用 `.quit` 或 `.exit` 退出客户端。
@@ -163,6 +177,7 @@ SQL text
 internal/src/core/parser       SQL 词法分析器、解析器与 AST
 internal/src/core/catalog      目录接口与内存目录
 internal/src/core/schema       逻辑类型、值、记录与集合
+internal/src/core/index        内存标量索引与 IndexManager
 internal/src/core/storage      集合存储接口与内存存储
 internal/src/core/persistence  持久化 catalog 快照与 row log
 internal/src/core/binder       名称解析与语义绑定
@@ -182,9 +197,9 @@ docs/design_docs/              设计文档与路线图
 
 ## 路线图
 
-v0.2.0 之后的近期计划：
+v0.2.2 之后的近期计划：
 
-- v0.2.x：持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
+- v0.2.x：`IndexScan` 与简单索引查询规划、`SHOW INDEXES`、持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
 - v0.3：向量检索与首批向量索引支持，可能从内存 HNSW 实现起步。
 - v0.4：可靠性改进，如 WAL、恢复、校验和、压缩与文件格式版本管理。
 - v0.5：早期分布式查询架构，包含分片、协调器路由与分布式 TopK 合并。
