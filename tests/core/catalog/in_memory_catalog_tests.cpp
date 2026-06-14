@@ -282,6 +282,105 @@ void test_index_catalog_operations()
     require(catalog.find_index(id_index.value()) == nullptr, "collection drop should remove indexes");
 }
 
+void test_vector_index_catalog_operations()
+{
+    InMemoryCatalog catalog;
+    const auto database_id = create_database_ok(catalog, "demo");
+    const auto collection_id = create_users_collection_ok(catalog, database_id);
+
+    const auto * id_column = catalog.find_column(collection_id, "id");
+    const auto * embedding_column = catalog.find_column(collection_id, "embedding");
+    require(id_column != nullptr, "id column lookup for vector index failed");
+    require(embedding_column != nullptr, "embedding column lookup for vector index failed");
+
+    auto vector_index = catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = collection_id,
+        .column_id = embedding_column->id(),
+        .name = "vidx_embedding",
+        .index_kind = CatalogVectorIndexKind::Hnsw,
+        .metric = CatalogVectorDistanceMetric::Cosine,
+        .max_neighbors = 24,
+        .ef_construction = 240,
+        .ef_search_default = 80,
+        .random_seed = 7,
+    });
+    require(vector_index.has_value(), "create vector index failed");
+
+    const auto * found = catalog.find_vector_index(collection_id, "VIDX_EMBEDDING");
+    require(found != nullptr, "case-insensitive vector index lookup failed");
+    require(found->id() == vector_index.value(), "vector index id mismatch");
+    require(found->collection_id() == collection_id, "vector index collection id mismatch");
+    require(found->column_id() == embedding_column->id(), "vector index column id mismatch");
+    require(found->index_kind() == CatalogVectorIndexKind::Hnsw, "vector index kind mismatch");
+    require(found->metric() == CatalogVectorDistanceMetric::Cosine, "vector index metric mismatch");
+    require(found->dimension() == 3, "vector index dimension mismatch");
+    require(found->max_neighbors() == 24, "vector index max_neighbors mismatch");
+    require(found->ef_construction() == 240, "vector index ef_construction mismatch");
+    require(found->ef_search_default() == 80, "vector index ef_search_default mismatch");
+    require(found->random_seed() == 7, "vector index random seed mismatch");
+
+    const auto indexes = catalog.list_vector_indexes(collection_id);
+    require(indexes.size() == 1, "vector index list size mismatch");
+    require(indexes[0]->id() == vector_index.value(), "vector index list order mismatch");
+
+    auto duplicate = catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = collection_id,
+        .column_id = embedding_column->id(),
+        .name = "VIDX_EMBEDDING",
+    });
+    require(!duplicate.has_value(), "duplicate vector index should fail");
+    require(duplicate.error().code == CatalogErrorCode::DuplicateIndex, "duplicate vector index error mismatch");
+
+    auto if_not_exists = catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = collection_id,
+        .column_id = embedding_column->id(),
+        .name = "vidx_embedding",
+        .if_not_exists = true,
+    });
+    require(if_not_exists.has_value(), "IF NOT EXISTS vector index should succeed");
+    require(if_not_exists.value() == vector_index.value(), "IF NOT EXISTS vector index id mismatch");
+
+    auto scalar_column = catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = collection_id,
+        .column_id = id_column->id(),
+        .name = "vidx_id",
+    });
+    require(!scalar_column.has_value(), "vector index on scalar column should fail");
+    require(scalar_column.error().code == CatalogErrorCode::InvalidArgument, "vector index scalar column error mismatch");
+
+    auto bad_options = catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = collection_id,
+        .column_id = embedding_column->id(),
+        .name = "vidx_bad",
+        .max_neighbors = 16,
+        .ef_construction = 8,
+    });
+    require(!bad_options.has_value(), "invalid HNSW options should fail");
+    require(bad_options.error().code == CatalogErrorCode::InvalidArgument, "invalid HNSW options error mismatch");
+
+    auto drop_missing = catalog.drop_vector_index(DropVectorIndexRequest {
+        .collection_id = collection_id,
+        .name = "missing",
+    });
+    require(!drop_missing.has_value(), "missing vector index drop should fail");
+    require(drop_missing.error().code == CatalogErrorCode::IndexNotFound, "missing vector index drop error mismatch");
+
+    auto drop_missing_if_exists = catalog.drop_vector_index(DropVectorIndexRequest {
+        .collection_id = collection_id,
+        .name = "missing",
+        .if_exists = true,
+    });
+    require(drop_missing_if_exists.has_value(), "DROP VINDEX IF EXISTS should succeed");
+
+    auto drop = catalog.drop_vector_index(DropVectorIndexRequest {
+        .collection_id = collection_id,
+        .name = "VIDX_EMBEDDING",
+    });
+    require(drop.has_value(), "drop vector index should succeed");
+    require(catalog.find_vector_index(vector_index.value()) == nullptr, "dropped vector index should not be found by id");
+    require(catalog.find_vector_index(collection_id, "vidx_embedding") == nullptr, "dropped vector index should not be found by name");
+}
+
 void test_index_snapshot_restore()
 {
     InMemoryCatalog catalog;
@@ -309,6 +408,42 @@ void test_index_snapshot_restore()
     require(restored_index->column_id() == name_column->id(), "restored index column mismatch");
     require(restored_index->index_kind() == CatalogIndexKind::Hash, "restored index kind mismatch");
     require(restored_index->unique(), "restored index unique mismatch");
+}
+
+void test_vector_index_snapshot_restore()
+{
+    InMemoryCatalog catalog;
+    const auto database_id = create_database_ok(catalog, "demo");
+    const auto collection_id = create_users_collection_ok(catalog, database_id);
+    const auto * embedding_column = catalog.find_column(collection_id, "embedding");
+    require(embedding_column != nullptr, "embedding column lookup for vector snapshot failed");
+
+    auto index_id = catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = collection_id,
+        .column_id = embedding_column->id(),
+        .name = "vidx_embedding",
+        .metric = CatalogVectorDistanceMetric::InnerProduct,
+        .max_neighbors = 32,
+        .ef_construction = 256,
+        .ef_search_default = 96,
+        .random_seed = 11,
+    });
+    require(index_id.has_value(), "create snapshot vector index failed");
+
+    InMemoryCatalog restored;
+    auto restore = restored.restore(catalog.snapshot());
+    require(restore.has_value(), "catalog restore with vector index failed");
+
+    const auto * restored_index = restored.find_vector_index(collection_id, "VIDX_EMBEDDING");
+    require(restored_index != nullptr, "restored vector index lookup failed");
+    require(restored_index->id() == index_id.value(), "restored vector index id mismatch");
+    require(restored_index->column_id() == embedding_column->id(), "restored vector index column mismatch");
+    require(restored_index->metric() == CatalogVectorDistanceMetric::InnerProduct, "restored vector index metric mismatch");
+    require(restored_index->dimension() == 3, "restored vector index dimension mismatch");
+    require(restored_index->max_neighbors() == 32, "restored vector index max_neighbors mismatch");
+    require(restored_index->ef_construction() == 256, "restored vector index ef_construction mismatch");
+    require(restored_index->ef_search_default() == 96, "restored vector index ef_search_default mismatch");
+    require(restored_index->random_seed() == 11, "restored vector index random seed mismatch");
 }
 
 void test_list_and_drop()
@@ -373,7 +508,9 @@ int main()
         test_create_collection_columns_and_defaults();
         test_duplicate_collection_and_column_rules();
         test_index_catalog_operations();
+        test_vector_index_catalog_operations();
         test_index_snapshot_restore();
+        test_vector_index_snapshot_restore();
         test_list_and_drop();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

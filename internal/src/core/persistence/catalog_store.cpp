@@ -121,6 +121,7 @@ void write_snapshot(BinaryWriter & writer, const catalog::CatalogSnapshot & snap
     writer.write_u64(snapshot.next_collection_id);
     writer.write_u64(snapshot.next_column_id);
     writer.write_u64(snapshot.next_index_id);
+    writer.write_u64(snapshot.next_vector_index_id);
     writer.write_u32(static_cast<std::uint32_t>(snapshot.databases.size()));
 
     for (const auto & database : snapshot.databases) {
@@ -150,6 +151,19 @@ void write_snapshot(BinaryWriter & writer, const catalog::CatalogSnapshot & snap
                 writer.write_u8(static_cast<std::uint8_t>(index.index_kind));
                 writer.write_u8(index.unique ? 1U : 0U);
             }
+            writer.write_u32(static_cast<std::uint32_t>(collection.vector_indexes.size()));
+            for (const auto & index : collection.vector_indexes) {
+                writer.write_u64(index.id);
+                writer.write_u64(index.column_id);
+                writer.write_string(index.name);
+                writer.write_u8(static_cast<std::uint8_t>(index.index_kind));
+                writer.write_u8(static_cast<std::uint8_t>(index.metric));
+                writer.write_u64(index.dimension);
+                writer.write_u64(index.max_neighbors);
+                writer.write_u64(index.ef_construction);
+                writer.write_u64(index.ef_search_default);
+                writer.write_u64(index.random_seed);
+            }
         }
     }
 }
@@ -163,6 +177,7 @@ catalog::CatalogSnapshot read_snapshot(BinaryReader & reader)
     snapshot.next_collection_id = reader.read_u64();
     snapshot.next_column_id = reader.read_u64();
     snapshot.next_index_id = reader.read_u64();
+    snapshot.next_vector_index_id = reader.read_u64();
 
     const auto database_count = reader.read_u32();
     snapshot.databases.reserve(database_count);
@@ -205,6 +220,23 @@ catalog::CatalogSnapshot read_snapshot(BinaryReader & reader)
                 index.index_kind = static_cast<catalog::CatalogIndexKind>(reader.read_u8());
                 index.unique = reader.read_u8() != 0;
                 collection.indexes.push_back(std::move(index));
+            }
+
+            const auto vector_index_count = reader.read_u32();
+            collection.vector_indexes.reserve(vector_index_count);
+            for (std::uint32_t index_index = 0; index_index < vector_index_count; ++index_index) {
+                catalog::CatalogSnapshotVectorIndex index;
+                index.id = reader.read_u64();
+                index.column_id = reader.read_u64();
+                index.name = reader.read_string();
+                index.index_kind = static_cast<catalog::CatalogVectorIndexKind>(reader.read_u8());
+                index.metric = static_cast<catalog::CatalogVectorDistanceMetric>(reader.read_u8());
+                index.dimension = static_cast<std::size_t>(reader.read_u64());
+                index.max_neighbors = static_cast<std::size_t>(reader.read_u64());
+                index.ef_construction = static_cast<std::size_t>(reader.read_u64());
+                index.ef_search_default = static_cast<std::size_t>(reader.read_u64());
+                index.random_seed = static_cast<std::size_t>(reader.read_u64());
+                collection.vector_indexes.push_back(std::move(index));
             }
 
             database.collections.push_back(std::move(collection));

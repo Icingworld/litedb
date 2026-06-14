@@ -111,6 +111,7 @@ void test_manifest_and_catalog_store()
     snapshot.next_collection_id = 2;
     snapshot.next_column_id = 3;
     snapshot.next_index_id = 2;
+    snapshot.next_vector_index_id = 2;
     snapshot.databases.push_back(catalog::CatalogSnapshotDatabase {
         .id = 1,
         .name = "demo",
@@ -150,6 +151,20 @@ void test_manifest_and_catalog_store()
                         .unique = false,
                     },
                 },
+                .vector_indexes = {
+                    catalog::CatalogSnapshotVectorIndex {
+                        .id = 1,
+                        .column_id = 2,
+                        .name = "vidx_embedding",
+                        .index_kind = catalog::CatalogVectorIndexKind::Hnsw,
+                        .metric = catalog::CatalogVectorDistanceMetric::Cosine,
+                        .dimension = 3,
+                        .max_neighbors = 24,
+                        .ef_construction = 240,
+                        .ef_search_default = 80,
+                        .random_seed = 7,
+                    },
+                },
             },
         },
     });
@@ -164,6 +179,10 @@ void test_manifest_and_catalog_store()
     require(loaded->databases[0].collections[0].columns[1].type.parameter == 3, "catalog vector parameter mismatch");
     require(loaded->databases[0].collections[0].indexes.size() == 1, "catalog index count mismatch");
     require(loaded->databases[0].collections[0].indexes[0].name == "idx_id", "catalog index name mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes.size() == 1, "catalog vector index count mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].name == "vidx_embedding", "catalog vector index name mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].metric == catalog::CatalogVectorDistanceMetric::Cosine, "catalog vector index metric mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].dimension == 3, "catalog vector index dimension mismatch");
 }
 
 schema::CollectionSchema simple_users_schema()

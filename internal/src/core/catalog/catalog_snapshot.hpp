@@ -33,6 +33,20 @@ struct CatalogSnapshotIndex
     bool unique {false};
 };
 
+struct CatalogSnapshotVectorIndex
+{
+    common::VIndexId id {0};
+    common::ColumnId column_id {0};
+    std::string name;
+    CatalogVectorIndexKind index_kind {CatalogVectorIndexKind::Hnsw};
+    CatalogVectorDistanceMetric metric {CatalogVectorDistanceMetric::L2};
+    std::size_t dimension {0};
+    std::size_t max_neighbors {16};
+    std::size_t ef_construction {200};
+    std::size_t ef_search_default {64};
+    std::size_t random_seed {0};
+};
+
 struct CatalogSnapshotCollection
 {
     common::CollectionId id {0};
@@ -40,6 +54,7 @@ struct CatalogSnapshotCollection
     std::string name;
     std::vector<CatalogSnapshotColumn> columns;
     std::vector<CatalogSnapshotIndex> indexes;
+    std::vector<CatalogSnapshotVectorIndex> vector_indexes;
 };
 
 struct CatalogSnapshotDatabase
@@ -55,6 +70,7 @@ struct CatalogSnapshot
     common::CollectionId next_collection_id {1};
     common::ColumnId next_column_id {1};
     common::IndexId next_index_id {1};
+    common::VIndexId next_vector_index_id {1};
     std::vector<CatalogSnapshotDatabase> databases;
 };
 
