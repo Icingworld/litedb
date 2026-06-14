@@ -2,11 +2,11 @@
 
 [EN](../../README.md) | 简体中文
 
-`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.2.2 版本聚焦于让第一个可用的数据库闭环具备可重启能力：解析 SQL、在目录（catalog）上绑定、规划并执行语句，可通过 `--data-dir` 持久化 catalog 与行数据，并维护内存标量索引，为后续查询加速打下基础。
+`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.3.0 版本引入了标量函数框架与内置向量距离函数，可通过 `ORDER BY` 做暴力最近邻查询。更早的版本已建立可重启的数据库闭环：解析 SQL、在目录（catalog）上绑定、规划并执行语句，可通过 `--data-dir` 持久化 catalog 与行数据，并维护内存标量索引，为后续查询加速打下基础。
 
 本项目仍处于早期阶段。当前版本更适合作为数据库内核与学习/实验平台，而非可直接用于生产的存储引擎。
 
-## v0.2.2 已实现的功能
+## v0.3.0 已实现的功能
 
 - SQL 词法分析器、解析器、AST、绑定器（binder）、逻辑规划器、求值器（evaluator）、执行器（executor）以及引擎门面（facade）。
 - 内存目录、模式（schema）模型与集合（collection）存储。
@@ -29,15 +29,23 @@
   - 支持投影、`WHERE`、`ORDER BY`、`LIMIT`、`OFFSET` 的 `SELECT`
   - `UPDATE`
   - `DELETE`
+- 标量函数框架：内置函数注册表、签名匹配与重载绑定。
+- 内置向量距离函数：
+  - `l2_distance(vector, vector)` — 欧氏距离（L2）
+  - `cosine_distance(vector, vector)` — `1 - 余弦相似度`
+  - `inner_product(vector, vector)` — 内积（点积）
+- 函数调用可用于 `SELECT` 投影、`WHERE`、`ORDER BY` 等表达式上下文。
+- 通过在 `ORDER BY` 中使用距离函数进行暴力向量相似度查询（全表扫描，尚无向量索引）。
 - 标量类型：`INTEGER`、`BIGINT`、`FLOAT`、`DOUBLE`、`VARCHAR(n)`、`BOOLEAN`。
-- `VECTOR(n)` 作为一等模式/值类型，为后续版本的向量检索奠定基础。
+- `VECTOR(n)` 作为一等模式/值类型，支持固定维度向量字面量，如 `[0.1, 0.2, 0.3]`。
 - 独立的 TCP 服务端与交互式客户端 CLI 示例。
 - 用于客户端/服务端请求的小型帧协议层。
 - 自定义内存子系统，包含页缓存、中央缓存与线程缓存相关测试。
+- `verify/` 目录下的 Python 脚本，用于对照参考实现校验向量距离 SQL 结果。
 
 ## 当前限制
 
-v0.2.2 有意保持较小的功能范围：
+v0.3.0 有意保持较小的功能范围：
 
 - 持久化需要显式开启。不传 `--data-dir` 时，服务端仍以纯内存模式运行，重启会丢失目录与记录。
 - 尚无 WAL、checksum、compaction、checkpoint 或 crash-consistent commit 协议。
@@ -46,8 +54,9 @@ v0.2.2 有意保持较小的功能范围：
 - 标量索引目前为纯内存实现。索引定义会持久化，但索引数据在启动时从 row log 重建，而非写入独立索引文件。
 - 查询仍使用顺序扫描加过滤，`IndexScan` 与基于索引的查询规划尚未实现。
 - 尚无 `SHOW INDEXES`、唯一索引、联合索引或表达式索引。
-- 尚无向量索引。
-- 向量值可作为数据存储与查询，但本版本尚未实现相似度检索。
+- 尚无向量索引。相似度查询需全表扫描并在查询时逐行计算距离。
+- 尚不支持 `SELECT ... AS` 别名。投影中的函数结果列会自动命名为 `expr1`、`expr3` 等，`ORDER BY` 不能引用这些别名，需重复完整表达式。
+- 目前仅提供上述三个内置向量距离函数，尚不支持用户自定义函数与聚合函数。
 
 ## 环境要求
 
@@ -82,7 +91,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-当前测试覆盖解析器、目录、模式、标量索引、内存存储、持久化存储、绑定器、逻辑规划器、求值器、执行器、引擎、协议、内存以及客户端/服务端行为。
+当前测试覆盖解析器、目录、模式、标量索引、内存存储、持久化存储、绑定器、逻辑规划器、求值器、执行器、引擎、函数注册表、协议、内存以及客户端/服务端行为。
 
 ## 快速开始
 
@@ -110,7 +119,7 @@ ctest --test-dir build --output-on-failure
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
 ```
 
-该目录中会生成 `manifest.ldb`、`catalog.lcat`，以及位于 `collections/` 下的 append-only row log。v0.2 的存储格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
+该目录中会生成 `manifest.ldb`、`catalog.lcat`，以及位于 `collections/` 下的 append-only row log。v0.3 的存储格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
 
 在另一个终端中启动客户端 CLI：
 
@@ -152,9 +161,50 @@ LIMIT 10;
 
 CREATE INDEX idx_age ON users (age) USING BTREE;
 CREATE INDEX idx_name ON users (name) USING HASH;
+
+SELECT id
+FROM users
+ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC
+LIMIT 5;
 ```
 
+投影中的函数结果列目前会显示为自动生成的列名，例如 `expr3`：
+
+```sql
+SELECT id, l2_distance(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC
+LIMIT 5;
+```
+
+其他内置距离函数：
+
+```sql
+SELECT id, cosine_distance(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY cosine_distance(embedding, [0.1, 0.2, 0.3]) ASC
+LIMIT 5;
+
+SELECT id, inner_product(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY inner_product(embedding, [0.1, 0.2, 0.3]) DESC
+LIMIT 5;
+```
+
+说明：
+
+- 向量距离函数的两个参数必须是相同维度的 `VECTOR(n)` 值。
+- `ORDER BY` 需重复完整的函数调用，暂不支持引用投影别名。
+
 使用 `.quit` 或 `.exit` 退出客户端。
+
+### 校验向量距离结果
+
+按 `docs/design_docs/test_sqls.md` 导入示例数据后，可运行 Python 脚本对照参考计算结果：
+
+```sh
+python verify/verify.py --mode all --show
+```
 
 ## 架构
 
@@ -177,6 +227,7 @@ SQL text
 internal/src/core/parser       SQL 词法分析器、解析器与 AST
 internal/src/core/catalog      目录接口与内存目录
 internal/src/core/schema       逻辑类型、值、记录与集合
+internal/src/core/function     标量函数注册表与内置函数
 internal/src/core/index        内存标量索引与 IndexManager
 internal/src/core/storage      集合存储接口与内存存储
 internal/src/core/persistence  持久化 catalog 快照与 row log
@@ -191,16 +242,17 @@ internal/src/server            TCP 服务端
 internal/src/client            客户端库
 internal/src/memory            自定义分配器与缓存实验
 examples/                      示例服务端与交互式客户端
+verify/                        用于校验向量距离 SQL 的 Python 脚本
 tests/                         单元测试与集成测试
-docs/design_docs/              设计文档与路线图
+docs/design_docs/              设计文档、测试 SQL 与路线图
 ```
 
 ## 路线图
 
-v0.2.2 之后的近期计划：
+v0.3.0 之后的近期计划：
 
-- v0.2.x：`IndexScan` 与简单索引查询规划、`SHOW INDEXES`、持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
-- v0.3：向量检索与首批向量索引支持，可能从内存 HNSW 实现起步。
+- v0.3.x：向量索引（可能从内存 HNSW 起步）、`SELECT ... AS` 别名、更多内置函数，以及距离查询体验优化。
+- v0.2.x 遗留项：`IndexScan` 与简单索引查询规划、`SHOW INDEXES`、持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
 - v0.4：可靠性改进，如 WAL、恢复、校验和、压缩与文件格式版本管理。
 - v0.5：早期分布式查询架构，包含分片、协调器路由与分布式 TopK 合并。
 

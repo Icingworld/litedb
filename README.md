@@ -3,16 +3,18 @@
 EN | [简体中文](docs/readme/README_zh_CN.md)
 
 `litedb` is a lightweight experimental database written in modern C++. The
-v0.2.2 release focuses on making the first usable database loop restartable:
-parsing SQL, binding it against a catalog, planning and executing statements,
-optionally persisting catalog and row data through `--data-dir`, and maintaining
-in-memory scalar indexes for faster future query paths.
+v0.3.0 release adds a scalar function framework and built-in vector distance
+functions, enabling brute-force nearest-neighbor queries through `ORDER BY`.
+Earlier releases established a restartable database loop: parsing SQL, binding
+it against a catalog, planning and executing statements, optionally persisting
+catalog and row data through `--data-dir`, and maintaining in-memory scalar
+indexes for faster future query paths.
 
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
 storage engine.
 
-## What works in v0.2.2
+## What works in v0.3.0
 
 - SQL lexer, parser, AST, binder, logical planner, evaluator, executor, and
 engine facade.
@@ -41,17 +43,29 @@ existing rows on startup.
   - `SELECT` with projection, `WHERE`, `ORDER BY`, `LIMIT`, and `OFFSET`
   - `UPDATE`
   - `DELETE`
+- Scalar function framework with a built-in function registry and overload
+binding.
+- Built-in vector distance functions:
+  - `l2_distance(vector, vector)` — Euclidean distance
+  - `cosine_distance(vector, vector)` — `1 - cosine similarity`
+  - `inner_product(vector, vector)` — dot product
+- Function calls in `SELECT` projections, `WHERE`, `ORDER BY`, and other
+expression contexts.
+- Brute-force vector similarity queries by sorting with distance functions in
+`ORDER BY` (full table scan; no vector index yet).
 - Scalar types including `INTEGER`, `BIGINT`, `FLOAT`, `DOUBLE`, `VARCHAR(n)`,
 and `BOOLEAN`.
-- `VECTOR(n)` as a first-class schema/value type, laying groundwork for vector
-search in later releases.
+- `VECTOR(n)` as a first-class schema/value type with fixed-dimension vector
+literals such as `[0.1, 0.2, 0.3]`.
 - Standalone TCP server and interactive client CLI examples.
 - A small framed protocol layer for client/server requests.
 - A custom memory subsystem with page, central, and thread cache tests.
+- A Python verification script under `verify/` for checking vector distance SQL
+results against reference calculations.
 
 ## Current limitations
 
-v0.2.2 intentionally keeps the scope small:
+v0.3.0 intentionally keeps the scope small:
 
 - Persistence is opt-in. Without `--data-dir`, the server still runs in
 in-memory mode and restart loses catalog and records.
@@ -66,9 +80,13 @@ files.
 query planning are not implemented yet.
 - No `SHOW INDEXES`, unique indexes, composite indexes, or expression indexes
 yet.
-- No vector indexes yet.
-- Vector values can be stored and queried as data, but similarity search is not
-implemented in this release.
+- No vector indexes yet. Similarity queries scan every row and compute distance
+at query time.
+- No `SELECT ... AS alias` yet. Function results in projections are exposed as
+auto-generated names such as `expr1`, `expr3`, and `ORDER BY` cannot reference
+those aliases — repeat the full expression instead.
+- Only the three built-in vector distance functions are available. User-defined
+functions and aggregate functions are not implemented yet.
 
 ## Requirements
 
@@ -105,7 +123,7 @@ ctest --test-dir build --output-on-failure
 
 The current suite covers parser, catalog, schema, scalar indexes, in-memory and
 persistent storage, binder, logical planner, evaluator, executor, engine,
-protocol, memory, and client/server behavior.
+function registry, protocol, memory, and client/server behavior.
 
 ## Quick start
 
@@ -135,7 +153,7 @@ On Windows:
 ```
 
 The data directory will contain `manifest.ldb`, `catalog.lcat`, and append-only
-row logs under `collections/`. The v0.2 storage format is experimental and does
+row logs under `collections/`. The v0.3 storage format is experimental and does
 not promise compatibility with future versions.
 
 In another terminal, start the client CLI:
@@ -178,9 +196,54 @@ LIMIT 10;
 
 CREATE INDEX idx_age ON users (age) USING BTREE;
 CREATE INDEX idx_name ON users (name) USING HASH;
+
+SELECT id
+FROM users
+ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC
+LIMIT 5;
 ```
 
+Function results in projections currently appear as auto-generated column names
+such as `expr3`:
+
+```sql
+SELECT id, l2_distance(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC
+LIMIT 5;
+```
+
+Other built-in distance functions:
+
+```sql
+SELECT id, cosine_distance(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY cosine_distance(embedding, [0.1, 0.2, 0.3]) ASC
+LIMIT 5;
+
+SELECT id, inner_product(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY inner_product(embedding, [0.1, 0.2, 0.3]) DESC
+LIMIT 5;
+```
+
+Notes:
+
+- Both arguments to a vector distance function must be `VECTOR(n)` values with
+the same dimension.
+- `ORDER BY` must repeat the full function call; projection aliases are not
+supported yet.
+
 Use `.quit` or `.exit` to leave the client.
+
+### Verify vector distance results
+
+After loading the sample data from `docs/design_docs/test_sqls.md`, you can
+compare SQL output with Python reference calculations:
+
+```sh
+python verify/verify.py --mode all --show
+```
 
 ## Architecture
 
@@ -203,6 +266,7 @@ Repository layout:
 internal/src/core/parser       SQL lexer, parser, and AST
 internal/src/core/catalog      Catalog interfaces and in-memory catalog
 internal/src/core/schema       Logical types, values, records, collections
+internal/src/core/function     Scalar function registry and built-in functions
 internal/src/core/index        In-memory scalar indexes and IndexManager
 internal/src/core/storage      Collection storage interface and in-memory storage
 internal/src/core/persistence  Persistent catalog snapshots and row logs
@@ -217,18 +281,20 @@ internal/src/server            TCP server
 internal/src/client            Client library
 internal/src/memory            Custom allocator and cache experiments
 examples/                      Example server and interactive client
+verify/                        Python scripts to verify vector distance SQL
 tests/                         Unit and integration tests
-docs/design_docs/              Design notes and roadmap
+docs/design_docs/              Design notes, test SQL, and roadmap
 ```
 
 ## Roadmap
 
-Near-term work after v0.2.2:
+Near-term work after v0.3.0:
 
-- v0.2.x: `IndexScan` and simple index-based query planning, `SHOW INDEXES`,
-persistence hardening, cleanup/compaction planning, and storage format polish.
-- v0.3: vector search and first vector index support, likely starting with an in-memory HNSW
-implementation.
+- v0.3.x: vector indexes (likely starting with in-memory HNSW), `SELECT ... AS`
+aliases, more built-in functions, and distance-query polish.
+- v0.2.x carry-over: `IndexScan` and simple index-based query planning,
+`SHOW INDEXES`, persistence hardening, cleanup/compaction planning, and storage
+format polish.
 - v0.4: reliability improvements such as WAL, recovery, checksums, compaction,
 and file format versioning.
 - v0.5: early distributed query architecture with shards, coordinator routing,
