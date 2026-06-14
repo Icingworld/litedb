@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/common/logical_id.hpp"
+#include "core/common/logical_type.hpp"
 #include "core/schema/value.hpp"
 
 namespace litedb::core::executor

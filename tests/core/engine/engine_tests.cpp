@@ -117,6 +117,26 @@ void test_execute_sql_end_to_end()
     require(!engine.index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
 }
 
+void test_vector_distance_query()
+{
+    Engine engine;
+    execute_ok(engine, "CREATE DATABASE vectors;");
+    execute_ok(engine, "USE vectors;");
+    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+    execute_ok(engine, "INSERT INTO docs VALUES (1, [0.0, 0.0, 0.0]);");
+    execute_ok(engine, "INSERT INTO docs VALUES (2, [1.0, 0.0, 0.0]);");
+    execute_ok(engine, "INSERT INTO docs VALUES (3, [0.2, 0.0, 0.0]);");
+
+    auto result = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 2;"
+    );
+    require(result.kind == ExecutionResultKind::RowSet, "vector SELECT result kind mismatch");
+    require(result.rows.size() == 2, "vector SELECT row count mismatch");
+    require(get_value<std::int64_t>(result.rows[0].values[0]) == 1, "vector nearest first mismatch");
+    require(get_value<std::int64_t>(result.rows[1].values[0]) == 3, "vector nearest second mismatch");
+}
+
 void test_engine_error_mapping()
 {
     Engine engine;
@@ -153,6 +173,7 @@ int main()
 {
     try {
         test_execute_sql_end_to_end();
+        test_vector_distance_query();
         test_engine_error_mapping();
         test_sessions_share_instance_but_keep_context();
     } catch (const std::exception & exception) {

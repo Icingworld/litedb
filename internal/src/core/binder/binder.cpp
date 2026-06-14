@@ -13,6 +13,7 @@
 #include "core/binder/bound/expression/bound_between_expression.hpp"
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
+#include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 #include "core/binder/bound/expression/bound_like_expression.hpp"
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
@@ -36,12 +37,13 @@
 #include "core/binder/bound/statement/bound_use_statement.hpp"
 #include "core/catalog/catalog_default_expression.hpp"
 #include "core/catalog/catalog_entry.hpp"
+#include "core/function/builtin/builtin_functions.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 #include "core/parser/ast/expression/expression_node.hpp"
 // 暂不支持函数调用
-// #include "core/parser/ast/expression/function_call_expression.hpp"
+#include "core/parser/ast/expression/function_call_expression.hpp"
 #include "core/parser/ast/expression/in_expression.hpp"
 #include "core/parser/ast/expression/like_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
@@ -552,6 +554,15 @@ private:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_vector(const VectorExpression & expression, const BindingCollection & collection);
+
+    /**
+     * @brief 绑定函数
+     * @param expression 函数
+     * @param collection 绑定集合
+     * @return 绑定后的表达式
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_function(const FunctionCallExpression & expression, const BindingCollection & collection);
 
     /**
      * @brief 绑定 IN
@@ -1376,11 +1387,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorker::bind_
             expression.location()
         );
     case AstNodeKind::FunctionCall:
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::UnsupportedExpression,
-            expression.location(),
-            "Function calls are not supported yet"
-        ));
+        return bind_function(static_cast<const FunctionCallExpression &>(expression), collection);
     [[unlikely]] default:
         return std::unexpected(make_binder_error(
             BinderErrorCode::UnsupportedExpression,
@@ -1454,6 +1461,75 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorker::bind_
         column->name(),
         column->type(),
         column->nullable(),
+        expression.location()
+    );
+}
+
+std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorker::bind_function(const FunctionCallExpression & expression, const BindingCollection & collection)
+{
+    std::vector<std::unique_ptr<BoundExpression>> arguments;
+    std::vector<LogicalType> argument_types;
+    arguments.reserve(expression.arguments().size());
+    argument_types.reserve(expression.arguments().size());
+
+    for (const auto & argument : expression.arguments()) {
+        auto bound_argument = bind_expression(*argument, collection);
+        if (!bound_argument.has_value()) [[unlikely]] {
+            return std::unexpected(std::move(bound_argument.error()));
+        }
+        argument_types.push_back(bound_argument.value()->type());
+        arguments.push_back(std::move(bound_argument.value()));
+    }
+
+    auto registry = function::builtin::make_builtin_function_registry();
+    auto binding = registry.bind_scalar(expression.name(), argument_types);
+    if (!binding.has_value()) [[unlikely]] {
+        const auto found = registry.find(expression.name());
+        return std::unexpected(make_binder_error(
+            found == nullptr ? BinderErrorCode::UnsupportedExpression : BinderErrorCode::InvalidType,
+            expression.location(),
+            found == nullptr ? "Unknown function: " + expression.name() : "Function arguments do not match any overload: " + expression.name()
+        ));
+    }
+
+    if ((function::normalize_function_name(expression.name()) == "l2_distance"
+        || function::normalize_function_name(expression.name()) == "cosine_distance"
+        || function::normalize_function_name(expression.name()) == "inner_product")
+        && argument_types.size() == 2
+        && argument_types[0].id == LogicalTypeId::Vector
+        && argument_types[1].id == LogicalTypeId::Vector
+        && argument_types[0].parameter.has_value()
+        && argument_types[1].parameter.has_value()
+        && argument_types[0].parameter.value() != argument_types[1].parameter.value()) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::InvalidType,
+            expression.location(),
+            "Vector function arguments must have the same dimension"
+        ));
+    }
+
+    for (std::size_t index = 0; index < arguments.size(); ++index) {
+        const auto signature_index = std::min(index, binding->signature.argument_types.size() - 1);
+        const auto & target_type = binding->signature.argument_types[signature_index];
+        if (!can_cast(arguments[index]->type(), target_type)) [[unlikely]] {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidType,
+                arguments[index]->location(),
+                "Function argument type " + type_name(arguments[index]->type())
+                    + " cannot be cast to " + type_name(target_type)
+            ));
+        }
+        if (!(arguments[index]->type().id == LogicalTypeId::Vector && target_type.id == LogicalTypeId::Vector && !target_type.parameter.has_value())) {
+            arguments[index] = cast_if_needed(std::move(arguments[index]), target_type);
+        }
+    }
+
+    return std::make_unique<BoundFunctionExpression>(
+        expression.name(),
+        std::move(binding->function),
+        std::move(binding->signature),
+        std::move(arguments),
+        binding->signature.return_type,
         expression.location()
     );
 }

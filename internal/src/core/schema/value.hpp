@@ -5,7 +5,7 @@
 #include <variant>
 #include <vector>
 
-#include "core/common/logical_id.hpp"
+#include "core/common/logical_type.hpp"
 
 namespace litedb::core::schema
 {

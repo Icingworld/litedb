@@ -4,7 +4,7 @@
 #include <string>
 
 #include "core/common/ids.hpp"
-#include "core/common/logical_id.hpp"
+#include "core/common/logical_type.hpp"
 #include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::binder::bound

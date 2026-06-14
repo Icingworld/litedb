@@ -2,6 +2,7 @@
 #include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
+#include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 #include "core/binder/bound/expression/bound_like_expression.hpp"
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
@@ -10,6 +11,7 @@
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
+#include "core/function/builtin/builtin_functions.hpp"
 #include "core/parser/token.hpp"
 
 #include <exception>
@@ -225,6 +227,43 @@ void test_in_between_like_and_cast()
     require(get_value<double>(*cast_result) == 18.0, "cast mismatch");
 }
 
+void test_scalar_function()
+{
+    ExpressionEvaluator evaluator;
+    const auto row = Record {
+        .record_id = 1,
+        .data = RecordData {
+            .values = {
+                Value {VectorValue {1.0, 2.0, 3.0}},
+            },
+        },
+    };
+
+    auto registry = litedb::core::function::builtin::make_builtin_function_registry();
+    auto binding = registry.bind_scalar("l2_distance", {type(LogicalTypeId::Vector, 3), type(LogicalTypeId::Vector, 3)});
+    require(binding.has_value(), "l2_distance binding missing");
+
+    std::vector<std::unique_ptr<BoundExpression>> arguments;
+    arguments.push_back(column(1, LogicalTypeId::Vector, "embedding"));
+    std::vector<std::unique_ptr<BoundExpression>> elements;
+    elements.push_back(literal(LogicalTypeId::Double, "1.0"));
+    elements.push_back(literal(LogicalTypeId::Double, "2.0"));
+    elements.push_back(literal(LogicalTypeId::Double, "5.0"));
+    arguments.push_back(std::make_unique<BoundVectorExpression>(std::move(elements), type(LogicalTypeId::Vector, 3), loc));
+
+    auto function = BoundFunctionExpression {
+        "l2_distance",
+        binding->function,
+        binding->signature,
+        std::move(arguments),
+        type(LogicalTypeId::Double),
+        loc,
+    };
+    auto result = evaluator.evaluate(function, row);
+    require(result.has_value(), "l2_distance evaluation failed");
+    require(get_value<double>(*result) == 2.0, "l2_distance value mismatch");
+}
+
 void test_predicate_and_null_semantics()
 {
     ExpressionEvaluator evaluator;
@@ -292,6 +331,7 @@ int main()
         test_literals_null_vector_and_column_ref();
         test_arithmetic_comparison_and_logic();
         test_in_between_like_and_cast();
+        test_scalar_function();
         test_predicate_and_null_semantics();
         test_errors();
     } catch (const std::exception & exception) {
