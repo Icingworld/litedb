@@ -3,11 +3,13 @@ set(LOGICAL_PLANNER_SOURCES
     ../statement/create_collection_plan.cpp
     ../statement/create_database_plan.cpp
     ../statement/create_index_plan.cpp
+    ../statement/create_vector_index_plan.cpp
     ../statement/delete_plan.cpp
     ../statement/describe_collection_plan.cpp
     ../statement/drop_collection_plan.cpp
     ../statement/drop_database_plan.cpp
     ../statement/drop_index_plan.cpp
+    ../statement/drop_vector_index_plan.cpp
     ../statement/insert_plan.cpp
     ../statement/query_plan.cpp
     ../statement/show_collections_plan.cpp

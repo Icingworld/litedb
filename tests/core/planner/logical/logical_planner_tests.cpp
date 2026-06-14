@@ -15,11 +15,13 @@
 #include "core/planner/statement/create_collection_plan.hpp"
 #include "core/planner/statement/create_database_plan.hpp"
 #include "core/planner/statement/create_index_plan.hpp"
+#include "core/planner/statement/create_vector_index_plan.hpp"
 #include "core/planner/statement/delete_plan.hpp"
 #include "core/planner/statement/describe_collection_plan.hpp"
 #include "core/planner/statement/drop_collection_plan.hpp"
 #include "core/planner/statement/drop_database_plan.hpp"
 #include "core/planner/statement/drop_index_plan.hpp"
+#include "core/planner/statement/drop_vector_index_plan.hpp"
 #include "core/planner/statement/insert_plan.hpp"
 #include "core/planner/statement/query_plan.hpp"
 #include "core/planner/statement/show_collections_plan.hpp"
@@ -368,6 +370,26 @@ void test_admin_and_ddl_plans()
     require(create_index_node.if_not_exists(), "CREATE INDEX if not exists mismatch");
     require(!create_index_node.unique(), "CREATE INDEX unique mismatch");
 
+    auto create_vector_index = plan_ok(
+        fixture,
+        "CREATE VINDEX IF NOT EXISTS vidx_embedding ON users (embedding) USING HNSW "
+        "WITH (metric = COSINE, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 7);"
+    );
+    require(create_vector_index->kind() == StatementPlanKind::CreateVectorIndex, "CREATE VINDEX kind mismatch");
+    const auto & create_vector_index_node = static_cast<const CreateVectorIndexPlan &>(*create_vector_index);
+    require(create_vector_index_node.database_id() == fixture.database_id, "CREATE VINDEX database id mismatch");
+    require(create_vector_index_node.collection_id() == fixture.users_id, "CREATE VINDEX collection id mismatch");
+    require(create_vector_index_node.collection_name() == "users", "CREATE VINDEX collection name mismatch");
+    require(create_vector_index_node.column_name() == "embedding", "CREATE VINDEX column name mismatch");
+    require(create_vector_index_node.index_name() == "vidx_embedding", "CREATE VINDEX index name mismatch");
+    require(create_vector_index_node.index_kind() == CatalogVectorIndexKind::Hnsw, "CREATE VINDEX kind value mismatch");
+    require(create_vector_index_node.metric() == CatalogVectorDistanceMetric::Cosine, "CREATE VINDEX metric mismatch");
+    require(create_vector_index_node.max_neighbors() == 24, "CREATE VINDEX max_neighbors mismatch");
+    require(create_vector_index_node.ef_construction() == 240, "CREATE VINDEX ef_construction mismatch");
+    require(create_vector_index_node.ef_search_default() == 80, "CREATE VINDEX ef_search mismatch");
+    require(create_vector_index_node.random_seed() == 7, "CREATE VINDEX random_seed mismatch");
+    require(create_vector_index_node.if_not_exists(), "CREATE VINDEX if not exists mismatch");
+
     auto drop_database = plan_ok(fixture, "DROP DATABASE IF EXISTS missing;");
     require(drop_database->kind() == StatementPlanKind::DropDatabase, "DROP DATABASE kind mismatch");
     const auto & drop_database_node = static_cast<const DropDatabasePlan &>(*drop_database);
@@ -398,6 +420,24 @@ void test_admin_and_ddl_plans()
     require(drop_index_node.collection_name() == "users", "DROP INDEX collection name mismatch");
     require(drop_index_node.index_name() == "idx_age", "DROP INDEX index name mismatch");
     require(!drop_index_node.if_exists(), "DROP INDEX if exists mismatch");
+
+    const auto * embedding_column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    require(embedding_column != nullptr, "embedding column lookup failed");
+    auto created_vector_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = embedding_column->id(),
+        .name = "vidx_embedding",
+    });
+    require(created_vector_index.has_value(), "fixture vector index create failed");
+
+    auto drop_vector_index = plan_ok(fixture, "DROP VINDEX vidx_embedding ON users;");
+    require(drop_vector_index->kind() == StatementPlanKind::DropVectorIndex, "DROP VINDEX kind mismatch");
+    const auto & drop_vector_index_node = static_cast<const DropVectorIndexPlan &>(*drop_vector_index);
+    require(drop_vector_index_node.database_id() == fixture.database_id, "DROP VINDEX database id mismatch");
+    require(drop_vector_index_node.collection_id() == fixture.users_id, "DROP VINDEX collection id mismatch");
+    require(drop_vector_index_node.collection_name() == "users", "DROP VINDEX collection name mismatch");
+    require(drop_vector_index_node.index_name() == "vidx_embedding", "DROP VINDEX index name mismatch");
+    require(!drop_vector_index_node.if_exists(), "DROP VINDEX if exists mismatch");
 
     require(plan_ok(fixture, "SHOW DATABASES;")->kind() == StatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
 

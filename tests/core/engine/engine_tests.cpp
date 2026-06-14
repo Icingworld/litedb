@@ -137,6 +137,43 @@ void test_vector_distance_query()
     require(get_value<std::int64_t>(result.rows[1].values[0]) == 3, "vector nearest second mismatch");
 }
 
+void test_vector_index_ddl()
+{
+    Engine engine;
+    execute_ok(engine, "CREATE DATABASE vectors;");
+    execute_ok(engine, "USE vectors;");
+    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+
+    auto created = execute_ok(
+        engine,
+        "CREATE VINDEX vidx_embedding ON docs (embedding) USING HNSW "
+        "WITH (metric = COSINE, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 7);"
+    );
+    require(created.affected_rows == 1, "CREATE VINDEX affected rows mismatch");
+
+    const auto * collection = engine.catalog().find_collection(engine.current_database_id().value(), "docs");
+    require(collection != nullptr, "vector index collection lookup failed");
+    const auto * index = engine.catalog().find_vector_index(collection->id(), "vidx_embedding");
+    require(index != nullptr, "created vector index missing");
+    require(index->index_kind() == litedb::core::catalog::CatalogVectorIndexKind::Hnsw, "vector index kind mismatch");
+    require(index->metric() == litedb::core::catalog::CatalogVectorDistanceMetric::Cosine, "vector index metric mismatch");
+    require(index->dimension() == 3, "vector index dimension mismatch");
+    require(index->max_neighbors() == 24, "vector index max_neighbors mismatch");
+    require(index->ef_construction() == 240, "vector index ef_construction mismatch");
+    require(index->ef_search_default() == 80, "vector index ef_search mismatch");
+    require(index->random_seed() == 7, "vector index random_seed mismatch");
+
+    auto existing = execute_ok(engine, "CREATE VINDEX IF NOT EXISTS vidx_embedding ON docs (embedding) USING HNSW;");
+    require(existing.affected_rows == 0, "CREATE VINDEX IF NOT EXISTS affected rows mismatch");
+
+    auto dropped = execute_ok(engine, "DROP VINDEX vidx_embedding ON docs;");
+    require(dropped.affected_rows == 1, "DROP VINDEX affected rows mismatch");
+    require(engine.catalog().find_vector_index(collection->id(), "vidx_embedding") == nullptr, "dropped vector index should leave catalog");
+
+    auto missing = execute_ok(engine, "DROP VINDEX IF EXISTS vidx_embedding ON docs;");
+    require(missing.affected_rows == 0, "DROP VINDEX IF EXISTS affected rows mismatch");
+}
+
 void test_engine_error_mapping()
 {
     Engine engine;
@@ -174,6 +211,7 @@ int main()
     try {
         test_execute_sql_end_to_end();
         test_vector_distance_query();
+        test_vector_index_ddl();
         test_engine_error_mapping();
         test_sessions_share_instance_but_keep_context();
     } catch (const std::exception & exception) {

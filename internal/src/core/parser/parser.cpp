@@ -1,5 +1,6 @@
 #include "core/parser/parser.hpp"
 
+#include <cctype>
 #include <charconv>
 #include <expected>
 #include <memory>
@@ -25,11 +26,13 @@
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
+#include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
+#include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -73,6 +76,17 @@ bool is_literal_token(TokenType type) noexcept
         || type == TokenType::True
         || type == TokenType::False
         || type == TokenType::Null;
+}
+
+[[nodiscard]]
+std::string lower_ascii(std::string_view value)
+{
+    std::string result;
+    result.reserve(value.size());
+    for (const unsigned char ch : value) {
+        result.push_back(static_cast<char>(std::tolower(ch)));
+    }
+    return result;
 }
 
 /**
@@ -131,11 +145,31 @@ private:
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_statement();
 
     /**
+     * @brief 解析 CREATE VINDEX 语句
+     * @param location CREATE 位置
+     * @return 解析结果
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_vector_index_statement(
+        TokenLocation location
+    );
+
+    /**
      * @brief 解析 DROP 语句
      * @return 解析结果
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_statement();
+
+    /**
+     * @brief 解析 DROP VINDEX 语句
+     * @param location DROP 位置
+     * @return 解析结果
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_vector_index_statement(
+        TokenLocation location
+    );
 
     /**
      * @brief 解析 SHOW 语句
@@ -630,10 +664,176 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         );
     }
 
+    if (match(TokenType::VIndex)) {
+        return parse_create_vector_index_statement(location);
+    }
+
     [[unlikely]] return std::unexpected(make_current_error(
         ParserErrorCode::UnsupportedSyntax, 
-        "Expected DATABASE, COLLECTION, or INDEX after CREATE"
+        "Expected DATABASE, COLLECTION, INDEX, or VINDEX after CREATE"
     ));
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_create_vector_index_statement(
+    TokenLocation location
+)
+{
+    auto if_not_exists = parse_if_not_exists();
+    if (!if_not_exists.has_value()) [[unlikely]] {
+        return std::unexpected(if_not_exists.error());
+    }
+
+    auto index_name = parse_identifier_string("Expected vector index name");
+    if (!index_name.has_value()) [[unlikely]] {
+        return std::unexpected(index_name.error());
+    }
+
+    auto on = consume(TokenType::On, "Expected ON after vector index name");
+    if (!on.has_value()) [[unlikely]] {
+        return std::unexpected(on.error());
+    }
+
+    auto collection_name = parse_identifier_string("Expected collection name");
+    if (!collection_name.has_value()) [[unlikely]] {
+        return std::unexpected(collection_name.error());
+    }
+
+    auto left_paren = consume(TokenType::LeftParen, "Expected '(' before vector index column");
+    if (!left_paren.has_value()) [[unlikely]] {
+        return std::unexpected(left_paren.error());
+    }
+
+    auto column_name = parse_identifier_string("Expected vector index column name");
+    if (!column_name.has_value()) [[unlikely]] {
+        return std::unexpected(column_name.error());
+    }
+
+    auto right_paren = consume(TokenType::RightParen, "Expected ')' after vector index column");
+    if (!right_paren.has_value()) [[unlikely]] {
+        return std::unexpected(right_paren.error());
+    }
+
+    auto using_token = consume(TokenType::Using, "Expected USING HNSW after vector index column");
+    if (!using_token.has_value()) [[unlikely]] {
+        return std::unexpected(using_token.error());
+    }
+
+    auto method = parse_identifier_string("Expected vector index method after USING");
+    if (!method.has_value()) [[unlikely]] {
+        return std::unexpected(method.error());
+    }
+    if (lower_ascii(method.value()) != "hnsw") [[unlikely]] {
+        return std::unexpected(make_parser_error(
+            ParserErrorCode::UnsupportedSyntax,
+            current_token_.location(),
+            "Expected HNSW after USING"
+        ));
+    }
+
+    ast::VectorIndexOptions options;
+    if (match(TokenType::With)) {
+        auto options_left_paren = consume(TokenType::LeftParen, "Expected '(' after WITH");
+        if (!options_left_paren.has_value()) [[unlikely]] {
+            return std::unexpected(options_left_paren.error());
+        }
+        if (check(TokenType::RightParen)) [[unlikely]] {
+            return std::unexpected(make_current_error(ParserErrorCode::EmptyList, "Expected at least one vector index option"));
+        }
+
+        while (true) {
+            auto option_name = parse_identifier_string("Expected vector index option name");
+            if (!option_name.has_value()) [[unlikely]] {
+                return std::unexpected(option_name.error());
+            }
+            const auto option_key = lower_ascii(option_name.value());
+
+            auto equal = consume(TokenType::Equal, "Expected '=' after vector index option name");
+            if (!equal.has_value()) [[unlikely]] {
+                return std::unexpected(equal.error());
+            }
+
+            if (option_key == "metric") {
+                if (options.metric != ast::VectorIndexMetric::Default) [[unlikely]] {
+                    return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: metric"));
+                }
+                auto metric = parse_identifier_string("Expected vector index metric");
+                if (!metric.has_value()) [[unlikely]] {
+                    return std::unexpected(metric.error());
+                }
+                const auto metric_key = lower_ascii(metric.value());
+                if (metric_key == "l2") {
+                    options.metric = ast::VectorIndexMetric::L2;
+                } else if (metric_key == "inner_product") {
+                    options.metric = ast::VectorIndexMetric::InnerProduct;
+                } else if (metric_key == "cosine") {
+                    options.metric = ast::VectorIndexMetric::Cosine;
+                } else [[unlikely]] {
+                    return std::unexpected(make_parser_error(
+                        ParserErrorCode::UnsupportedSyntax,
+                        current_token_.location(),
+                        "Expected L2, COSINE, or INNER_PRODUCT for vector index metric"
+                    ));
+                }
+            } else if (option_key == "max_neighbors") {
+                if (options.max_neighbors.has_value()) [[unlikely]] {
+                    return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: max_neighbors"));
+                }
+                auto value = parse_integer_value("Expected max_neighbors value");
+                if (!value.has_value()) [[unlikely]] {
+                    return std::unexpected(value.error());
+                }
+                options.max_neighbors = value.value();
+            } else if (option_key == "ef_construction") {
+                if (options.ef_construction.has_value()) [[unlikely]] {
+                    return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: ef_construction"));
+                }
+                auto value = parse_integer_value("Expected ef_construction value");
+                if (!value.has_value()) [[unlikely]] {
+                    return std::unexpected(value.error());
+                }
+                options.ef_construction = value.value();
+            } else if (option_key == "ef_search") {
+                if (options.ef_search.has_value()) [[unlikely]] {
+                    return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: ef_search"));
+                }
+                auto value = parse_integer_value("Expected ef_search value");
+                if (!value.has_value()) [[unlikely]] {
+                    return std::unexpected(value.error());
+                }
+                options.ef_search = value.value();
+            } else if (option_key == "random_seed") {
+                if (options.random_seed.has_value()) [[unlikely]] {
+                    return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: random_seed"));
+                }
+                auto value = parse_integer_value("Expected random_seed value");
+                if (!value.has_value()) [[unlikely]] {
+                    return std::unexpected(value.error());
+                }
+                options.random_seed = value.value();
+            } else [[unlikely]] {
+                return std::unexpected(make_current_error(ParserErrorCode::UnsupportedSyntax, "Unknown vector index option"));
+            }
+
+            if (!match(TokenType::Comma)) {
+                break;
+            }
+        }
+
+        auto options_right_paren = consume(TokenType::RightParen, "Expected ')' after vector index options");
+        if (!options_right_paren.has_value()) [[unlikely]] {
+            return std::unexpected(options_right_paren.error());
+        }
+    }
+
+    return std::make_unique<ast::CreateVectorIndexStatement>(
+        std::move(index_name.value()),
+        std::move(collection_name.value()),
+        std::move(column_name.value()),
+        if_not_exists.value(),
+        ast::CreateVectorIndexMethod::Hnsw,
+        options,
+        ast_location(location)
+    );
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_drop_statement()
@@ -721,10 +921,46 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         );
     }
 
+    if (match(TokenType::VIndex)) {
+        return parse_drop_vector_index_statement(location);
+    }
+
     return std::unexpected(make_current_error(
         ParserErrorCode::ExpectedToken,
-        "Expected DATABASE, COLLECTION, or INDEX after DROP"
+        "Expected DATABASE, COLLECTION, INDEX, or VINDEX after DROP"
     ));
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_drop_vector_index_statement(
+    TokenLocation location
+)
+{
+    auto if_exists = parse_if_exists();
+    if (!if_exists.has_value()) [[unlikely]] {
+        return std::unexpected(if_exists.error());
+    }
+
+    auto index_name = parse_identifier_string("Expected vector index name");
+    if (!index_name.has_value()) [[unlikely]] {
+        return std::unexpected(index_name.error());
+    }
+
+    auto on = consume(TokenType::On, "Expected ON after vector index name");
+    if (!on.has_value()) [[unlikely]] {
+        return std::unexpected(on.error());
+    }
+
+    auto collection_name = parse_identifier_string("Expected collection name");
+    if (!collection_name.has_value()) [[unlikely]] {
+        return std::unexpected(collection_name.error());
+    }
+
+    return std::make_unique<ast::DropVectorIndexStatement>(
+        std::move(index_name.value()),
+        std::move(collection_name.value()),
+        if_exists.value(),
+        ast_location(location)
+    );
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_show_statement()

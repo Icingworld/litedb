@@ -24,11 +24,13 @@
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_database_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
+#include "core/binder/bound/statement/bound_create_vector_index_statement.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
 #include "core/binder/bound/statement/bound_describe_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_database_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_index_statement.hpp"
+#include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_show_collections_statement.hpp"
@@ -54,11 +56,13 @@
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
+#include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
+#include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -408,6 +412,16 @@ private:
     std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_create_index(const CreateIndexStatement & statement);
 
     /**
+     * @brief 绑定 CREATE VINDEX 语句
+     * @param statement CREATE VINDEX 语句
+     * @return 绑定后的语句
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_create_vector_index(
+        const CreateVectorIndexStatement & statement
+    );
+
+    /**
      * @brief 绑定 DROP DATABASE 语句
      * @param statement DROP DATABASE 语句
      * @return 绑定后的语句
@@ -430,6 +444,16 @@ private:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_drop_index(const DropIndexStatement & statement);
+
+    /**
+     * @brief 绑定 DROP VINDEX 语句
+     * @param statement DROP VINDEX 语句
+     * @return 绑定后的语句
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_drop_vector_index(
+        const DropVectorIndexStatement & statement
+    );
 
     /**
      * @brief 绑定 SHOW 语句
@@ -675,12 +699,16 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_s
         return bind_create_collection(static_cast<const CreateCollectionStatement &>(statement));
     case AstNodeKind::CreateIndex:
         return bind_create_index(static_cast<const CreateIndexStatement &>(statement));
+    case AstNodeKind::CreateVectorIndex:
+        return bind_create_vector_index(static_cast<const CreateVectorIndexStatement &>(statement));
     case AstNodeKind::DropDatabase:
         return bind_drop_database(static_cast<const DropDatabaseStatement &>(statement));
     case AstNodeKind::DropCollection:
         return bind_drop_collection(static_cast<const DropCollectionStatement &>(statement));
     case AstNodeKind::DropIndex:
         return bind_drop_index(static_cast<const DropIndexStatement &>(statement));
+    case AstNodeKind::DropVectorIndex:
+        return bind_drop_vector_index(static_cast<const DropVectorIndexStatement &>(statement));
     case AstNodeKind::Show:
         return bind_show(static_cast<const ShowStatement &>(statement));
     case AstNodeKind::Describe:
@@ -809,6 +837,66 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_c
     );
 }
 
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_create_vector_index(
+    const CreateVectorIndexStatement & statement
+)
+{
+    auto collection = bind_collection(statement.collection_name(), statement.location());
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(collection.error()));
+    }
+
+    const auto * column = catalog_.find_column(collection->collection->id(), statement.column_name());
+    if (column == nullptr) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::ColumnNotFound,
+            statement.location(),
+            "Column not found: " + statement.column_name()
+        ));
+    }
+
+    if (column->type().id != LogicalTypeId::Vector || !column->type().parameter.has_value() || column->type().parameter.value() == 0) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::InvalidType,
+            statement.location(),
+            "Vector index can only be created on VECTOR(n) column: " + column->name()
+        ));
+    }
+
+    catalog::CatalogVectorDistanceMetric metric = catalog::CatalogVectorDistanceMetric::L2;
+    switch (statement.options().metric) {
+    case VectorIndexMetric::Default:
+        metric = catalog::CatalogVectorDistanceMetric::L2;
+        break;
+    case VectorIndexMetric::L2:
+        metric = catalog::CatalogVectorDistanceMetric::L2;
+        break;
+    case VectorIndexMetric::InnerProduct:
+        metric = catalog::CatalogVectorDistanceMetric::InnerProduct;
+        break;
+    case VectorIndexMetric::Cosine:
+        metric = catalog::CatalogVectorDistanceMetric::Cosine;
+        break;
+    }
+
+    return std::make_unique<BoundCreateVectorIndexStatement>(
+        collection->database_id,
+        collection->collection->id(),
+        collection->collection->name(),
+        column->id(),
+        column->name(),
+        statement.index_name(),
+        catalog::CatalogVectorIndexKind::Hnsw,
+        metric,
+        statement.options().max_neighbors.value_or(16),
+        statement.options().ef_construction.value_or(200),
+        statement.options().ef_search.value_or(64),
+        statement.options().random_seed.value_or(0),
+        statement.if_not_exists(),
+        statement.location()
+    );
+}
+
 /**
 * @brief 绑定 DROP DATABASE 语句
 * @param statement DROP DATABASE 语句
@@ -892,6 +980,34 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_d
     }
 
     return std::make_unique<BoundDropIndexStatement>(
+        collection->database_id,
+        collection->collection->id(),
+        collection->collection->name(),
+        statement.index_name(),
+        statement.if_exists(),
+        statement.location()
+    );
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_drop_vector_index(
+    const DropVectorIndexStatement & statement
+)
+{
+    auto collection = bind_collection(statement.collection_name(), statement.location());
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(collection.error()));
+    }
+
+    const auto * index = catalog_.find_vector_index(collection->collection->id(), statement.index_name());
+    if (index == nullptr && !statement.if_exists()) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::IndexNotFound,
+            statement.location(),
+            "Vector index not found: " + statement.index_name()
+        ));
+    }
+
+    return std::make_unique<BoundDropVectorIndexStatement>(
         collection->database_id,
         collection->collection->id(),
         collection->collection->name(),

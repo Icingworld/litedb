@@ -9,9 +9,11 @@
 #include "core/planner/statement/create_collection_plan.hpp"
 #include "core/planner/statement/create_database_plan.hpp"
 #include "core/planner/statement/create_index_plan.hpp"
+#include "core/planner/statement/create_vector_index_plan.hpp"
 #include "core/planner/statement/drop_collection_plan.hpp"
 #include "core/planner/statement/drop_database_plan.hpp"
 #include "core/planner/statement/drop_index_plan.hpp"
+#include "core/planner/statement/drop_vector_index_plan.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_loader.hpp"
 
@@ -257,6 +259,54 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(1);
 }
 
+std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_vector_index(
+    const planner::CreateVectorIndexPlan & plan,
+    catalog::Catalog &,
+    storage::StorageManager &,
+    index::IndexManager &
+)
+{
+    const auto * existing = catalog_->find_vector_index(plan.collection_id(), plan.index_name());
+
+    catalog::InMemoryCatalog staged;
+    auto restored = staged.restore(catalog_->snapshot());
+    if (!restored.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(restored.error()), plan.location()));
+    }
+
+    auto created = staged.create_vector_index(catalog::CreateVectorIndexRequest {
+        .collection_id = plan.collection_id(),
+        .column_id = plan.column_id(),
+        .name = plan.index_name(),
+        .index_kind = plan.index_kind(),
+        .metric = plan.metric(),
+        .max_neighbors = plan.max_neighbors(),
+        .ef_construction = plan.ef_construction(),
+        .ef_search_default = plan.ef_search_default(),
+        .random_seed = plan.random_seed(),
+        .if_not_exists = plan.if_not_exists(),
+    });
+    if (!created.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+    }
+
+    if (existing != nullptr) {
+        return command_result(0);
+    }
+
+    auto saved = catalog_store_.save(staged.snapshot());
+    if (!saved.has_value()) {
+        return std::unexpected(from_storage_error(std::move(saved.error()), plan.location()));
+    }
+
+    auto committed = catalog_->restore(staged.snapshot());
+    if (!committed.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(committed.error()), plan.location()));
+    }
+
+    return command_result(1);
+}
+
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_database(
     const planner::DropDatabasePlan & plan,
     catalog::Catalog &,
@@ -405,6 +455,46 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         if (!dropped_index.has_value() && dropped_index.error().code != index::IndexErrorCode::IndexNotFound) {
             return std::unexpected(from_index_error(std::move(dropped_index.error()), plan.location()));
         }
+    }
+
+    return command_result(existing == nullptr ? 0 : 1);
+}
+
+std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_vector_index(
+    const planner::DropVectorIndexPlan & plan,
+    catalog::Catalog &,
+    storage::StorageManager &,
+    index::IndexManager &
+)
+{
+    const auto * existing = catalog_->find_vector_index(plan.collection_id(), plan.index_name());
+    if (existing == nullptr && plan.if_exists()) {
+        return command_result(0);
+    }
+
+    catalog::InMemoryCatalog staged;
+    auto restored = staged.restore(catalog_->snapshot());
+    if (!restored.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(restored.error()), plan.location()));
+    }
+
+    auto dropped = staged.drop_vector_index(catalog::DropVectorIndexRequest {
+        .collection_id = plan.collection_id(),
+        .name = plan.index_name(),
+        .if_exists = plan.if_exists(),
+    });
+    if (!dropped.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(dropped.error()), plan.location()));
+    }
+
+    auto saved = catalog_store_.save(staged.snapshot());
+    if (!saved.has_value()) {
+        return std::unexpected(from_storage_error(std::move(saved.error()), plan.location()));
+    }
+
+    auto committed = catalog_->restore(staged.snapshot());
+    if (!committed.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(committed.error()), plan.location()));
     }
 
     return command_result(existing == nullptr ? 0 : 1);

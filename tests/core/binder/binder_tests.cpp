@@ -3,8 +3,10 @@
 #include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
+#include "core/binder/bound/statement/bound_create_vector_index_statement.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_index_statement.hpp"
+#include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
@@ -309,6 +311,65 @@ void test_index_binding()
     require(bound_drop_missing->if_exists(), "DROP INDEX IF EXISTS mismatch");
 }
 
+void test_vector_index_binding()
+{
+    Fixture fixture;
+    auto create = bind_ok(
+        fixture,
+        "CREATE VINDEX IF NOT EXISTS vidx_embedding ON users (embedding) USING HNSW "
+        "WITH (metric = INNER_PRODUCT, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 9);"
+    );
+    require(create->kind() == BoundStatementKind::CreateVectorIndex, "CREATE VINDEX kind mismatch");
+    const auto * bound_create = static_cast<const BoundCreateVectorIndexStatement *>(create.get());
+    require(bound_create->database_id() == fixture.database_id, "CREATE VINDEX database id mismatch");
+    require(bound_create->collection_id() == fixture.users_id, "CREATE VINDEX collection id mismatch");
+    require(bound_create->collection_name() == "users", "CREATE VINDEX collection name mismatch");
+    require(bound_create->column_name() == "embedding", "CREATE VINDEX column name mismatch");
+    require(bound_create->index_name() == "vidx_embedding", "CREATE VINDEX index name mismatch");
+    require(bound_create->index_kind() == CatalogVectorIndexKind::Hnsw, "CREATE VINDEX kind value mismatch");
+    require(bound_create->metric() == CatalogVectorDistanceMetric::InnerProduct, "CREATE VINDEX metric mismatch");
+    require(bound_create->max_neighbors() == 24, "CREATE VINDEX max_neighbors mismatch");
+    require(bound_create->ef_construction() == 240, "CREATE VINDEX ef_construction mismatch");
+    require(bound_create->ef_search_default() == 80, "CREATE VINDEX ef_search mismatch");
+    require(bound_create->random_seed() == 9, "CREATE VINDEX random_seed mismatch");
+    require(bound_create->if_not_exists(), "CREATE VINDEX IF NOT EXISTS mismatch");
+
+    auto defaults = bind_ok(fixture, "CREATE VINDEX vidx_embedding_default ON users (embedding) USING HNSW;");
+    const auto * bound_defaults = static_cast<const BoundCreateVectorIndexStatement *>(defaults.get());
+    require(bound_defaults->metric() == CatalogVectorDistanceMetric::L2, "CREATE VINDEX default metric mismatch");
+    require(bound_defaults->max_neighbors() == 16, "CREATE VINDEX default max_neighbors mismatch");
+    require(bound_defaults->ef_construction() == 200, "CREATE VINDEX default ef_construction mismatch");
+    require(bound_defaults->ef_search_default() == 64, "CREATE VINDEX default ef_search mismatch");
+    require(bound_defaults->random_seed() == 0, "CREATE VINDEX default random_seed mismatch");
+
+    require(bind_error(fixture, "CREATE VINDEX vidx_age ON users (age) USING HNSW;").code == BinderErrorCode::InvalidType, "vector index scalar column error mismatch");
+    require(bind_error(fixture, "CREATE VINDEX vidx_missing ON users (missing) USING HNSW;").code == BinderErrorCode::ColumnNotFound, "missing vector index column error mismatch");
+
+    const auto * embedding_column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    require(embedding_column != nullptr, "embedding column lookup failed");
+    auto created_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = embedding_column->id(),
+        .name = "vidx_embedding",
+    });
+    require(created_index.has_value(), "fixture vector index create failed");
+
+    auto drop = bind_ok(fixture, "DROP VINDEX vidx_embedding ON users;");
+    require(drop->kind() == BoundStatementKind::DropVectorIndex, "DROP VINDEX kind mismatch");
+    const auto * bound_drop = static_cast<const BoundDropVectorIndexStatement *>(drop.get());
+    require(bound_drop->database_id() == fixture.database_id, "DROP VINDEX database id mismatch");
+    require(bound_drop->collection_id() == fixture.users_id, "DROP VINDEX collection id mismatch");
+    require(bound_drop->collection_name() == "users", "DROP VINDEX collection name mismatch");
+    require(bound_drop->index_name() == "vidx_embedding", "DROP VINDEX index name mismatch");
+    require(!bound_drop->if_exists(), "DROP VINDEX if-exists mismatch");
+
+    require(bind_error(fixture, "DROP VINDEX missing ON users;").code == BinderErrorCode::IndexNotFound, "missing vector index error mismatch");
+
+    auto drop_missing = bind_ok(fixture, "DROP VINDEX IF EXISTS missing ON users;");
+    const auto * bound_drop_missing = static_cast<const BoundDropVectorIndexStatement *>(drop_missing.get());
+    require(bound_drop_missing->if_exists(), "DROP VINDEX IF EXISTS mismatch");
+}
+
 } // namespace
 
 int main()
@@ -323,6 +384,7 @@ int main()
         test_update_delete_binding();
         test_ddl_and_metadata_binding();
         test_index_binding();
+        test_vector_index_binding();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

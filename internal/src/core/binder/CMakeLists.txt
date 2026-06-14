@@ -16,11 +16,13 @@ set(BINDER_SOURCES
     bound/statement/bound_create_collection_statement.cpp
     bound/statement/bound_create_database_statement.cpp
     bound/statement/bound_create_index_statement.cpp
+    bound/statement/bound_create_vector_index_statement.cpp
     bound/statement/bound_delete_statement.cpp
     bound/statement/bound_describe_collection_statement.cpp
     bound/statement/bound_drop_collection_statement.cpp
     bound/statement/bound_drop_database_statement.cpp
     bound/statement/bound_drop_index_statement.cpp
+    bound/statement/bound_drop_vector_index_statement.cpp
     bound/statement/bound_insert_statement.cpp
     bound/statement/bound_select_statement.cpp
     bound/statement/bound_show_collections_statement.cpp

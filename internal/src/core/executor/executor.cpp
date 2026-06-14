@@ -22,11 +22,13 @@
 #include "core/planner/statement/create_collection_plan.hpp"
 #include "core/planner/statement/create_database_plan.hpp"
 #include "core/planner/statement/create_index_plan.hpp"
+#include "core/planner/statement/create_vector_index_plan.hpp"
 #include "core/planner/statement/delete_plan.hpp"
 #include "core/planner/statement/describe_collection_plan.hpp"
 #include "core/planner/statement/drop_collection_plan.hpp"
 #include "core/planner/statement/drop_database_plan.hpp"
 #include "core/planner/statement/drop_index_plan.hpp"
+#include "core/planner/statement/drop_vector_index_plan.hpp"
 #include "core/planner/statement/insert_plan.hpp"
 #include "core/planner/statement/query_plan.hpp"
 #include "core/planner/statement/show_collections_plan.hpp"
@@ -755,6 +757,31 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 }
 
 [[nodiscard]]
+std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
+    const planner::CreateVectorIndexPlan & plan,
+    catalog::Catalog & catalog
+)
+{
+    const auto * existing = catalog.find_vector_index(plan.collection_id(), plan.index_name());
+    auto created = catalog.create_vector_index(catalog::CreateVectorIndexRequest {
+        .collection_id = plan.collection_id(),
+        .column_id = plan.column_id(),
+        .name = plan.index_name(),
+        .index_kind = plan.index_kind(),
+        .metric = plan.metric(),
+        .max_neighbors = plan.max_neighbors(),
+        .ef_construction = plan.ef_construction(),
+        .ef_search_default = plan.ef_search_default(),
+        .random_seed = plan.random_seed(),
+        .if_not_exists = plan.if_not_exists(),
+    });
+    if (!created.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+    }
+    return command_result(existing == nullptr ? 1 : 0);
+}
+
+[[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
     const planner::DropCollectionPlan & plan,
     catalog::Catalog & catalog,
@@ -817,6 +844,29 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_index(
     }
 
     return command_result(1);
+}
+
+[[nodiscard]]
+std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
+    const planner::DropVectorIndexPlan & plan,
+    catalog::Catalog & catalog
+)
+{
+    const auto * existing = catalog.find_vector_index(plan.collection_id(), plan.index_name());
+    if (existing == nullptr && plan.if_exists()) {
+        return command_result(0);
+    }
+
+    auto dropped = catalog.drop_vector_index(catalog::DropVectorIndexRequest {
+        .collection_id = plan.collection_id(),
+        .name = plan.index_name(),
+        .if_exists = plan.if_exists(),
+    });
+    if (!dropped.has_value()) {
+        return std::unexpected(from_catalog_error(std::move(dropped.error()), plan.location()));
+    }
+
+    return command_result(existing == nullptr ? 0 : 1);
 }
 
 [[nodiscard]]
@@ -1141,6 +1191,11 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
             return ddl_handler_->execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_index(static_cast<const planner::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
+    case StatementPlanKind::CreateVectorIndex:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_create_vector_index(static_cast<const planner::CreateVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
+        }
+        return execute_create_vector_index(static_cast<const planner::CreateVectorIndexPlan &>(plan), catalog_);
     case StatementPlanKind::DropDatabase:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_drop_database(static_cast<const planner::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
@@ -1156,6 +1211,11 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
             return ddl_handler_->execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_drop_index(static_cast<const planner::DropIndexPlan &>(plan), catalog_, index_manager_);
+    case StatementPlanKind::DropVectorIndex:
+        if (ddl_handler_ != nullptr) {
+            return ddl_handler_->execute_drop_vector_index(static_cast<const planner::DropVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
+        }
+        return execute_drop_vector_index(static_cast<const planner::DropVectorIndexPlan &>(plan), catalog_);
     case StatementPlanKind::ShowDatabases:
         return execute_show_databases(catalog_);
     case StatementPlanKind::ShowCollections:
