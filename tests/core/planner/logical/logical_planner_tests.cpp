@@ -2,7 +2,9 @@
 #include "core/catalog/in_memory_catalog.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
+#include "core/index/index_manager.hpp"
 #include "core/planner/planner.hpp"
+#include "core/planner/logical/node/logical_index_scan.hpp"
 #include "core/planner/logical/node/logical_filter.hpp"
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
@@ -24,6 +26,8 @@
 #include "core/planner/statement/statement_plan.hpp"
 #include "core/planner/statement/update_plan.hpp"
 #include "core/planner/statement/use_plan.hpp"
+#include "core/schema/schema_loader.hpp"
+#include "core/storage/storage_manager.hpp"
 
 #include <exception>
 #include <iostream>
@@ -39,9 +43,11 @@ using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
 using namespace litedb::core::catalog;
 using namespace litedb::core::common;
+using namespace litedb::core::index;
 using namespace litedb::core::parser;
 using namespace litedb::core::planner;
 using namespace litedb::core::planner::logical;
+using namespace litedb::core::storage;
 
 void require(bool condition, const char * message)
 {
@@ -68,6 +74,8 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 struct Fixture
 {
     InMemoryCatalog catalog;
+    StorageManager storage;
+    IndexManager index_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -110,6 +118,15 @@ struct Fixture
             throw std::runtime_error(collection.error().message);
         }
         users_id = collection.value();
+
+        auto schema = litedb::core::schema::load_collection_schema(catalog, users_id);
+        if (!schema.has_value()) {
+            throw std::runtime_error(schema.error().message);
+        }
+        auto storage_created = storage.create_collection(std::move(schema.value()));
+        if (!storage_created.has_value()) {
+            throw std::runtime_error(storage_created.error().message);
+        }
     }
 };
 
@@ -125,9 +142,13 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
+std::unique_ptr<StatementPlan> plan_ok(
+    Fixture & fixture,
+    std::string_view sql,
+    const IndexManager * index_manager = nullptr
+)
 {
-    Planner planner;
+    Planner planner {index_manager};
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
@@ -139,6 +160,43 @@ const LogicalPlanNode & query_root(const StatementPlan & plan)
 {
     require(plan.kind() == StatementPlanKind::Query, "plan should be query");
     return static_cast<const QueryPlan &>(plan).root();
+}
+
+IndexId create_managed_index(
+    Fixture & fixture,
+    std::string name,
+    std::string_view column_name,
+    CatalogIndexKind kind
+)
+{
+    const auto * column = fixture.catalog.find_column(fixture.users_id, std::string(column_name));
+    require(column != nullptr, "fixture index column missing");
+
+    auto created = fixture.catalog.create_index(CreateIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = column->id(),
+        .name = std::move(name),
+        .index_kind = kind,
+    });
+    if (!created.has_value()) {
+        throw std::runtime_error(created.error().message);
+    }
+
+    const auto * entry = fixture.catalog.find_index(created.value());
+    require(entry != nullptr, "fixture index entry missing");
+
+    auto schema = litedb::core::schema::load_collection_schema(fixture.catalog, fixture.users_id);
+    if (!schema.has_value()) {
+        throw std::runtime_error(schema.error().message);
+    }
+    const auto * collection_storage = fixture.storage.find_collection(fixture.users_id);
+    require(collection_storage != nullptr, "fixture collection storage missing");
+
+    auto managed = fixture.index_manager.create_index(*entry, schema.value(), *collection_storage);
+    if (!managed.has_value()) {
+        throw std::runtime_error(managed.error().message);
+    }
+    return created.value();
 }
 
 void test_select_full_chain()
@@ -225,6 +283,59 @@ void test_update_delete_plans()
     require(delete_without_where->kind() == StatementPlanKind::Delete, "DELETE without WHERE kind mismatch");
     const auto & delete_without_where_node = static_cast<const DeletePlan &>(*delete_without_where);
     require(delete_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "DELETE without WHERE should scan directly");
+}
+
+void test_access_path_selector_uses_indexes()
+{
+    Fixture fixture;
+    const auto btree_id = create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
+    const auto hash_id = create_managed_index(fixture, "idx_age_hash", "age", CatalogIndexKind::Hash);
+
+    auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_manager);
+    const auto & equal_projection = static_cast<const LogicalProjection &>(query_root(*equal));
+    const auto & equal_filter = static_cast<const LogicalFilter &>(equal_projection.child());
+    require(equal_filter.child().kind() == LogicalPlanNodeKind::IndexScan, "equality should use index scan");
+    const auto & equal_scan = static_cast<const LogicalIndexScan &>(equal_filter.child());
+    require(equal_scan.index_id() == hash_id, "equality should prefer hash index");
+    require(equal_scan.index_kind() == IndexKind::Hash, "equality index kind mismatch");
+    require(equal_scan.lookup().kind == IndexLookupKind::Equal, "equality lookup kind mismatch");
+
+    auto range = plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;", &fixture.index_manager);
+    const auto & range_projection = static_cast<const LogicalProjection &>(query_root(*range));
+    const auto & range_filter = static_cast<const LogicalFilter &>(range_projection.child());
+    require(range_filter.child().kind() == LogicalPlanNodeKind::IndexScan, "range should use index scan");
+    const auto & range_scan = static_cast<const LogicalIndexScan &>(range_filter.child());
+    require(range_scan.index_id() == btree_id, "range should use btree index");
+    require(range_scan.lookup().kind == IndexLookupKind::Range, "range lookup kind mismatch");
+
+    auto between = plan_ok(fixture, "SELECT id FROM users WHERE age BETWEEN 18 AND 30;", &fixture.index_manager);
+    const auto & between_projection = static_cast<const LogicalProjection &>(query_root(*between));
+    const auto & between_filter = static_cast<const LogicalFilter &>(between_projection.child());
+    require(between_filter.child().kind() == LogicalPlanNodeKind::IndexScan, "between should use index scan");
+
+    auto fallback_like = plan_ok(fixture, "SELECT id FROM users WHERE name LIKE 'a%';", &fixture.index_manager);
+    const auto & like_projection = static_cast<const LogicalProjection &>(query_root(*fallback_like));
+    const auto & like_filter = static_cast<const LogicalFilter &>(like_projection.child());
+    require(like_filter.child().kind() == LogicalPlanNodeKind::Scan, "LIKE should fall back to scan");
+
+    auto fallback_expression = plan_ok(fixture, "SELECT id FROM users WHERE age + 1 = 19;", &fixture.index_manager);
+    const auto & expr_projection = static_cast<const LogicalProjection &>(query_root(*fallback_expression));
+    const auto & expr_filter = static_cast<const LogicalFilter &>(expr_projection.child());
+    require(expr_filter.child().kind() == LogicalPlanNodeKind::Scan, "expression predicate should fall back to scan");
+}
+
+void test_access_path_selector_btree_equality()
+{
+    Fixture fixture;
+    const auto btree_id = create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
+
+    auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_manager);
+    const auto & projection = static_cast<const LogicalProjection &>(query_root(*equal));
+    const auto & filter = static_cast<const LogicalFilter &>(projection.child());
+    require(filter.child().kind() == LogicalPlanNodeKind::IndexScan, "btree equality should use index scan");
+    const auto & scan = static_cast<const LogicalIndexScan &>(filter.child());
+    require(scan.index_id() == btree_id, "btree equality index mismatch");
+    require(scan.index_kind() == IndexKind::BTree, "btree equality index kind mismatch");
 }
 
 void test_admin_and_ddl_plans()
@@ -318,6 +429,8 @@ int main()
         test_select_minimal_chain();
         test_insert_plan();
         test_update_delete_plans();
+        test_access_path_selector_uses_indexes();
+        test_access_path_selector_btree_equality();
         test_admin_and_ddl_plans();
         test_null_statement_error();
     } catch (const std::exception & exception) {

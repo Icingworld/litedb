@@ -12,15 +12,11 @@ v0.3.0
 create database vec;
 ```
 
-
-
 ## 切换数据库
 
 ```sql
 use vec;
 ```
-
-
 
 ## 创建集合
 
@@ -33,7 +29,9 @@ create collection t_vec (
 );
 ```
 
-
+```sql
+create index idx_id on t_vec(id);
+```
 
 ## 插入
 

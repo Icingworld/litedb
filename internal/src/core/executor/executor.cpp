@@ -14,6 +14,7 @@
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/planner/logical/node/logical_filter.hpp"
+#include "core/planner/logical/node/logical_index_scan.hpp"
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
 #include "core/planner/logical/node/logical_projection.hpp"
@@ -47,6 +48,8 @@ using parser::ast::AstNodeLocation;
 using planner::StatementPlan;
 using planner::StatementPlanKind;
 using planner::logical::LogicalFilter;
+using planner::logical::LogicalIndexScan;
+using planner::logical::IndexLookupKind;
 using planner::logical::LogicalLimit;
 using planner::logical::LogicalOrderBy;
 using planner::logical::LogicalPlanNode;
@@ -239,8 +242,34 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
 std::expected<PipelineResult, ExecutionError> execute_logical(
     const LogicalPlanNode & node,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 );
+
+void append_pipeline_row(
+    PipelineResult & result,
+    const schema::CollectionSchema & collection_schema,
+    schema::Record record
+)
+{
+    auto evaluation_record = make_evaluation_record(collection_schema, record);
+    result.rows.push_back(PipelineRow {
+        .source_record = std::move(record),
+        .evaluation_record = std::move(evaluation_record),
+        .output_values = {},
+    });
+    result.rows.back().output_values = result.rows.back().source_record.data.values;
+}
+
+void append_scan_columns(PipelineResult & result, const schema::CollectionSchema & collection_schema)
+{
+    for (const auto & column : collection_schema.columns()) {
+        result.columns.push_back(ExecutionColumn {
+            .name = column.column_name(),
+            .type = column.type(),
+        });
+    }
+}
 
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_scan(
@@ -260,24 +289,61 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
     }
 
     PipelineResult result;
-    for (const auto & column : collection_schema->columns()) {
-        result.columns.push_back(ExecutionColumn {
-            .name = column.column_name(),
-            .type = column.type(),
-        });
-    }
+    append_scan_columns(result, collection_schema.value());
 
     auto cursor = collection_storage.value()->scan();
     while (auto record = cursor->next()) {
-        auto evaluation_record = make_evaluation_record(collection_schema.value(), record.value());
-        result.rows.push_back(PipelineRow {
-            .source_record = std::move(record.value()),
-            .evaluation_record = std::move(evaluation_record),
-            .output_values = {},
-        });
-        result.rows.back().output_values = result.rows.back().source_record.data.values;
+        append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
     }
 
+    return result;
+}
+
+[[nodiscard]]
+std::expected<PipelineResult, ExecutionError> execute_index_scan(
+    const LogicalIndexScan & scan,
+    catalog::Catalog & catalog,
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
+)
+{
+    auto collection_schema = load_schema(catalog, scan.collection_id(), scan.location());
+    if (!collection_schema.has_value()) {
+        return std::unexpected(std::move(collection_schema.error()));
+    }
+
+    auto collection_storage = find_storage(storage, scan.collection_id(), scan.location());
+    if (!collection_storage.has_value()) {
+        return std::unexpected(std::move(collection_storage.error()));
+    }
+
+    auto index_view = index_manager.find_index(scan.index_id());
+    if (!index_view.has_value()) {
+        return std::unexpected(make_error(ExecutionErrorCode::IndexError, scan.location(), "Index not found"));
+    }
+
+    std::expected<std::vector<common::RecordId>, index::IndexError> record_ids;
+    switch (scan.lookup().kind) {
+    case IndexLookupKind::Equal:
+        record_ids = index_view->index.find_equal(scan.lookup().key);
+        break;
+    case IndexLookupKind::Range:
+        record_ids = index_view->index.scan_range(scan.lookup().range);
+        break;
+    }
+    if (!record_ids.has_value()) {
+        return std::unexpected(from_index_error(std::move(record_ids.error()), scan.location()));
+    }
+
+    PipelineResult result;
+    append_scan_columns(result, collection_schema.value());
+    for (const auto record_id : record_ids.value()) {
+        auto record = collection_storage.value()->get(record_id);
+        if (!record.has_value()) {
+            return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
+        }
+        append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
+    }
     return result;
 }
 
@@ -285,10 +351,11 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
 std::expected<PipelineResult, ExecutionError> execute_filter(
     const LogicalFilter & filter,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(filter.child(), catalog, storage);
+    auto input = execute_logical(filter.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -324,10 +391,11 @@ std::string projection_name(const BoundExpression & expression, std::size_t inde
 std::expected<PipelineResult, ExecutionError> execute_projection(
     const LogicalProjection & projection,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(projection.child(), catalog, storage);
+    auto input = execute_logical(projection.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -422,10 +490,11 @@ std::expected<std::vector<schema::Value>, ExecutionError> evaluate_order_keys(
 std::expected<PipelineResult, ExecutionError> execute_order_by(
     const LogicalOrderBy & order_by,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(order_by.child(), catalog, storage);
+    auto input = execute_logical(order_by.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -492,10 +561,11 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
 std::expected<PipelineResult, ExecutionError> execute_limit(
     const LogicalLimit & limit,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(limit.child(), catalog, storage);
+    auto input = execute_logical(limit.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -522,20 +592,23 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
 std::expected<PipelineResult, ExecutionError> execute_logical(
     const LogicalPlanNode & node,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
     switch (node.kind()) {
     case LogicalPlanNodeKind::Scan:
         return execute_scan(static_cast<const LogicalScan &>(node), catalog, storage);
+    case LogicalPlanNodeKind::IndexScan:
+        return execute_index_scan(static_cast<const LogicalIndexScan &>(node), catalog, storage, index_manager);
     case LogicalPlanNodeKind::Filter:
-        return execute_filter(static_cast<const LogicalFilter &>(node), catalog, storage);
+        return execute_filter(static_cast<const LogicalFilter &>(node), catalog, storage, index_manager);
     case LogicalPlanNodeKind::Projection:
-        return execute_projection(static_cast<const LogicalProjection &>(node), catalog, storage);
+        return execute_projection(static_cast<const LogicalProjection &>(node), catalog, storage, index_manager);
     case LogicalPlanNodeKind::OrderBy:
-        return execute_order_by(static_cast<const LogicalOrderBy &>(node), catalog, storage);
+        return execute_order_by(static_cast<const LogicalOrderBy &>(node), catalog, storage, index_manager);
     case LogicalPlanNodeKind::Limit:
-        return execute_limit(static_cast<const LogicalLimit &>(node), catalog, storage);
+        return execute_limit(static_cast<const LogicalLimit &>(node), catalog, storage, index_manager);
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::InvalidPlan, node.location(), "Unknown logical plan node"));
@@ -545,10 +618,11 @@ std::expected<PipelineResult, ExecutionError> execute_logical(
 std::expected<ExecutionResult, ExecutionError> execute_query(
     const planner::QueryPlan & plan,
     catalog::Catalog & catalog,
-    storage::StorageManager & storage
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
 )
 {
-    auto pipeline = execute_logical(plan.root(), catalog, storage);
+    auto pipeline = execute_logical(plan.root(), catalog, storage, index_manager);
     if (!pipeline.has_value()) {
         return std::unexpected(std::move(pipeline.error()));
     }
@@ -848,7 +922,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
     index::IndexManager & index_manager
 )
 {
-    auto rows = execute_logical(plan.input(), catalog, storage);
+    auto rows = execute_logical(plan.input(), catalog, storage, index_manager);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -906,7 +980,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         return std::unexpected(std::move(collection_schema.error()));
     }
 
-    auto rows = execute_logical(plan.input(), catalog, storage);
+    auto rows = execute_logical(plan.input(), catalog, storage, index_manager);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -1095,7 +1169,7 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const Statement
     case StatementPlanKind::Delete:
         return execute_delete(static_cast<const planner::DeletePlan &>(plan), catalog_, storage_, index_manager_);
     case StatementPlanKind::Query:
-        return execute_query(static_cast<const planner::QueryPlan &>(plan), catalog_, storage_);
+        return execute_query(static_cast<const planner::QueryPlan &>(plan), catalog_, storage_, index_manager_);
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::UnsupportedStatement, internal_location, "Unsupported statement"));

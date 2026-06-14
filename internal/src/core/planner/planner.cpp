@@ -56,6 +56,16 @@ PlannerError error(
 
 } // namespace
 
+Planner::Planner() noexcept
+    : logical_planner_(nullptr)
+{
+}
+
+Planner::Planner(const index::IndexManager * index_manager) noexcept
+    : logical_planner_(index_manager)
+{
+}
+
 std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     std::unique_ptr<BoundStatement> statement
 ) const

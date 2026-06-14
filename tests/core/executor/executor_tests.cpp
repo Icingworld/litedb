@@ -66,6 +66,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
 
 std::unique_ptr<StatementPlan> plan_ok(
     InMemoryCatalog & catalog,
+    IndexManager & index_manager,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
 )
@@ -78,7 +79,7 @@ std::unique_ptr<StatementPlan> plan_ok(
         throw std::runtime_error(bound.error().message);
     }
 
-    Planner planner;
+    Planner planner {&index_manager};
     auto planned = planner.plan(std::move(bound.value()));
     if (!planned.has_value()) {
         throw std::runtime_error(planned.error().message);
@@ -94,7 +95,7 @@ ExecutionResult execute_ok(
     std::optional<DatabaseId> database_id = std::nullopt
 )
 {
-    auto plan = plan_ok(catalog, sql, database_id);
+    auto plan = plan_ok(catalog, index_manager, sql, database_id);
     Executor executor {catalog, storage, index_manager};
     auto result = executor.execute(*plan);
     if (!result.has_value()) {
@@ -111,7 +112,7 @@ ExecutionError execute_error(
     std::optional<DatabaseId> database_id = std::nullopt
 )
 {
-    auto plan = plan_ok(catalog, sql, database_id);
+    auto plan = plan_ok(catalog, index_manager, sql, database_id);
     Executor executor {catalog, storage, index_manager};
     auto result = executor.execute(*plan);
     require(!result.has_value(), "statement should fail to execute");
@@ -368,6 +369,107 @@ void test_index_ddl_updates_catalog()
     require(drop_missing.affected_rows == 0, "DROP INDEX IF EXISTS affected rows mismatch");
 }
 
+void test_index_scan_execution_paths()
+{
+    Fixture fixture;
+    auto hash_index = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "CREATE INDEX idx_age_hash ON users (age) USING HASH;",
+        fixture.database_id
+    );
+    require(hash_index.affected_rows == 1, "hash index create affected rows mismatch");
+
+    insert_user(fixture, 1, "alice", 18);
+    insert_user(fixture, 2, "bob", 20);
+    insert_user(fixture, 3, "carl", 15);
+    insert_user(fixture, 4, "dora", 18);
+
+    auto equal = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT id FROM users WHERE age = 18 ORDER BY id ASC;",
+        fixture.database_id
+    );
+    require(equal.rows.size() == 2, "hash equality SELECT row count mismatch");
+    require(get_value<std::int64_t>(equal.rows[0].values[0]) == 1, "hash equality first row mismatch");
+    require(get_value<std::int64_t>(equal.rows[1].values[0]) == 4, "hash equality second row mismatch");
+
+    auto hash_range_fallback = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT id FROM users WHERE age >= 18 ORDER BY id ASC;",
+        fixture.database_id
+    );
+    require(hash_range_fallback.rows.size() == 3, "hash-only range fallback row count mismatch");
+
+    auto btree_index = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "CREATE INDEX idx_age_btree ON users (age) USING BTREE;",
+        fixture.database_id
+    );
+    require(btree_index.affected_rows == 1, "btree index create affected rows mismatch");
+
+    auto btree_range = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT id FROM users WHERE age BETWEEN 18 AND 20 ORDER BY id ASC;",
+        fixture.database_id
+    );
+    require(btree_range.rows.size() == 3, "btree range SELECT row count mismatch");
+
+    auto updated = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "UPDATE users SET name = 'adult' WHERE age >= 20;",
+        fixture.database_id
+    );
+    require(updated.affected_rows == 1, "indexed range UPDATE affected rows mismatch");
+
+    auto renamed = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT name FROM users WHERE id = 2;",
+        fixture.database_id
+    );
+    require(get_value<std::string>(renamed.rows[0].values[0]) == "adult", "indexed UPDATE value mismatch");
+
+    auto deleted = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "DELETE FROM users WHERE age < 18;",
+        fixture.database_id
+    );
+    require(deleted.affected_rows == 1, "indexed range DELETE affected rows mismatch");
+
+    auto dropped = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "DROP INDEX idx_age_btree ON users;",
+        fixture.database_id
+    );
+    require(dropped.affected_rows == 1, "btree index drop affected rows mismatch");
+
+    auto range_after_drop = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT id FROM users WHERE age >= 18 ORDER BY id ASC;",
+        fixture.database_id
+    );
+    require(range_after_drop.rows.size() == 3, "range after btree drop fallback row count mismatch");
+}
+
 void test_error_mapping()
 {
     Fixture fixture;
@@ -410,6 +512,7 @@ int main()
         test_order_by_keeps_null_last();
         test_drop_collection_removes_storage();
         test_index_ddl_updates_catalog();
+        test_index_scan_execution_paths();
         test_error_mapping();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
