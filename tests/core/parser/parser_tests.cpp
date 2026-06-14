@@ -2,6 +2,7 @@
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
+#include "core/parser/ast/expression/function_call_expression.hpp"
 #include "core/parser/ast/expression/in_expression.hpp"
 #include "core/parser/ast/expression/like_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
@@ -236,6 +237,13 @@ void test_parse_select_statement()
     require(column_select->select_list().size() == 3, "SELECT qualified list size mismatch");
     require(column_select->select_list()[1]->kind() == AstNodeKind::ColumnReference, "SELECT qualified column mismatch");
     require(column_select->select_list()[2]->kind() == AstNodeKind::Wildcard, "SELECT qualified wildcard mismatch");
+
+    auto function_order = parse_ok("SELECT id, l2_distance(embedding, [0.1, 0.2, 0.3]) FROM users ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC;");
+    const auto * function_select = static_cast<const SelectStatement *>(function_order.get());
+    require(function_select->select_list().size() == 2, "SELECT function list size mismatch");
+    require(function_select->select_list()[1]->kind() == AstNodeKind::FunctionCall, "SELECT function item mismatch");
+    require(function_select->order_by().size() == 1, "SELECT function ORDER BY size mismatch");
+    require(function_select->order_by()[0].expression->kind() == AstNodeKind::FunctionCall, "SELECT function ORDER BY mismatch");
 }
 
 void test_parse_expression_shapes()

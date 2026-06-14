@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.3.2)
-project(litedb VERSION 0.2.2 LANGUAGES CXX)
+project(litedb VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -12,6 +12,7 @@ add_subdirectory(internal/src/memory)
 add_subdirectory(internal/src/core/parser)
 add_subdirectory(internal/src/core/catalog)
 add_subdirectory(internal/src/core/schema)
+add_subdirectory(internal/src/core/function)
 add_subdirectory(internal/src/core/index)
 add_subdirectory(internal/src/core/storage)
 add_subdirectory(internal/src/core/binder)

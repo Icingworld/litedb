@@ -7,7 +7,7 @@
 #include "core/catalog/catalog_default_expression.hpp"
 #include "core/catalog/catalog_entry.hpp"
 #include "core/common/ids.hpp"
-#include "core/common/logical_id.hpp"
+#include "core/common/logical_type.hpp"
 
 namespace litedb::core::catalog
 {

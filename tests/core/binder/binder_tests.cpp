@@ -1,5 +1,6 @@
 #include "core/binder/binder.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
+#include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
@@ -173,28 +174,26 @@ void test_select_errors()
     require(bind_error(fixture, "SELECT other.id FROM users;").code == BinderErrorCode::InvalidQualifier, "qualifier error mismatch");
     require(bind_error(fixture, "SELECT * FROM users WHERE name + 1 > 3;").code == BinderErrorCode::InvalidType, "invalid arithmetic error mismatch");
 
-    litedb::core::parser::ast::FunctionCallExpression::ArgumentList arguments;
-    litedb::core::parser::ast::SelectStatement::SelectList select_list;
-    select_list.push_back(std::make_unique<litedb::core::parser::ast::FunctionCallExpression>(
-        "distance",
-        std::move(arguments),
-        litedb::core::parser::ast::AstNodeLocation {1, 8}
-    ));
-    litedb::core::parser::ast::SelectStatement::OrderByList order_by;
-    litedb::core::parser::ast::SelectStatement function_statement {
-        std::move(select_list),
-        "users",
-        nullptr,
-        std::move(order_by),
-        std::nullopt,
-        std::nullopt,
-        litedb::core::parser::ast::AstNodeLocation {1, 1}
-    };
-    SessionContext session {.current_database_id = fixture.database_id};
-    Binder binder {fixture.catalog, session};
-    auto function_result = binder.bind(function_statement);
-    require(!function_result.has_value(), "function call should fail to bind");
-    require(function_result.error().code == BinderErrorCode::UnsupportedExpression, "function call error mismatch");
+    require(bind_error(fixture, "SELECT missing_function(age) FROM users;").code == BinderErrorCode::UnsupportedExpression, "unknown function error mismatch");
+}
+
+void test_function_binding()
+{
+    Fixture fixture;
+    auto statement = bind_ok(
+        fixture,
+        "SELECT id FROM users ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC LIMIT 3;"
+    );
+
+    const auto * select = static_cast<const BoundSelectStatement *>(statement.get());
+    require(select->order_by().size() == 1, "function ORDER BY count mismatch");
+    require(select->order_by()[0].expression->kind() == BoundExpressionKind::Function, "ORDER BY should bind function");
+    const auto & function = static_cast<const BoundFunctionExpression &>(*select->order_by()[0].expression);
+    require(function.name() == "l2_distance", "function name mismatch");
+    require(function.type().id == LogicalTypeId::Double, "function return type mismatch");
+    require(function.arguments().size() == 2, "function argument count mismatch");
+
+    require(bind_error(fixture, "SELECT id FROM users ORDER BY l2_distance(embedding, [0.1, 0.2]);").code == BinderErrorCode::InvalidType, "function vector dimension error mismatch");
 }
 
 void test_insert_binding()
@@ -318,6 +317,7 @@ int main()
         test_use_and_missing_database_context();
         test_select_binding();
         test_select_errors();
+        test_function_binding();
         test_insert_binding();
         test_insert_errors();
         test_update_delete_binding();

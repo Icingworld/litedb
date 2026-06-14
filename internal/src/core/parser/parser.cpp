@@ -14,6 +14,7 @@
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 #include "core/parser/ast/expression/expression_node.hpp"
+#include "core/parser/ast/expression/function_call_expression.hpp"
 #include "core/parser/ast/expression/in_expression.hpp"
 #include "core/parser/ast/expression/like_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
@@ -247,6 +248,13 @@ private:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_column_reference_expression();
+
+    /**
+     * @brief 瑙ｆ瀽鍑芥暟璋冪敤鎴栧垪寮曠敤琛ㄨ揪寮?
+     * @return 瑙ｆ瀽缁撴灉
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_function_call_or_column_reference();
 
     /**
      * @brief 解析通配符或列引用表达式
@@ -1014,7 +1022,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         // 解析排序项列表
         while (true) {
             // 解析表达式
-            auto expression = parse_column_reference_expression();
+            auto expression = parse_expression();
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(expression.error());
             }
@@ -1443,7 +1451,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::p
     }
     // 尝试匹配列引用
     if (check(TokenType::Identifier)) {
-        return parse_column_reference_expression();
+        return parse_function_call_or_column_reference();
     }
     // 遇到 [ 则尝试匹配向量字面量
     if (check(TokenType::LeftBracket)) {
@@ -1503,6 +1511,58 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::p
     );
 }
 
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_function_call_or_column_reference()
+{
+    auto first = consume(TokenType::Identifier, "Expected function or column name");
+    if (!first.has_value()) [[unlikely]] {
+        return std::unexpected(first.error());
+    }
+
+    std::string name(first->value());
+    if (match(TokenType::LeftParen)) {
+        ast::FunctionCallExpression::ArgumentList arguments;
+        if (!check(TokenType::RightParen)) {
+            while (true) {
+                auto argument = parse_expression();
+                if (!argument.has_value()) [[unlikely]] {
+                    return std::unexpected(argument.error());
+                }
+                arguments.push_back(std::move(argument.value()));
+                if (!match(TokenType::Comma)) {
+                    break;
+                }
+            }
+        }
+
+        auto right_paren = consume(TokenType::RightParen, "Expected ')' after function arguments");
+        if (!right_paren.has_value()) [[unlikely]] {
+            return std::unexpected(right_paren.error());
+        }
+
+        return std::make_unique<ast::FunctionCallExpression>(
+            std::move(name),
+            std::move(arguments),
+            ast_location(first->location())
+        );
+    }
+
+    std::optional<std::string> qualifier;
+    if (match(TokenType::Dot)) {
+        qualifier = std::move(name);
+        auto second = consume(TokenType::Identifier, "Expected column name after '.'");
+        if (!second.has_value()) [[unlikely]] {
+            return std::unexpected(second.error());
+        }
+        name = std::string(second->value());
+    }
+
+    return std::make_unique<ast::ColumnReferenceExpression>(
+        std::move(qualifier),
+        std::move(name),
+        ast_location(first->location())
+    );
+}
+
 std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_wildcard_or_column_reference()
 {
     // 尝试匹配 *
@@ -1544,6 +1604,31 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::p
             return std::unexpected(second.error());
         }
         column = std::string(second->value());
+    } else if (match(TokenType::LeftParen)) {
+        ast::FunctionCallExpression::ArgumentList arguments;
+        if (!check(TokenType::RightParen)) {
+            while (true) {
+                auto argument = parse_expression();
+                if (!argument.has_value()) [[unlikely]] {
+                    return std::unexpected(argument.error());
+                }
+                arguments.push_back(std::move(argument.value()));
+                if (!match(TokenType::Comma)) {
+                    break;
+                }
+            }
+        }
+
+        auto right_paren = consume(TokenType::RightParen, "Expected ')' after function arguments");
+        if (!right_paren.has_value()) [[unlikely]] {
+            return std::unexpected(right_paren.error());
+        }
+
+        return std::make_unique<ast::FunctionCallExpression>(
+            std::move(column),
+            std::move(arguments),
+            ast_location(first->location())
+        );
     }
 
     // 创建普通的列引用表达式

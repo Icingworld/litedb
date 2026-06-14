@@ -14,11 +14,13 @@
 #include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
+#include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 #include "core/binder/bound/expression/bound_like_expression.hpp"
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
+#include "core/function/function_error.hpp"
 #include "core/parser/token.hpp"
 
 namespace litedb::core::evaluator
@@ -33,6 +35,7 @@ using binder::bound::BoundCastExpression;
 using binder::bound::BoundColumnRefExpression;
 using binder::bound::BoundExpression;
 using binder::bound::BoundExpressionKind;
+using binder::bound::BoundFunctionExpression;
 using binder::bound::BoundInExpression;
 using binder::bound::BoundLikeExpression;
 using binder::bound::BoundLiteralExpression;
@@ -52,6 +55,18 @@ EvaluationError make_error(
 )
 {
     return EvaluationError {code, location, std::move(message)};
+}
+
+[[nodiscard]]
+EvaluationError from_function_error(function::FunctionError error)
+{
+    return EvaluationError {
+        .code = error.code == function::FunctionErrorCode::InvalidType
+            ? EvaluationErrorCode::InvalidType
+            : EvaluationErrorCode::UnsupportedExpression,
+        .location = error.location,
+        .message = std::move(error.message),
+    };
 }
 
 /**
@@ -669,6 +684,8 @@ public:
             return eval_binary(static_cast<const BoundBinaryExpression &>(expression));
         case BoundExpressionKind::Vector:
             return eval_vector(static_cast<const BoundVectorExpression &>(expression));
+        case BoundExpressionKind::Function:
+            return eval_function(static_cast<const BoundFunctionExpression &>(expression));
         case BoundExpressionKind::In:
             return eval_in(static_cast<const BoundInExpression &>(expression));
         case BoundExpressionKind::Between:
@@ -690,6 +707,27 @@ public:
             expression.location(),
             "Unsupported expression"
         ));
+    }
+
+    [[nodiscard]]
+    std::expected<schema::Value, EvaluationError> eval_function(const BoundFunctionExpression & expression)
+    {
+        std::vector<schema::Value> arguments;
+        arguments.reserve(expression.arguments().size());
+
+        for (const auto & argument : expression.arguments()) {
+            auto value = evaluate(*argument);
+            if (!value.has_value()) {
+                return std::unexpected(std::move(value.error()));
+            }
+            arguments.push_back(std::move(value.value()));
+        }
+
+        auto result = expression.function().evaluate(arguments, function::ScalarFunctionContext {}, expression.location());
+        if (!result.has_value()) {
+            return std::unexpected(from_function_error(std::move(result.error())));
+        }
+        return std::move(result.value());
     }
 
 private:

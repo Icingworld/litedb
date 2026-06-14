@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "core/common/logical_id.hpp"
+#include "core/common/logical_type.hpp"
 #include "core/schema/value.hpp"
 
 namespace litedb::protocol

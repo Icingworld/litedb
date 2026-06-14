@@ -5,6 +5,7 @@ set(BINDER_SOURCES
     bound/expression/bound_cast_expression.cpp
     bound/expression/bound_column_ref_expression.cpp
     bound/expression/bound_expression.cpp
+    bound/expression/bound_function_expression.cpp
     bound/expression/bound_in_expression.cpp
     bound/expression/bound_like_expression.cpp
     bound/expression/bound_literal_expression.cpp
@@ -33,4 +34,4 @@ add_library(litedb_binder ${BINDER_SOURCES})
 
 target_include_directories(litedb_binder PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-target_link_libraries(litedb_binder PUBLIC litedb_parser litedb_catalog)
+target_link_libraries(litedb_binder PUBLIC litedb_parser litedb_catalog litedb_function)
