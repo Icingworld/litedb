@@ -8,7 +8,6 @@
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
 #include "core/planner/logical/node/logical_projection.hpp"
-#include "core/planner/logical/node/logical_scan.hpp"
 
 namespace litedb::core::planner::logical
 {
@@ -30,10 +29,12 @@ std::unique_ptr<LogicalPlanNode> scan_for(
     common::DatabaseId database_id,
     common::CollectionId collection_id,
     const std::string & collection_name,
+    const BoundExpression * predicate,
+    const access_path::AccessPathSelector & access_path_selector,
     parser::ast::AstNodeLocation location
 )
 {
-    return std::make_unique<LogicalScan>(database_id, collection_id, collection_name, location);
+    return access_path_selector.select_scan(database_id, collection_id, collection_name, predicate, location);
 }
 
 /**
@@ -58,6 +59,16 @@ std::unique_ptr<LogicalPlanNode> apply_optional_filter(
 
 } // namespace
 
+LogicalPlanner::LogicalPlanner() noexcept
+    : access_path_selector_(nullptr)
+{
+}
+
+LogicalPlanner::LogicalPlanner(const index::IndexManager * index_manager) noexcept
+    : access_path_selector_(index_manager)
+{
+}
+
 std::unique_ptr<LogicalPlanNode> LogicalPlanner::plan_select(BoundSelectStatement & statement) const
 {
     // 自底向上构建逻辑计划
@@ -67,6 +78,8 @@ std::unique_ptr<LogicalPlanNode> LogicalPlanner::plan_select(BoundSelectStatemen
         statement.database_id(),
         statement.collection_id(),
         statement.collection_name(),
+        statement.where(),
+        access_path_selector_,
         statement.location()
     );
 
@@ -110,6 +123,8 @@ std::unique_ptr<LogicalPlanNode> LogicalPlanner::plan_update_input(BoundUpdateSt
         statement.database_id(),
         statement.collection_id(),
         statement.collection_name(),
+        statement.where(),
+        access_path_selector_,
         statement.location()
     );
 
@@ -124,6 +139,8 @@ std::unique_ptr<LogicalPlanNode> LogicalPlanner::plan_delete_input(BoundDeleteSt
         statement.database_id(),
         statement.collection_id(),
         statement.collection_name(),
+        statement.where(),
+        access_path_selector_,
         statement.location()
     );
 

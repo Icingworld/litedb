@@ -12,6 +12,7 @@ class ColumnEntry;
 class CollectionEntry;
 class DatabaseEntry;
 class IndexEntry;
+class VectorIndexEntry;
 
 /**
  * @brief 目录读取器
@@ -99,6 +100,26 @@ public:
     virtual const IndexEntry * find_index(common::IndexId index_id) const = 0;
 
     /**
+     * @brief 查找向量索引
+     * @param collection_id 集合 ID
+     * @param name 向量索引名
+     * @return 向量索引
+     */
+    [[nodiscard]]
+    virtual const VectorIndexEntry * find_vector_index(
+        common::CollectionId collection_id,
+        std::string_view name
+    ) const = 0;
+
+    /**
+     * @brief 查找向量索引
+     * @param index_id 向量索引 ID
+     * @return 向量索引
+     */
+    [[nodiscard]]
+    virtual const VectorIndexEntry * find_vector_index(common::VIndexId index_id) const = 0;
+
+    /**
      * @brief 列出所有数据库
      * @return 数据库列表
      */
@@ -128,6 +149,14 @@ public:
      */
     [[nodiscard]]
     virtual std::vector<const IndexEntry *> list_indexes(common::CollectionId collection_id) const = 0;
+
+    /**
+     * @brief 列出所有向量索引
+     * @param collection_id 集合 ID
+     * @return 向量索引列表
+     */
+    [[nodiscard]]
+    virtual std::vector<const VectorIndexEntry *> list_vector_indexes(common::CollectionId collection_id) const = 0;
 };
 
 } // namespace litedb::core::catalog

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <expected>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -91,6 +92,33 @@ struct DropIndexRequest
 };
 
 /**
+ * @brief 创建向量索引请求
+ */
+struct CreateVectorIndexRequest
+{
+    common::CollectionId collection_id {0};     ///< 集合 ID
+    common::ColumnId column_id {0};             ///< 列 ID
+    std::string name;                           ///< 向量索引名
+    CatalogVectorIndexKind index_kind {CatalogVectorIndexKind::Hnsw}; ///< 向量索引类型
+    CatalogVectorDistanceMetric metric {CatalogVectorDistanceMetric::L2}; ///< 距离度量
+    std::size_t max_neighbors {16};             ///< HNSW 最大邻居数量
+    std::size_t ef_construction {200};          ///< HNSW 构建候选数量
+    std::size_t ef_search_default {64};         ///< HNSW 默认搜索候选数量
+    std::size_t random_seed {0};                ///< 随机种子
+    bool if_not_exists {false};                 ///< 如果向量索引不存在，则创建
+};
+
+/**
+ * @brief 删除向量索引请求
+ */
+struct DropVectorIndexRequest
+{
+    common::CollectionId collection_id {0};     ///< 集合 ID
+    std::string name;                           ///< 向量索引名
+    bool if_exists {false};                     ///< 如果向量索引存在，则删除
+};
+
+/**
  * @brief 目录写入器
  */
 class CatalogWriter
@@ -144,6 +172,22 @@ public:
      * @return 结果
      */
     virtual std::expected<void, CatalogError> drop_index(const DropIndexRequest & request) = 0;
+
+    /**
+     * @brief 创建向量索引
+     * @param request 创建向量索引请求
+     * @return 向量索引 ID
+     */
+    virtual std::expected<common::VIndexId, CatalogError> create_vector_index(
+        const CreateVectorIndexRequest & request
+    ) = 0;
+
+    /**
+     * @brief 删除向量索引
+     * @param request 删除向量索引请求
+     * @return 结果
+     */
+    virtual std::expected<void, CatalogError> drop_vector_index(const DropVectorIndexRequest & request) = 0;
 };
 
 } // namespace litedb::core::catalog

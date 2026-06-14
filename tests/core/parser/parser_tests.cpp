@@ -12,11 +12,13 @@
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
+#include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
+#include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
@@ -131,6 +133,36 @@ void test_parse_create_index_statement()
     require(default_create->method() == CreateIndexMethod::Default, "CREATE INDEX default method mismatch");
 }
 
+void test_parse_create_vector_index_statement()
+{
+    auto statement = parse_ok(
+        "CREATE VINDEX IF NOT EXISTS vidx_embedding ON users(embedding) USING HNSW "
+        "WITH (metric = COSINE, max_neighbors = 16, ef_construction = 200, ef_search = 64, random_seed = 7);"
+    );
+
+    require(statement->kind() == AstNodeKind::CreateVectorIndex, "CREATE VINDEX kind mismatch");
+    const auto * create = static_cast<const CreateVectorIndexStatement *>(statement.get());
+    require(create->index_name() == "vidx_embedding", "CREATE VINDEX name mismatch");
+    require(create->collection_name() == "users", "CREATE VINDEX collection mismatch");
+    require(create->column_name() == "embedding", "CREATE VINDEX column mismatch");
+    require(create->if_not_exists(), "CREATE VINDEX IF NOT EXISTS mismatch");
+    require(create->method() == CreateVectorIndexMethod::Hnsw, "CREATE VINDEX method mismatch");
+    require(create->options().metric == VectorIndexMetric::Cosine, "CREATE VINDEX metric mismatch");
+    require(create->options().max_neighbors.value() == 16, "CREATE VINDEX max_neighbors mismatch");
+    require(create->options().ef_construction.value() == 200, "CREATE VINDEX ef_construction mismatch");
+    require(create->options().ef_search.value() == 64, "CREATE VINDEX ef_search mismatch");
+    require(create->options().random_seed.value() == 7, "CREATE VINDEX random_seed mismatch");
+
+    auto minimal = parse_ok("CREATE VINDEX vidx_embedding ON users(embedding) USING hnsw;");
+    const auto * minimal_create = static_cast<const CreateVectorIndexStatement *>(minimal.get());
+    require(minimal_create->options().metric == VectorIndexMetric::Default, "CREATE VINDEX default metric mismatch");
+
+    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding);").code == ParserErrorCode::ExpectedToken, "CREATE VINDEX missing USING error mismatch");
+    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING IVF;").code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX method error mismatch");
+    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = BAD);").code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX metric error mismatch");
+    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = L2, metric = COSINE);").code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX duplicate option error mismatch");
+}
+
 void test_parse_drop_show_describe_statements()
 {
     auto drop_database = parse_ok("DROP DATABASE IF EXISTS demo;");
@@ -155,6 +187,13 @@ void test_parse_drop_show_describe_statements()
     const auto * drop_idx_if_exists = static_cast<const DropIndexStatement *>(drop_index_if_exists.get());
     require(drop_idx_if_exists->collection_name() == "users", "DROP INDEX IF EXISTS collection mismatch");
     require(drop_idx_if_exists->if_exists(), "DROP INDEX IF EXISTS mismatch");
+
+    auto drop_vector_index = parse_ok("DROP VINDEX IF EXISTS vidx_embedding ON users;");
+    require(drop_vector_index->kind() == AstNodeKind::DropVectorIndex, "DROP VINDEX kind mismatch");
+    const auto * drop_vidx = static_cast<const DropVectorIndexStatement *>(drop_vector_index.get());
+    require(drop_vidx->index_name() == "vidx_embedding", "DROP VINDEX name mismatch");
+    require(drop_vidx->collection_name() == "users", "DROP VINDEX collection mismatch");
+    require(drop_vidx->if_exists(), "DROP VINDEX IF EXISTS mismatch");
 
     auto show_databases = parse_ok("SHOW DATABASES;");
     const auto * show_db = static_cast<const ShowStatement *>(show_databases.get());
@@ -340,6 +379,7 @@ int main()
         test_parse_create_database_statement();
         test_parse_create_collection_statement();
         test_parse_create_index_statement();
+        test_parse_create_vector_index_statement();
         test_parse_drop_show_describe_statements();
         test_parse_insert_statement();
         test_parse_update_delete_statements();

@@ -89,7 +89,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_binder_error(std::move(bound.error())));
     }
 
-    planner::Planner planner;
+    planner::Planner planner {&instance_->index_manager()};
     auto planned = planner.plan(std::move(bound.value()));
     if (!planned.has_value()) {
         return std::unexpected(from_planner_error(std::move(planned.error())));

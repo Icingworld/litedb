@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/index/index_manager.hpp"
 #include "core/planner/logical/logical_planner.hpp"
 #include "core/planner/planner_error.hpp"
 #include "core/planner/statement/statement_plan.hpp"
@@ -16,6 +17,11 @@ namespace litedb::core::planner
  */
 class Planner
 {
+public:
+    Planner() noexcept;
+
+    explicit Planner(const index::IndexManager * index_manager) noexcept;
+
 public:
     /**
      * @brief 计划语句

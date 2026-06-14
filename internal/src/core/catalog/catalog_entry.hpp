@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -33,6 +34,24 @@ enum class CatalogIndexKind
 {
     Hash,                 ///< 哈希索引
     BTree,                ///< B+ 树索引
+};
+
+/**
+ * @brief 向量索引类型
+ */
+enum class CatalogVectorIndexKind
+{
+    Hnsw,                 ///< HNSW 索引
+};
+
+/**
+ * @brief 向量距离度量
+ */
+enum class CatalogVectorDistanceMetric
+{
+    L2,                   ///< 欧氏距离
+    InnerProduct,         ///< 内积
+    Cosine,               ///< 余弦距离
 };
 
 /**
@@ -191,6 +210,13 @@ public:
     const std::vector<common::IndexId> & index_ids() const noexcept;
 
     /**
+     * @brief 获取集合包含的向量索引 ID 列表
+     * @return 集合包含的向量索引 ID 列表
+     */
+    [[nodiscard]]
+    const std::vector<common::VIndexId> & vector_index_ids() const noexcept;
+
+    /**
      * @brief 获取集合主键列 ID
      * @return 集合主键列 ID
      */
@@ -214,6 +240,14 @@ public:
     std::optional<common::IndexId> find_index_id(std::string_view index_key) const;
 
     /**
+     * @brief 查找向量索引 ID
+     * @param index_key 向量索引键
+     * @return 向量索引 ID
+     */
+    [[nodiscard]]
+    std::optional<common::VIndexId> find_vector_index_id(std::string_view index_key) const;
+
+    /**
      * @brief 添加列
      * @param column_key 列键
      * @param column_id 列 ID
@@ -229,18 +263,34 @@ public:
     void add_index(std::string_view index_key, common::IndexId index_id);
 
     /**
+     * @brief 添加向量索引
+     * @param index_key 向量索引键
+     * @param index_id 向量索引 ID
+     */
+    void add_vector_index(std::string_view index_key, common::VIndexId index_id);
+
+    /**
      * @brief 删除索引
      * @param index_key 索引键
      * @param index_id 索引 ID
      */
     void remove_index(std::string_view index_key, common::IndexId index_id);
 
+    /**
+     * @brief 删除向量索引
+     * @param index_key 向量索引键
+     * @param index_id 向量索引 ID
+     */
+    void remove_vector_index(std::string_view index_key, common::VIndexId index_id);
+
 private:
     common::DatabaseId database_id_;                                    ///< 数据库 ID
     std::vector<common::ColumnId> column_ids_;                          ///< 集合包含的列 ID 列表
     std::vector<common::IndexId> index_ids_;                            ///< 集合包含的索引 ID 列表
+    std::vector<common::VIndexId> vector_index_ids_;                     ///< 集合包含的向量索引 ID 列表
     std::unordered_map<std::string, common::ColumnId> columns_by_key_;  ///< 集合包含的列键到 ID 的映射
     std::unordered_map<std::string, common::IndexId> indexes_by_key_;   ///< 集合包含的索引键到 ID 的映射
+    std::unordered_map<std::string, common::VIndexId> vector_indexes_by_key_; ///< 集合包含的向量索引键到 ID 的映射
     std::optional<common::ColumnId> primary_key_column_id_;             ///< 集合主键列 ID
 };
 
@@ -406,6 +456,123 @@ private:
     common::ColumnId column_id_;            ///< 列 ID
     CatalogIndexKind index_kind_;           ///< 索引类型
     bool unique_;                           ///< 是否唯一
+};
+
+/**
+ * @brief 向量索引目录项
+ */
+class VectorIndexEntry final : public CatalogEntry
+{
+public:
+    /**
+     * @brief 构造向量索引目录项
+     * @param id 向量索引 ID
+     * @param collection_id 集合 ID
+     * @param column_id 列 ID
+     * @param name 向量索引名称
+     * @param index_kind 向量索引类型
+     * @param metric 距离度量
+     * @param dimension 向量维度
+     * @param max_neighbors HNSW 最大邻居数量
+     * @param ef_construction HNSW 构建候选数量
+     * @param ef_search_default HNSW 默认搜索候选数量
+     * @param random_seed 随机种子
+     */
+    VectorIndexEntry(
+        common::VIndexId id,
+        common::CollectionId collection_id,
+        common::ColumnId column_id,
+        std::string name,
+        CatalogVectorIndexKind index_kind,
+        CatalogVectorDistanceMetric metric,
+        std::size_t dimension,
+        std::size_t max_neighbors,
+        std::size_t ef_construction,
+        std::size_t ef_search_default,
+        std::size_t random_seed
+    );
+
+public:
+    /**
+     * @brief 获取向量索引 ID
+     * @return 向量索引 ID
+     */
+    [[nodiscard]]
+    common::VIndexId id() const noexcept;
+
+    /**
+     * @brief 获取集合 ID
+     * @return 集合 ID
+     */
+    [[nodiscard]]
+    common::CollectionId collection_id() const noexcept;
+
+    /**
+     * @brief 获取列 ID
+     * @return 列 ID
+     */
+    [[nodiscard]]
+    common::ColumnId column_id() const noexcept;
+
+    /**
+     * @brief 获取向量索引类型
+     * @return 向量索引类型
+     */
+    [[nodiscard]]
+    CatalogVectorIndexKind index_kind() const noexcept;
+
+    /**
+     * @brief 获取距离度量
+     * @return 距离度量
+     */
+    [[nodiscard]]
+    CatalogVectorDistanceMetric metric() const noexcept;
+
+    /**
+     * @brief 获取向量维度
+     * @return 向量维度
+     */
+    [[nodiscard]]
+    std::size_t dimension() const noexcept;
+
+    /**
+     * @brief 获取 HNSW 最大邻居数量
+     * @return HNSW 最大邻居数量
+     */
+    [[nodiscard]]
+    std::size_t max_neighbors() const noexcept;
+
+    /**
+     * @brief 获取 HNSW 构建候选数量
+     * @return HNSW 构建候选数量
+     */
+    [[nodiscard]]
+    std::size_t ef_construction() const noexcept;
+
+    /**
+     * @brief 获取 HNSW 默认搜索候选数量
+     * @return HNSW 默认搜索候选数量
+     */
+    [[nodiscard]]
+    std::size_t ef_search_default() const noexcept;
+
+    /**
+     * @brief 获取随机种子
+     * @return 随机种子
+     */
+    [[nodiscard]]
+    std::size_t random_seed() const noexcept;
+
+private:
+    common::CollectionId collection_id_;            ///< 集合 ID
+    common::ColumnId column_id_;                    ///< 列 ID
+    CatalogVectorIndexKind index_kind_;             ///< 向量索引类型
+    CatalogVectorDistanceMetric metric_;            ///< 距离度量
+    std::size_t dimension_;                         ///< 向量维度
+    std::size_t max_neighbors_;                     ///< HNSW 最大邻居数量
+    std::size_t ef_construction_;                   ///< HNSW 构建候选数量
+    std::size_t ef_search_default_;                 ///< HNSW 默认搜索候选数量
+    std::size_t random_seed_;                       ///< 随机种子
 };
 
 } // namespace litedb::core::catalog

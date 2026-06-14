@@ -8,13 +8,18 @@ litedb 第一版支持：
 
 - 数据库管理：`USE`、`CREATE DATABASE`、`DROP DATABASE`、`SHOW DATABASES`
 - 集合管理：`CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS`、`DESCRIBE`
+- 标量索引管理：`CREATE INDEX`、`DROP INDEX`
 - 数据修改：`INSERT`、`UPDATE`、`DELETE`
 - 数据查询：`SELECT`
-- 表达式：字面量、字段引用、向量字面量、算术表达式、比较表达式、逻辑表达式、`IN`、`BETWEEN`、`LIKE`
+- 表达式：字面量、字段引用、函数调用、向量字面量、算术表达式、比较表达式、逻辑表达式、`IN`、`BETWEEN`、`LIKE`
+
+litedb 下一阶段已确定接入：
+
+- 向量索引管理：`CREATE VINDEX`、`DROP VINDEX`
 
 litedb 第一版暂不支持：
 
-- 索引和向量索引：`CREATE INDEX`、`CREATE VINDEX`、`DROP INDEX`、`DROP VINDEX`、`SHOW INDEXES`、`SHOW VINDEXES`
+- 索引查看语句：`SHOW INDEXES`、`SHOW VINDEXES`
 - 聚合和分组：`COUNT`、`SUM`、`AVG`、`MIN`、`MAX`、`GROUP BY`、`HAVING`
 - 查询别名：`AS`
 - 多集合查询、连接查询、子查询
@@ -92,6 +97,10 @@ statement := use_statement
            | drop_collection_statement
            | show_collections_statement
            | describe_collection_statement
+           | create_index_statement
+           | drop_index_statement
+           | create_vindex_statement
+           | drop_vindex_statement
            | insert_statement
            | update_statement
            | delete_statement
@@ -248,9 +257,131 @@ DESC users;
 DESCRIBE COLLECTION users;
 ```
 
-## 6. 数据修改语句
+## 6. 索引管理语句
 
-### 6.1 INSERT
+### 6.1 CREATE INDEX
+
+创建标量索引。第一版只支持单列标量索引。
+
+```ebnf
+create_index_statement :=
+    CREATE INDEX [ IF NOT EXISTS ] identifier
+    ON identifier "(" identifier ")"
+    [ USING index_method ]
+
+index_method := HASH | BTREE
+```
+
+说明：
+
+- 省略 `USING` 时默认由语义层选择 `BTREE`。
+- `HASH` 用于等值查询。
+- `BTREE` 用于等值查询和范围查询。
+- 标量索引不能创建在 `VECTOR(n)` 列上。
+- 复合索引暂不支持。
+
+示例：
+
+```sql
+CREATE INDEX idx_age ON users(age);
+CREATE INDEX IF NOT EXISTS idx_name ON users(name) USING HASH;
+CREATE INDEX idx_age_range ON users(age) USING BTREE;
+```
+
+### 6.2 DROP INDEX
+
+删除标量索引。
+
+```ebnf
+drop_index_statement :=
+    DROP INDEX [ IF EXISTS ] identifier
+    ON identifier
+```
+
+示例：
+
+```sql
+DROP INDEX idx_age ON users;
+DROP INDEX IF EXISTS idx_name ON users;
+```
+
+### 6.3 CREATE VINDEX
+
+创建向量索引。第一版向量索引只支持 HNSW，目标列必须是 `VECTOR(n)`。
+
+```ebnf
+create_vindex_statement :=
+    CREATE VINDEX [ IF NOT EXISTS ] identifier
+    ON identifier "(" identifier ")"
+    USING HNSW
+    [ WITH "(" vindex_option { "," vindex_option } ")" ]
+
+vindex_option :=
+      METRIC "=" vindex_metric
+    | MAX_NEIGHBORS "=" integer_literal
+    | EF_CONSTRUCTION "=" integer_literal
+    | EF_SEARCH "=" integer_literal
+    | RANDOM_SEED "=" integer_literal
+
+vindex_metric :=
+      L2
+    | COSINE
+    | INNER_PRODUCT
+```
+
+说明：
+
+- `CREATE VINDEX` 是向量索引专用语句，不复用 `CREATE INDEX ... USING HNSW`。
+- `USING HNSW` 第一版必填。
+- `WITH` 参数可选。
+- `metric` 默认值为 `L2`。
+- `max_neighbors` 默认值为 `16`。
+- `ef_construction` 默认值为 `200`。
+- `ef_search` 默认值为 `64`。
+- `random_seed` 默认值为 `0`。
+- `ef_construction` 必须大于等于 `max_neighbors`。
+- `max_neighbors` 和 `ef_search` 必须大于 `0`。
+- 向量索引名在同一个 collection 内不能和已有标量索引或向量索引重名。
+
+示例：
+
+```sql
+CREATE VINDEX idx_embedding
+ON docs(embedding)
+USING HNSW;
+
+CREATE VINDEX IF NOT EXISTS idx_embedding_cosine
+ON docs(embedding)
+USING HNSW
+WITH (
+    metric = COSINE,
+    max_neighbors = 16,
+    ef_construction = 200,
+    ef_search = 64,
+    random_seed = 0
+);
+```
+
+### 6.4 DROP VINDEX
+
+删除向量索引。
+
+```ebnf
+drop_vindex_statement :=
+    DROP VINDEX [ IF EXISTS ] identifier
+    ON identifier
+```
+
+示例：
+
+```sql
+DROP VINDEX idx_embedding ON docs;
+DROP VINDEX IF EXISTS idx_embedding_cosine ON docs;
+```
+
+## 7. 数据修改语句
+
+### 7.1 INSERT
 
 插入一条记录。
 
@@ -276,7 +407,7 @@ INSERT INTO users
 VALUES (2, 'Jerry', 20, true, [0.1, 0.2, 0.3]);
 ```
 
-### 6.2 UPDATE
+### 7.2 UPDATE
 
 更新记录。
 
@@ -306,7 +437,7 @@ SET active = false, embedding = [0.2, 0.3, 0.4]
 WHERE id = 1;
 ```
 
-### 6.3 DELETE
+### 7.3 DELETE
 
 删除记录。
 
@@ -328,9 +459,9 @@ DELETE FROM users WHERE age < 18;
 DELETE FROM users;
 ```
 
-## 7. 数据查询语句
+## 8. 数据查询语句
 
-### 7.1 SELECT
+### 8.1 SELECT
 
 查询记录。
 
@@ -344,19 +475,19 @@ select_statement :=
     [ OFFSET integer_literal ]
 
 select_item := "*"
-             | column_reference
+             | identifier "." "*"
+             | expression
 
-order_item := column_reference [ ASC | DESC ]
+order_item := expression [ ASC | DESC ]
 
 column_reference := identifier [ "." identifier ]
-                  | identifier "." "*"
 ```
 
 说明：
 
 - 第一版 `SELECT` 不支持 `AS` 别名。
-- 第一版 `SELECT` 不支持函数调用作为查询项，即使 AST 预留了 `FunctionCallExpression`。
-- `ORDER BY` 暂时只支持字段引用，不支持任意表达式。
+- `SELECT` 列表支持字段引用、通配符和普通表达式。
+- `ORDER BY` 支持普通表达式。
 - `LIMIT` 和 `OFFSET` 只接受非负整数字面量。
 
 示例：
@@ -369,19 +500,24 @@ FROM users
 WHERE age >= 18
 ORDER BY age DESC
 LIMIT 10 OFFSET 20;
+
+SELECT id, l2_distance(embedding, [0.1, 0.2, 0.3])
+FROM users
+ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3])
+LIMIT 10;
 ```
 
-## 8. 表达式语法
+## 9. 表达式语法
 
 表达式用于 `WHERE`、`UPDATE SET`、`INSERT VALUES`、默认值和向量字面量。
 
-### 8.1 表达式优先级
+### 9.1 表达式优先级
 
 从高到低：
 
 | 优先级 | 表达式 |
 | --- | --- |
-| 1 | 括号、字面量、字段引用、向量字面量 |
+| 1 | 括号、字面量、字段引用、函数调用、向量字面量 |
 | 2 | 一元 `+`、`-`、`NOT` |
 | 3 | `*`、`/`、`%` |
 | 4 | `+`、`-` |
@@ -389,7 +525,7 @@ LIMIT 10 OFFSET 20;
 | 6 | `AND` |
 | 7 | `OR` |
 
-### 8.2 EBNF
+### 9.2 EBNF
 
 ```ebnf
 expression := or_expression
@@ -407,9 +543,9 @@ comparison_expression :=
     additive_expression
     [
         comparison_operator additive_expression
-      | LIKE additive_expression
-      | IN "(" expression { "," expression } ")"
-      | BETWEEN additive_expression AND additive_expression
+      | [ NOT ] LIKE additive_expression
+      | [ NOT ] IN "(" expression { "," expression } ")"
+      | [ NOT ] BETWEEN additive_expression AND additive_expression
     ]
 
 comparison_operator := "=" | "!=" | "<>" | "<" | "<=" | ">" | ">="
@@ -426,8 +562,12 @@ unary_expression :=
 primary_expression :=
     literal
   | column_reference
+  | function_call
   | vector_literal
   | "(" expression ")"
+
+function_call :=
+    identifier "(" [ expression { "," expression } ] ")"
 ```
 
 说明：
@@ -446,13 +586,14 @@ category IN ('book', 'tool')
 active = true AND age > 18
 NOT active OR age < 10
 score + bonus >= 100
+l2_distance(embedding, [0.1, 0.2, 0.3])
 ```
 
-## 9. AST 设计建议
+## 10. AST 设计建议
 
 本节用于约束 Parser 输出，避免语法和 AST 脱节。
 
-### 9.1 需要补充的结构
+### 10.1 需要补充的结构
 
 因为第一版支持字段定义，AST 需要补充集合定义相关结构：
 
@@ -485,11 +626,13 @@ struct ColumnDefinition
 };
 ```
 
-同时建议将泛化的 `CreateStatement` 拆成至少：
+同时建议将泛化的 `CreateStatement` 拆成独立语句节点：
 
 ```cpp
 CreateDatabaseStatement
 CreateCollectionStatement
+CreateIndexStatement
+CreateVectorIndexStatement
 ```
 
 其中 `CreateCollectionStatement` 保存：
@@ -500,12 +643,32 @@ bool if_not_exists;
 std::vector<ColumnDefinition> columns;
 ```
 
-### 9.2 可以继续泛化的结构
-
-以下语句第一版结构简单，可以继续用泛化节点加对象类型枚举：
+`CreateIndexStatement` 保存：
 
 ```cpp
-DropStatement
+std::string index_name;
+std::string collection_name;
+std::string column_name;
+bool if_not_exists;
+CreateIndexMethod method; // Default | Hash | BTree
+```
+
+`CreateVectorIndexStatement` 建议保存：
+
+```cpp
+std::string index_name;
+std::string collection_name;
+std::string column_name;
+bool if_not_exists;
+CreateVectorIndexMethod method; // Hnsw
+VectorIndexOptions options;
+```
+
+### 10.2 可以继续泛化的结构
+
+以下语句结构简单，可以继续用泛化节点加对象类型枚举：
+
+```cpp
 ShowStatement
 DescribeStatement
 ```
@@ -520,37 +683,31 @@ enum class SchemaObjectType
 };
 ```
 
-## 10. 未来扩展
+`DROP INDEX` 和 `DROP VINDEX` 当前带有 collection 名称，建议保留独立 AST 节点，避免后续绑定时再从泛化节点里解释参数。
+
+## 11. 未来扩展
 
 后续版本可以按以下顺序扩展：
 
-1. 索引语法
+1. 索引查看语法
    ```sql
-   CREATE INDEX idx_age ON users(age);
-   DROP INDEX idx_age ON users;
    SHOW INDEXES FROM users;
-   ```
-
-2. 向量索引语法
-   ```sql
-   CREATE VINDEX idx_embedding ON users(embedding) USING HNSW;
-   DROP VINDEX idx_embedding ON users;
    SHOW VINDEXES FROM users;
    ```
 
-3. 聚合查询和分组
+2. 聚合查询和分组
    ```sql
    SELECT COUNT(*) FROM users;
    SELECT age, COUNT(*) FROM users GROUP BY age;
    SELECT age, COUNT(*) FROM users GROUP BY age HAVING COUNT(*) > 10;
    ```
 
-4. 查询别名
+3. 查询别名
    ```sql
    SELECT name AS username FROM users;
    ```
 
-5. 更完整的 DDL
+4. 更完整的 DDL
    ```sql
    ALTER COLLECTION users ADD COLUMN email VARCHAR(128);
    ALTER COLLECTION users DROP COLUMN email;

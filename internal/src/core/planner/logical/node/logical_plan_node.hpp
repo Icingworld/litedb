@@ -11,6 +11,7 @@ namespace litedb::core::planner::logical
 enum class LogicalPlanNodeKind
 {
     Scan,               ///< 扫描
+    IndexScan,          ///< 索引扫描
     Filter,             ///< 过滤
     Projection,         ///< 投影
     OrderBy,            ///< 排序

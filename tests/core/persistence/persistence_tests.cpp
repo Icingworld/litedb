@@ -111,6 +111,7 @@ void test_manifest_and_catalog_store()
     snapshot.next_collection_id = 2;
     snapshot.next_column_id = 3;
     snapshot.next_index_id = 2;
+    snapshot.next_vector_index_id = 2;
     snapshot.databases.push_back(catalog::CatalogSnapshotDatabase {
         .id = 1,
         .name = "demo",
@@ -150,6 +151,20 @@ void test_manifest_and_catalog_store()
                         .unique = false,
                     },
                 },
+                .vector_indexes = {
+                    catalog::CatalogSnapshotVectorIndex {
+                        .id = 1,
+                        .column_id = 2,
+                        .name = "vidx_embedding",
+                        .index_kind = catalog::CatalogVectorIndexKind::Hnsw,
+                        .metric = catalog::CatalogVectorDistanceMetric::Cosine,
+                        .dimension = 3,
+                        .max_neighbors = 24,
+                        .ef_construction = 240,
+                        .ef_search_default = 80,
+                        .random_seed = 7,
+                    },
+                },
             },
         },
     });
@@ -164,6 +179,10 @@ void test_manifest_and_catalog_store()
     require(loaded->databases[0].collections[0].columns[1].type.parameter == 3, "catalog vector parameter mismatch");
     require(loaded->databases[0].collections[0].indexes.size() == 1, "catalog index count mismatch");
     require(loaded->databases[0].collections[0].indexes[0].name == "idx_id", "catalog index name mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes.size() == 1, "catalog vector index count mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].name == "vidx_embedding", "catalog vector index name mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].metric == catalog::CatalogVectorDistanceMetric::Cosine, "catalog vector index metric mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].dimension == 3, "catalog vector index dimension mismatch");
 }
 
 schema::CollectionSchema simple_users_schema()
@@ -348,6 +367,75 @@ void test_index_ddl_reopen()
     }
 }
 
+void test_vector_index_ddl_reopen()
+{
+    const auto dir = make_temp_dir("litedb_vector_index_ddl_reopen_test");
+
+    common::CollectionId docs_id {0};
+    {
+        engine::DatabaseInstance instance {engine::DatabaseConfig {.data_dir = dir}};
+        engine::Session session {instance};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        execute_ok(session, "CREATE COLLECTION docs (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+
+        auto created = execute_ok(
+            session,
+            "CREATE VINDEX vidx_embedding ON docs (embedding) USING HNSW "
+            "WITH (metric = INNER_PRODUCT, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 7);"
+        );
+        require(created.affected_rows == 1, "CREATE VINDEX affected rows mismatch");
+
+        const auto * database = instance.catalog().find_database("demo");
+        require(database != nullptr, "vector index database lookup failed");
+        const auto * collection = instance.catalog().find_collection(database->id(), "docs");
+        require(collection != nullptr, "vector index collection lookup failed");
+        docs_id = collection->id();
+
+        const auto * index = instance.catalog().find_vector_index(docs_id, "vidx_embedding");
+        require(index != nullptr, "created vector index lookup failed");
+        require(index->metric() == catalog::CatalogVectorDistanceMetric::InnerProduct, "created vector index metric mismatch");
+        require(index->dimension() == 3, "created vector index dimension mismatch");
+    }
+
+    {
+        engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
+        const auto * database = reopened.catalog().find_database("demo");
+        require(database != nullptr, "reopened vector index database missing");
+        const auto * collection = reopened.catalog().find_collection(database->id(), "docs");
+        require(collection != nullptr, "reopened vector index collection missing");
+        require(collection->id() == docs_id, "reopened vector index collection id mismatch");
+
+        const auto * index = reopened.catalog().find_vector_index(docs_id, "vidx_embedding");
+        require(index != nullptr, "reopened vector index missing");
+        require(index->index_kind() == catalog::CatalogVectorIndexKind::Hnsw, "reopened vector index kind mismatch");
+        require(index->metric() == catalog::CatalogVectorDistanceMetric::InnerProduct, "reopened vector index metric mismatch");
+        require(index->dimension() == 3, "reopened vector index dimension mismatch");
+        require(index->max_neighbors() == 24, "reopened vector index max_neighbors mismatch");
+        require(index->ef_construction() == 240, "reopened vector index ef_construction mismatch");
+        require(index->ef_search_default() == 80, "reopened vector index ef_search mismatch");
+        require(index->random_seed() == 7, "reopened vector index random_seed mismatch");
+
+        engine::Session session {reopened};
+        execute_ok(session, "USE demo;");
+        auto existing = execute_ok(session, "CREATE VINDEX IF NOT EXISTS vidx_embedding ON docs (embedding) USING HNSW;");
+        require(existing.affected_rows == 0, "persistent CREATE VINDEX IF NOT EXISTS affected rows mismatch");
+        auto dropped = execute_ok(session, "DROP VINDEX vidx_embedding ON docs;");
+        require(dropped.affected_rows == 1, "persistent DROP VINDEX affected rows mismatch");
+        require(reopened.catalog().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should leave catalog");
+    }
+
+    {
+        engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
+        const auto * database = reopened.catalog().find_database("demo");
+        require(database != nullptr, "second vector index reopen database missing");
+        const auto * collection = reopened.catalog().find_collection(database->id(), "docs");
+        require(collection != nullptr, "second vector index reopen collection missing");
+        require(collection->id() == docs_id, "second vector index reopen collection id mismatch");
+        require(reopened.catalog().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should not reappear");
+    }
+}
+
 void test_drop_collection_reopen()
 {
     const auto dir = make_temp_dir("litedb_drop_reopen_test");
@@ -396,6 +484,7 @@ int main()
         test_row_log_replay_and_partial_tail();
         test_database_instance_reopens_persistent_data();
         test_index_ddl_reopen();
+        test_vector_index_ddl_reopen();
         test_drop_collection_reopen();
         test_default_instance_is_still_memory_only();
     } catch (const std::exception & exception) {

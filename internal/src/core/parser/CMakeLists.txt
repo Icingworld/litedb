@@ -21,9 +21,11 @@ set(PARSER_SOURCES
     ast/statement/create_database_statement.cpp
     ast/statement/create_collection_statement.cpp
     ast/statement/create_index_statement.cpp
+    ast/statement/create_vector_index_statement.cpp
     ast/statement/drop_database_statement.cpp
     ast/statement/drop_collection_statement.cpp
     ast/statement/drop_index_statement.cpp
+    ast/statement/drop_vector_index_statement.cpp
     ast/statement/use_statement.cpp
     ast/statement/delete_statement.cpp
     ast/statement/update_statement.cpp
