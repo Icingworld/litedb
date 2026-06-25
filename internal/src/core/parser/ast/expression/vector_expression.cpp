@@ -16,6 +16,11 @@ AstNodeKind VectorExpression::kind() const noexcept
     return AstNodeKind::Vector;
 }
 
+void VectorExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const VectorExpression::ElementList & VectorExpression::elements() const noexcept
 {
     return elements_;

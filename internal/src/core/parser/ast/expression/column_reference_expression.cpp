@@ -21,6 +21,11 @@ AstNodeKind ColumnReferenceExpression::kind() const noexcept
     return AstNodeKind::ColumnReference;
 }
 
+void ColumnReferenceExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::optional<std::string> & ColumnReferenceExpression::qualifier() const noexcept
 {
     return qualifier_;

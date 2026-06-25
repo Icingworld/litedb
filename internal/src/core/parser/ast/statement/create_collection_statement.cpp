@@ -23,6 +23,11 @@ AstNodeKind CreateCollectionStatement::kind() const noexcept
     return AstNodeKind::CreateCollection;
 }
 
+void CreateCollectionStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & CreateCollectionStatement::collection() const noexcept
 {
     return collection_;

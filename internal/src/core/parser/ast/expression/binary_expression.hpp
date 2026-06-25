@@ -31,6 +31,12 @@ public:
     AstNodeKind kind() const noexcept override;
 
     /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(AstNodeVisitor & visitor) const override;
+
+    /**
      * @brief 获取左操作数
      * @return 左操作数
      */

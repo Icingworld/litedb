@@ -14,6 +14,11 @@ AstNodeKind ShowStatement::kind() const noexcept
     return AstNodeKind::Show;
 }
 
+void ShowStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 SchemaObjectType ShowStatement::object_type() const noexcept
 {
     return object_type_;

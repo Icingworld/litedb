@@ -23,6 +23,11 @@ AstNodeKind DropVectorIndexStatement::kind() const noexcept
     return AstNodeKind::DropVectorIndex;
 }
 
+void DropVectorIndexStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & DropVectorIndexStatement::index_name() const noexcept
 {
     return index_name_;

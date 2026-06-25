@@ -17,6 +17,11 @@ AstNodeKind LiteralExpression::kind() const noexcept
     return AstNodeKind::Literal;
 }
 
+void LiteralExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 TokenType LiteralExpression::literal_type() const noexcept
 {
     return literal_type_;

@@ -23,6 +23,11 @@ AstNodeKind InsertStatement::kind() const noexcept
     return AstNodeKind::Insert;
 }
 
+void InsertStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & InsertStatement::collection() const noexcept
 {
     return collection_;

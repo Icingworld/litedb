@@ -21,6 +21,11 @@ AstNodeKind LikeExpression::kind() const noexcept
     return AstNodeKind::Like;
 }
 
+void LikeExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const ExpressionNode & LikeExpression::expression() const noexcept
 {
     return *expression_;

@@ -17,6 +17,11 @@ AstNodeKind UnaryExpression::kind() const noexcept
     return AstNodeKind::Unary;
 }
 
+void UnaryExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 TokenType UnaryExpression::op() const noexcept
 {
     return op_;

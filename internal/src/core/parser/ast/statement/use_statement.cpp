@@ -16,6 +16,11 @@ AstNodeKind UseStatement::kind() const noexcept
     return AstNodeKind::Use;
 }
 
+void UseStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & UseStatement::database() const noexcept
 {
     return database_;
