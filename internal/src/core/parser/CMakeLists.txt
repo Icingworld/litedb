@@ -3,6 +3,7 @@ set(PARSER_SOURCES
     lexer.cpp
     parser.cpp
     ast/ast_node.cpp
+    ast/debug_printer.cpp
     ast/expression/expression_node.cpp
     ast/expression/identifier_expression.cpp
     ast/expression/literal_expression.cpp
