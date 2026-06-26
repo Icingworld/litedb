@@ -120,6 +120,7 @@ void test_manifest_and_catalog_store()
                 .id = 1,
                 .database_id = 1,
                 .name = "users",
+                .comment = std::string {"user collection"},
                 .columns = {
                     catalog::CatalogSnapshotColumn {
                         .id = 1,
@@ -176,6 +177,7 @@ void test_manifest_and_catalog_store()
     require(loaded.has_value(), "catalog load failed");
     require(loaded->databases.size() == 1, "catalog database count mismatch");
     require(loaded->databases[0].collections[0].columns.size() == 2, "catalog column count mismatch");
+    require(loaded->databases[0].collections[0].comment == std::string {"user collection"}, "catalog collection comment mismatch");
     require(loaded->databases[0].collections[0].columns[1].type.parameter == 3, "catalog vector parameter mismatch");
     require(loaded->databases[0].collections[0].indexes.size() == 1, "catalog index count mismatch");
     require(loaded->databases[0].collections[0].indexes[0].name == "idx_id", "catalog index name mismatch");
@@ -278,10 +280,10 @@ void test_database_instance_reopens_persistent_data()
             session,
             "CREATE COLLECTION users ("
             "id BIGINT PRIMARY KEY, "
-            "name VARCHAR(64) DEFAULT 'unknown', "
+            "name VARCHAR(64) COMMENT 'display name' DEFAULT 'unknown', "
             "age INTEGER, "
             "embedding VECTOR(3)"
-            ");"
+            ") COMMENT 'user collection';"
         );
         execute_ok(session, "INSERT INTO users VALUES (1, 'alice', 18, [0.1, 0.2, 0.3]);");
         execute_ok(session, "INSERT INTO users VALUES (2, 'bob', 20, [0.2, 0.3, 0.4]);");
@@ -299,6 +301,10 @@ void test_database_instance_reopens_persistent_data()
         require(get_value<std::string>(selected.rows[0].values[0]) == "alice", "reopen name mismatch");
         require(get_value<std::int32_t>(selected.rows[0].values[1]) == 19, "reopen updated age mismatch");
         require(get_value<schema::VectorValue>(selected.rows[0].values[2]).size() == 3, "reopen vector mismatch");
+
+        auto describe = execute_ok(session, "DESCRIBE users;");
+        require(get_value<std::string>(describe.rows[1].values[5]) == "display name", "reopen column comment mismatch");
+        require(get_value<std::string>(describe.rows[1].values[6]) == "user collection", "reopen collection comment mismatch");
 
         auto remaining = execute_ok(session, "SELECT id FROM users ORDER BY id ASC;");
         require(remaining.rows.size() == 1, "deleted row should not reappear");

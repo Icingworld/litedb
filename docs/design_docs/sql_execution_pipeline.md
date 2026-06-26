@@ -370,6 +370,7 @@ CollectionCatalog
   id
   columns
   primary_key
+  comment
 
 ColumnCatalog
   name

@@ -343,6 +343,11 @@ void AstDebugPrinter::visit(const CreateCollectionStatement & node)
     IndentScope scope(*this);
     write_field("collection", node.collection());
     write_field("if_not_exists", node.if_not_exists());
+    if (node.comment().has_value()) {
+        write_field("comment", node.comment().value());
+    } else {
+        write_field("comment", "<none>");
+    }
     write_indent();
     out_ << "columns:";
     if (node.columns().empty()) {

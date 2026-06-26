@@ -184,7 +184,7 @@ SHOW DATABASES;
 
 ```ebnf
 create_collection_statement :=
-    CREATE COLLECTION [ IF NOT EXISTS ] identifier "(" column_definition { "," column_definition } ")"
+    CREATE COLLECTION [ IF NOT EXISTS ] identifier "(" column_definition { "," column_definition } ")" [ COMMENT string_literal ]
 
 column_definition := identifier data_type { column_constraint }
 
@@ -198,6 +198,7 @@ column_constraint := UNIQUE
 说明：
 
 - 每个集合至少需要一个字段。
+- 列级 `COMMENT` 写在字段定义内，集合级 `COMMENT` 写在右括号之后。
 - `UNIQUE`、`DEFAULT`、`NOT NULL`、`NULL`、`COMMENT` 的语义校验由后续语义层完成。
 - 默认情况下字段允许为 `NULL`；显式 `NOT NULL` 表示该字段不允许插入或更新为 `NULL`。
 - 同一字段不能同时声明 `NULL` 和 `NOT NULL`。
@@ -212,7 +213,7 @@ CREATE COLLECTION users (
     age INTEGER NULL DEFAULT 0,
     active BOOLEAN DEFAULT true,
     embedding VECTOR(128)
-);
+) COMMENT 'user collection';
 ```
 
 ### 5.2 DROP COLLECTION
@@ -259,6 +260,8 @@ DESCRIBE users;
 DESC users;
 DESCRIBE COLLECTION users;
 ```
+
+返回结果建议包含字段名、类型、可空性、唯一性、列注释以及集合注释。
 
 ## 6. 索引管理语句
 
@@ -658,7 +661,7 @@ struct ColumnDefinition
     bool unique;
     std::optional<bool> nullable;
     std::optional<std::unique_ptr<ExpressionNode>> default_value;
-    std::optional<std::string> comment;
+    std::optional<std::string> comment; // column comment
 };
 ```
 
@@ -679,6 +682,7 @@ ShowVectorIndexesStatement
 std::string collection;
 bool if_not_exists;
 std::vector<ColumnDefinition> columns;
+std::optional<std::string> comment; // collection comment
 ```
 
 `CreateIndexStatement` 保存：

@@ -101,12 +101,14 @@ void test_create_collection_statement()
     columns.push_back(std::move(age));
     columns.push_back(std::move(embedding));
 
-    CreateCollectionStatement statement("users", false, std::move(columns), AstNodeLocation {1, 1});
+    CreateCollectionStatement statement("users", false, std::move(columns), "user collection", AstNodeLocation {1, 1});
 
     require(statement.kind() == AstNodeKind::CreateCollection, "create collection kind mismatch");
     require(statement.collection() == "users", "create collection name mismatch");
     require(!statement.if_not_exists(), "create collection if-not-exists mismatch");
     require(statement.columns().size() == 4, "create collection columns size mismatch");
+    require(statement.comment().has_value(), "create collection comment missing");
+    require(statement.comment().value() == "user collection", "create collection comment mismatch");
     require(statement.columns()[0].primary_key, "primary key column mismatch");
     require(statement.columns()[1].type.parameter.has_value(), "varchar parameter should exist");
     require(statement.columns()[1].type.parameter.value() == 64, "varchar parameter mismatch");

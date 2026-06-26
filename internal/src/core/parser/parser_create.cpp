@@ -90,10 +90,20 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
             return std::unexpected(right_paren.error());
         }
 
+        std::optional<std::string> comment;
+        if (match(TokenType::Comment)) {
+            auto comment_token = consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
+            if (!comment_token.has_value()) [[unlikely]] {
+                return std::unexpected(comment_token.error());
+            }
+            comment = std::string(comment_token->value());
+        }
+
         return std::make_unique<ast::CreateCollectionStatement>(
             std::move(collection.value()),
             if_not_exists.value(),
             std::move(columns),
+            std::move(comment),
             ast_location(location)
         );
     }

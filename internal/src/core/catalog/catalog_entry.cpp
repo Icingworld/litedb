@@ -80,9 +80,10 @@ void DatabaseEntry::remove_collection(std::string_view collection_key, common::C
     std::erase(collection_ids_, collection_id);
 }
 
-CollectionEntry::CollectionEntry(common::CollectionId id, common::DatabaseId database_id, std::string name)
+CollectionEntry::CollectionEntry(common::CollectionId id, common::DatabaseId database_id, std::string name, std::optional<std::string> comment)
     : CatalogEntry(CatalogEntryKind::Collection, id, std::move(name)),
-      database_id_(database_id)
+      database_id_(database_id),
+      comment_(std::move(comment))
 {
 }
 
@@ -114,6 +115,11 @@ const std::vector<common::VIndexId> & CollectionEntry::vector_index_ids() const 
 std::optional<common::ColumnId> CollectionEntry::primary_key_column_id() const noexcept
 {
     return primary_key_column_id_;
+}
+
+const std::optional<std::string> & CollectionEntry::comment() const noexcept
+{
+    return comment_;
 }
 
 std::optional<common::ColumnId> CollectionEntry::find_column_id(std::string_view column_key) const

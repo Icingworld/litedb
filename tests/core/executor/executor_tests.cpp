@@ -211,7 +211,7 @@ void test_ddl_use_show_and_describe()
     require(get_value<std::string>(collections.rows[0].values[0]) == "users", "SHOW COLLECTIONS value mismatch");
 
     auto describe = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DESCRIBE users;", fixture.database_id);
-    require(describe.columns.size() == 6, "DESCRIBE column count mismatch");
+    require(describe.columns.size() == 7, "DESCRIBE column count mismatch");
     require(describe.rows.size() == 4, "DESCRIBE row count mismatch");
     require(get_value<std::string>(describe.rows[0].values[0]) == "id", "DESCRIBE column name mismatch");
     require(get_value<std::string>(describe.rows[0].values[1]) == "BIGINT", "DESCRIBE type mismatch");

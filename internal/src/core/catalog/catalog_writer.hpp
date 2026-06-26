@@ -56,6 +56,7 @@ struct CreateCollectionRequest
     std::string name;                       ///< 集合名
     bool if_not_exists {false};             ///< 如果集合不存在，则创建
     std::vector<ColumnDefinition> columns;  ///< 列定义
+    std::optional<std::string> comment;     ///< 集合注释
 };
 
 /**

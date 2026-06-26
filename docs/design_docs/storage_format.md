@@ -48,7 +48,7 @@ data/
 
 `manifest.ldb` 描述存储格式版本和顶层文件位置。
 
-`catalog.lcat` 是完整的 catalog 快照，保存 database、collection、column、逻辑类型、约束、默认表达式、注释和下一组 ID 计数器。
+`catalog.lcat` 是完整的 catalog 快照，保存 database、collection、collection 注释、column、逻辑类型、约束、默认表达式、列注释和下一组 ID 计数器。
 
 `collections/<collection_id>.rows` 是某个 collection 的 append-only 行变更日志。启动时，litedb 会 replay 该文件，把记录恢复到内存 collection storage 中。
 
@@ -209,6 +209,7 @@ Collection 按创建或 list 顺序存储。
 CollectionEntry
   u64 collection_id
   string collection_name
+  OptionalString comment
   u32 column_count
   ColumnEntry[column_count]
 ```

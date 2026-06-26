@@ -61,6 +61,7 @@ std::expected<CollectionSchema, SchemaError> load_collection_schema(
         collection->id(),
         collection->name(),
         std::move(columns),
+        collection->comment(),
     };
 }
 

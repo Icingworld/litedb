@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,7 +21,8 @@ public:
         common::DatabaseId database_id,
         common::CollectionId collection_id,
         std::string collection_name,
-        std::vector<ColumnSchema> columns
+        std::vector<ColumnSchema> columns,
+        std::optional<std::string> comment = std::nullopt
     );
 
 public:
@@ -44,6 +46,13 @@ public:
      */
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
+
+    /**
+     * @brief 获取集合注释
+     * @return 集合注释
+     */
+    [[nodiscard]]
+    const std::optional<std::string> & comment() const noexcept;
 
     /**
      * @brief 获取列 schema
@@ -81,6 +90,7 @@ private:
     common::CollectionId collection_id_;                ///< 集合 ID
     std::string collection_name_;                       ///< 集合名称
     std::vector<ColumnSchema> columns_;                 ///< 列 schema
+    std::optional<std::string> comment_;                ///< 集合注释
 };
 
 } // namespace litedb::core::schema

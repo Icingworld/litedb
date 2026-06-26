@@ -131,6 +131,7 @@ void write_snapshot(BinaryWriter & writer, const catalog::CatalogSnapshot & snap
         for (const auto & collection : database.collections) {
             writer.write_u64(collection.id);
             writer.write_string(collection.name);
+            write_optional_string(writer, collection.comment);
             writer.write_u32(static_cast<std::uint32_t>(collection.columns.size()));
             for (const auto & column : collection.columns) {
                 writer.write_u64(column.id);
@@ -193,6 +194,7 @@ catalog::CatalogSnapshot read_snapshot(BinaryReader & reader)
             collection.id = reader.read_u64();
             collection.database_id = database.id;
             collection.name = reader.read_string();
+            collection.comment = read_optional_string(reader);
 
             const auto column_count = reader.read_u32();
             collection.columns.reserve(column_count);

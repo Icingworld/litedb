@@ -91,12 +91,13 @@ void test_create_collection_debug_print()
         "id BIGINT PRIMARY KEY, "
         "name VARCHAR(64) UNIQUE COMMENT 'display name', "
         "age INTEGER DEFAULT 0"
-        ");"
+        ") COMMENT 'user collection';"
     );
     const auto output = print_without_location(*statement);
 
     require_contains(output, "CreateCollectionStatement\n");
     require_contains(output, "  collection: users\n");
+    require_contains(output, "  comment: user collection\n");
     require_contains(output, "  columns:\n");
     require_contains(output, "    [0] ColumnDefinition\n");
     require_contains(output, "      name: id\n");

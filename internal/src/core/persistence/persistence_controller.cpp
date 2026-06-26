@@ -144,6 +144,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         .name = plan.collection_name(),
         .if_not_exists = plan.if_not_exists(),
         .columns = plan.columns(),
+        .comment = plan.comment(),
     });
     if (!created.has_value()) {
         return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));

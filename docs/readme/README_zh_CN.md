@@ -24,7 +24,7 @@
 - 通过 `IndexManager` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
 - 基础数据库与集合管理：
   - `CREATE DATABASE`、`DROP DATABASE`、`USE`、`SHOW DATABASES`
-  - `CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS FROM database`、`DESCRIBE`
+  - `CREATE COLLECTION ... COMMENT`、列级 `COMMENT`、`DROP COLLECTION`、`SHOW COLLECTIONS FROM database`、`DESCRIBE`
 - 基础数据操作：
   - `INSERT`
   - 支持投影、`WHERE`、`ORDER BY`、`LIMIT`、`OFFSET` 的 `SELECT`
@@ -142,11 +142,11 @@ USE demo;
 
 CREATE COLLECTION users (
     id BIGINT NOT NULL,
-    name VARCHAR(64) NOT NULL,
+    name VARCHAR(64) NOT NULL COMMENT 'display name',
     age INTEGER,
     active BOOLEAN DEFAULT true,
     embedding VECTOR(3)
-);
+) COMMENT 'user collection';
 
 INSERT INTO users (id, name, age, active, embedding)
 VALUES (1, 'Ada', 36, true, [0.1, 0.2, 0.3]);

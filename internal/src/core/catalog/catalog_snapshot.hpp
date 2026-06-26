@@ -52,6 +52,7 @@ struct CatalogSnapshotCollection
     common::CollectionId id {0};
     common::DatabaseId database_id {0};
     std::string name;
+    std::optional<std::string> comment;
     std::vector<CatalogSnapshotColumn> columns;
     std::vector<CatalogSnapshotIndex> indexes;
     std::vector<CatalogSnapshotVectorIndex> vector_indexes;

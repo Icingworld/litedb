@@ -37,7 +37,7 @@ existing rows on startup.
 `IndexManager`.
 - Basic database and collection management:
   - `CREATE DATABASE`, `DROP DATABASE`, `USE`, `SHOW DATABASES`
-  - `CREATE COLLECTION`, `DROP COLLECTION`, `SHOW COLLECTIONS FROM database`, `DESCRIBE`
+  - `CREATE COLLECTION ... COMMENT`, column `COMMENT`, `DROP COLLECTION`, `SHOW COLLECTIONS FROM database`, `DESCRIBE`
 - Basic data operations:
   - `INSERT`
   - `SELECT` with projection, `WHERE`, `ORDER BY`, `LIMIT`, and `OFFSET`
@@ -175,11 +175,11 @@ USE demo;
 
 CREATE COLLECTION users (
     id BIGINT NOT NULL,
-    name VARCHAR(64) NOT NULL,
+    name VARCHAR(64) NOT NULL COMMENT 'display name',
     age INTEGER,
     active BOOLEAN DEFAULT true,
     embedding VECTOR(3)
-);
+) COMMENT 'user collection';
 
 INSERT INTO users (id, name, age, active, embedding)
 VALUES (1, 'Ada', 36, true, [0.1, 0.2, 0.3]);

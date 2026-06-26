@@ -34,6 +34,7 @@ CollectionId create_users_collection(InMemoryCatalog & catalog)
     CreateCollectionRequest request;
     request.database_id = database.value();
     request.name = "users";
+    request.comment = "user collection";
     request.columns.push_back(ColumnDefinition {
         .name = "id",
         .type = type(LogicalTypeId::BigInt),
@@ -70,6 +71,8 @@ void test_load_collection_schema_from_catalog()
     const auto & schema = loaded.value();
     require(schema.collection_id() == collection_id, "collection id mismatch");
     require(schema.collection_name() == "users", "collection name mismatch");
+    require(schema.comment().has_value(), "collection comment missing");
+    require(schema.comment().value() == "user collection", "collection comment mismatch");
     require(schema.columns().size() == 3, "column count mismatch");
 
     const auto * id = schema.column_at(0);
