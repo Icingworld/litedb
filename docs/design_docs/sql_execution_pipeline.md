@@ -22,7 +22,7 @@ SQL Text
 
 ```sql
 CREATE COLLECTION users (
-    id BIGINT PRIMARY KEY,
+    id BIGINT NOT NULL,
     name VARCHAR(64),
     age INTEGER,
     embedding VECTOR(128)
@@ -298,7 +298,7 @@ age + 1   -> BoundBinaryExpression(INTEGER)
 
 ```sql
 CREATE COLLECTION items (
-    id BIGINT PRIMARY KEY,
+    id BIGINT NOT NULL,
     embedding VECTOR(3)
 );
 
@@ -984,7 +984,7 @@ SchemaResult
   optional rows
 ```
 
-例如 `SHOW COLLECTIONS` 和 `DESCRIBE users` 可以返回表格式结果。
+例如 `SHOW COLLECTIONS FROM demo` 和 `DESCRIBE users` 可以返回表格式结果。
 
 ### 11.2 错误分类
 
@@ -1019,7 +1019,7 @@ SQL：
 
 ```sql
 CREATE COLLECTION users (
-    id BIGINT PRIMARY KEY,
+    id BIGINT NOT NULL,
     name VARCHAR(64),
     embedding VECTOR(128)
 );
@@ -1150,7 +1150,7 @@ Result
 
 ```sql
 CREATE COLLECTION items (
-    id BIGINT PRIMARY KEY,
+    id BIGINT NOT NULL,
     embedding VECTOR(3)
 );
 
@@ -1381,7 +1381,7 @@ SELECT * FROM users WHERE ... ORDER BY ... LIMIT ...;
 UPDATE users SET ... WHERE ...;
 DELETE FROM users WHERE ...;
 SHOW DATABASES;
-SHOW COLLECTIONS;
+SHOW COLLECTIONS FROM demo;
 DESCRIBE users;
 ```
 

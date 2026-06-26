@@ -13,17 +13,18 @@
 - 通过 `--data-dir` 显式启用的单机持久化能力。
 - 持久化 catalog 快照，以及用于 `INSERT`、`UPDATE`、`DELETE` 的 append-only row log。
 - 启动时恢复已持久化的 database、collection、schema、索引定义、标量值与 `VECTOR(n)` 值。
-- 内存标量索引：`HashIndex`（等值查找）与 `BTreeIndex`（范围与等值查找）。
+- 内存标量索引：`BTreeIndex`（范围与等值查找）。
 - catalog 中的索引元数据，写入 `catalog.lcat` 持久化，并在启动时从已有行数据重建内存索引。
 - 索引 DDL：
-  - `CREATE INDEX ... ON collection(column) [USING HASH | USING BTREE]`
+  - `CREATE INDEX ... ON collection(column) [USING BTREE]`
   - `CREATE INDEX IF NOT EXISTS ...`
   - `DROP INDEX ... ON collection`
   - `DROP INDEX IF EXISTS ... ON collection`
+  - `SHOW INDEXES FROM collection`
 - 通过 `IndexManager` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
 - 基础数据库与集合管理：
   - `CREATE DATABASE`、`DROP DATABASE`、`USE`、`SHOW DATABASES`
-  - `CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS`、`DESCRIBE`
+  - `CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS FROM database`、`DESCRIBE`
 - 基础数据操作：
   - `INSERT`
   - 支持投影、`WHERE`、`ORDER BY`、`LIMIT`、`OFFSET` 的 `SELECT`
@@ -53,7 +54,7 @@ v0.3.0 有意保持较小的功能范围：
 - 不支持 SQL 连接（join）、子查询、聚合、`GROUP BY` 或完整 SQL 兼容性。
 - 标量索引目前为纯内存实现。索引定义会持久化，但索引数据在启动时从 row log 重建，而非写入独立索引文件。
 - 查询仍使用顺序扫描加过滤，`IndexScan` 与基于索引的查询规划尚未实现。
-- 尚无 `SHOW INDEXES`、唯一索引、联合索引或表达式索引。
+- 尚无唯一索引、联合索引或表达式索引。
 - 尚无向量索引。相似度查询需全表扫描并在查询时逐行计算距离。
 - 尚不支持 `SELECT ... AS` 别名。投影中的函数结果列会自动命名为 `expr1`、`expr3` 等，`ORDER BY` 不能引用这些别名，需重复完整表达式。
 - 目前仅提供上述三个内置向量距离函数，尚不支持用户自定义函数与聚合函数。
@@ -140,8 +141,8 @@ CREATE DATABASE demo;
 USE demo;
 
 CREATE COLLECTION users (
-    id BIGINT PRIMARY KEY,
-    name VARCHAR(64),
+    id BIGINT NOT NULL,
+    name VARCHAR(64) NOT NULL,
     age INTEGER,
     active BOOLEAN DEFAULT true,
     embedding VECTOR(3)
@@ -160,7 +161,7 @@ ORDER BY age DESC
 LIMIT 10;
 
 CREATE INDEX idx_age ON users (age) USING BTREE;
-CREATE INDEX idx_name ON users (name) USING HASH;
+CREATE INDEX idx_name ON users (name) USING BTREE;
 
 SELECT id
 FROM users
@@ -252,7 +253,7 @@ docs/design_docs/              设计文档、测试 SQL 与路线图
 v0.3.0 之后的近期计划：
 
 - v0.3.x：向量索引（可能从内存 HNSW 起步）、`SELECT ... AS` 别名、更多内置函数，以及距离查询体验优化。
-- v0.2.x 遗留项：`IndexScan` 与简单索引查询规划、`SHOW INDEXES`、持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
+- v0.2.x 遗留项：`IndexScan` 与简单索引查询规划、持久化能力加固、cleanup/compaction 规划，以及存储格式细节打磨。
 - v0.4：可靠性改进，如 WAL、恢复、校验和、压缩与文件格式版本管理。
 - v0.5：早期分布式查询架构，包含分片、协调器路由与分布式 TopK 合并。
 

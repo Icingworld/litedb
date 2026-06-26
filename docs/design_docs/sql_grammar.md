@@ -7,19 +7,18 @@
 litedb 第一版支持：
 
 - 数据库管理：`USE`、`CREATE DATABASE`、`DROP DATABASE`、`SHOW DATABASES`
-- 集合管理：`CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS`、`DESCRIBE`
-- 标量索引管理：`CREATE INDEX`、`DROP INDEX`
+- 集合管理：`CREATE COLLECTION`、`DROP COLLECTION`、`SHOW COLLECTIONS FROM`、`DESCRIBE`
+- 标量索引管理：`CREATE INDEX`、`DROP INDEX`、`SHOW INDEXES`
 - 数据修改：`INSERT`、`UPDATE`、`DELETE`
 - 数据查询：`SELECT`
 - 表达式：字面量、字段引用、函数调用、向量字面量、算术表达式、比较表达式、逻辑表达式、`IN`、`BETWEEN`、`LIKE`
 
 litedb 下一阶段已确定接入：
 
-- 向量索引管理：`CREATE VINDEX`、`DROP VINDEX`
+- 向量索引管理：`CREATE VINDEX`、`DROP VINDEX`、`SHOW VINDEXES`
 
 litedb 第一版暂不支持：
 
-- 索引查看语句：`SHOW INDEXES`、`SHOW VINDEXES`
 - 聚合和分组：`COUNT`、`SUM`、`AVG`、`MIN`、`MAX`、`GROUP BY`、`HAVING`
 - 查询别名：`AS`
 - 多集合查询、连接查询、子查询
@@ -99,8 +98,10 @@ statement := use_statement
            | describe_collection_statement
            | create_index_statement
            | drop_index_statement
+           | show_indexes_statement
            | create_vindex_statement
            | drop_vindex_statement
+           | show_vindexes_statement
            | insert_statement
            | update_statement
            | delete_statement
@@ -187,26 +188,28 @@ create_collection_statement :=
 
 column_definition := identifier data_type { column_constraint }
 
-column_constraint := PRIMARY KEY
-                   | UNIQUE
+column_constraint := UNIQUE
                    | DEFAULT literal
+                   | NOT NULL
+                   | NULL
                    | COMMENT string_literal
 ```
 
 说明：
 
-- 第一版不支持 `NOT NULL` 和 `AUTO_INCREMENT`，虽然 Lexer 已保留相关关键字，语法暂不纳入。
 - 每个集合至少需要一个字段。
-- `PRIMARY KEY`、`UNIQUE`、`DEFAULT`、`COMMENT` 的语义校验由后续语义层完成。
-- 是否允许多个 `PRIMARY KEY`、默认值类型是否匹配字段类型，也由语义层处理。
+- `UNIQUE`、`DEFAULT`、`NOT NULL`、`NULL`、`COMMENT` 的语义校验由后续语义层完成。
+- 默认情况下字段允许为 `NULL`；显式 `NOT NULL` 表示该字段不允许插入或更新为 `NULL`。
+- 同一字段不能同时声明 `NULL` 和 `NOT NULL`。
+- 默认值类型是否匹配字段类型，也由语义层处理。
 
 示例：
 
 ```sql
 CREATE COLLECTION users (
-    id BIGINT PRIMARY KEY,
-    name VARCHAR(64),
-    age INTEGER DEFAULT 0,
+    id BIGINT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    age INTEGER NULL DEFAULT 0,
     active BOOLEAN DEFAULT true,
     embedding VECTOR(128)
 );
@@ -229,16 +232,16 @@ DROP COLLECTION IF EXISTS users;
 
 ### 5.3 SHOW COLLECTIONS
 
-列出当前数据库中的集合。
+列出指定数据库中的集合。
 
 ```ebnf
-show_collections_statement := SHOW COLLECTIONS
+show_collections_statement := SHOW COLLECTIONS FROM identifier
 ```
 
 示例：
 
 ```sql
-SHOW COLLECTIONS;
+SHOW COLLECTIONS FROM demo;
 ```
 
 ### 5.4 DESCRIBE
@@ -269,13 +272,13 @@ create_index_statement :=
     ON identifier "(" identifier ")"
     [ USING index_method ]
 
-index_method := HASH | BTREE
+index_method := BTREE
 ```
 
 说明：
 
 - 省略 `USING` 时默认由语义层选择 `BTREE`。
-- `HASH` 用于等值查询。
+- 暂不支持 `HASH` 索引，未来可能支持。
 - `BTREE` 用于等值查询和范围查询。
 - 标量索引不能创建在 `VECTOR(n)` 列上。
 - 复合索引暂不支持。
@@ -284,7 +287,7 @@ index_method := HASH | BTREE
 
 ```sql
 CREATE INDEX idx_age ON users(age);
-CREATE INDEX IF NOT EXISTS idx_name ON users(name) USING HASH;
+CREATE INDEX IF NOT EXISTS idx_name ON users(name) USING BTREE;
 CREATE INDEX idx_age_range ON users(age) USING BTREE;
 ```
 
@@ -305,7 +308,23 @@ DROP INDEX idx_age ON users;
 DROP INDEX IF EXISTS idx_name ON users;
 ```
 
-### 6.3 CREATE VINDEX
+### 6.3 SHOW INDEXES
+
+列出指定集合上的标量索引。
+
+```ebnf
+show_indexes_statement := SHOW INDEXES FROM identifier
+```
+
+示例：
+
+```sql
+SHOW INDEXES FROM users;
+```
+
+返回结果建议包含索引名、集合名、字段名、索引方法和是否唯一等元数据。第一版索引方法只会返回 `BTREE`。
+
+### 6.4 CREATE VINDEX
 
 创建向量索引。第一版向量索引只支持 HNSW，目标列必须是 `VECTOR(n)`。
 
@@ -362,7 +381,7 @@ WITH (
 );
 ```
 
-### 6.4 DROP VINDEX
+### 6.5 DROP VINDEX
 
 删除向量索引。
 
@@ -378,6 +397,22 @@ drop_vindex_statement :=
 DROP VINDEX idx_embedding ON docs;
 DROP VINDEX IF EXISTS idx_embedding_cosine ON docs;
 ```
+
+### 6.6 SHOW VINDEXES
+
+列出指定集合上的向量索引。
+
+```ebnf
+show_vindexes_statement := SHOW VINDEXES FROM identifier
+```
+
+示例：
+
+```sql
+SHOW VINDEXES FROM docs;
+```
+
+返回结果建议包含索引名、集合名、字段名、索引方法、距离度量和 HNSW 参数等元数据。
 
 ## 7. 数据修改语句
 
@@ -619,8 +654,9 @@ struct ColumnDefinition
 {
     std::string name;
     DataType type;
-    bool primary_key;
+
     bool unique;
+    std::optional<bool> nullable;
     std::optional<std::unique_ptr<ExpressionNode>> default_value;
     std::optional<std::string> comment;
 };
@@ -632,7 +668,9 @@ struct ColumnDefinition
 CreateDatabaseStatement
 CreateCollectionStatement
 CreateIndexStatement
+ShowIndexesStatement
 CreateVectorIndexStatement
+ShowVectorIndexesStatement
 ```
 
 其中 `CreateCollectionStatement` 保存：
@@ -650,7 +688,7 @@ std::string index_name;
 std::string collection_name;
 std::string column_name;
 bool if_not_exists;
-CreateIndexMethod method; // Default | Hash | BTree
+CreateIndexMethod method; // Default | BTree
 ```
 
 `CreateVectorIndexStatement` 建议保存：
@@ -689,25 +727,19 @@ enum class SchemaObjectType
 
 后续版本可以按以下顺序扩展：
 
-1. 索引查看语法
-   ```sql
-   SHOW INDEXES FROM users;
-   SHOW VINDEXES FROM users;
-   ```
-
-2. 聚合查询和分组
+1. 聚合查询和分组
    ```sql
    SELECT COUNT(*) FROM users;
    SELECT age, COUNT(*) FROM users GROUP BY age;
    SELECT age, COUNT(*) FROM users GROUP BY age HAVING COUNT(*) > 10;
    ```
 
-3. 查询别名
+2. 查询别名
    ```sql
    SELECT name AS username FROM users;
    ```
 
-4. 更完整的 DDL
+3. 更完整的 DDL
    ```sql
    ALTER COLLECTION users ADD COLUMN email VARCHAR(128);
    ALTER COLLECTION users DROP COLUMN email;

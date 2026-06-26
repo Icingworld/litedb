@@ -611,7 +611,7 @@ HnswIndex
 CREATE DATABASE demo;
 USE demo;
 CREATE COLLECTION docs (
-    id BIGINT PRIMARY KEY,
+    id BIGINT NOT NULL,
     category VARCHAR(32),
     embedding VECTOR(3)
 );

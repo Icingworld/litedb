@@ -109,7 +109,7 @@ std::expected<Token, ParserError> ParserWorker::consume(
     ParserErrorCode code
 )
 {
-    if (!check(type)) {
+    if (!check(type)) [[unlikely]] {
         return std::unexpected(make_current_error(code, message));
     }
 

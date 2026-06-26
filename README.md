@@ -24,20 +24,20 @@ engine facade.
 and `DELETE`.
 - Startup recovery for persisted databases, collections, schemas, index
 definitions, scalar values, and `VECTOR(n)` values.
-- In-memory scalar indexes with `HashIndex` (equality lookup) and `BTreeIndex`
-(range and equality lookup).
+- In-memory scalar indexes with `BTreeIndex` (range and equality lookup).
 - Index metadata in the catalog, persisted in `catalog.lcat`, and rebuilt from
 existing rows on startup.
 - Index DDL:
-  - `CREATE INDEX ... ON collection(column) [USING HASH | USING BTREE]`
+  - `CREATE INDEX ... ON collection(column) [USING BTREE]`
   - `CREATE INDEX IF NOT EXISTS ...`
   - `DROP INDEX ... ON collection`
   - `DROP INDEX IF EXISTS ... ON collection`
+  - `SHOW INDEXES FROM collection`
 - Automatic index maintenance on `INSERT`, `UPDATE`, and `DELETE` through
 `IndexManager`.
 - Basic database and collection management:
   - `CREATE DATABASE`, `DROP DATABASE`, `USE`, `SHOW DATABASES`
-  - `CREATE COLLECTION`, `DROP COLLECTION`, `SHOW COLLECTIONS`, `DESCRIBE`
+  - `CREATE COLLECTION`, `DROP COLLECTION`, `SHOW COLLECTIONS FROM database`, `DESCRIBE`
 - Basic data operations:
   - `INSERT`
   - `SELECT` with projection, `WHERE`, `ORDER BY`, `LIMIT`, and `OFFSET`
@@ -78,8 +78,7 @@ data is rebuilt from row logs on startup rather than stored in separate index
 files.
 - Queries still use sequential scan plus filter. `IndexScan` and index-based
 query planning are not implemented yet.
-- No `SHOW INDEXES`, unique indexes, composite indexes, or expression indexes
-yet.
+- No unique indexes, composite indexes, or expression indexes yet.
 - No vector indexes yet. Similarity queries scan every row and compute distance
 at query time.
 - No `SELECT ... AS alias` yet. Function results in projections are exposed as
@@ -175,8 +174,8 @@ CREATE DATABASE demo;
 USE demo;
 
 CREATE COLLECTION users (
-    id BIGINT PRIMARY KEY,
-    name VARCHAR(64),
+    id BIGINT NOT NULL,
+    name VARCHAR(64) NOT NULL,
     age INTEGER,
     active BOOLEAN DEFAULT true,
     embedding VECTOR(3)
@@ -195,7 +194,7 @@ ORDER BY age DESC
 LIMIT 10;
 
 CREATE INDEX idx_age ON users (age) USING BTREE;
-CREATE INDEX idx_name ON users (name) USING HASH;
+CREATE INDEX idx_name ON users (name) USING BTREE;
 
 SELECT id
 FROM users
@@ -293,8 +292,7 @@ Near-term work after v0.3.0:
 - v0.3.x: vector indexes (likely starting with in-memory HNSW), `SELECT ... AS`
 aliases, more built-in functions, and distance-query polish.
 - v0.2.x carry-over: `IndexScan` and simple index-based query planning,
-`SHOW INDEXES`, persistence hardening, cleanup/compaction planning, and storage
-format polish.
+persistence hardening, cleanup/compaction planning, and storage format polish.
 - v0.4: reliability improvements such as WAL, recovery, checksums, compaction,
 and file format versioning.
 - v0.5: early distributed query architecture with shards, coordinator routing,
