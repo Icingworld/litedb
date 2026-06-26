@@ -15,6 +15,9 @@ namespace litedb::core::parser::ast
 class VectorExpression final : public ExpressionNode
 {
 public:
+    /**
+     * @brief 元素列表类型
+     */
     using ElementList = std::vector<std::unique_ptr<ExpressionNode>>;
 
 public:
@@ -27,6 +30,12 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
+
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取元素列表

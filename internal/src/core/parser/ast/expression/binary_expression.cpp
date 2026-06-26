@@ -23,6 +23,11 @@ AstNodeKind BinaryExpression::kind() const noexcept
     return AstNodeKind::Binary;
 }
 
+void BinaryExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const ExpressionNode & BinaryExpression::left() const noexcept
 {
     return *left_;

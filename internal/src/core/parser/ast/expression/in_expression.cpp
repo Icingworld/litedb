@@ -17,6 +17,11 @@ AstNodeKind InExpression::kind() const noexcept
     return AstNodeKind::In;
 }
 
+void InExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const ExpressionNode & InExpression::expression() const noexcept
 {
     return *expression_;

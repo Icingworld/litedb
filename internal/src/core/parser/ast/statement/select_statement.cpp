@@ -29,6 +29,11 @@ AstNodeKind SelectStatement::kind() const noexcept
     return AstNodeKind::Select;
 }
 
+void SelectStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const SelectStatement::SelectList & SelectStatement::select_list() const noexcept
 {
     return select_list_;
