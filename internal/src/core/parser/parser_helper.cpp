@@ -8,7 +8,6 @@
 namespace litedb::core::parser
 {
 
-[[nodiscard]]
 std::string lower_ascii(std::string_view value)
 {
     std::string result(value);
@@ -18,7 +17,6 @@ std::string lower_ascii(std::string_view value)
     return result;
 }
 
-[[nodiscard]]
 ParserError make_parser_error(ParserErrorCode code, TokenLocation location, std::string_view message)
 {
     return ParserError {

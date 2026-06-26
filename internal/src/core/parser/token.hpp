@@ -159,4 +159,20 @@ private:
     TokenLocation location_;    ///< Token 位置
 };
 
+/**
+ * @brief 是否为比较运算符
+ * @param type Token 类型
+ * @return 是否为比较运算符
+ */
+[[nodiscard]]
+bool is_comparison_operator(TokenType type) noexcept;
+ 
+/**
+ * @brief 是否为字面量 Token 
+ * @param type Token 类型
+ * @return 是否为字面量 Token 
+ */
+[[nodiscard]]
+bool is_literal_token(TokenType type) noexcept;
+
 } // namespace litedb::core::parser

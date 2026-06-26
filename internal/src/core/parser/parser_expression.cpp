@@ -4,6 +4,7 @@
 #include <memory>
 #include <utility>
 
+#include "core/parser/token.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -18,43 +19,6 @@
 
 namespace litedb::core::parser
 {
-
-namespace
-{
-
-/**
- * @brief 是否为比较运算符
- * @param type  Token 类型
- * @return 是否为比较运算符
- */
-[[nodiscard]]
-bool is_comparison_operator(TokenType type) noexcept
-{
-    return type == TokenType::Equal
-        || type == TokenType::NotEqual
-        || type == TokenType::LessThan
-        || type == TokenType::LessEqual
-        || type == TokenType::GreaterThan
-        || type == TokenType::GreaterEqual;
-}
-
-/**
- * @brief 是否为字面量 Token 
- * @param type  Token 类型
- * @return 是否为字面量 Token 
- */
-[[nodiscard]]
-bool is_literal_token(TokenType type) noexcept
-{
-    return type == TokenType::IntegerLiteral
-        || type == TokenType::FloatLiteral
-        || type == TokenType::StringLiteral
-        || type == TokenType::True
-        || type == TokenType::False
-        || type == TokenType::Null;
-}
-
-} // namespace
 
 std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserWorker::parse_expression()
 {
