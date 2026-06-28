@@ -160,9 +160,18 @@ void test_parse_create_vector_index_statement()
     require(minimal_create->options().metric == VectorIndexMetric::Default, "CREATE VINDEX default metric mismatch");
 
     require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding);").code == ParserErrorCode::ExpectedToken, "CREATE VINDEX missing USING error mismatch");
-    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING IVF;").code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX method error mismatch");
-    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = BAD);").code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX metric error mismatch");
-    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = L2, metric = COSINE);").code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX duplicate option error mismatch");
+
+    auto bad_method = parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING IVF;");
+    require(bad_method.code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX method error mismatch");
+    require(bad_method.location.column == 56, "CREATE VINDEX method error location mismatch");
+
+    auto bad_metric = parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = BAD);");
+    require(bad_metric.code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX metric error mismatch");
+    require(bad_metric.location.column == 76, "CREATE VINDEX metric error location mismatch");
+
+    auto duplicate_option = parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = L2, metric = COSINE);");
+    require(duplicate_option.code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX duplicate option error mismatch");
+    require(duplicate_option.location.column == 80, "CREATE VINDEX duplicate option error location mismatch");
 }
 
 void test_parse_drop_show_describe_statements()

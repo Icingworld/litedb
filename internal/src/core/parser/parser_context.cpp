@@ -82,4 +82,3 @@ ast::AstNodeLocation ParserContext::ast_location(TokenLocation location) const n
 }
 
 } // namespace litedb::core::parser
-

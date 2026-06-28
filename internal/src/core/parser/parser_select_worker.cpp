@@ -13,8 +13,6 @@ namespace litedb::core::parser
 
 ParserSelectWorker::ParserSelectWorker(ParserContext & context)
     : context_(context)
-    , expression_worker_(context)
-    , schema_worker_(context)
 {
 }
 
@@ -23,9 +21,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
     const TokenLocation location = context_.current().location();
     context_.advance();
 
+    ParserExpressionWorker expression_worker(context_);
+    ParserSchemaWorker schema_worker(context_);
+
     ast::SelectStatement::SelectList select_list;
     while (true) {
-        auto item = expression_worker_.parse_wildcard_or_column_reference();
+        auto item = expression_worker.parse_wildcard_or_column_reference();
         if (!item.has_value()) [[unlikely]] {
             return std::unexpected(item.error());
         }
@@ -41,14 +42,14 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
         return std::unexpected(from.error());
     }
 
-    auto collection = schema_worker_.parse_identifier_string("Expected collection name");
+    auto collection = schema_worker.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(collection.error());
     }
 
     std::unique_ptr<ast::ExpressionNode> where;
     if (context_.match(TokenType::Where)) {
-        auto expression = expression_worker_.parse_expression();
+        auto expression = expression_worker.parse_expression();
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(expression.error());
         }
@@ -63,7 +64,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
         }
 
         while (true) {
-            auto expression = expression_worker_.parse_expression();
+            auto expression = expression_worker.parse_expression();
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(expression.error());
             }
@@ -85,7 +86,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
 
     std::optional<std::size_t> limit;
     if (context_.match(TokenType::Limit)) {
-        auto value = schema_worker_.parse_integer_value("Expected LIMIT value");
+        auto value = schema_worker.parse_integer_value("Expected LIMIT value");
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(value.error());
         }
@@ -94,7 +95,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
 
     std::optional<std::size_t> offset;
     if (context_.match(TokenType::Offset)) {
-        auto value = schema_worker_.parse_integer_value("Expected OFFSET value");
+        auto value = schema_worker.parse_integer_value("Expected OFFSET value");
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(value.error());
         }

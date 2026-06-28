@@ -106,12 +106,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         auto if_not_exists = schema_worker_.parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_not_exists.error());
-        }   
+        }
 
         auto index_name = schema_worker_.parse_identifier_string("Expected index name");
         if (!index_name.has_value()) [[unlikely]] {
             return std::unexpected(index_name.error());
-        }   
+        }
 
         auto on = context_.consume(TokenType::On, "Expected ON after index name");
         if (!on.has_value()) [[unlikely]] {
@@ -168,7 +168,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
     }
 
     [[unlikely]] return std::unexpected(context_.make_current_error(
-        ParserErrorCode::UnsupportedSyntax, 
+        ParserErrorCode::UnsupportedSyntax,
         "Expected DATABASE, COLLECTION, INDEX, or VINDEX after CREATE"
     ));
 }
@@ -217,14 +217,18 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         return std::unexpected(using_token.error());
     }
 
-    auto method = schema_worker_.parse_identifier_string("Expected vector index method after USING");
-    if (!method.has_value()) [[unlikely]] {
-        return std::unexpected(method.error());
+    auto method_token = context_.consume(
+        TokenType::Identifier,
+        "Expected vector index method after USING",
+        ParserErrorCode::ExpectedIdentifier
+    );
+    if (!method_token.has_value()) [[unlikely]] {
+        return std::unexpected(method_token.error());
     }
-    if (lower_ascii(method.value()) != "hnsw") [[unlikely]] {
+    if (lower_ascii(method_token->value()) != "hnsw") [[unlikely]] {
         return std::unexpected(make_parser_error(
             ParserErrorCode::UnsupportedSyntax,
-            context_.current().location(),
+            method_token->location(),
             "Expected HNSW after USING"
         ));
     }
@@ -240,11 +244,15 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         }
 
         while (true) {
-            auto option_name = schema_worker_.parse_identifier_string("Expected vector index option name");
+            auto option_name = context_.consume(
+                TokenType::Identifier,
+                "Expected vector index option name",
+                ParserErrorCode::ExpectedIdentifier
+            );
             if (!option_name.has_value()) [[unlikely]] {
                 return std::unexpected(option_name.error());
             }
-            const auto option_key = lower_ascii(option_name.value());
+            const auto option_key = lower_ascii(option_name->value());
 
             auto equal = context_.consume(TokenType::Equal, "Expected '=' after vector index option name");
             if (!equal.has_value()) [[unlikely]] {
@@ -253,13 +261,21 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
 
             if (option_key == "metric") {
                 if (options.metric != ast::VectorIndexMetric::Default) [[unlikely]] {
-                    return std::unexpected(context_.make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: metric"));
+                    return std::unexpected(make_parser_error(
+                        ParserErrorCode::UnsupportedSyntax,
+                        option_name->location(),
+                        "Duplicate vector index option: metric"
+                    ));
                 }
-                auto metric = schema_worker_.parse_identifier_string("Expected vector index metric");
-                if (!metric.has_value()) [[unlikely]] {
-                    return std::unexpected(metric.error());
+                auto metric_token = context_.consume(
+                    TokenType::Identifier,
+                    "Expected vector index metric",
+                    ParserErrorCode::ExpectedIdentifier
+                );
+                if (!metric_token.has_value()) [[unlikely]] {
+                    return std::unexpected(metric_token.error());
                 }
-                const auto metric_key = lower_ascii(metric.value());
+                const auto metric_key = lower_ascii(metric_token->value());
                 if (metric_key == "l2") {
                     options.metric = ast::VectorIndexMetric::L2;
                 } else if (metric_key == "inner_product") {
@@ -269,13 +285,17 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                 } else [[unlikely]] {
                     return std::unexpected(make_parser_error(
                         ParserErrorCode::UnsupportedSyntax,
-                        context_.current().location(),
+                        metric_token->location(),
                         "Expected L2, COSINE, or INNER_PRODUCT for vector index metric"
                     ));
                 }
             } else if (option_key == "max_neighbors") {
                 if (options.max_neighbors.has_value()) [[unlikely]] {
-                    return std::unexpected(context_.make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: max_neighbors"));
+                    return std::unexpected(make_parser_error(
+                        ParserErrorCode::UnsupportedSyntax,
+                        option_name->location(),
+                        "Duplicate vector index option: max_neighbors"
+                    ));
                 }
                 auto value = schema_worker_.parse_integer_value("Expected max_neighbors value");
                 if (!value.has_value()) [[unlikely]] {
@@ -284,7 +304,11 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                 options.max_neighbors = value.value();
             } else if (option_key == "ef_construction") {
                 if (options.ef_construction.has_value()) [[unlikely]] {
-                    return std::unexpected(context_.make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: ef_construction"));
+                    return std::unexpected(make_parser_error(
+                        ParserErrorCode::UnsupportedSyntax,
+                        option_name->location(),
+                        "Duplicate vector index option: ef_construction"
+                    ));
                 }
                 auto value = schema_worker_.parse_integer_value("Expected ef_construction value");
                 if (!value.has_value()) [[unlikely]] {
@@ -293,7 +317,11 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                 options.ef_construction = value.value();
             } else if (option_key == "ef_search") {
                 if (options.ef_search.has_value()) [[unlikely]] {
-                    return std::unexpected(context_.make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: ef_search"));
+                    return std::unexpected(make_parser_error(
+                        ParserErrorCode::UnsupportedSyntax,
+                        option_name->location(),
+                        "Duplicate vector index option: ef_search"
+                    ));
                 }
                 auto value = schema_worker_.parse_integer_value("Expected ef_search value");
                 if (!value.has_value()) [[unlikely]] {
@@ -302,7 +330,11 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                 options.ef_search = value.value();
             } else if (option_key == "random_seed") {
                 if (options.random_seed.has_value()) [[unlikely]] {
-                    return std::unexpected(context_.make_current_error(ParserErrorCode::UnsupportedSyntax, "Duplicate vector index option: random_seed"));
+                    return std::unexpected(make_parser_error(
+                        ParserErrorCode::UnsupportedSyntax,
+                        option_name->location(),
+                        "Duplicate vector index option: random_seed"
+                    ));
                 }
                 auto value = schema_worker_.parse_integer_value("Expected random_seed value");
                 if (!value.has_value()) [[unlikely]] {
@@ -310,7 +342,11 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                 }
                 options.random_seed = value.value();
             } else [[unlikely]] {
-                return std::unexpected(context_.make_current_error(ParserErrorCode::UnsupportedSyntax, "Unknown vector index option"));
+                return std::unexpected(make_parser_error(
+                    ParserErrorCode::UnsupportedSyntax,
+                    option_name->location(),
+                    "Unknown vector index option"
+                ));
             }
 
             if (!context_.match(TokenType::Comma)) {
