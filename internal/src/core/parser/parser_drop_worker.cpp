@@ -1,4 +1,4 @@
-#include "core/parser/parser_worker.hpp"
+#include "core/parser/parser_drop_worker.hpp"
 
 #include <expected>
 #include <memory>
@@ -8,27 +8,30 @@
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/drop_vector_index_statement.hpp"
+#include "core/parser/parser_schema_worker.hpp"
 
 namespace litedb::core::parser
 {
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_drop_statement()
+ParserDropWorker::ParserDropWorker(ParserContext & context)
+    : context_(context)
+    , schema_worker_(context)
 {
-    // 保存并消耗 DROP 关键字
-    const TokenLocation location = current_token_.location();
-    advance();
+}
 
-    if (match(TokenType::Database)) {
-        // 解析 DROP DATABASE 语句
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDropWorker::parse_drop_statement()
+{
+    const TokenLocation location = context_.current().location();
+    context_.advance();
 
-        // 判断是否存在 IF EXISTS 关键字
-        auto if_exists = parse_if_exists();
+    if (context_.match(TokenType::Database)) {
+
+        auto if_exists = schema_worker_.parse_if_exists();
         if (!if_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_exists.error());
         }
 
-        // 解析数据库名称
-        auto database = parse_identifier_string("Expected database name");
+        auto database = schema_worker_.parse_identifier_string("Expected database name");
         if (!database.has_value()) [[unlikely]] {
             return std::unexpected(database.error());
         }
@@ -36,21 +39,18 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         return std::make_unique<ast::DropDatabaseStatement>(
             std::move(database.value()),
             if_exists.value(),
-            ast_location(location)
+            context_.ast_location(location)
         );
     }
 
-    if (match(TokenType::Collection)) {
-        // 解析 DROP COLLECTION 语句
+    if (context_.match(TokenType::Collection)) {
 
-        // 判断是否存在 IF EXISTS 关键字
-        auto if_exists = parse_if_exists();
+        auto if_exists = schema_worker_.parse_if_exists();
         if (!if_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_exists.error());
         }
 
-        // 解析集合名称
-        auto collection = parse_identifier_string("Expected collection name");
+        auto collection = schema_worker_.parse_identifier_string("Expected collection name");
         if (!collection.has_value()) [[unlikely]] {
             return std::unexpected(collection.error());
         }
@@ -58,33 +58,28 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         return std::make_unique<ast::DropCollectionStatement>(
             std::move(collection.value()),
             if_exists.value(),
-            ast_location(location)
+            context_.ast_location(location)
         );
     }
 
-    if (match(TokenType::Index)) {
-        // 解析 DROP INDEX 语句
+    if (context_.match(TokenType::Index)) {
 
-        // 判断是否存在 IF EXISTS 关键字
-        auto if_exists = parse_if_exists();
+        auto if_exists = schema_worker_.parse_if_exists();
         if (!if_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_exists.error());
         }
 
-        // 解析索引名称
-        auto index_name = parse_identifier_string("Expected index name");
+        auto index_name = schema_worker_.parse_identifier_string("Expected index name");
         if (!index_name.has_value()) [[unlikely]] {
             return std::unexpected(index_name.error());
         }
 
-        // 期望 ON 关键字
-        auto on = consume(TokenType::On, "Expected ON after index name");
+        auto on = context_.consume(TokenType::On, "Expected ON after index name");
         if (!on.has_value()) [[unlikely]] {
             return std::unexpected(on.error());
         }
 
-        // 解析集合名称
-        auto collection_name = parse_identifier_string("Expected collection name");
+        auto collection_name = schema_worker_.parse_identifier_string("Expected collection name");
         if (!collection_name.has_value()) [[unlikely]] {
             return std::unexpected(collection_name.error());
         }
@@ -93,40 +88,40 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
             std::move(index_name.value()),
             std::move(collection_name.value()),
             if_exists.value(),
-            ast_location(location)
+            context_.ast_location(location)
         );
     }
 
-    if (match(TokenType::VIndex)) {
+    if (context_.match(TokenType::VIndex)) {
         return parse_drop_vector_index_statement(location);
     }
 
-    return std::unexpected(make_current_error(
+    return std::unexpected(context_.make_current_error(
         ParserErrorCode::ExpectedToken,
         "Expected DATABASE, COLLECTION, INDEX, or VINDEX after DROP"
     ));
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_drop_vector_index_statement(
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDropWorker::parse_drop_vector_index_statement(
     TokenLocation location
 )
 {
-    auto if_exists = parse_if_exists();
+    auto if_exists = schema_worker_.parse_if_exists();
     if (!if_exists.has_value()) [[unlikely]] {
         return std::unexpected(if_exists.error());
     }
 
-    auto index_name = parse_identifier_string("Expected vector index name");
+    auto index_name = schema_worker_.parse_identifier_string("Expected vector index name");
     if (!index_name.has_value()) [[unlikely]] {
         return std::unexpected(index_name.error());
     }
 
-    auto on = consume(TokenType::On, "Expected ON after vector index name");
+    auto on = context_.consume(TokenType::On, "Expected ON after vector index name");
     if (!on.has_value()) [[unlikely]] {
         return std::unexpected(on.error());
     }
 
-    auto collection_name = parse_identifier_string("Expected collection name");
+    auto collection_name = schema_worker_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
         return std::unexpected(collection_name.error());
     }
@@ -135,7 +130,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         std::move(index_name.value()),
         std::move(collection_name.value()),
         if_exists.value(),
-        ast_location(location)
+        context_.ast_location(location)
     );
 }
 

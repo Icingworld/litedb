@@ -1,0 +1,68 @@
+#pragma once
+
+#include <cstddef>
+#include <expected>
+#include <memory>
+#include <string>
+#include <string_view>
+
+#include "core/parser/ast/schema.hpp"
+#include "core/parser/parser_context.hpp"
+#include "core/parser/parser_error.hpp"
+#include "core/parser/parser_expression_worker.hpp"
+
+namespace litedb::core::parser
+{
+
+namespace ast
+{
+
+class StatementNode;
+
+} // namespace ast
+
+/**
+ * @brief schema 和通用语法解析工作器
+ */
+class ParserSchemaWorker
+{
+public:
+    explicit ParserSchemaWorker(ParserContext & context);
+
+public:
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_use_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_statement();
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_describe_statement();
+
+    [[nodiscard]]
+    std::expected<std::string, ParserError> parse_identifier_string(std::string_view message);
+
+    [[nodiscard]]
+    std::expected<std::size_t, ParserError> parse_integer_value(std::string_view message);
+
+    [[nodiscard]]
+    std::expected<ast::DataType, ParserError> parse_data_type();
+
+    [[nodiscard]]
+    std::expected<ast::ColumnDefinition, ParserError> parse_column_definition();
+
+    [[nodiscard]]
+    std::expected<ast::SchemaObjectType, ParserError> parse_schema_object_type(bool plural);
+
+    [[nodiscard]]
+    std::expected<bool, ParserError> parse_if_not_exists();
+
+    [[nodiscard]]
+    std::expected<bool, ParserError> parse_if_exists();
+
+private:
+    ParserContext & context_;                   ///< 解析上下文
+    ParserExpressionWorker expression_worker_;  ///< 表达式解析工作器
+};
+
+} // namespace litedb::core::parser

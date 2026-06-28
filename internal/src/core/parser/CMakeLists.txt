@@ -2,14 +2,15 @@ set(PARSER_SOURCES
     token.cpp
     lexer.cpp
     parser.cpp
+    parser_context.cpp
     parser_helper.cpp
     parser_worker.cpp
-    parser_expression.cpp
-    parser_schema.cpp
-    parser_select.cpp
-    parser_mutation.cpp
-    parser_create.cpp
-    parser_drop.cpp
+    parser_expression_worker.cpp
+    parser_schema_worker.cpp
+    parser_select_worker.cpp
+    parser_mutation_worker.cpp
+    parser_create_worker.cpp
+    parser_drop_worker.cpp
     ast/ast_node.cpp
     ast/debug_printer.cpp
     ast/expression/expression_node.cpp
