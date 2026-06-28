@@ -7,7 +7,7 @@
 
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/lexer.hpp"
-#include "core/parser/parser_worker.hpp"
+#include "core/parser/worker/parser_worker.hpp"
 
 namespace litedb::core::parser
 {

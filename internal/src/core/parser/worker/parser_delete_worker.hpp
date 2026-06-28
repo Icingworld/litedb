@@ -17,19 +17,19 @@ class StatementNode;
 } // namespace ast
 
 /**
- * @brief SELECT 语句解析工作器
+ * @brief DELETE 语句解析工作器
  */
-class ParserSelectWorker
+class ParserDeleteWorker
 {
 public:
-    explicit ParserSelectWorker(ParserContext & context);
+    explicit ParserDeleteWorker(ParserContext & context);
 
 public:
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_select_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_delete_statement();
 
 private:
-    ParserContext & context_;                   ///< 解析上下文
+    ParserContext & context_;   ///< 解析上下文
 };
 
 } // namespace litedb::core::parser

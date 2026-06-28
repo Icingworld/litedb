@@ -9,36 +9,20 @@
 #include "core/parser/ast/schema.hpp"
 #include "core/parser/parser_context.hpp"
 #include "core/parser/parser_error.hpp"
-#include "core/parser/parser_expression_worker.hpp"
+#include "core/parser/worker/parser_expression_worker.hpp"
 
 namespace litedb::core::parser
 {
 
-namespace ast
-{
-
-class StatementNode;
-
-} // namespace ast
-
 /**
- * @brief schema 和通用语法解析工作器
+ * @brief schema 和通用语法解析辅助器
  */
-class ParserSchemaWorker
+class ParserSchemaHelper
 {
 public:
-    explicit ParserSchemaWorker(ParserContext & context);
+    explicit ParserSchemaHelper(ParserContext & context);
 
 public:
-    [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_use_statement();
-
-    [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_statement();
-
-    [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_describe_statement();
-
     [[nodiscard]]
     std::expected<std::string, ParserError> parse_identifier_string(std::string_view message);
 
@@ -61,8 +45,8 @@ public:
     std::expected<bool, ParserError> parse_if_exists();
 
 private:
-    ParserContext & context_;                   ///< 解析上下文
-    ParserExpressionWorker expression_worker_;  ///< 表达式解析工作器
+    ParserContext & context_;
+    ParserExpressionWorker expression_worker_;
 };
 
 } // namespace litedb::core::parser

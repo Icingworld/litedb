@@ -81,7 +81,7 @@ private:
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_vector_expression();
 
 private:
-    ParserContext & context_;   ///< 解析上下文
+    ParserContext & context_;
 };
 
 } // namespace litedb::core::parser

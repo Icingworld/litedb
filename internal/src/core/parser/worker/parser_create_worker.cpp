@@ -1,4 +1,4 @@
-#include "core/parser/parser_create_worker.hpp"
+#include "core/parser/worker/parser_create_worker.hpp"
 
 #include <expected>
 #include <memory>
@@ -10,14 +10,14 @@
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/parser_helper.hpp"
-#include "core/parser/parser_schema_worker.hpp"
+#include "core/parser/worker/parser_schema_helper.hpp"
 
 namespace litedb::core::parser
 {
 
 ParserCreateWorker::ParserCreateWorker(ParserContext & context)
     : context_(context)
-    , schema_worker_(context)
+    , schema_helper_(context)
 {
 }
 
@@ -28,12 +28,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
 
     if (context_.match(TokenType::Database)) {
 
-        auto if_not_exists = schema_worker_.parse_if_not_exists();
+        auto if_not_exists = schema_helper_.parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_not_exists.error());
         }
 
-        auto database = schema_worker_.parse_identifier_string("Expected database name");
+        auto database = schema_helper_.parse_identifier_string("Expected database name");
         if (!database.has_value()) [[unlikely]] {
             return std::unexpected(database.error());
         }
@@ -47,12 +47,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
 
     if (context_.match(TokenType::Collection)) {
 
-        auto if_not_exists = schema_worker_.parse_if_not_exists();
+        auto if_not_exists = schema_helper_.parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_not_exists.error());
         }
 
-        auto collection = schema_worker_.parse_identifier_string("Expected collection name");
+        auto collection = schema_helper_.parse_identifier_string("Expected collection name");
         if (!collection.has_value()) [[unlikely]] {
             return std::unexpected(collection.error());
         }
@@ -67,7 +67,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
 
         ast::ColumnDefinitionList columns;
         while (true) {
-            auto column = schema_worker_.parse_column_definition();
+            auto column = schema_helper_.parse_column_definition();
             if (!column.has_value()) [[unlikely]] {
                 return std::unexpected(column.error());
             }
@@ -103,12 +103,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
 
     if (context_.match(TokenType::Index)) {
 
-        auto if_not_exists = schema_worker_.parse_if_not_exists();
+        auto if_not_exists = schema_helper_.parse_if_not_exists();
         if (!if_not_exists.has_value()) [[unlikely]] {
             return std::unexpected(if_not_exists.error());
         }
 
-        auto index_name = schema_worker_.parse_identifier_string("Expected index name");
+        auto index_name = schema_helper_.parse_identifier_string("Expected index name");
         if (!index_name.has_value()) [[unlikely]] {
             return std::unexpected(index_name.error());
         }
@@ -118,7 +118,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
             return std::unexpected(on.error());
         }
 
-        auto collection_name = schema_worker_.parse_identifier_string("Expected collection name");
+        auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
         if (!collection_name.has_value()) [[unlikely]] {
             return std::unexpected(collection_name.error());
         }
@@ -128,7 +128,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
             return std::unexpected(left_paren.error());
         }
 
-        auto column_name = schema_worker_.parse_identifier_string("Expected index column name");
+        auto column_name = schema_helper_.parse_identifier_string("Expected index column name");
         if (!column_name.has_value()) [[unlikely]] {
             return std::unexpected(column_name.error());
         }
@@ -177,12 +177,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
     TokenLocation location
 )
 {
-    auto if_not_exists = schema_worker_.parse_if_not_exists();
+    auto if_not_exists = schema_helper_.parse_if_not_exists();
     if (!if_not_exists.has_value()) [[unlikely]] {
         return std::unexpected(if_not_exists.error());
     }
 
-    auto index_name = schema_worker_.parse_identifier_string("Expected vector index name");
+    auto index_name = schema_helper_.parse_identifier_string("Expected vector index name");
     if (!index_name.has_value()) [[unlikely]] {
         return std::unexpected(index_name.error());
     }
@@ -192,7 +192,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         return std::unexpected(on.error());
     }
 
-    auto collection_name = schema_worker_.parse_identifier_string("Expected collection name");
+    auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
         return std::unexpected(collection_name.error());
     }
@@ -202,7 +202,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         return std::unexpected(left_paren.error());
     }
 
-    auto column_name = schema_worker_.parse_identifier_string("Expected vector index column name");
+    auto column_name = schema_helper_.parse_identifier_string("Expected vector index column name");
     if (!column_name.has_value()) [[unlikely]] {
         return std::unexpected(column_name.error());
     }
@@ -297,7 +297,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                         "Duplicate vector index option: max_neighbors"
                     ));
                 }
-                auto value = schema_worker_.parse_integer_value("Expected max_neighbors value");
+                auto value = schema_helper_.parse_integer_value("Expected max_neighbors value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(value.error());
                 }
@@ -310,7 +310,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                         "Duplicate vector index option: ef_construction"
                     ));
                 }
-                auto value = schema_worker_.parse_integer_value("Expected ef_construction value");
+                auto value = schema_helper_.parse_integer_value("Expected ef_construction value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(value.error());
                 }
@@ -323,7 +323,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                         "Duplicate vector index option: ef_search"
                     ));
                 }
-                auto value = schema_worker_.parse_integer_value("Expected ef_search value");
+                auto value = schema_helper_.parse_integer_value("Expected ef_search value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(value.error());
                 }
@@ -336,7 +336,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
                         "Duplicate vector index option: random_seed"
                     ));
                 }
-                auto value = schema_worker_.parse_integer_value("Expected random_seed value");
+                auto value = schema_helper_.parse_integer_value("Expected random_seed value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(value.error());
                 }

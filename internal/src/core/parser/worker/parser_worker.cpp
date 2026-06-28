@@ -1,4 +1,4 @@
-#include "core/parser/parser_worker.hpp"
+#include "core/parser/worker/parser_worker.hpp"
 
 #include <expected>
 #include <memory>
@@ -6,11 +6,15 @@
 
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/lexer.hpp"
-#include "core/parser/parser_create_worker.hpp"
-#include "core/parser/parser_drop_worker.hpp"
-#include "core/parser/parser_mutation_worker.hpp"
-#include "core/parser/parser_schema_worker.hpp"
-#include "core/parser/parser_select_worker.hpp"
+#include "core/parser/worker/parser_create_worker.hpp"
+#include "core/parser/worker/parser_delete_worker.hpp"
+#include "core/parser/worker/parser_describe_worker.hpp"
+#include "core/parser/worker/parser_drop_worker.hpp"
+#include "core/parser/worker/parser_insert_worker.hpp"
+#include "core/parser/worker/parser_select_worker.hpp"
+#include "core/parser/worker/parser_show_worker.hpp"
+#include "core/parser/worker/parser_update_worker.hpp"
+#include "core/parser/worker/parser_use_worker.hpp"
 
 namespace litedb::core::parser
 {
@@ -32,11 +36,13 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         return std::unexpected(context_.make_current_error(ParserErrorCode::LexicalError, "Invalid token"));
     }
 
+    // 解析语句
     auto statement = parse_statement();
     if (!statement.has_value()) [[unlikely]] {
         return std::unexpected(statement.error());
     }
 
+    // 跳过分号
     context_.skip_semicolon();
 
     // 主工作器统一处理语句后的非法尾随 token
@@ -54,8 +60,8 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 {
     switch (context_.current().type()) {
     case TokenType::Use: {
-        ParserSchemaWorker schema_worker(context_);
-        return schema_worker.parse_use_statement();
+        ParserUseWorker use_worker(context_);
+        return use_worker.parse_use_statement();
     }
     case TokenType::Create: {
         ParserCreateWorker create_worker(context_);
@@ -66,26 +72,26 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         return drop_worker.parse_drop_statement();
     }
     case TokenType::Show: {
-        ParserSchemaWorker schema_worker(context_);
-        return schema_worker.parse_show_statement();
+        ParserShowWorker show_worker(context_);
+        return show_worker.parse_show_statement();
     }
     case TokenType::Describe:
         [[fallthrough]];
     case TokenType::Desc: {
-        ParserSchemaWorker schema_worker(context_);
-        return schema_worker.parse_describe_statement();
+        ParserDescribeWorker describe_worker(context_);
+        return describe_worker.parse_describe_statement();
     }
     case TokenType::Insert: {
-        ParserMutationWorker mutation_worker(context_);
-        return mutation_worker.parse_insert_statement();
+        ParserInsertWorker insert_worker(context_);
+        return insert_worker.parse_insert_statement();
     }
     case TokenType::Update: {
-        ParserMutationWorker mutation_worker(context_);
-        return mutation_worker.parse_update_statement();
+        ParserUpdateWorker update_worker(context_);
+        return update_worker.parse_update_statement();
     }
     case TokenType::Delete: {
-        ParserMutationWorker mutation_worker(context_);
-        return mutation_worker.parse_delete_statement();
+        ParserDeleteWorker delete_worker(context_);
+        return delete_worker.parse_delete_statement();
     }
     case TokenType::Select: {
         ParserSelectWorker select_worker(context_);

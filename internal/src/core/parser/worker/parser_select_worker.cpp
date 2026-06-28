@@ -1,12 +1,12 @@
-#include "core/parser/parser_select_worker.hpp"
+#include "core/parser/worker/parser_select_worker.hpp"
 
 #include <expected>
 #include <memory>
 #include <utility>
 
 #include "core/parser/ast/statement/select_statement.hpp"
-#include "core/parser/parser_expression_worker.hpp"
-#include "core/parser/parser_schema_worker.hpp"
+#include "core/parser/worker/parser_expression_worker.hpp"
+#include "core/parser/worker/parser_schema_helper.hpp"
 
 namespace litedb::core::parser
 {
@@ -22,7 +22,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
     context_.advance();
 
     ParserExpressionWorker expression_worker(context_);
-    ParserSchemaWorker schema_worker(context_);
+    ParserSchemaHelper schema_worker(context_);
 
     ast::SelectStatement::SelectList select_list;
     while (true) {

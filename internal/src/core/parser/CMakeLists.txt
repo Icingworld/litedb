@@ -4,13 +4,18 @@ set(PARSER_SOURCES
     parser.cpp
     parser_context.cpp
     parser_helper.cpp
-    parser_worker.cpp
-    parser_expression_worker.cpp
-    parser_schema_worker.cpp
-    parser_select_worker.cpp
-    parser_mutation_worker.cpp
-    parser_create_worker.cpp
-    parser_drop_worker.cpp
+    worker/parser_worker.cpp
+    worker/parser_schema_helper.cpp
+    worker/parser_expression_worker.cpp
+    worker/parser_use_worker.cpp
+    worker/parser_show_worker.cpp
+    worker/parser_describe_worker.cpp
+    worker/parser_select_worker.cpp
+    worker/parser_insert_worker.cpp
+    worker/parser_update_worker.cpp
+    worker/parser_delete_worker.cpp
+    worker/parser_create_worker.cpp
+    worker/parser_drop_worker.cpp
     ast/ast_node.cpp
     ast/debug_printer.cpp
     ast/expression/expression_node.cpp

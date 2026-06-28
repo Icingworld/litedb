@@ -1,4 +1,4 @@
-﻿#include "core/parser/parser_context.hpp"
+#include "core/parser/parser_context.hpp"
 
 #include <expected>
 #include <string_view>

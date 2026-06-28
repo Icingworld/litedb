@@ -1,80 +1,26 @@
-#include "core/parser/parser_schema_worker.hpp"
+#include "core/parser/worker/parser_schema_helper.hpp"
 
 #include <charconv>
 #include <expected>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 
-#include "core/parser/ast/statement/describe_statement.hpp"
-#include "core/parser/ast/statement/show_statement.hpp"
-#include "core/parser/ast/statement/use_statement.hpp"
 #include "core/parser/parser_helper.hpp"
-#include "core/parser/parser_expression_worker.hpp"
+#include "core/parser/worker/parser_expression_worker.hpp"
 
 namespace litedb::core::parser
 {
 
-ParserSchemaWorker::ParserSchemaWorker(ParserContext & context)
+ParserSchemaHelper::ParserSchemaHelper(ParserContext & context)
     : context_(context)
     , expression_worker_(context)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSchemaWorker::parse_use_statement()
-{
-    const TokenLocation location = context_.current().location();
-    context_.advance();
-
-    auto database = parse_identifier_string("Expected database name");
-    if (!database.has_value()) [[unlikely]] {
-        return std::unexpected(database.error());
-    }
-
-    return std::make_unique<ast::UseStatement>(
-        std::move(database.value()),
-        context_.ast_location(location)
-    );
-}
-
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSchemaWorker::parse_show_statement()
-{
-    const TokenLocation location = context_.current().location();
-    context_.advance();
-
-    auto object_type = parse_schema_object_type(true);
-    if (!object_type.has_value()) [[unlikely]] {
-        return std::unexpected(object_type.error());
-    }
-
-    return std::make_unique<ast::ShowStatement>(object_type.value(), context_.ast_location(location));
-}
-
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSchemaWorker::parse_describe_statement()
-{
-    const TokenLocation location = context_.current().location();
-    context_.advance();
-
-    if (context_.check(TokenType::Collection)) {
-        context_.advance();
-    }
-
-    auto collection = parse_identifier_string("Expected collection name");
-    if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
-    }
-
-    return std::make_unique<ast::DescribeStatement>(
-        ast::SchemaObjectType::Collection,
-        std::move(collection.value()),
-        context_.ast_location(location)
-    );
-}
-
-std::expected<std::string, ParserError> ParserSchemaWorker::parse_identifier_string(std::string_view message)
+std::expected<std::string, ParserError> ParserSchemaHelper::parse_identifier_string(std::string_view message)
 {
     auto token = context_.consume(TokenType::Identifier, message, ParserErrorCode::ExpectedIdentifier);
     if (!token.has_value()) [[unlikely]] {
@@ -84,7 +30,7 @@ std::expected<std::string, ParserError> ParserSchemaWorker::parse_identifier_str
     return std::string(token->value());
 }
 
-std::expected<std::size_t, ParserError> ParserSchemaWorker::parse_integer_value(std::string_view message)
+std::expected<std::size_t, ParserError> ParserSchemaHelper::parse_integer_value(std::string_view message)
 {
     auto token = context_.consume(TokenType::IntegerLiteral, message);
     if (!token.has_value()) [[unlikely]] {
@@ -103,7 +49,7 @@ std::expected<std::size_t, ParserError> ParserSchemaWorker::parse_integer_value(
     return value;
 }
 
-std::expected<ast::DataType, ParserError> ParserSchemaWorker::parse_data_type()
+std::expected<ast::DataType, ParserError> ParserSchemaHelper::parse_data_type()
 {
     if (context_.match(TokenType::Integer)) {
         return ast::DataType {ast::DataTypeKind::Integer, std::nullopt};
@@ -154,7 +100,7 @@ std::expected<ast::DataType, ParserError> ParserSchemaWorker::parse_data_type()
     return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedDataType, "Expected data type"));
 }
 
-std::expected<ast::ColumnDefinition, ParserError> ParserSchemaWorker::parse_column_definition()
+std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_column_definition()
 {
     auto name = parse_identifier_string("Expected column name");
     if (!name.has_value()) [[unlikely]] {
@@ -199,7 +145,7 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaWorker::parse_colu
     return column;
 }
 
-std::expected<ast::SchemaObjectType, ParserError> ParserSchemaWorker::parse_schema_object_type(bool plural)
+std::expected<ast::SchemaObjectType, ParserError> ParserSchemaHelper::parse_schema_object_type(bool plural)
 {
     if (!plural && context_.match(TokenType::Database)) {
         return ast::SchemaObjectType::Database;
@@ -220,7 +166,7 @@ std::expected<ast::SchemaObjectType, ParserError> ParserSchemaWorker::parse_sche
     ));
 }
 
-std::expected<bool, ParserError> ParserSchemaWorker::parse_if_not_exists()
+std::expected<bool, ParserError> ParserSchemaHelper::parse_if_not_exists()
 {
     if (!context_.match(TokenType::If)) {
         return false;
@@ -238,7 +184,7 @@ std::expected<bool, ParserError> ParserSchemaWorker::parse_if_not_exists()
     return true;
 }
 
-std::expected<bool, ParserError> ParserSchemaWorker::parse_if_exists()
+std::expected<bool, ParserError> ParserSchemaHelper::parse_if_exists()
 {
     if (!context_.match(TokenType::If)) {
         return false;
