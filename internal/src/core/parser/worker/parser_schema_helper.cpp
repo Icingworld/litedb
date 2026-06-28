@@ -145,27 +145,6 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
     return column;
 }
 
-std::expected<ast::SchemaObjectType, ParserError> ParserSchemaHelper::parse_schema_object_type(bool plural)
-{
-    if (!plural && context_.match(TokenType::Database)) {
-        return ast::SchemaObjectType::Database;
-    }
-    if (!plural && context_.match(TokenType::Collection)) {
-        return ast::SchemaObjectType::Collection;
-    }
-    if (plural && context_.match(TokenType::Databases)) {
-        return ast::SchemaObjectType::Database;
-    }
-    if (plural && context_.match(TokenType::Collections)) {
-        return ast::SchemaObjectType::Collection;
-    }
-
-    return std::unexpected(context_.make_current_error(
-        ParserErrorCode::ExpectedToken,
-        plural ? "Expected DATABASES or COLLECTIONS" : "Expected DATABASE or COLLECTION"
-    ));
-}
-
 std::expected<bool, ParserError> ParserSchemaHelper::parse_if_not_exists()
 {
     if (!context_.match(TokenType::If)) {

@@ -36,9 +36,6 @@ public:
     std::expected<ast::ColumnDefinition, ParserError> parse_column_definition();
 
     [[nodiscard]]
-    std::expected<ast::SchemaObjectType, ParserError> parse_schema_object_type(bool plural);
-
-    [[nodiscard]]
     std::expected<bool, ParserError> parse_if_not_exists();
 
     [[nodiscard]]

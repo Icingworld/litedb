@@ -60,42 +60,33 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 {
     switch (context_.current().type()) {
     case TokenType::Use: {
-        ParserUseWorker use_worker(context_);
-        return use_worker.parse_use_statement();
+        return ParserUseWorker(context_).parse_use_statement();
     }
     case TokenType::Create: {
-        ParserCreateWorker create_worker(context_);
-        return create_worker.parse_create_statement();
+        return ParserCreateWorker(context_).parse_create_statement();
     }
     case TokenType::Drop: {
-        ParserDropWorker drop_worker(context_);
-        return drop_worker.parse_drop_statement();
+        return ParserDropWorker(context_).parse_drop_statement();
     }
     case TokenType::Show: {
-        ParserShowWorker show_worker(context_);
-        return show_worker.parse_show_statement();
+        return ParserShowWorker(context_).parse_show_statement();
     }
     case TokenType::Describe:
         [[fallthrough]];
     case TokenType::Desc: {
-        ParserDescribeWorker describe_worker(context_);
-        return describe_worker.parse_describe_statement();
+        return ParserDescribeWorker(context_).parse_describe_statement();
     }
     case TokenType::Insert: {
-        ParserInsertWorker insert_worker(context_);
-        return insert_worker.parse_insert_statement();
+        return ParserInsertWorker(context_).parse_insert_statement();
     }
     case TokenType::Update: {
-        ParserUpdateWorker update_worker(context_);
-        return update_worker.parse_update_statement();
+        return ParserUpdateWorker(context_).parse_update_statement();
     }
     case TokenType::Delete: {
-        ParserDeleteWorker delete_worker(context_);
-        return delete_worker.parse_delete_statement();
+        return ParserDeleteWorker(context_).parse_delete_statement();
     }
     case TokenType::Select: {
-        ParserSelectWorker select_worker(context_);
-        return select_worker.parse_select_statement();
+        return ParserSelectWorker(context_).parse_select_statement();
     }
     [[unlikely]] default:
         return std::unexpected(context_.make_current_error(ParserErrorCode::UnexpectedStatement, "Unexpected statement"));

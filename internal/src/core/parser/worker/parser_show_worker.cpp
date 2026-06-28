@@ -4,7 +4,6 @@
 #include <memory>
 
 #include "core/parser/ast/statement/show_statement.hpp"
-#include "core/parser/worker/parser_schema_helper.hpp"
 
 namespace litedb::core::parser
 {
@@ -19,13 +18,24 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
     const TokenLocation location = context_.current().location();
     context_.advance();
 
-    ParserSchemaHelper schema_helper(context_);
-    auto object_type = schema_helper.parse_schema_object_type(true);
-    if (!object_type.has_value()) [[unlikely]] {
-        return std::unexpected(object_type.error());
+    if (context_.match(TokenType::Databases)) {
+        return std::make_unique<ast::ShowStatement>(
+            ast::SchemaObjectType::Database,
+            context_.ast_location(location)
+        );
     }
 
-    return std::make_unique<ast::ShowStatement>(object_type.value(), context_.ast_location(location));
+    if (context_.match(TokenType::Collections)) {
+        return std::make_unique<ast::ShowStatement>(
+            ast::SchemaObjectType::Collection,
+            context_.ast_location(location)
+        );
+    }
+
+    return std::unexpected(context_.make_current_error(
+        ParserErrorCode::ExpectedToken,
+        "Expected DATABASES or COLLECTIONS after SHOW"
+    ));
 }
 
 } // namespace litedb::core::parser
