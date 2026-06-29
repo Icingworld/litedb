@@ -10,14 +10,19 @@ BoundLiteralExpression::BoundLiteralExpression(
     std::string value,
     parser::ast::AstNodeLocation location
 )
-    : BoundExpression(BoundExpressionKind::Literal, type, location),
-      value_(std::move(value))
+    : BoundExpression(BoundExpressionKind::Literal, type, location)
+    , value_(std::move(value))
 {
 }
 
 const std::string & BoundLiteralExpression::value() const noexcept
 {
     return value_;
+}
+
+void BoundLiteralExpression::accept(BoundExpressionVisitor & visitor) const
+{
+    visitor.visit(*this);
 }
 
 } // namespace litedb::core::binder::bound

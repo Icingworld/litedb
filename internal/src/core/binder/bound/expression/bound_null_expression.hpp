@@ -13,6 +13,12 @@ class BoundNullExpression final : public BoundExpression
 {
 public:
     BoundNullExpression(common::LogicalType type, parser::ast::AstNodeLocation location);
+
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
 };
 
 } // namespace litedb::core::binder::bound

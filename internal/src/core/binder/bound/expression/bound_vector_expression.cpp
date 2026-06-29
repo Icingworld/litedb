@@ -10,14 +10,19 @@ BoundVectorExpression::BoundVectorExpression(
     common::LogicalType type,
     parser::ast::AstNodeLocation location
 )
-    : BoundExpression(BoundExpressionKind::Vector, type, location),
-      elements_(std::move(elements))
+    : BoundExpression(BoundExpressionKind::Vector, type, location)
+    , elements_(std::move(elements))
 {
 }
 
 const std::vector<std::unique_ptr<BoundExpression>> & BoundVectorExpression::elements() const noexcept
 {
     return elements_;
+}
+
+void BoundVectorExpression::accept(BoundExpressionVisitor & visitor) const
+{
+    visitor.visit(*this);
 }
 
 } // namespace litedb::core::binder::bound

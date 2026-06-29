@@ -12,15 +12,31 @@ BoundBinaryExpression::BoundBinaryExpression(
     common::LogicalType type,
     parser::ast::AstNodeLocation location
 )
-    : BoundExpression(BoundExpressionKind::Binary, type, location),
-      left_(std::move(left)),
-      op_(op),
-      right_(std::move(right))
+    : BoundExpression(BoundExpressionKind::Binary, type, location)
+    , left_(std::move(left))
+    , op_(op)
+    , right_(std::move(right))
 {
 }
 
-const BoundExpression & BoundBinaryExpression::left() const noexcept { return *left_; }
-parser::TokenType BoundBinaryExpression::op() const noexcept { return op_; }
-const BoundExpression & BoundBinaryExpression::right() const noexcept { return *right_; }
+const BoundExpression & BoundBinaryExpression::left() const noexcept
+{
+    return *left_;
+}
+
+parser::TokenType BoundBinaryExpression::op() const noexcept
+{
+    return op_;
+}
+
+const BoundExpression & BoundBinaryExpression::right() const noexcept
+{
+    return *right_;
+}
+
+void BoundBinaryExpression::accept(BoundExpressionVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
 
 } // namespace litedb::core::binder::bound

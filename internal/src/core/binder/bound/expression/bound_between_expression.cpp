@@ -11,15 +11,31 @@ BoundBetweenExpression::BoundBetweenExpression(
     std::unique_ptr<BoundExpression> upper,
     parser::ast::AstNodeLocation location
 )
-    : BoundExpression(BoundExpressionKind::Between, common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt}, location),
-      expression_(std::move(expression)),
-      lower_(std::move(lower)),
-      upper_(std::move(upper))
+    : BoundExpression(BoundExpressionKind::Between, common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt}, location)
+    , expression_(std::move(expression))
+    , lower_(std::move(lower))
+    , upper_(std::move(upper))
 {
 }
 
-const BoundExpression & BoundBetweenExpression::expression() const noexcept { return *expression_; }
-const BoundExpression & BoundBetweenExpression::lower() const noexcept { return *lower_; }
-const BoundExpression & BoundBetweenExpression::upper() const noexcept { return *upper_; }
+const BoundExpression & BoundBetweenExpression::expression() const noexcept
+{
+    return *expression_;
+}
+
+const BoundExpression & BoundBetweenExpression::lower() const noexcept
+{
+    return *lower_;
+}
+
+const BoundExpression & BoundBetweenExpression::upper() const noexcept
+{
+    return *upper_;
+}
+
+void BoundBetweenExpression::accept(BoundExpressionVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
 
 } // namespace litedb::core::binder::bound

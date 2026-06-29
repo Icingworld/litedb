@@ -24,6 +24,12 @@ public:
     [[nodiscard]]
     const std::string & value() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
+
 private:
     std::string value_;     ///< 常量值
 };

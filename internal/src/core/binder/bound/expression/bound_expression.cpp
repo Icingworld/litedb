@@ -8,9 +8,9 @@ BoundExpression::BoundExpression(
     common::LogicalType type,
     parser::ast::AstNodeLocation location
 ) noexcept
-    : kind_(kind),
-      type_(type),
-      location_(location)
+    : kind_(kind)
+    , type_(type)
+    , location_(location)
 {
 }
 

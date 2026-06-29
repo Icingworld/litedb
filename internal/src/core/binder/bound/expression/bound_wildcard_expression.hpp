@@ -25,6 +25,12 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & qualifier() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
+
 private:
     std::optional<std::string> qualifier_;    ///< 限定符
 };

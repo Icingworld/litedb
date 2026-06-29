@@ -28,6 +28,12 @@ public:
     [[nodiscard]]
     const BoundExpression & expression() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
+
 private:
     std::unique_ptr<BoundExpression> expression_;    ///< 表达式
 };

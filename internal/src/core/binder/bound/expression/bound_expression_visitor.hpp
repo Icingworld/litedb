@@ -6,8 +6,8 @@ namespace litedb::core::binder::bound
 class BoundBetweenExpression;
 class BoundBinaryExpression;
 class BoundCastExpression;
-class BoundColumnReferenceExpression;
-class BoundFunctionCallExpression;
+class BoundColumnRefExpression;
+class BoundFunctionExpression;
 class BoundInExpression;
 class BoundLikeExpression;
 class BoundLiteralExpression;
@@ -28,8 +28,8 @@ public:
     virtual void visit(const BoundBetweenExpression & expression) = 0;
     virtual void visit(const BoundBinaryExpression & expression) = 0;
     virtual void visit(const BoundCastExpression & expression) = 0;
-    virtual void visit(const BoundColumnReferenceExpression & expression) = 0;
-    virtual void visit(const BoundFunctionCallExpression & expression) = 0;
+    virtual void visit(const BoundColumnRefExpression & expression) = 0;
+    virtual void visit(const BoundFunctionExpression & expression) = 0;
     virtual void visit(const BoundInExpression & expression) = 0;
     virtual void visit(const BoundLikeExpression & expression) = 0;
     virtual void visit(const BoundLiteralExpression & expression) = 0;
