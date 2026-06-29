@@ -42,7 +42,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
 
 std::string print_without_location(const AstNode & node)
 {
-    DebugPrinterOptions options;
+    AstDebugPrinterOptions options;
     options.include_location = false;
     return debug_print(node, options);
 }

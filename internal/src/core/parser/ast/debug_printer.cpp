@@ -251,7 +251,7 @@ private:
     AstDebugPrinter & printer_;         ///< 调试打印器
 };
 
-AstDebugPrinter::AstDebugPrinter(std::ostream & out, DebugPrinterOptions options)
+AstDebugPrinter::AstDebugPrinter(std::ostream & out, AstDebugPrinterOptions options)
     : out_(out)
     , options_(options)
 {
@@ -750,14 +750,14 @@ void AstDebugPrinter::visit(const WildcardExpression & node)
     }
 }
 
-std::string debug_print(const AstNode & node, DebugPrinterOptions options)
+std::string debug_print(const AstNode & node, AstDebugPrinterOptions options)
 {
     std::ostringstream out;
     debug_print(out, node, options);
     return out.str();
 }
 
-void debug_print(std::ostream & out, const AstNode & node, DebugPrinterOptions options)
+void debug_print(std::ostream & out, const AstNode & node, AstDebugPrinterOptions options)
 {
     AstDebugPrinter printer(out, options);
     printer.print(node);

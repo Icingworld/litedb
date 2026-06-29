@@ -11,20 +11,20 @@ namespace litedb::core::parser::ast
 {
 
 /**
- * @brief 调试打印器选项
+ * @brief AST 调试打印器选项
  */
-struct DebugPrinterOptions
+struct AstDebugPrinterOptions
 {
     bool include_location {true};  ///< 是否包含位置信息
 };
 
 /**
- * @brief 调试打印器
+ * @brief AST 调试打印器
  */
 class AstDebugPrinter final : public AstNodeVisitor
 {
 public:
-    explicit AstDebugPrinter(std::ostream & out, DebugPrinterOptions options = {});
+    explicit AstDebugPrinter(std::ostream & out, AstDebugPrinterOptions options = {});
 
 public:
     /**
@@ -130,25 +130,25 @@ private:
 
 private:
     std::ostream & out_;                ///< 输出流
-    DebugPrinterOptions options_;       ///< 选项
+    AstDebugPrinterOptions options_;    ///< 选项
     std::size_t indent_ {0};            ///< 缩进
     std::string pending_prefix_;        ///< 待处理前缀
 };
 
 /**
- * @brief 调试打印
+ * @brief AST 调试打印
  * @param node 节点
  * @param options 选项
- * @return 调试打印结果
+ * @return AST 调试打印结果
  */
-std::string debug_print(const AstNode & node, DebugPrinterOptions options = {});
+std::string debug_print(const AstNode & node, AstDebugPrinterOptions options = {});
 
 /**
- * @brief 调试打印
+ * @brief AST 调试打印
  * @param out 输出流
  * @param node 节点
  * @param options 选项
  */
-void debug_print(std::ostream & out, const AstNode & node, DebugPrinterOptions options = {});
+void debug_print(std::ostream & out, const AstNode & node, AstDebugPrinterOptions options = {});
 
 } // namespace litedb::core::parser::ast

@@ -1,5 +1,6 @@
 set(BINDER_SOURCES
     binder.cpp
+    bound/debug_printer.cpp
     bound/expression/bound_binary_expression.cpp
     bound/expression/bound_between_expression.cpp
     bound/expression/bound_cast_expression.cpp
