@@ -27,6 +27,8 @@ set(BINDER_SOURCES
     bound/statement/bound_select_statement.cpp
     bound/statement/bound_show_collections_statement.cpp
     bound/statement/bound_show_databases_statement.cpp
+    bound/statement/bound_show_indexes_statement.cpp
+    bound/statement/bound_show_vector_indexes_statement.cpp
     bound/statement/bound_statement.cpp
     bound/statement/bound_update_statement.cpp
     bound/statement/bound_use_statement.cpp

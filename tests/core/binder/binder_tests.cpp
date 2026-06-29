@@ -9,6 +9,8 @@
 #include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
+#include "core/binder/bound/statement/bound_show_indexes_statement.hpp"
+#include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
 #include "core/catalog/in_memory_catalog.hpp"
@@ -250,6 +252,19 @@ void test_ddl_and_metadata_binding()
     require(bind_ok(fixture, "DROP DATABASE IF EXISTS missing;")->kind() == BoundStatementKind::DropDatabase, "DROP DATABASE IF EXISTS kind mismatch");
     require(bind_ok(fixture, "SHOW DATABASES;")->kind() == BoundStatementKind::ShowDatabases, "SHOW DATABASES kind mismatch");
     require(bind_ok(fixture, "SHOW COLLECTIONS;")->kind() == BoundStatementKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
+    auto show_indexes = bind_ok(fixture, "SHOW INDEXES FROM users;");
+    require(show_indexes->kind() == BoundStatementKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    const auto * bound_show_indexes = static_cast<const BoundShowIndexesStatement *>(show_indexes.get());
+    require(bound_show_indexes->database_id() == fixture.database_id, "SHOW INDEXES database id mismatch");
+    require(bound_show_indexes->collection_id() == fixture.users_id, "SHOW INDEXES collection id mismatch");
+    require(bound_show_indexes->collection_name() == "users", "SHOW INDEXES collection name mismatch");
+
+    auto show_vector_indexes = bind_ok(fixture, "SHOW VINDEXES FROM users;");
+    require(show_vector_indexes->kind() == BoundStatementKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    const auto * bound_show_vector_indexes = static_cast<const BoundShowVectorIndexesStatement *>(show_vector_indexes.get());
+    require(bound_show_vector_indexes->database_id() == fixture.database_id, "SHOW VINDEXES database id mismatch");
+    require(bound_show_vector_indexes->collection_id() == fixture.users_id, "SHOW VINDEXES collection id mismatch");
+    require(bound_show_vector_indexes->collection_name() == "users", "SHOW VINDEXES collection name mismatch");
     require(bind_ok(fixture, "DESCRIBE users;")->kind() == BoundStatementKind::DescribeCollection, "DESCRIBE kind mismatch");
 
     auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT PRIMARY KEY, embedding VECTOR(3));");

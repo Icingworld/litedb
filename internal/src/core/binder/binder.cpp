@@ -35,6 +35,8 @@
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_show_collections_statement.hpp"
 #include "core/binder/bound/statement/bound_show_databases_statement.hpp"
+#include "core/binder/bound/statement/bound_show_indexes_statement.hpp"
+#include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
 #include "core/catalog/catalog_default_expression.hpp"
@@ -65,7 +67,9 @@
 #include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
+#include "core/parser/ast/statement/show_indexes_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
+#include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include "core/parser/ast/statement/use_statement.hpp"
@@ -461,6 +465,16 @@ private:
     [[nodiscard]]
     std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_show(const ShowStatement & statement);
 
+    [[nodiscard]]
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_show_indexes(
+        const ShowIndexesStatement & statement
+    );
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<BoundStatement>, BinderError> bind_show_vector_indexes(
+        const ShowVectorIndexesStatement & statement
+    );
+
     /**
      * @brief 绑定 DESCRIBE 语句
      * @param statement DESCRIBE 语句
@@ -709,6 +723,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_s
         return bind_drop_vector_index(static_cast<const DropVectorIndexStatement &>(statement));
     case AstNodeKind::Show:
         return bind_show(static_cast<const ShowStatement &>(statement));
+    case AstNodeKind::ShowIndexes:
+        return bind_show_indexes(static_cast<const ShowIndexesStatement &>(statement));
+    case AstNodeKind::ShowVectorIndexes:
+        return bind_show_vector_indexes(static_cast<const ShowVectorIndexesStatement &>(statement));
     case AstNodeKind::Describe:
         return bind_describe(static_cast<const DescribeStatement &>(statement));
     case AstNodeKind::Insert:
@@ -1033,6 +1051,40 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_s
     }
 
     return std::make_unique<BoundShowCollectionsStatement>(database_id.value(), statement.location());
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_show_indexes(
+    const ShowIndexesStatement & statement
+)
+{
+    auto collection = bind_collection(statement.collection_name(), statement.location());
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(collection.error()));
+    }
+
+    return std::make_unique<BoundShowIndexesStatement>(
+        collection->database_id,
+        collection->collection->id(),
+        collection->collection->name(),
+        statement.location()
+    );
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_show_vector_indexes(
+    const ShowVectorIndexesStatement & statement
+)
+{
+    auto collection = bind_collection(statement.collection_name(), statement.location());
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(collection.error()));
+    }
+
+    return std::make_unique<BoundShowVectorIndexesStatement>(
+        collection->database_id,
+        collection->collection->id(),
+        collection->collection->name(),
+        statement.location()
+    );
 }
 
 /**
