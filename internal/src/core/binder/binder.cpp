@@ -349,8 +349,6 @@ BoundColumn bound_column_from_entry(const catalog::ColumnEntry & column)
 catalog::CatalogIndexKind catalog_index_kind(CreateIndexMethod method)
 {
     switch (method) {
-    case CreateIndexMethod::Hash:
-        return catalog::CatalogIndexKind::Hash;
     case CreateIndexMethod::Default:
         [[fallthrough]];
     case CreateIndexMethod::BTree:

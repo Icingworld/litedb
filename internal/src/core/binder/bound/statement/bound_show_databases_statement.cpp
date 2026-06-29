@@ -8,4 +8,9 @@ BoundShowDatabasesStatement::BoundShowDatabasesStatement(parser::ast::AstNodeLoc
 {
 }
 
+void BoundShowDatabasesStatement::accept(BoundStatementVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::binder::bound

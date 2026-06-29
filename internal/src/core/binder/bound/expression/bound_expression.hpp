@@ -6,6 +6,8 @@
 namespace litedb::core::binder::bound
 {
 
+class BoundExpressionVisitor;
+
 enum class BoundExpressionKind
 {
     Literal,
@@ -46,6 +48,12 @@ public:
 
     [[nodiscard]]
     parser::ast::AstNodeLocation location() const noexcept;
+
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    virtual void accept(BoundExpressionVisitor & visitor) const = 0;
 
 private:
     BoundExpressionKind kind_;

@@ -18,8 +18,8 @@ public:
 
 public:
     /**
-     * @brief 获取数据库ID
-     * @return 数据库ID
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
@@ -31,8 +31,14 @@ public:
     [[nodiscard]]
     const std::string & database_name() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
-    common::DatabaseId database_id_;        ///< 数据库ID
+    common::DatabaseId database_id_;        ///< 数据库 ID
     std::string database_name_;             ///< 数据库名称
 };
 

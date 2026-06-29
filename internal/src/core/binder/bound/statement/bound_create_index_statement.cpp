@@ -75,4 +75,9 @@ bool BoundCreateIndexStatement::if_not_exists() const noexcept
     return if_not_exists_;
 }
 
+void BoundCreateIndexStatement::accept(BoundStatementVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::binder::bound

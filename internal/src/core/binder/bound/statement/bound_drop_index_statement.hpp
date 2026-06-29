@@ -59,6 +59,12 @@ public:
     [[nodiscard]]
     bool if_exists() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
     common::DatabaseId database_id_;        ///< 数据库 ID
     common::CollectionId collection_id_;    ///< 集合 ID

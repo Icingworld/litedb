@@ -7,6 +7,10 @@
 namespace litedb::core::binder::bound
 {
 
+/**
+ * @brief DROP VINDEX 语句节点
+ * @details 示例：DROP VINDEX [IF EXISTS] <index_name> ON <collection_name>
+ */
 class BoundDropVectorIndexStatement final : public BoundStatement
 {
 public:
@@ -20,27 +24,53 @@ public:
     );
 
 public:
+    /**
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
+     */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
+    /**
+     * @brief 获取集合 ID
+     * @return 集合 ID
+     */
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
+    /**
+     * @brief 获取集合名称
+     * @return 集合名称
+     */
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
 
+    /**
+     * @brief 获取索引名称
+     * @return 索引名称
+     */
     [[nodiscard]]
     const std::string & index_name() const noexcept;
 
+    /**
+     * @brief 是否存在
+     * @return 是否存在
+     */
     [[nodiscard]]
     bool if_exists() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
-    common::DatabaseId database_id_;
-    common::CollectionId collection_id_;
-    std::string collection_name_;
-    std::string index_name_;
-    bool if_exists_;
+    common::DatabaseId database_id_;            ///< 数据库 ID
+    common::CollectionId collection_id_;        ///< 集合 ID
+    std::string collection_name_;               ///< 集合名称
+    std::string index_name_;                    ///< 索引名称
+    bool if_exists_;                            ///< 是否存在
 };
 
 } // namespace litedb::core::binder::bound

@@ -13,6 +13,13 @@ class BoundShowDatabasesStatement final : public BoundStatement
 {
 public:
     explicit BoundShowDatabasesStatement(parser::ast::AstNodeLocation location);
+
+public:
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
 };
 
 } // namespace litedb::core::binder::bound
