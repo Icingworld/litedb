@@ -10,6 +10,7 @@ namespace litedb::core::parser::ast
  * @brief SHOW 语句节点
  * @details 示例：SHOW <object_type>
  * @note object_type 可以是 DATABASE 或 COLLECTION
+ * @deprecated 即将废弃，请使用 ShowDatabasesStatement、ShowCollectionsStatement、ShowIndexesStatement、ShowVectorIndexesStatement 代替
  */
 class ShowStatement final : public StatementNode
 {

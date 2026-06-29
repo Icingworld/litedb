@@ -48,6 +48,10 @@ public:
     void visit(const InsertStatement & node) override;
     void visit(const SelectStatement & node) override;
     void visit(const ShowStatement & node) override;
+    void visit(const ShowCollectionsStatement & node) override;
+    void visit(const ShowDatabasesStatement & node) override;
+    void visit(const ShowIndexesStatement & node) override;
+    void visit(const ShowVectorIndexesStatement & node) override;
     void visit(const UpdateStatement & node) override;
     void visit(const UseStatement & node) override;
 

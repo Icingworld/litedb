@@ -24,7 +24,11 @@
 #include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
+#include "core/parser/ast/statement/show_collections_statement.hpp"
+#include "core/parser/ast/statement/show_databases_statement.hpp"
+#include "core/parser/ast/statement/show_indexes_statement.hpp"
 #include "core/parser/ast/statement/show_statement.hpp"
+#include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include "core/parser/ast/statement/use_statement.hpp"
 #include "core/parser/token.hpp"
@@ -548,6 +552,36 @@ void AstDebugPrinter::visit(const ShowStatement & node)
     write_node_header("ShowStatement", node.location());
     IndentScope scope(*this);
     write_field("object_type", schema_object_type_name(node.object_type()));
+}
+
+void AstDebugPrinter::visit(const ShowCollectionsStatement & node)
+{
+    write_node_header("ShowCollectionsStatement", node.location());
+    IndentScope scope(*this);
+    if (node.database_name().has_value()) {
+        write_field("database_name", node.database_name().value());
+    } else {
+        write_field("database_name", "null");
+    }
+}
+
+void AstDebugPrinter::visit(const ShowDatabasesStatement & node)
+{
+    write_node_header("ShowDatabasesStatement", node.location());
+}
+
+void AstDebugPrinter::visit(const ShowIndexesStatement & node)
+{
+    write_node_header("ShowIndexesStatement", node.location());
+    IndentScope scope(*this);
+    write_field("collection_name", node.collection_name());
+}
+
+void AstDebugPrinter::visit(const ShowVectorIndexesStatement & node)
+{
+    write_node_header("ShowVectorIndexesStatement", node.location());
+    IndentScope scope(*this);
+    write_field("collection_name", node.collection_name());
 }
 
 void AstDebugPrinter::visit(const UpdateStatement & node)

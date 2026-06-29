@@ -17,6 +17,10 @@ class DropVectorIndexStatement;
 class InsertStatement;
 class SelectStatement;
 class ShowStatement;
+class ShowCollectionsStatement;
+class ShowDatabasesStatement;
+class ShowIndexesStatement;
+class ShowVectorIndexesStatement;
 class UpdateStatement;
 class UseStatement;
 class BetweenExpression;
@@ -54,6 +58,10 @@ public:
     virtual void visit(const InsertStatement & node) = 0;
     virtual void visit(const SelectStatement & node) = 0;
     virtual void visit(const ShowStatement & node) = 0;
+    virtual void visit(const ShowCollectionsStatement & node) = 0;
+    virtual void visit(const ShowDatabasesStatement & node) = 0;
+    virtual void visit(const ShowIndexesStatement & node) = 0;
+    virtual void visit(const ShowVectorIndexesStatement & node) = 0;
     virtual void visit(const UpdateStatement & node) = 0;
     virtual void visit(const UseStatement & node) = 0;
 

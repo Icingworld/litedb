@@ -36,6 +36,10 @@ enum class AstNodeKind : std::uint8_t
     Insert,                 ///< INSERT
     Select,                 ///< SELECT
     Show,                   ///< SHOW
+    ShowDatabases,          ///< SHOW DATABASES
+    ShowCollections,        ///< SHOW COLLECTIONS
+    ShowIndexes,            ///< SHOW INDEXES
+    ShowVectorIndexes,      ///< SHOW VINDEXES
     Update,                 ///< UPDATE
     Use,                    ///< USE
 

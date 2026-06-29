@@ -21,7 +21,10 @@
 #include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
-#include "core/parser/ast/statement/show_statement.hpp"
+#include "core/parser/ast/statement/show_collections_statement.hpp"
+#include "core/parser/ast/statement/show_databases_statement.hpp"
+#include "core/parser/ast/statement/show_indexes_statement.hpp"
+#include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include "core/parser/ast/statement/use_statement.hpp"
 
@@ -207,12 +210,28 @@ void test_parse_drop_show_describe_statements()
     require(drop_vidx->if_exists(), "DROP VINDEX IF EXISTS mismatch");
 
     auto show_databases = parse_ok("SHOW DATABASES;");
-    const auto * show_db = static_cast<const ShowStatement *>(show_databases.get());
-    require(show_db->object_type() == SchemaObjectType::Database, "SHOW DATABASES object type mismatch");
+    require(show_databases->kind() == AstNodeKind::ShowDatabases, "SHOW DATABASES kind mismatch");
 
     auto show_collections = parse_ok("SHOW COLLECTIONS;");
-    const auto * show_col = static_cast<const ShowStatement *>(show_collections.get());
-    require(show_col->object_type() == SchemaObjectType::Collection, "SHOW COLLECTIONS object type mismatch");
+    require(show_collections->kind() == AstNodeKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
+    const auto * show_col = static_cast<const ShowCollectionsStatement *>(show_collections.get());
+    require(!show_col->database_name().has_value(), "SHOW COLLECTIONS database name mismatch");
+
+    auto show_collections_from = parse_ok("SHOW COLLECTIONS FROM demo;");
+    require(show_collections_from->kind() == AstNodeKind::ShowCollections, "SHOW COLLECTIONS FROM kind mismatch");
+    const auto * show_col_from = static_cast<const ShowCollectionsStatement *>(show_collections_from.get());
+    require(show_col_from->database_name().has_value(), "SHOW COLLECTIONS FROM database name missing");
+    require(show_col_from->database_name().value() == "demo", "SHOW COLLECTIONS FROM database name mismatch");
+
+    auto show_indexes = parse_ok("SHOW INDEXES FROM users;");
+    require(show_indexes->kind() == AstNodeKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    const auto * show_idx = static_cast<const ShowIndexesStatement *>(show_indexes.get());
+    require(show_idx->collection_name() == "users", "SHOW INDEXES collection name mismatch");
+
+    auto show_vector_indexes = parse_ok("SHOW VINDEXES FROM docs;");
+    require(show_vector_indexes->kind() == AstNodeKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    const auto * show_vidx = static_cast<const ShowVectorIndexesStatement *>(show_vector_indexes.get());
+    require(show_vidx->collection_name() == "docs", "SHOW VINDEXES collection name mismatch");
 
     auto describe = parse_ok("DESCRIBE users;");
     const auto * describe_statement = static_cast<const DescribeStatement *>(describe.get());
@@ -376,6 +395,14 @@ void test_parse_failures()
     auto unsupported_b_tree = parse_error("CREATE INDEX idx_age ON users(age) USING B_TREE;");
     require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
     require(unsupported_b_tree.message == "Expected HASH or BTREE after USING", "CREATE INDEX B_TREE error mismatch");
+
+    auto show_indexes_missing_from = parse_error("SHOW INDEXES;");
+    require(show_indexes_missing_from.code == ParserErrorCode::ExpectedToken, "SHOW INDEXES missing FROM error code mismatch");
+    require(show_indexes_missing_from.message == "Expected FROM after SHOW INDEXES", "SHOW INDEXES missing FROM error mismatch");
+
+    auto show_vindexes_missing_from = parse_error("SHOW VINDEXES;");
+    require(show_vindexes_missing_from.code == ParserErrorCode::ExpectedToken, "SHOW VINDEXES missing FROM error code mismatch");
+    require(show_vindexes_missing_from.message == "Expected FROM after SHOW VINDEXES", "SHOW VINDEXES missing FROM error mismatch");
 
     auto lexical_error = parse_error("SELECT ! FROM users;");
     require(lexical_error.code == ParserErrorCode::LexicalError, "lexical error code mismatch");
