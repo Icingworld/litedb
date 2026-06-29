@@ -32,11 +32,20 @@ public:
 
 private:
     [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_database_statement(TokenLocation location);
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_collection_statement(TokenLocation location);
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_index_statement(TokenLocation location);
+
+    [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_vector_index_statement(TokenLocation location);
 
 private:
-    ParserContext & context_;
-    ParserSchemaHelper schema_helper_;
+    ParserContext & context_;                   ///< 解析上下文
+    ParserSchemaHelper schema_helper_;          ///< 模式助手
 };
 
 } // namespace litedb::core::parser

@@ -54,6 +54,7 @@ enum class AstNodeKind : std::uint8_t
     In,                     ///< IN
     Between,                ///< BETWEEN
     Like,                   ///< LIKE
+    Alias,                  ///< AS alias
 };
 
 /**

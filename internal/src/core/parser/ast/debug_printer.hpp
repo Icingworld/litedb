@@ -55,6 +55,7 @@ public:
     void visit(const UpdateStatement & node) override;
     void visit(const UseStatement & node) override;
 
+    void visit(const AliasExpression & node) override;
     void visit(const BetweenExpression & node) override;
     void visit(const BinaryExpression & node) override;
     void visit(const ColumnReferenceExpression & node) override;

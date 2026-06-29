@@ -25,77 +25,97 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
     context_.advance();
 
     if (context_.match(TokenType::Databases)) {
-        return std::make_unique<ast::ShowDatabasesStatement>(
-            context_.ast_location(location)
-        );
+        return parse_show_databases_statement(location);
     }
 
     if (context_.match(TokenType::Collections)) {
-        std::optional<std::string> database_name;
-        if (context_.match(TokenType::From)) {
-            auto database = context_.consume(
-                TokenType::Identifier,
-                "Expected database name after FROM",
-                ParserErrorCode::ExpectedIdentifier
-            );
-            if (!database.has_value()) [[unlikely]] {
-                return std::unexpected(database.error());
-            }
-            database_name = std::string(database->value());
-        }
-
-        return std::make_unique<ast::ShowCollectionsStatement>(
-            std::move(database_name),
-            context_.ast_location(location)
-        );
+        return parse_show_collections_statement(location);
     }
 
     if (context_.match(TokenType::Indexes)) {
-        auto from = context_.consume(TokenType::From, "Expected FROM after SHOW INDEXES");
-        if (!from.has_value()) [[unlikely]] {
-            return std::unexpected(from.error());
-        }
-
-        auto collection = context_.consume(
-            TokenType::Identifier,
-            "Expected collection name after FROM",
-            ParserErrorCode::ExpectedIdentifier
-        );
-        if (!collection.has_value()) [[unlikely]] {
-            return std::unexpected(collection.error());
-        }
-
-        return std::make_unique<ast::ShowIndexesStatement>(
-            std::string(collection->value()),
-            context_.ast_location(location)
-        );
+        return parse_show_indexes_statement(location);
     }
 
     if (context_.match(TokenType::VIndexes)) {
-        auto from = context_.consume(TokenType::From, "Expected FROM after SHOW VINDEXES");
-        if (!from.has_value()) [[unlikely]] {
-            return std::unexpected(from.error());
-        }
-
-        auto collection = context_.consume(
-            TokenType::Identifier,
-            "Expected collection name after FROM",
-            ParserErrorCode::ExpectedIdentifier
-        );
-        if (!collection.has_value()) [[unlikely]] {
-            return std::unexpected(collection.error());
-        }
-
-        return std::make_unique<ast::ShowVectorIndexesStatement>(
-            std::string(collection->value()),
-            context_.ast_location(location)
-        );
+        return parse_show_vector_indexes_statement(location);
     }
 
     [[unlikely]] return std::unexpected(context_.make_current_error(
         ParserErrorCode::ExpectedToken,
         "Expected DATABASES, COLLECTIONS, INDEXES, or VINDEXES after SHOW"
     ));
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker::parse_show_databases_statement(TokenLocation location)
+{
+    return std::make_unique<ast::ShowDatabasesStatement>(
+        context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker::parse_show_collections_statement(TokenLocation location)
+{
+    std::optional<std::string> database_name;
+    if (context_.match(TokenType::From)) {
+        auto database = context_.consume(
+            TokenType::Identifier,
+            "Expected database name after FROM",
+            ParserErrorCode::ExpectedIdentifier
+        );
+        if (!database.has_value()) [[unlikely]] {
+            return std::unexpected(database.error());
+        }
+        database_name = std::string(database->value());
+    }
+
+    return std::make_unique<ast::ShowCollectionsStatement>(
+        std::move(database_name),
+        context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker::parse_show_indexes_statement(TokenLocation location)
+{
+    auto from = context_.consume(TokenType::From, "Expected FROM after SHOW INDEXES");
+    if (!from.has_value()) [[unlikely]] {
+        return std::unexpected(from.error());
+    }
+
+    auto collection = context_.consume(
+        TokenType::Identifier,
+        "Expected collection name after FROM",
+        ParserErrorCode::ExpectedIdentifier
+    );
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(collection.error());
+    }
+
+    return std::make_unique<ast::ShowIndexesStatement>(
+        std::string(collection->value()),
+        context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker::parse_show_vector_indexes_statement(TokenLocation location)
+{
+    auto from = context_.consume(TokenType::From, "Expected FROM after SHOW VINDEXES");
+    if (!from.has_value()) [[unlikely]] {
+        return std::unexpected(from.error());
+    }
+
+    auto collection = context_.consume(
+        TokenType::Identifier,
+        "Expected collection name after FROM",
+        ParserErrorCode::ExpectedIdentifier
+    );
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(collection.error());
+    }
+
+    return std::make_unique<ast::ShowVectorIndexesStatement>(
+        std::string(collection->value()),
+        context_.ast_location(location)
+    );
 }
 
 } // namespace litedb::core::parser

@@ -13,7 +13,6 @@ namespace litedb::core::parser::ast
 enum class CreateIndexMethod
 {
     Default,                ///< 默认
-    Hash,                   ///< 哈希
     BTree,                  ///< B+ 树
 };
 

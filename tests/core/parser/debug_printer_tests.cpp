@@ -64,6 +64,17 @@ void test_select_debug_print()
     require_contains(output, "  order_by: []\n");
     require_contains(output, "  limit: <none>\n");
     require_contains(output, "  offset: <none>\n");
+
+    auto alias_statement = parse_ok("SELECT age + 1 AS next_age, *, users.* FROM users;");
+    const auto alias_output = print_without_location(*alias_statement);
+    require_contains(alias_output, "    [0] AliasExpression\n");
+    require_contains(alias_output, "      expression:\n");
+    require_contains(alias_output, "        BinaryExpression\n");
+    require_contains(alias_output, "      alias: next_age\n");
+    require_contains(alias_output, "    [1] WildcardExpression\n");
+    require_contains(alias_output, "      qualifier: <none>\n");
+    require_contains(alias_output, "    [2] WildcardExpression\n");
+    require_contains(alias_output, "      qualifier: users\n");
 }
 
 void test_expression_debug_print()
@@ -88,7 +99,7 @@ void test_create_collection_debug_print()
 {
     auto statement = parse_ok(
         "CREATE COLLECTION users ("
-        "id BIGINT PRIMARY KEY, "
+        "id BIGINT NOT NULL, "
         "name VARCHAR(64) UNIQUE COMMENT 'display name', "
         "age INTEGER DEFAULT 0"
         ") COMMENT 'user collection';"
@@ -101,7 +112,7 @@ void test_create_collection_debug_print()
     require_contains(output, "  columns:\n");
     require_contains(output, "    [0] ColumnDefinition\n");
     require_contains(output, "      name: id\n");
-    require_contains(output, "      primary_key: true\n");
+    require_contains(output, "      primary_key: false\n");
     require_contains(output, "    [1] ColumnDefinition\n");
     require_contains(output, "      kind: Varchar\n");
     require_contains(output, "      parameter: 64\n");

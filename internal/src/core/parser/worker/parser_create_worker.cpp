@@ -27,140 +27,15 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
     context_.advance();
 
     if (context_.match(TokenType::Database)) {
-
-        auto if_not_exists = schema_helper_.parse_if_not_exists();
-        if (!if_not_exists.has_value()) [[unlikely]] {
-            return std::unexpected(if_not_exists.error());
-        }
-
-        auto database = schema_helper_.parse_identifier_string("Expected database name");
-        if (!database.has_value()) [[unlikely]] {
-            return std::unexpected(database.error());
-        }
-
-        return std::make_unique<ast::CreateDatabaseStatement>(
-            std::move(database.value()),
-            if_not_exists.value(),
-            context_.ast_location(location)
-        );
+        return parse_create_database_statement(location);
     }
 
     if (context_.match(TokenType::Collection)) {
-
-        auto if_not_exists = schema_helper_.parse_if_not_exists();
-        if (!if_not_exists.has_value()) [[unlikely]] {
-            return std::unexpected(if_not_exists.error());
-        }
-
-        auto collection = schema_helper_.parse_identifier_string("Expected collection name");
-        if (!collection.has_value()) [[unlikely]] {
-            return std::unexpected(collection.error());
-        }
-
-        auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before column definitions");
-        if (!left_paren.has_value()) [[unlikely]] {
-            return std::unexpected(left_paren.error());
-        }
-        if (context_.check(TokenType::RightParen)) [[unlikely]] {
-            return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one column definition"));
-        }
-
-        ast::ColumnDefinitionList columns;
-        while (true) {
-            auto column = schema_helper_.parse_column_definition();
-            if (!column.has_value()) [[unlikely]] {
-                return std::unexpected(column.error());
-            }
-            columns.push_back(std::move(column.value()));
-
-            if (!context_.match(TokenType::Comma)) {
-                break;
-            }
-        }
-
-        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after column definitions");
-        if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
-        }
-
-        std::optional<std::string> comment;
-        if (context_.match(TokenType::Comment)) {
-            auto comment_token = context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
-            if (!comment_token.has_value()) [[unlikely]] {
-                return std::unexpected(comment_token.error());
-            }
-            comment = std::string(comment_token->value());
-        }
-
-        return std::make_unique<ast::CreateCollectionStatement>(
-            std::move(collection.value()),
-            if_not_exists.value(),
-            std::move(columns),
-            std::move(comment),
-            context_.ast_location(location)
-        );
+        return parse_create_collection_statement(location);
     }
 
     if (context_.match(TokenType::Index)) {
-
-        auto if_not_exists = schema_helper_.parse_if_not_exists();
-        if (!if_not_exists.has_value()) [[unlikely]] {
-            return std::unexpected(if_not_exists.error());
-        }
-
-        auto index_name = schema_helper_.parse_identifier_string("Expected index name");
-        if (!index_name.has_value()) [[unlikely]] {
-            return std::unexpected(index_name.error());
-        }
-
-        auto on = context_.consume(TokenType::On, "Expected ON after index name");
-        if (!on.has_value()) [[unlikely]] {
-            return std::unexpected(on.error());
-        }
-
-        auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
-        if (!collection_name.has_value()) [[unlikely]] {
-            return std::unexpected(collection_name.error());
-        }
-
-        auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before index column");
-        if (!left_paren.has_value()) [[unlikely]] {
-            return std::unexpected(left_paren.error());
-        }
-
-        auto column_name = schema_helper_.parse_identifier_string("Expected index column name");
-        if (!column_name.has_value()) [[unlikely]] {
-            return std::unexpected(column_name.error());
-        }
-
-        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after index column");
-        if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
-        }
-
-        auto method = ast::CreateIndexMethod::Default;
-        if (context_.match(TokenType::Using)) {
-            if (context_.match(TokenType::Hash)) {
-                method = ast::CreateIndexMethod::Hash;
-            } else if (context_.match(TokenType::BTree)) {
-                method = ast::CreateIndexMethod::BTree;
-            } else [[unlikely]] {
-                return std::unexpected(make_parser_error(
-                    ParserErrorCode::UnsupportedSyntax,
-                    context_.current().location(),
-                    "Expected HASH or BTREE after USING"
-                ));
-            }
-        }
-
-        return std::make_unique<ast::CreateIndexStatement>(
-            std::move(index_name.value()),
-            std::move(collection_name.value()),
-            std::move(column_name.value()),
-            if_not_exists.value(),
-            method,
-            context_.ast_location(location)
-        );
+        return parse_create_index_statement(location);
     }
 
     if (context_.match(TokenType::VIndex)) {
@@ -173,9 +48,142 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
     ));
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWorker::parse_create_vector_index_statement(
-    TokenLocation location
-)
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWorker::parse_create_database_statement(TokenLocation location)
+{
+    auto if_not_exists = schema_helper_.parse_if_not_exists();
+    if (!if_not_exists.has_value()) [[unlikely]] {
+        return std::unexpected(if_not_exists.error());
+    }
+
+    auto database = schema_helper_.parse_identifier_string("Expected database name");
+    if (!database.has_value()) [[unlikely]] {
+        return std::unexpected(database.error());
+    }
+
+    return std::make_unique<ast::CreateDatabaseStatement>(
+        std::move(database.value()),
+        if_not_exists.value(),
+        context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWorker::parse_create_collection_statement(TokenLocation location)
+{
+    auto if_not_exists = schema_helper_.parse_if_not_exists();
+    if (!if_not_exists.has_value()) [[unlikely]] {
+        return std::unexpected(if_not_exists.error());
+    }
+
+    auto collection = schema_helper_.parse_identifier_string("Expected collection name");
+    if (!collection.has_value()) [[unlikely]] {
+        return std::unexpected(collection.error());
+    }
+
+    auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before column definitions");
+    if (!left_paren.has_value()) [[unlikely]] {
+        return std::unexpected(left_paren.error());
+    }
+    if (context_.check(TokenType::RightParen)) [[unlikely]] {
+        return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one column definition"));
+    }
+
+    ast::ColumnDefinitionList columns;
+    while (true) {
+        auto column = schema_helper_.parse_column_definition();
+        if (!column.has_value()) [[unlikely]] {
+            return std::unexpected(column.error());
+        }
+        columns.push_back(std::move(column.value()));
+
+        if (!context_.match(TokenType::Comma)) {
+            break;
+        }
+    }
+
+    auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after column definitions");
+    if (!right_paren.has_value()) [[unlikely]] {
+        return std::unexpected(right_paren.error());
+    }
+
+    std::optional<std::string> comment;
+    if (context_.match(TokenType::Comment)) {
+        auto comment_token = context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
+        if (!comment_token.has_value()) [[unlikely]] {
+            return std::unexpected(comment_token.error());
+        }
+        comment = std::string(comment_token->value());
+    }
+
+    return std::make_unique<ast::CreateCollectionStatement>(
+        std::move(collection.value()),
+        if_not_exists.value(),
+        std::move(columns),
+        std::move(comment),
+        context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWorker::parse_create_index_statement(TokenLocation location)
+{
+    auto if_not_exists = schema_helper_.parse_if_not_exists();
+    if (!if_not_exists.has_value()) [[unlikely]] {
+        return std::unexpected(if_not_exists.error());
+    }
+
+    auto index_name = schema_helper_.parse_identifier_string("Expected index name");
+    if (!index_name.has_value()) [[unlikely]] {
+        return std::unexpected(index_name.error());
+    }
+
+    auto on = context_.consume(TokenType::On, "Expected ON after index name");
+    if (!on.has_value()) [[unlikely]] {
+        return std::unexpected(on.error());
+    }
+
+    auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
+    if (!collection_name.has_value()) [[unlikely]] {
+        return std::unexpected(collection_name.error());
+    }
+
+    auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before index column");
+    if (!left_paren.has_value()) [[unlikely]] {
+        return std::unexpected(left_paren.error());
+    }
+
+    auto column_name = schema_helper_.parse_identifier_string("Expected index column name");
+    if (!column_name.has_value()) [[unlikely]] {
+        return std::unexpected(column_name.error());
+    }
+
+    auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after index column");
+    if (!right_paren.has_value()) [[unlikely]] {
+        return std::unexpected(right_paren.error());
+    }
+
+    auto method = ast::CreateIndexMethod::Default;
+    if (context_.match(TokenType::Using)) {
+        if (context_.match(TokenType::BTree)) {
+            method = ast::CreateIndexMethod::BTree;
+        } else [[unlikely]] {
+            return std::unexpected(make_parser_error(
+                ParserErrorCode::UnsupportedSyntax,
+                context_.current().location(),
+                "Expected BTREE after USING"
+            ));
+        }
+    }
+
+    return std::make_unique<ast::CreateIndexStatement>(
+        std::move(index_name.value()),
+        std::move(collection_name.value()),
+        std::move(column_name.value()),
+        if_not_exists.value(),
+        method,
+        context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
 {
     auto if_not_exists = schema_helper_.parse_if_not_exists();
     if (!if_not_exists.has_value()) [[unlikely]] {
@@ -212,7 +220,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         return std::unexpected(right_paren.error());
     }
 
-    auto using_token = context_.consume(TokenType::Using, "Expected USING HNSW after vector index column");
+    auto using_token = context_.consume(TokenType::Using, "Expected USING after vector index column");
     if (!using_token.has_value()) [[unlikely]] {
         return std::unexpected(using_token.error());
     }

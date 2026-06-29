@@ -12,12 +12,16 @@ namespace litedb::core::parser
 ParserContext::ParserContext(Lexer & lexer)
     : lexer_(lexer)
     , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
+    , next_token_(TokenType::EoF, "", TokenLocation {1, 1})
+    , next_after_next_token_(TokenType::EoF, "", TokenLocation {1, 1})
 {
 }
 
 void ParserContext::initialize()
 {
     current_token_ = lexer_.next();
+    next_token_ = lexer_.next();
+    next_after_next_token_ = lexer_.next();
 }
 
 const Token & ParserContext::current() const noexcept
@@ -25,10 +29,22 @@ const Token & ParserContext::current() const noexcept
     return current_token_;
 }
 
+const Token & ParserContext::peek_next() const noexcept
+{
+    return next_token_;
+}
+
+const Token & ParserContext::peek_after_next() const noexcept
+{
+    return next_after_next_token_;
+}
+
 Token ParserContext::advance()
 {
     const Token previous = current_token_;
-    current_token_ = lexer_.next();
+    current_token_ = next_token_;
+    next_token_ = next_after_next_token_;
+    next_after_next_token_ = lexer_.next();
     return previous;
 }
 

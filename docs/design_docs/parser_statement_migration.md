@@ -55,17 +55,39 @@ Required downstream adaptation:
 
 ## Legacy, Keep Until Migration Completes
 
+### ColumnDefinition `primary_key`
+
+Reason kept:
+
+- `ParserSchemaHelper::parse_column_definition()` no longer accepts
+  `PRIMARY KEY` in `CREATE COLLECTION` column definitions.
+- `ColumnDefinition::primary_key` still exists because binder, catalog, schema,
+  executor, persistence, and existing non-parser tests still reference primary
+  key metadata.
+- Removing the field now would force a broad downstream migration before the
+  parser statement migration is complete.
+
+Deletion criteria:
+
+- Binder no longer reads `ColumnDefinition::primary_key` from parser AST.
+- Catalog/schema/persistence primary-key metadata has either been removed or
+  moved behind a separate design.
+- Tests and examples no longer use `CREATE COLLECTION ... PRIMARY KEY`.
+- `DESCRIBE` / metadata output no longer exposes stale primary-key behavior
+  unless a replacement feature explicitly keeps it.
+
 ### `ShowStatement`
 
 Reason kept:
 
-- Existing parser tests, binder, planner, and executor still depend on it.
+- Parser no longer constructs `ShowStatement`.
+- Binder, planner, executor, visitor/debug-printer compatibility, and some
+  includes still keep the legacy node reachable.
 - Removing it before downstream adaptation would force a broad mixed-layer
   migration.
 
 Deletion criteria:
 
-- Parser no longer constructs `ShowStatement`.
 - Binder has concrete overloads or branches for all new SHOW AST nodes.
 - Debug printer and tests cover the new concrete SHOW nodes.
 - No production or test include needs `show_statement.hpp`.

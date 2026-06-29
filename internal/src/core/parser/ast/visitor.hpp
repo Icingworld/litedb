@@ -24,6 +24,7 @@ class ShowVectorIndexesStatement;
 class UpdateStatement;
 class UseStatement;
 class BetweenExpression;
+class AliasExpression;
 class BinaryExpression;
 class ColumnReferenceExpression;
 class FunctionCallExpression;
@@ -66,6 +67,7 @@ public:
     virtual void visit(const UseStatement & node) = 0;
 
     virtual void visit(const BetweenExpression & node) = 0;
+    virtual void visit(const AliasExpression & node) = 0;
     virtual void visit(const BinaryExpression & node) = 0;
     virtual void visit(const ColumnReferenceExpression & node) = 0;
     virtual void visit(const FunctionCallExpression & node) = 0;

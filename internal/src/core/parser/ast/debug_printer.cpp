@@ -1,5 +1,6 @@
 #include "core/parser/ast/debug_printer.hpp"
 
+#include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -189,7 +190,6 @@ const char * create_index_method_name(CreateIndexMethod method) noexcept
 {
     switch (method) {
         case CreateIndexMethod::Default: return "Default";
-        case CreateIndexMethod::Hash: return "Hash";
         case CreateIndexMethod::BTree: return "BTree";
     }
 
@@ -612,6 +612,14 @@ void AstDebugPrinter::visit(const UseStatement & node)
     write_node_header("UseStatement", node.location());
     IndentScope scope(*this);
     write_field("database", node.database());
+}
+
+void AstDebugPrinter::visit(const AliasExpression & node)
+{
+    write_node_header("AliasExpression", node.location());
+    IndentScope scope(*this);
+    write_child_field("expression", &node.expression());
+    write_field("alias", node.alias());
 }
 
 void AstDebugPrinter::visit(const BetweenExpression & node)

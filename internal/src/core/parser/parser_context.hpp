@@ -34,6 +34,20 @@ public:
     const Token & current() const noexcept;
 
     /**
+     * @brief 查看下一个 Token
+     * @return 下一个 Token
+     */
+    [[nodiscard]]
+    const Token & peek_next() const noexcept;
+
+    /**
+     * @brief 查看下下个 Token
+     * @return 下下个 Token
+     */
+    [[nodiscard]]
+    const Token & peek_after_next() const noexcept;
+
+    /**
      * @brief 前进一个 Token
      * @return 前进前的 Token
      */
@@ -93,6 +107,8 @@ public:
 private:
     Lexer & lexer_;                 ///< 词法分析器
     Token current_token_;           ///< 当前 Token
+    Token next_token_;
+    Token next_after_next_token_;
 };
 
 } // namespace litedb::core::parser

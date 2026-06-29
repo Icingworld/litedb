@@ -33,6 +33,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
     }
 
     ast::InsertStatement::ColumnList columns;
+    // 列名列表是可省略的
     if (context_.match(TokenType::LeftParen)) {
         if (context_.check(TokenType::RightParen)) [[unlikely]] {
             return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one column name"));

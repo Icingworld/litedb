@@ -1,4 +1,5 @@
 #include "core/parser/parser.hpp"
+#include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -92,9 +93,9 @@ void test_parse_create_collection_statement()
 {
     auto statement = parse_ok(
         "CREATE COLLECTION users ("
-        "id BIGINT PRIMARY KEY, "
+        "id BIGINT NOT NULL, "
         "name VARCHAR(64) UNIQUE COMMENT 'display name', "
-        "age INTEGER DEFAULT 0, "
+        "age INTEGER NULL DEFAULT 0, "
         "active BOOLEAN DEFAULT true, "
         "embedding VECTOR(128) DEFAULT [0.1, 0.2]"
         ") COMMENT 'user collection';"
@@ -106,7 +107,7 @@ void test_parse_create_collection_statement()
     require(create->columns().size() == 5, "CREATE COLLECTION column count mismatch");
     require(create->comment().has_value(), "CREATE COLLECTION comment missing");
     require(create->comment().value() == "user collection", "CREATE COLLECTION comment mismatch");
-    require(create->columns()[0].primary_key, "PRIMARY KEY constraint mismatch");
+    require(!create->columns()[0].primary_key, "PRIMARY KEY constraint mismatch");
     require(create->columns()[1].unique, "UNIQUE constraint mismatch");
     require(create->columns()[1].comment.has_value(), "COMMENT constraint mismatch");
     require(create->columns()[1].type.kind == DataTypeKind::Varchar, "VARCHAR type mismatch");
@@ -129,9 +130,9 @@ void test_parse_create_index_statement()
     require(create->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
     require(create->method() == CreateIndexMethod::BTree, "CREATE INDEX BTREE method mismatch");
 
-    auto hash_statement = parse_ok("CREATE INDEX idx_name ON users(name) USING HASH;");
-    const auto * hash_create = static_cast<const CreateIndexStatement *>(hash_statement.get());
-    require(hash_create->method() == CreateIndexMethod::Hash, "CREATE INDEX HASH method mismatch");
+    auto btree_statement = parse_ok("CREATE INDEX idx_name ON users(name) USING BTREE;");
+    const auto * btree_create = static_cast<const CreateIndexStatement *>(btree_statement.get());
+    require(btree_create->method() == CreateIndexMethod::BTree, "CREATE INDEX BTREE method mismatch");
 
     auto default_statement = parse_ok("CREATE INDEX idx_id ON users(id);");
     const auto * default_create = static_cast<const CreateIndexStatement *>(default_statement.get());
@@ -301,11 +302,12 @@ void test_parse_select_statement()
     require(select->limit().value() == 10, "SELECT LIMIT mismatch");
     require(select->offset().value() == 20, "SELECT OFFSET mismatch");
 
-    auto columns = parse_ok("SELECT id, users.name, users.* FROM users;");
+    auto columns = parse_ok("SELECT id, users.name, *, users.* FROM users;");
     const auto * column_select = static_cast<const SelectStatement *>(columns.get());
-    require(column_select->select_list().size() == 3, "SELECT qualified list size mismatch");
+    require(column_select->select_list().size() == 4, "SELECT qualified list size mismatch");
     require(column_select->select_list()[1]->kind() == AstNodeKind::ColumnReference, "SELECT qualified column mismatch");
-    require(column_select->select_list()[2]->kind() == AstNodeKind::Wildcard, "SELECT qualified wildcard mismatch");
+    require(column_select->select_list()[2]->kind() == AstNodeKind::Wildcard, "SELECT wildcard mismatch");
+    require(column_select->select_list()[3]->kind() == AstNodeKind::Wildcard, "SELECT qualified wildcard mismatch");
 
     auto function_order = parse_ok("SELECT id, l2_distance(embedding, [0.1, 0.2, 0.3]) FROM users ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC;");
     const auto * function_select = static_cast<const SelectStatement *>(function_order.get());
@@ -313,6 +315,36 @@ void test_parse_select_statement()
     require(function_select->select_list()[1]->kind() == AstNodeKind::FunctionCall, "SELECT function item mismatch");
     require(function_select->order_by().size() == 1, "SELECT function ORDER BY size mismatch");
     require(function_select->order_by()[0].expression->kind() == AstNodeKind::FunctionCall, "SELECT function ORDER BY mismatch");
+
+    auto expression_item = parse_ok("SELECT age + 1 FROM users;");
+    const auto * expression_select = static_cast<const SelectStatement *>(expression_item.get());
+    require(expression_select->select_list()[0]->kind() == AstNodeKind::Binary, "SELECT expression item mismatch");
+
+    auto expression_alias = parse_ok("SELECT age + 1 AS next_age FROM users;");
+    const auto * alias_select = static_cast<const SelectStatement *>(expression_alias.get());
+    require(alias_select->select_list()[0]->kind() == AstNodeKind::Alias, "SELECT expression alias kind mismatch");
+    const auto * next_age_alias = static_cast<const AliasExpression *>(alias_select->select_list()[0].get());
+    require(next_age_alias->alias() == "next_age", "SELECT expression alias mismatch");
+    require(next_age_alias->expression().kind() == AstNodeKind::Binary, "SELECT expression alias inner mismatch");
+
+    auto literal_alias = parse_ok("SELECT 1 AS one FROM users;");
+    const auto * literal_alias_select = static_cast<const SelectStatement *>(literal_alias.get());
+    require(literal_alias_select->select_list()[0]->kind() == AstNodeKind::Alias, "SELECT literal alias kind mismatch");
+    const auto * one_alias = static_cast<const AliasExpression *>(literal_alias_select->select_list()[0].get());
+    require(one_alias->alias() == "one", "SELECT literal alias mismatch");
+    require(one_alias->expression().kind() == AstNodeKind::Literal, "SELECT literal alias inner mismatch");
+
+    auto parenthesized_alias = parse_ok("SELECT (age + score) AS total FROM users;");
+    const auto * parenthesized_alias_select = static_cast<const SelectStatement *>(parenthesized_alias.get());
+    const auto * total_alias = static_cast<const AliasExpression *>(parenthesized_alias_select->select_list()[0].get());
+    require(total_alias->alias() == "total", "SELECT parenthesized alias mismatch");
+    require(total_alias->expression().kind() == AstNodeKind::Binary, "SELECT parenthesized alias inner mismatch");
+
+    auto function_expression_alias = parse_ok("SELECT l2_distance(embedding, [0.1, 0.2, 0.3]) + 1 AS score FROM users;");
+    const auto * function_expression_alias_select = static_cast<const SelectStatement *>(function_expression_alias.get());
+    const auto * score_alias = static_cast<const AliasExpression *>(function_expression_alias_select->select_list()[0].get());
+    require(score_alias->alias() == "score", "SELECT function expression alias mismatch");
+    require(score_alias->expression().kind() == AstNodeKind::Binary, "SELECT function expression alias inner mismatch");
 }
 
 void test_parse_expression_shapes()
@@ -380,9 +412,25 @@ void test_parse_failures()
     require(default_expression.code == ParserErrorCode::ExpectedLiteral, "DEFAULT expression error code mismatch");
     require(default_expression.message == "Expected literal after DEFAULT", "DEFAULT expression error mismatch");
 
-    auto unsupported_as = parse_error("SELECT name AS username FROM users;");
-    require(unsupported_as.code == ParserErrorCode::ExpectedToken, "AS unsupported error code mismatch");
-    require(unsupported_as.message == "Expected FROM after select list", "AS unsupported error mismatch");
+    auto primary_key_constraint = parse_error("CREATE COLLECTION users (id BIGINT PRIMARY KEY);");
+    require(primary_key_constraint.code == ParserErrorCode::UnexpectedToken, "PRIMARY KEY constraint error code mismatch");
+    require(primary_key_constraint.message == "Unexpected column constraint", "PRIMARY KEY constraint error mismatch");
+
+    auto implicit_alias = parse_error("SELECT age + 1 next_age FROM users;");
+    require(implicit_alias.code == ParserErrorCode::ExpectedToken, "implicit alias error code mismatch");
+    require(implicit_alias.message == "Expected FROM after select list", "implicit alias error mismatch");
+
+    auto missing_alias = parse_error("SELECT age + 1 AS FROM users;");
+    require(missing_alias.code == ParserErrorCode::ExpectedIdentifier, "missing alias error code mismatch");
+    require(missing_alias.message == "Expected alias after AS", "missing alias error mismatch");
+
+    auto wildcard_alias = parse_error("SELECT * AS all_columns FROM users;");
+    require(wildcard_alias.code == ParserErrorCode::UnexpectedToken, "wildcard alias error code mismatch");
+    require(wildcard_alias.message == "Wildcard select item cannot have alias", "wildcard alias error mismatch");
+
+    auto qualified_wildcard_alias = parse_error("SELECT users.* AS all_user_columns FROM users;");
+    require(qualified_wildcard_alias.code == ParserErrorCode::UnexpectedToken, "qualified wildcard alias error code mismatch");
+    require(qualified_wildcard_alias.message == "Wildcard select item cannot have alias", "qualified wildcard alias error mismatch");
 
     auto unsupported_group_by = parse_error("SELECT age FROM users GROUP BY age;");
     require(unsupported_group_by.code == ParserErrorCode::UnexpectedToken, "GROUP BY unsupported error code mismatch");
@@ -390,11 +438,15 @@ void test_parse_failures()
 
     auto unsupported_index_method = parse_error("CREATE INDEX idx_age ON users(age) USING gin;");
     require(unsupported_index_method.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX method error code mismatch");
-    require(unsupported_index_method.message == "Expected HASH or BTREE after USING", "CREATE INDEX method error mismatch");
+    require(unsupported_index_method.message == "Expected BTREE after USING", "CREATE INDEX method error mismatch");
 
     auto unsupported_b_tree = parse_error("CREATE INDEX idx_age ON users(age) USING B_TREE;");
     require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
-    require(unsupported_b_tree.message == "Expected HASH or BTREE after USING", "CREATE INDEX B_TREE error mismatch");
+    require(unsupported_b_tree.message == "Expected BTREE after USING", "CREATE INDEX B_TREE error mismatch");
+
+    auto unsupported_hash = parse_error("CREATE INDEX idx_age ON users(age) USING HASH;");
+    require(unsupported_hash.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX HASH error code mismatch");
+    require(unsupported_hash.message == "Expected BTREE after USING", "CREATE INDEX HASH error mismatch");
 
     auto show_indexes_missing_from = parse_error("SHOW INDEXES;");
     require(show_indexes_missing_from.code == ParserErrorCode::ExpectedToken, "SHOW INDEXES missing FROM error code mismatch");

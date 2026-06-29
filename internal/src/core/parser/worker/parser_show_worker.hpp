@@ -29,6 +29,19 @@ public:
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_statement();
 
 private:
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_databases_statement(TokenLocation location);
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_collections_statement(TokenLocation location);
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_indexes_statement(TokenLocation location);
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_vector_indexes_statement(TokenLocation location);
+
+private:
     ParserContext & context_;   ///< 解析上下文
 };
 

@@ -2,8 +2,11 @@
 
 #include <expected>
 #include <memory>
+#include <string>
 #include <utility>
 
+#include "core/parser/ast/expression/alias_expression.hpp"
+#include "core/parser/ast/expression/wildcard_expression.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/worker/parser_expression_worker.hpp"
 #include "core/parser/worker/parser_schema_helper.hpp"
@@ -26,7 +29,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
 
     ast::SelectStatement::SelectList select_list;
     while (true) {
-        auto item = expression_worker.parse_wildcard_or_column_reference();
+        auto item = parse_select_item();
         if (!item.has_value()) [[unlikely]] {
             return std::unexpected(item.error());
         }
@@ -110,6 +113,64 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
         limit,
         offset,
         context_.ast_location(location)
+    );
+}
+
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserSelectWorker::parse_select_item()
+{
+    if (context_.check(TokenType::Star)) {
+        const Token star = context_.advance();
+        if (context_.check(TokenType::As)) [[unlikely]] {
+            return std::unexpected(context_.make_current_error(
+                ParserErrorCode::UnexpectedToken,
+                "Wildcard select item cannot have alias"
+            ));
+        }
+        return std::make_unique<ast::WildcardExpression>(context_.ast_location(star.location()));
+    }
+
+    if (context_.check(TokenType::Identifier)
+        && context_.peek_next().type() == TokenType::Dot
+        && context_.peek_after_next().type() == TokenType::Star) {
+        const Token qualifier = context_.advance();
+        context_.advance();
+        context_.advance();
+        if (context_.check(TokenType::As)) [[unlikely]] {
+            return std::unexpected(context_.make_current_error(
+                ParserErrorCode::UnexpectedToken,
+                "Wildcard select item cannot have alias"
+            ));
+        }
+        return std::make_unique<ast::WildcardExpression>(
+            std::string(qualifier.value()),
+            context_.ast_location(qualifier.location())
+        );
+    }
+
+    ParserExpressionWorker expression_worker(context_);
+    auto expression = expression_worker.parse_expression();
+    if (!expression.has_value()) [[unlikely]] {
+        return std::unexpected(expression.error());
+    }
+
+    if (!context_.match(TokenType::As)) {
+        return expression;
+    }
+
+    auto alias = context_.consume(
+        TokenType::Identifier,
+        "Expected alias after AS",
+        ParserErrorCode::ExpectedIdentifier
+    );
+    if (!alias.has_value()) [[unlikely]] {
+        return std::unexpected(alias.error());
+    }
+
+    const auto location = expression.value()->location();
+    return std::make_unique<ast::AliasExpression>(
+        std::move(expression.value()),
+        std::string(alias->value()),
+        location
     );
 }
 

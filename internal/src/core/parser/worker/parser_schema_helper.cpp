@@ -117,13 +117,7 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
     column.type = type.value();
 
     while (!context_.check(TokenType::Comma) && !context_.check(TokenType::RightParen) && !context_.check(TokenType::EoF)) {
-        if (context_.match(TokenType::Primary)) {
-            auto key = context_.consume(TokenType::Key, "Expected KEY after PRIMARY");
-            if (!key.has_value()) [[unlikely]] {
-                return std::unexpected(key.error());
-            }
-            column.primary_key = true;
-        } else if (context_.match(TokenType::Unique)) {
+        if (context_.match(TokenType::Unique)) {
             column.unique = true;
         } else if (context_.match(TokenType::Default)) {
             auto default_value = expression_worker_.parse_literal_expression();
@@ -131,6 +125,13 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
                 return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedLiteral, "Expected literal after DEFAULT"));
             }
             column.default_value = std::move(default_value.value());
+        } else if (context_.match(TokenType::Not)) {
+            auto null_token = context_.consume(TokenType::Null, "Expected NULL after NOT");
+            if (!null_token.has_value()) [[unlikely]] {
+                return std::unexpected(null_token.error());
+            }
+        } else if (context_.match(TokenType::Null)) {
+            // NULL 是默认行为，不需要额外处理
         } else if (context_.match(TokenType::Comment)) {
             auto comment = context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
             if (!comment.has_value()) [[unlikely]] {

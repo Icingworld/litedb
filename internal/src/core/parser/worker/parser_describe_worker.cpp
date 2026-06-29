@@ -20,6 +20,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDescribeWo
     const TokenLocation location = context_.current().location();
     context_.advance();
 
+    // COLLECTION 关键字是可选的
     if (context_.check(TokenType::Collection)) {
         context_.advance();
     }

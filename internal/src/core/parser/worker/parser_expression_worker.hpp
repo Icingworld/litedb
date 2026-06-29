@@ -17,7 +17,7 @@ class ExpressionNode;
 } // namespace ast
 
 /**
- * @brief 表达式解析工作器
+ * @brief Expression parser worker.
  */
 class ParserExpressionWorker
 {
@@ -25,24 +25,9 @@ public:
     explicit ParserExpressionWorker(ParserContext & context);
 
 public:
-    /**
-     * @brief 解析表达式
-     * @return 解析结果
-     */
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_expression();
 
-    /**
-     * @brief 解析通配符或列引用表达式
-     * @return 解析结果
-     */
-    [[nodiscard]]
-    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_wildcard_or_column_reference();
-
-    /**
-     * @brief 解析字面量表达式
-     * @return 解析结果
-     */
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_literal_expression();
 
@@ -81,7 +66,7 @@ private:
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_vector_expression();
 
 private:
-    ParserContext & context_;
+    ParserContext & context_;                   ///< 解析上下文
 };
 
 } // namespace litedb::core::parser
