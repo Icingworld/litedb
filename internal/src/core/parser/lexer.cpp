@@ -1,106 +1,11 @@
 #include "core/parser/lexer.hpp"
 
 #include <cctype>
-#include <array>
-#include <optional>
 #include <string_view>
 #include <utility>
 
 namespace litedb::core::parser
 {
-
-namespace
-{
-
-// 编译期常量表，用于快速查找获取 Token 类型
-constexpr auto KEYWORDS = std::to_array<std::pair<std::string_view, TokenType>>({
-    {"SELECT", TokenType::Select},
-    {"CREATE", TokenType::Create},
-    {"INSERT", TokenType::Insert},
-    {"DELETE", TokenType::Delete},
-    {"UPDATE", TokenType::Update},
-    {"DROP", TokenType::Drop},
-    {"USE", TokenType::Use},
-    {"ALTER", TokenType::Alter},
-    {"SHOW", TokenType::Show},
-    {"DESCRIBE", TokenType::Describe},
-    {"DESC", TokenType::Desc},
-    {"DATABASE", TokenType::Database},
-    {"COLLECTION", TokenType::Collection},
-    {"INDEX", TokenType::Index},
-    {"VINDEX", TokenType::VIndex},
-    {"DATABASES", TokenType::Databases},
-    {"COLLECTIONS", TokenType::Collections},
-    {"INDEXES", TokenType::Indexes},
-    {"VINDEXES", TokenType::VIndexes},
-    {"GROUP", TokenType::Group},
-    {"BY", TokenType::By},
-    {"HAVING", TokenType::Having},
-    {"ORDER", TokenType::Order},
-    {"ASC", TokenType::Asc},
-    {"LIMIT", TokenType::Limit},
-    {"OFFSET", TokenType::Offset},
-    {"IN", TokenType::In},
-    {"BETWEEN", TokenType::Between},
-    {"LIKE", TokenType::Like},
-    {"ADD", TokenType::Add},
-    {"MODIFY", TokenType::Modify},
-    {"RENAME", TokenType::Rename},
-    {"COLUMN", TokenType::Column},
-    {"TO", TokenType::To},
-    {"PRIMARY", TokenType::Primary},
-    {"KEY", TokenType::Key},
-    {"UNIQUE", TokenType::Unique},
-    {"AUTO_INCREMENT", TokenType::AutoIncrement},
-    {"DEFAULT", TokenType::Default},
-    {"COMMENT", TokenType::Comment},
-    {"USING", TokenType::Using},
-    {"HASH", TokenType::Hash},
-    {"BTREE", TokenType::BTree},
-    {"WITH", TokenType::With},
-    {"FROM", TokenType::From},
-    {"WHERE", TokenType::Where},
-    {"INTO", TokenType::Into},
-    {"VALUES", TokenType::Values},
-    {"SET", TokenType::Set},
-    {"AND", TokenType::And},
-    {"OR", TokenType::Or},
-    {"NOT", TokenType::Not},
-    {"AS", TokenType::As},
-    {"ON", TokenType::On},
-    {"IF", TokenType::If},
-    {"EXISTS", TokenType::Exists},
-    {"IS", TokenType::Is},
-    {"NULL", TokenType::Null},
-    {"TRUE", TokenType::True},
-    {"FALSE", TokenType::False},
-    {"INTEGER", TokenType::Integer},
-    {"BIGINT", TokenType::BigInt},
-    {"FLOAT", TokenType::Float},
-    {"DOUBLE", TokenType::Double},
-    {"VARCHAR", TokenType::Varchar},
-    {"BOOLEAN", TokenType::Boolean},
-    {"VECTOR", TokenType::Vector},
-});
-
-/**
- * @brief 获取关键字的 Token 类型
- * @param value 关键字
- * @return 关键字的 Token 类型
- */
-[[nodiscard]]
-constexpr std::optional<TokenType> keyword_type(std::string_view value) noexcept
-{
-    for (const auto & [keyword, type] : KEYWORDS) {
-        if (keyword == value) {
-            return type;
-        }
-    }
-
-    return std::nullopt;
-}
-
-} // namespace
 
 Lexer::Lexer(std::string input)
     : input_(std::move(input))

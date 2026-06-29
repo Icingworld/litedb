@@ -2,8 +2,24 @@ set(PARSER_SOURCES
     token.cpp
     lexer.cpp
     parser.cpp
+    parser_context.cpp
+    parser_helper.cpp
+    worker/parser_worker.cpp
+    worker/parser_schema_helper.cpp
+    worker/parser_expression_worker.cpp
+    worker/parser_use_worker.cpp
+    worker/parser_show_worker.cpp
+    worker/parser_describe_worker.cpp
+    worker/parser_select_worker.cpp
+    worker/parser_insert_worker.cpp
+    worker/parser_update_worker.cpp
+    worker/parser_delete_worker.cpp
+    worker/parser_create_worker.cpp
+    worker/parser_drop_worker.cpp
     ast/ast_node.cpp
+    ast/debug_printer.cpp
     ast/expression/expression_node.cpp
+    ast/expression/alias_expression.cpp
     ast/expression/identifier_expression.cpp
     ast/expression/literal_expression.cpp
     ast/expression/column_reference_expression.cpp
@@ -30,6 +46,10 @@ set(PARSER_SOURCES
     ast/statement/delete_statement.cpp
     ast/statement/update_statement.cpp
     ast/statement/show_statement.cpp
+    ast/statement/show_databases_statement.cpp
+    ast/statement/show_collections_statement.cpp
+    ast/statement/show_indexes_statement.cpp
+    ast/statement/show_vector_indexes_statement.cpp
     ast/statement/describe_statement.cpp
     ast/statement/alter_statement.cpp
 )

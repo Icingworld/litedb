@@ -21,6 +21,11 @@ AstNodeKind AlterStatement::kind() const noexcept
     return AstNodeKind::Alter;
 }
 
+void AlterStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 SchemaObjectType AlterStatement::object_type() const noexcept
 {
     return object_type_;

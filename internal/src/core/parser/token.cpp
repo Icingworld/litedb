@@ -32,4 +32,24 @@ TokenLocation Token::location() const noexcept
     return location_;
 }
 
+bool is_comparison_operator(TokenType type) noexcept
+{
+    return type == TokenType::Equal
+        || type == TokenType::NotEqual
+        || type == TokenType::LessThan
+        || type == TokenType::LessEqual
+        || type == TokenType::GreaterThan
+        || type == TokenType::GreaterEqual;
+}
+
+bool is_literal_token(TokenType type) noexcept
+{
+    return type == TokenType::IntegerLiteral
+        || type == TokenType::FloatLiteral
+        || type == TokenType::StringLiteral
+        || type == TokenType::True
+        || type == TokenType::False
+        || type == TokenType::Null;
+}
+
 } // namespace litedb::core::parser

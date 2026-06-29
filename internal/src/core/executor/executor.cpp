@@ -668,6 +668,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
         .name = plan.collection_name(),
         .if_not_exists = plan.if_not_exists(),
         .columns = plan.columns(),
+        .comment = plan.comment(),
     });
     if (!created.has_value()) {
         return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
@@ -1139,6 +1140,7 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
                 schema::Value {column.primary_key()},
                 schema::Value {column.unique()},
                 column.comment().has_value() ? schema::Value {column.comment().value()} : schema::Value::null(),
+                collection_schema->comment().has_value() ? schema::Value {collection_schema->comment().value()} : schema::Value::null(),
             },
         });
     }
@@ -1151,6 +1153,7 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
             ExecutionColumn {.name = "primary_key", .type = type(LogicalTypeId::Boolean)},
             ExecutionColumn {.name = "unique", .type = type(LogicalTypeId::Boolean)},
             ExecutionColumn {.name = "comment", .type = type(LogicalTypeId::Varchar)},
+            ExecutionColumn {.name = "collection_comment", .type = type(LogicalTypeId::Varchar)},
         },
         std::move(rows)
     );

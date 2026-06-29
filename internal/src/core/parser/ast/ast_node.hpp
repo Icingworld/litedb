@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "core/parser/ast/visitor.hpp"
+
 namespace litedb::core::parser::ast
 {
 
@@ -34,6 +36,10 @@ enum class AstNodeKind : std::uint8_t
     Insert,                 ///< INSERT
     Select,                 ///< SELECT
     Show,                   ///< SHOW
+    ShowDatabases,          ///< SHOW DATABASES
+    ShowCollections,        ///< SHOW COLLECTIONS
+    ShowIndexes,            ///< SHOW INDEXES
+    ShowVectorIndexes,      ///< SHOW VINDEXES
     Update,                 ///< UPDATE
     Use,                    ///< USE
 
@@ -48,6 +54,7 @@ enum class AstNodeKind : std::uint8_t
     In,                     ///< IN
     Between,                ///< BETWEEN
     Like,                   ///< LIKE
+    Alias,                  ///< AS alias
 };
 
 /**
@@ -84,6 +91,12 @@ public:
      */
     [[nodiscard]]
     virtual AstNodeKind kind() const noexcept = 0;
+
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    virtual void accept(AstNodeVisitor & visitor) const = 0;
 
 private:
     AstNodeLocation location_;  ///< 节点位置

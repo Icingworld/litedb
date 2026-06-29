@@ -786,6 +786,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_c
         statement.collection(),
         statement.if_not_exists(),
         std::move(columns.value()),
+        statement.comment(),
         statement.location()
     );
 }

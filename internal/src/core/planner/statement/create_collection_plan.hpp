@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,7 @@ public:
         std::string collection_name,
         bool if_not_exists,
         std::vector<catalog::ColumnDefinition> columns,
+        std::optional<std::string> comment,
         parser::ast::AstNodeLocation location
     );
 
@@ -53,11 +55,19 @@ public:
     [[nodiscard]]
     const std::vector<catalog::ColumnDefinition> & columns() const noexcept;
 
+    /**
+     * @brief 获取集合注释
+     * @return 集合注释
+     */
+    [[nodiscard]]
+    const std::optional<std::string> & comment() const noexcept;
+
 private:
     common::DatabaseId database_id_;                                ///< 数据库ID
     std::string collection_name_;                                   ///< 集合名称
     bool if_not_exists_;                                            ///< 是否存在
     std::vector<catalog::ColumnDefinition> columns_;                ///< 列定义
+    std::optional<std::string> comment_;                             ///< 集合注释
 };
 
 } // namespace litedb::core::planner

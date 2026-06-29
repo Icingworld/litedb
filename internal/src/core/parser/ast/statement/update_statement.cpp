@@ -23,6 +23,11 @@ AstNodeKind UpdateStatement::kind() const noexcept
     return AstNodeKind::Update;
 }
 
+void UpdateStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & UpdateStatement::collection() const noexcept
 {
     return collection_;

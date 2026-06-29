@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "core/parser/ast/schema.hpp"
@@ -19,6 +20,7 @@ public:
         std::string collection,
         bool if_not_exists,
         ColumnDefinitionList columns,
+        std::optional<std::string> comment,
         AstNodeLocation location
     ) noexcept;
 
@@ -29,6 +31,12 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
+
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取集合名称
@@ -51,10 +59,18 @@ public:
     [[nodiscard]]
     const ColumnDefinitionList & columns() const noexcept;
 
+    /**
+     * @brief 获取集合注释
+     * @return 集合注释
+     */
+    [[nodiscard]]
+    const std::optional<std::string> & comment() const noexcept;
+
 private:
     std::string collection_;        ///< 集合名称
     bool if_not_exists_;            ///< 是否不存在
-    ColumnDefinitionList columns_;  ///< 列定义列表
+    ColumnDefinitionList columns_;              ///< 列定义列表
+    std::optional<std::string> comment_;         ///< 集合注释
 };
 
 } // namespace litedb::core::parser::ast

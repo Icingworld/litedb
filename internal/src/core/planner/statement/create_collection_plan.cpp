@@ -10,6 +10,7 @@ CreateCollectionPlan::CreateCollectionPlan(
     std::string collection_name,
     bool if_not_exists,
     std::vector<catalog::ColumnDefinition> columns,
+    std::optional<std::string> comment,
     parser::ast::AstNodeLocation location
 )
     : StatementPlan(StatementPlanKind::CreateCollection, location)
@@ -17,6 +18,7 @@ CreateCollectionPlan::CreateCollectionPlan(
     , collection_name_(std::move(collection_name))
     , if_not_exists_(if_not_exists)
     , columns_(std::move(columns))
+    , comment_(std::move(comment))
 {
 }
 
@@ -38,6 +40,11 @@ bool CreateCollectionPlan::if_not_exists() const noexcept
 const std::vector<catalog::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
 {
     return columns_;
+}
+
+const std::optional<std::string> & CreateCollectionPlan::comment() const noexcept
+{
+    return comment_;
 }
 
 } // namespace litedb::core::planner

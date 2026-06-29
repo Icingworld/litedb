@@ -27,6 +27,11 @@ AstNodeKind CreateIndexStatement::kind() const noexcept
     return AstNodeKind::CreateIndex;
 }
 
+void CreateIndexStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & CreateIndexStatement::index_name() const noexcept
 {
     return index_name_;

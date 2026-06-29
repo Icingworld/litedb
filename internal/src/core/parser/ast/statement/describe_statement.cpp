@@ -21,6 +21,11 @@ AstNodeKind DescribeStatement::kind() const noexcept
     return AstNodeKind::Describe;
 }
 
+void DescribeStatement::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 SchemaObjectType DescribeStatement::object_type() const noexcept
 {
     return object_type_;

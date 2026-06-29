@@ -5,7 +5,7 @@
 namespace litedb::core::persistence
 {
 
-inline constexpr std::uint16_t StorageFormatVersion = 1;            ///< 存储格式版本
+inline constexpr std::uint16_t StorageFormatVersion = 2;            ///< 存储格式版本
 inline constexpr std::uint16_t FileHeaderSize = 8;                  ///< 文件头大小
 
 inline constexpr std::uint32_t ManifestMagic = 0x464d444c;          ///< LDMF

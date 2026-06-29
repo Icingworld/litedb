@@ -10,10 +10,10 @@
 先内存索引接入核心流程
   -> 再持久化索引定义
   -> 再从持久化 record 重建内存索引
-  -> 最后实现真正的持久化 Hash / B+Tree
+  -> 最后实现真正的持久化 B+Tree
 ```
 
-不要在第一次接入时同时实现 page-based Hash、page-based B+Tree、WAL 和崩溃恢复。那些属于更后面的存储引擎问题。
+不要在第一次接入时同时实现 page-based B+Tree、WAL 和崩溃恢复。那些属于更后面的存储引擎问题。
 
 ## 2. 当前索引模块
 
@@ -23,11 +23,9 @@
 
 ```text
 ScalarIndex
-  ├─ HashIndex
   └─ BTreeIndex
 
 ScalarIndexKey
-  ├─ ScalarIndexHash
   ├─ ScalarIndexEqual
   └─ ScalarIndexLess
 
@@ -68,33 +66,11 @@ erase(old_key, record_id)
 insert(new_key, record_id)
 ```
 
-## 3. HashIndex 与 BTreeIndex 语义
+## 3. BTreeIndex 语义
 
-### 3.1 HashIndex
+### 3.1 HASH 暂不支持
 
-`HashIndex` 用于等值查询。
-
-内部当前使用：
-
-```cpp
-std::unordered_map<ScalarIndexKey, std::vector<RecordId>, ScalarIndexHash, ScalarIndexEqual>
-```
-
-支持：
-
-```text
-insert
-erase
-find_equal
-```
-
-不支持：
-
-```text
-scan_range
-```
-
-当调用范围查询时返回 `UnsupportedRangeScan`。
+当前 SQL 语法不暴露 `USING HASH`，标量索引暂时只支持 `BTREE`。如果后续重新引入 HashIndex，也应作为独立版本能力重新补充语法、catalog 元数据和查询规划规则。
 
 ### 3.2 BTreeIndex
 
@@ -146,7 +122,7 @@ IndexEntry
   collection_id
   index_name
   column_id
-  index_kind: Hash | BTree
+  index_kind: BTree
   unique: false
 ```
 
@@ -165,7 +141,7 @@ SQL 可以随后接入：
 
 ```sql
 CREATE INDEX idx_age ON users(age) USING BTREE;
-CREATE INDEX idx_name ON users(name) USING HASH;
+CREATE INDEX idx_name ON users(name) USING BTREE;
 DROP INDEX idx_age;
 SHOW INDEXES FROM users;
 ```
@@ -189,7 +165,7 @@ std::expected<schema::Record, StorageError> get(common::RecordId record_id) cons
 
 ### 4.3 增加 IndexManager
 
-不要把索引维护逻辑塞进 `HashIndex` / `BTreeIndex`，也不要让 executor 手动维护每个索引。
+不要把索引维护逻辑塞进 `BTreeIndex`，也不要让 executor 手动维护每个索引。
 
 建议新增 `IndexManager`：
 
@@ -268,7 +244,7 @@ Filter(Comparison(ColumnRef, Literal))
 
 ```text
 =
-  HashIndex 或 BTreeIndex 都可用
+  使用 BTreeIndex
 
 < <= > >= BETWEEN
   只使用 BTreeIndex
@@ -370,7 +346,6 @@ B+Tree 删除是复杂点。可以分阶段：
 ```text
 v0.2 当前:
   core/index 内存索引模块
-  HashIndex 使用 unordered_map
   BTreeIndex 使用 map
 
 v0.2 下一步:
@@ -387,10 +362,9 @@ v0.2 后续:
 v0.3:
   catalog 持久化索引定义
   启动时从持久化 records rebuild 内存索引
-  可选实现 InMemoryHashIndex / InMemoryBPlusTreeIndex
+  可选实现 InMemoryBPlusTreeIndex
 
 v0.4+:
-  page-based Hash index
   page-based B+Tree index
   WAL 或恢复协议
   更完整的优化器和统计信息

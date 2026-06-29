@@ -23,6 +23,11 @@ AstNodeKind BetweenExpression::kind() const noexcept
     return AstNodeKind::Between;
 }
 
+void BetweenExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const ExpressionNode & BetweenExpression::expression() const noexcept
 {
     return *expression_;

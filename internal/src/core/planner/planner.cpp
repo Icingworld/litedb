@@ -138,6 +138,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
             create.collection_name(),
             create.if_not_exists(),
             create.columns(),
+            create.comment(),
             create.location()
         );
     }

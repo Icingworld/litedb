@@ -16,6 +16,11 @@ AstNodeKind IdentifierExpression::kind() const noexcept
     return AstNodeKind::Identifier;
 }
 
+void IdentifierExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & IdentifierExpression::name() const noexcept
 {
     return name_;

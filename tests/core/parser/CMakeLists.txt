@@ -14,6 +14,14 @@ target_link_libraries(parser_ast_tests PRIVATE litedb_parser)
 
 add_test(NAME parser_ast_tests COMMAND parser_ast_tests)
 
+add_executable(parser_debug_printer_tests
+    debug_printer_tests.cpp
+)
+
+target_link_libraries(parser_debug_printer_tests PRIVATE litedb_parser)
+
+add_test(NAME parser_debug_printer_tests COMMAND parser_debug_printer_tests)
+
 add_executable(parser_parser_tests
     parser_tests.cpp
 )

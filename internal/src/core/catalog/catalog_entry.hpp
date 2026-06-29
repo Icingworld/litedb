@@ -178,7 +178,7 @@ private:
 class CollectionEntry final : public CatalogEntry
 {
 public:
-    CollectionEntry(common::CollectionId id, common::DatabaseId database_id, std::string name);
+    CollectionEntry(common::CollectionId id, common::DatabaseId database_id, std::string name, std::optional<std::string> comment = std::nullopt);
 
 public:
     /**
@@ -222,6 +222,13 @@ public:
      */
     [[nodiscard]]
     std::optional<common::ColumnId> primary_key_column_id() const noexcept;
+
+    /**
+     * @brief 获取集合注释
+     * @return 集合注释
+     */
+    [[nodiscard]]
+    const std::optional<std::string> & comment() const noexcept;
 
     /**
      * @brief 查找列 ID
@@ -292,6 +299,7 @@ private:
     std::unordered_map<std::string, common::IndexId> indexes_by_key_;   ///< 集合包含的索引键到 ID 的映射
     std::unordered_map<std::string, common::VIndexId> vector_indexes_by_key_; ///< 集合包含的向量索引键到 ID 的映射
     std::optional<common::ColumnId> primary_key_column_id_;             ///< 集合主键列 ID
+    std::optional<std::string> comment_;                                ///< 集合注释
 };
 
 /**

@@ -11,12 +11,14 @@ CollectionSchema::CollectionSchema(
     common::DatabaseId database_id,
     common::CollectionId collection_id,
     std::string collection_name,
-    std::vector<ColumnSchema> columns
+    std::vector<ColumnSchema> columns,
+    std::optional<std::string> comment
 )
     : database_id_(database_id)
     , collection_id_(collection_id)
     , collection_name_(std::move(collection_name))
     , columns_(std::move(columns))
+    , comment_(std::move(comment))
 {
 }
 
@@ -33,6 +35,11 @@ common::CollectionId CollectionSchema::collection_id() const noexcept
 const std::string & CollectionSchema::collection_name() const noexcept
 {
     return collection_name_;
+}
+
+const std::optional<std::string> & CollectionSchema::comment() const noexcept
+{
+    return comment_;
 }
 
 const std::vector<ColumnSchema> & CollectionSchema::columns() const noexcept

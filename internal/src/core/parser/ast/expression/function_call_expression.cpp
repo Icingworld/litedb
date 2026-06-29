@@ -17,6 +17,11 @@ AstNodeKind FunctionCallExpression::kind() const noexcept
     return AstNodeKind::FunctionCall;
 }
 
+void FunctionCallExpression::accept(AstNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 const std::string & FunctionCallExpression::name() const noexcept
 {
     return name_;

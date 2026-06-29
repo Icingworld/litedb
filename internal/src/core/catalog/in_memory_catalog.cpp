@@ -346,7 +346,7 @@ std::expected<common::CollectionId, CatalogError> InMemoryCatalog::create_collec
     }
 
     const auto collection_id = next_collection_id();
-    auto collection = std::make_unique<CollectionEntry>(collection_id, request.database_id, request.name);
+    auto collection = std::make_unique<CollectionEntry>(collection_id, request.database_id, request.name, request.comment);
 
     for (const auto & column_request : request.columns) {
         const auto column_id = next_column_id();
@@ -578,6 +578,7 @@ CatalogSnapshot InMemoryCatalog::snapshot() const
                 .id = collection->id(),
                 .database_id = collection->database_id(),
                 .name = collection->name(),
+                .comment = collection->comment(),
                 .columns = {},
             };
 
@@ -794,7 +795,8 @@ std::expected<void, CatalogError> InMemoryCatalog::restore(const CatalogSnapshot
             auto collection = std::make_unique<CollectionEntry>(
                 collection_snapshot.id,
                 database_snapshot.id,
-                collection_snapshot.name
+                collection_snapshot.name,
+                collection_snapshot.comment
             );
             auto * collection_ptr = collection.get();
 
