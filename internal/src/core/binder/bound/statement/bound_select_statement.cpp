@@ -9,7 +9,7 @@ BoundSelectStatement::BoundSelectStatement(
     common::DatabaseId database_id,
     common::CollectionId collection_id,
     std::string collection_name,
-    std::vector<std::unique_ptr<BoundExpression>> projections,
+    std::vector<BoundProjectionItem> projections,
     std::unique_ptr<BoundExpression> where,
     std::vector<BoundOrderByItem> order_by,
     std::optional<std::size_t> limit,
@@ -43,7 +43,7 @@ const std::string & BoundSelectStatement::collection_name() const noexcept
     return collection_name_;
 }
 
-const std::vector<std::unique_ptr<BoundExpression>> & BoundSelectStatement::projections() const noexcept
+const std::vector<BoundProjectionItem> & BoundSelectStatement::projections() const noexcept
 {
     return projections_;
 }
@@ -68,7 +68,7 @@ std::optional<std::size_t> BoundSelectStatement::offset() const noexcept
     return offset_;
 }
 
-std::vector<std::unique_ptr<BoundExpression>> BoundSelectStatement::take_projections() noexcept
+std::vector<BoundProjectionItem> BoundSelectStatement::take_projections() noexcept
 {
     return std::move(projections_);
 }

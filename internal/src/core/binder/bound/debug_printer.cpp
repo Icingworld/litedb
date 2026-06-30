@@ -445,8 +445,15 @@ void BoundDebugPrinter::visit(const BoundSelectStatement & statement)
         out_ << '\n';
         IndentScope projections_scope(*this);
         for (std::size_t index = 0; index < statement.projections().size(); ++index) {
-            pending_prefix_ = "[" + std::to_string(index) + "] ";
-            statement.projections()[index]->accept(*this);
+            write_indent();
+            out_ << '[' << index << "] BoundProjectionItem\n";
+            IndentScope item_scope(*this);
+            if (statement.projections()[index].alias.has_value()) {
+                write_field("alias", statement.projections()[index].alias.value());
+            } else {
+                write_field("alias", "<none>");
+            }
+            write_child_field("expression", statement.projections()[index].expression.get());
         }
     }
 

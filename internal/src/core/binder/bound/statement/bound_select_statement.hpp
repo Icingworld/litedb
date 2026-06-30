@@ -21,6 +21,12 @@ struct BoundOrderByItem
     bool ascending {true};                          ///< 是否升序
 };
 
+struct BoundProjectionItem
+{
+    std::unique_ptr<BoundExpression> expression;    ///< 投影表达式
+    std::optional<std::string> alias;               ///< 投影别名
+};
+
 /**
  * @brief SELECT 语句节点
  * @details 示例：SELECT <select_item> [, <select_item>] FROM <collection_name> [WHERE <expression>] [ORDER BY <expression> [ASC | DESC]] [LIMIT <integer_literal>] [OFFSET <integer_literal>]
@@ -32,7 +38,7 @@ public:
         common::DatabaseId database_id,
         common::CollectionId collection_id,
         std::string collection_name,
-        std::vector<std::unique_ptr<BoundExpression>> projections,
+        std::vector<BoundProjectionItem> projections,
         std::unique_ptr<BoundExpression> where,
         std::vector<BoundOrderByItem> order_by,
         std::optional<std::size_t> limit,
@@ -67,7 +73,7 @@ public:
      * @return 选择列表
      */
     [[nodiscard]]
-    const std::vector<std::unique_ptr<BoundExpression>> & projections() const noexcept;
+    const std::vector<BoundProjectionItem> & projections() const noexcept;
 
     /**
      * @brief 获取条件表达式
@@ -102,7 +108,7 @@ public:
      * @return 选择列表
      */
     [[nodiscard]]
-    std::vector<std::unique_ptr<BoundExpression>> take_projections() noexcept;
+    std::vector<BoundProjectionItem> take_projections() noexcept;
 
     /**
      * @brief 获取条件表达式
@@ -128,7 +134,7 @@ private:
     common::DatabaseId database_id_;                                ///< 数据库 ID
     common::CollectionId collection_id_;                            ///< 集合 ID
     std::string collection_name_;                                   ///< 集合名称
-    std::vector<std::unique_ptr<BoundExpression>> projections_;     ///< 选择列表
+    std::vector<BoundProjectionItem> projections_;                  ///< 选择列表
     std::unique_ptr<BoundExpression> where_;                        ///< 条件表达式
     std::vector<BoundOrderByItem> order_by_;                        ///< 排序列表
     std::optional<std::size_t> limit_;                              ///< 限制

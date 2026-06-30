@@ -156,7 +156,8 @@ void test_select_binding()
     const auto * select = static_cast<const BoundSelectStatement *>(statement.get());
     require(select->collection_id() == fixture.users_id, "SELECT collection id mismatch");
     require(select->projections().size() == 2, "SELECT projection count mismatch");
-    require(select->projections()[0]->kind() == BoundExpressionKind::ColumnRef, "SELECT projection kind mismatch");
+    require(select->projections()[0].expression->kind() == BoundExpressionKind::ColumnRef, "SELECT projection kind mismatch");
+    require(!select->projections()[0].alias.has_value(), "SELECT projection alias mismatch");
     require(select->where() != nullptr, "SELECT where missing");
     require(select->where()->type().id == LogicalTypeId::Boolean, "SELECT where type mismatch");
     require(select->order_by().size() == 1, "SELECT order count mismatch");
@@ -172,6 +173,37 @@ void test_select_binding()
     const auto * varchar_select = static_cast<const BoundSelectStatement *>(varchar_comparison.get());
     require(varchar_select->where() != nullptr, "VARCHAR comparison where missing");
     require(varchar_select->where()->type().id == LogicalTypeId::Boolean, "VARCHAR comparison should bind as boolean");
+}
+
+void test_select_alias_binding()
+{
+    Fixture fixture;
+
+    auto expression_alias = bind_ok(fixture, "SELECT age + 1 AS next_age FROM users;");
+    const auto * expression_select = static_cast<const BoundSelectStatement *>(expression_alias.get());
+    require(expression_select->projections().size() == 1, "SELECT alias projection count mismatch");
+    require(expression_select->projections()[0].alias.has_value(), "SELECT alias missing");
+    require(expression_select->projections()[0].alias.value() == "next_age", "SELECT alias name mismatch");
+    require(expression_select->projections()[0].expression->kind() == BoundExpressionKind::Binary, "SELECT alias expression kind mismatch");
+
+    auto order_by_alias = bind_ok(fixture, "SELECT age + 1 AS next_age FROM users ORDER BY next_age DESC;");
+    const auto * order_by_select = static_cast<const BoundSelectStatement *>(order_by_alias.get());
+    require(order_by_select->order_by().size() == 1, "ORDER BY alias count mismatch");
+    require(!order_by_select->order_by()[0].ascending, "ORDER BY alias direction mismatch");
+    require(order_by_select->order_by()[0].expression->kind() == BoundExpressionKind::Binary, "ORDER BY alias expression kind mismatch");
+
+    auto alias_shadows_column = bind_ok(fixture, "SELECT name AS age FROM users ORDER BY age;");
+    const auto * shadow_select = static_cast<const BoundSelectStatement *>(alias_shadows_column.get());
+    require(shadow_select->order_by()[0].expression->kind() == BoundExpressionKind::ColumnRef, "ORDER BY shadow alias kind mismatch");
+    require(shadow_select->order_by()[0].expression->type().id == LogicalTypeId::Varchar, "ORDER BY should prefer alias over source column");
+
+    auto duplicate_alias = bind_ok(fixture, "SELECT age AS x, name AS x FROM users;");
+    const auto * duplicate_select = static_cast<const BoundSelectStatement *>(duplicate_alias.get());
+    require(duplicate_select->projections().size() == 2, "duplicate alias projection count mismatch");
+    require(duplicate_select->projections()[0].alias.value() == "x", "first duplicate alias mismatch");
+    require(duplicate_select->projections()[1].alias.value() == "x", "second duplicate alias mismatch");
+
+    require(bind_error(fixture, "SELECT age AS x, name AS x FROM users ORDER BY x;").code == BinderErrorCode::AmbiguousAlias, "ambiguous ORDER BY alias error mismatch");
 }
 
 void test_select_errors()
@@ -394,6 +426,7 @@ int main()
     try {
         test_use_and_missing_database_context();
         test_select_binding();
+        test_select_alias_binding();
         test_select_errors();
         test_function_binding();
         test_insert_binding();

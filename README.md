@@ -81,9 +81,8 @@ query planning are not implemented yet.
 - No unique indexes, composite indexes, or expression indexes yet.
 - No vector indexes yet. Similarity queries scan every row and compute distance
 at query time.
-- No `SELECT ... AS alias` yet. Function results in projections are exposed as
-auto-generated names such as `expr1`, `expr3`, and `ORDER BY` cannot reference
-those aliases — repeat the full expression instead.
+- `SELECT ... AS alias` is supported for explicit projection aliases, and
+`ORDER BY` can reference those aliases.
 - Only the three built-in vector distance functions are available. User-defined
 functions and aggregate functions are not implemented yet.
 
@@ -230,8 +229,8 @@ Notes:
 
 - Both arguments to a vector distance function must be `VECTOR(n)` values with
 the same dimension.
-- `ORDER BY` must repeat the full function call; projection aliases are not
-supported yet.
+- `ORDER BY` can reference explicit projection aliases, so distance expressions
+can be named once in the `SELECT` list and reused for ordering.
 
 Use `.quit` or `.exit` to leave the client.
 
@@ -289,8 +288,8 @@ docs/design_docs/              Design notes, test SQL, and roadmap
 
 Near-term work after v0.3.0:
 
-- v0.3.x: vector indexes (likely starting with in-memory HNSW), `SELECT ... AS`
-aliases, more built-in functions, and distance-query polish.
+- v0.3.x: vector indexes (likely starting with in-memory HNSW), more built-in
+functions, and distance-query polish.
 - v0.2.x carry-over: `IndexScan` and simple index-based query planning,
 persistence hardening, cleanup/compaction planning, and storage format polish.
 - v0.4: reliability improvements such as WAL, recovery, checksums, compaction,

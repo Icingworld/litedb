@@ -7,7 +7,7 @@ namespace litedb::core::planner::logical
 
 LogicalProjection::LogicalProjection(
     std::unique_ptr<LogicalPlanNode> child,
-    std::vector<std::unique_ptr<binder::bound::BoundExpression>> projections,
+    std::vector<binder::bound::BoundProjectionItem> projections,
     parser::ast::AstNodeLocation location
 )
     : LogicalUnaryNode(LogicalPlanNodeKind::Projection, std::move(child), location)
@@ -15,7 +15,7 @@ LogicalProjection::LogicalProjection(
 {
 }
 
-const std::vector<std::unique_ptr<binder::bound::BoundExpression>> & LogicalProjection::projections() const noexcept
+const std::vector<binder::bound::BoundProjectionItem> & LogicalProjection::projections() const noexcept
 {
     return projections_;
 }

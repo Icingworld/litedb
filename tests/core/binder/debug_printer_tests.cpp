@@ -132,9 +132,12 @@ void test_select_debug_print()
     require_contains(output, "  collection_id: 1\n");
     require_contains(output, "  collection_name: users\n");
     require_contains(output, "  projections:\n");
-    require_contains(output, "    [0] BoundColumnRefExpression @1:8\n");
-    require_contains(output, "      type: BIGINT\n");
-    require_contains(output, "      column_name: id\n");
+    require_contains(output, "    [0] BoundProjectionItem\n");
+    require_contains(output, "      alias: <none>\n");
+    require_contains(output, "      expression:\n");
+    require_contains(output, "        BoundColumnRefExpression @1:8\n");
+    require_contains(output, "          type: BIGINT\n");
+    require_contains(output, "          column_name: id\n");
     require_contains(output, "  where:\n");
     require_contains(output, "    BoundBinaryExpression @");
     require_contains(output, "      type: BOOLEAN\n");
@@ -144,6 +147,16 @@ void test_select_debug_print()
     require_contains(output, "      ascending: false\n");
     require_contains(output, "  limit: 10\n");
     require_contains(output, "  offset: <none>\n");
+
+    auto alias_statement = bind_ok(fixture, "SELECT age + 1 AS next_age FROM users ORDER BY next_age DESC;");
+    const auto alias_output = debug_print(*alias_statement);
+    require_contains(alias_output, "    [0] BoundProjectionItem\n");
+    require_contains(alias_output, "      alias: next_age\n");
+    require_contains(alias_output, "      expression:\n");
+    require_contains(alias_output, "        BoundBinaryExpression @");
+    require_contains(alias_output, "    [0] BoundOrderByItem\n");
+    require_contains(alias_output, "      expression:\n");
+    require_contains(alias_output, "        BoundBinaryExpression @");
 }
 
 void test_insert_update_debug_print()
