@@ -47,7 +47,6 @@ public:
     void visit(const DropVectorIndexStatement & node) override;
     void visit(const InsertStatement & node) override;
     void visit(const SelectStatement & node) override;
-    void visit(const ShowStatement & node) override;
     void visit(const ShowCollectionsStatement & node) override;
     void visit(const ShowDatabasesStatement & node) override;
     void visit(const ShowIndexesStatement & node) override;

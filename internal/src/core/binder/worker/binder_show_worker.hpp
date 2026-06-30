@@ -8,7 +8,8 @@
 namespace litedb::core::parser::ast
 {
 
-class ShowStatement;
+class ShowCollectionsStatement;
+class ShowDatabasesStatement;
 class ShowIndexesStatement;
 class ShowVectorIndexesStatement;
 
@@ -36,12 +37,21 @@ public:
 
 public:
     /**
-     * @brief 绑定 SHOW 语句
-     * @param statement SHOW 语句
+     * @brief 绑定 SHOW DATABASES 语句
+     * @param statement SHOW DATABASES 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show(
-        const parser::ast::ShowStatement & statement
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_databases(
+        const parser::ast::ShowDatabasesStatement & statement
+    );
+
+    /**
+     * @brief 绑定 SHOW COLLECTIONS 语句
+     * @param statement SHOW COLLECTIONS 语句
+     * @return 绑定后的语句
+     */
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_collections(
+        const parser::ast::ShowCollectionsStatement & statement
     );
 
     /**

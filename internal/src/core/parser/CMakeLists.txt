@@ -45,7 +45,6 @@ set(PARSER_SOURCES
     ast/statement/use_statement.cpp
     ast/statement/delete_statement.cpp
     ast/statement/update_statement.cpp
-    ast/statement/show_statement.cpp
     ast/statement/show_databases_statement.cpp
     ast/statement/show_collections_statement.cpp
     ast/statement/show_indexes_statement.cpp

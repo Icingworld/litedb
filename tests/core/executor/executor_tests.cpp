@@ -73,7 +73,8 @@ std::unique_ptr<StatementPlan> plan_ok(
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = database_id};
-    Binder binder {catalog, session};
+    BinderContext context {catalog, session};
+    Binder binder {context};
     auto bound = binder.bind(*statement);
     if (!bound.has_value()) {
         throw std::runtime_error(bound.error().message);

@@ -35,7 +35,6 @@ enum class AstNodeKind : std::uint8_t
     DropVectorIndex,        ///< DROP VINDEX
     Insert,                 ///< INSERT
     Select,                 ///< SELECT
-    Show,                   ///< SHOW
     ShowDatabases,          ///< SHOW DATABASES
     ShowCollections,        ///< SHOW COLLECTIONS
     ShowIndexes,            ///< SHOW INDEXES

@@ -105,7 +105,8 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    Binder binder {fixture.catalog, session};
+    BinderContext context {fixture.catalog, session};
+    Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);

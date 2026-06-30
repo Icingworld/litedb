@@ -22,8 +22,9 @@
 #include "core/parser/ast/statement/drop_vector_index_statement.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
+#include "core/parser/ast/statement/show_collections_statement.hpp"
+#include "core/parser/ast/statement/show_databases_statement.hpp"
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
-#include "core/parser/ast/statement/show_statement.hpp"
 #include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
@@ -61,8 +62,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_s
         return BinderDropWorker(context_).bind_drop_index(static_cast<const DropIndexStatement &>(statement));
     case AstNodeKind::DropVectorIndex:
         return BinderDropWorker(context_).bind_drop_vector_index(static_cast<const DropVectorIndexStatement &>(statement));
-    case AstNodeKind::Show:
-        return BinderShowWorker(context_).bind_show(static_cast<const ShowStatement &>(statement));
+    case AstNodeKind::ShowDatabases:
+        return BinderShowWorker(context_).bind_show_databases(static_cast<const ShowDatabasesStatement &>(statement));
+    case AstNodeKind::ShowCollections:
+        return BinderShowWorker(context_).bind_show_collections(static_cast<const ShowCollectionsStatement &>(statement));
     case AstNodeKind::ShowIndexes:
         return BinderShowWorker(context_).bind_show_indexes(static_cast<const ShowIndexesStatement &>(statement));
     case AstNodeKind::ShowVectorIndexes:

@@ -28,7 +28,6 @@
 #include "core/parser/ast/statement/show_collections_statement.hpp"
 #include "core/parser/ast/statement/show_databases_statement.hpp"
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
-#include "core/parser/ast/statement/show_statement.hpp"
 #include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include "core/parser/ast/statement/use_statement.hpp"
@@ -545,13 +544,6 @@ void AstDebugPrinter::visit(const SelectStatement & node)
 
     write_optional_field("limit", node.limit());
     write_optional_field("offset", node.offset());
-}
-
-void AstDebugPrinter::visit(const ShowStatement & node)
-{
-    write_node_header("ShowStatement", node.location());
-    IndentScope scope(*this);
-    write_field("object_type", schema_object_type_name(node.object_type()));
 }
 
 void AstDebugPrinter::visit(const ShowCollectionsStatement & node)

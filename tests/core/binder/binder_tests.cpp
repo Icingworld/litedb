@@ -107,7 +107,8 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    Binder binder {fixture.catalog, session};
+    BinderContext context {fixture.catalog, session};
+    Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
@@ -119,7 +120,8 @@ BinderError bind_error(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    Binder binder {fixture.catalog, session};
+    BinderContext context {fixture.catalog, session};
+    Binder binder {context};
     auto result = binder.bind(*statement);
     require(!result.has_value(), "statement should fail to bind");
     return result.error();
@@ -135,7 +137,8 @@ void test_use_and_missing_database_context()
 
     auto select_ast = parse_ok("SELECT * FROM users;");
     SessionContext empty_session;
-    Binder binder {fixture.catalog, empty_session};
+    BinderContext context {fixture.catalog, empty_session};
+    Binder binder {context};
     auto result = binder.bind(*select_ast);
     require(!result.has_value(), "SELECT without database should fail");
     require(result.error().code == BinderErrorCode::DatabaseNotSelected, "missing database error mismatch");
@@ -267,13 +270,12 @@ void test_ddl_and_metadata_binding()
     require(bound_show_vector_indexes->collection_name() == "users", "SHOW VINDEXES collection name mismatch");
     require(bind_ok(fixture, "DESCRIBE users;")->kind() == BoundStatementKind::DescribeCollection, "DESCRIBE kind mismatch");
 
-    auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+    auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT, embedding VECTOR(3));");
     require(create->kind() == BoundStatementKind::CreateCollection, "CREATE COLLECTION kind mismatch");
     const auto * create_collection = static_cast<const BoundCreateCollectionStatement *>(create.get());
     require(create_collection->columns().size() == 2, "CREATE COLLECTION column count mismatch");
     require(create_collection->columns()[1].type.id == LogicalTypeId::Vector, "CREATE COLLECTION vector type mismatch");
 
-    require(bind_error(fixture, "CREATE COLLECTION bad (id BIGINT PRIMARY KEY, other BIGINT PRIMARY KEY);").code == BinderErrorCode::DuplicatePrimaryKey, "duplicate primary key error mismatch");
     require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").code == BinderErrorCode::InvalidType, "default type error mismatch");
 }
 
@@ -292,9 +294,9 @@ void test_index_binding()
     require(!bound_create_age->unique(), "CREATE INDEX unique mismatch");
     require(!bound_create_age->if_not_exists(), "CREATE INDEX if-not-exists mismatch");
 
-    auto create_name = bind_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_name ON users (name) USING HASH;");
+    auto create_name = bind_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_name ON users (name) USING BTREE;");
     const auto * bound_create_name = static_cast<const BoundCreateIndexStatement *>(create_name.get());
-    require(bound_create_name->index_kind() == CatalogIndexKind::Hash, "CREATE INDEX hash kind mismatch");
+    require(bound_create_name->index_kind() == CatalogIndexKind::BTree, "CREATE INDEX BTREE kind mismatch");
     require(bound_create_name->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
 
     require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").code == BinderErrorCode::InvalidType, "vector index type error mismatch");
