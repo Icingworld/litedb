@@ -1,0 +1,42 @@
+#include "core/binder/worker/binder_use_worker.hpp"
+
+#include "core/binder/binder_helper.hpp"
+#include "core/binder/binder_context.hpp"
+#include "core/binder/bound/statement/bound_use_statement.hpp"
+#include "core/catalog/catalog_entry.hpp"
+#include "core/parser/ast/statement/use_statement.hpp"
+
+namespace litedb::core::binder
+{
+
+using namespace litedb::core::binder::bound;
+using namespace litedb::core::common;
+using namespace litedb::core::parser;
+using namespace litedb::core::parser::ast;
+
+BinderUseWorker::BinderUseWorker(BinderContext & context) noexcept
+    : context_(context)
+{
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUseWorker::bind_use(
+    const UseStatement & statement
+)
+{
+    const auto * database = context_.catalog().find_database(statement.database());
+    if (database == nullptr) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::DatabaseNotFound,
+            statement.location(),
+            "Database not found: " + statement.database()
+        ));
+    }
+
+    return std::make_unique<BoundUseStatement>(
+        database->id(),
+        database->name(),
+        statement.location()
+    );
+}
+
+} // namespace litedb::core::binder

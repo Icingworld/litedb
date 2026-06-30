@@ -1,0 +1,79 @@
+#pragma once
+
+#include <expected>
+#include <memory>
+
+#include "core/binder/binder_error.hpp"
+
+namespace litedb::core::parser::ast
+{
+
+class DropDatabaseStatement;
+class DropCollectionStatement;
+class DropIndexStatement;
+class DropVectorIndexStatement;
+
+} // namespace litedb::core::parser::ast
+
+namespace litedb::core::binder::bound
+{
+
+class BoundStatement;
+
+} // namespace litedb::core::binder::bound
+
+namespace litedb::core::binder
+{
+
+class BinderContext;
+
+/**
+ * @brief DROP 语句绑定工作器
+ */
+class BinderDropWorker
+{
+public:
+    explicit BinderDropWorker(BinderContext & context) noexcept;
+
+public:
+    /**
+     * @brief 绑定 DROP DATABASE 语句
+     * @param statement DROP DATABASE 语句
+     * @return 绑定后的语句
+     */
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_database(
+        const parser::ast::DropDatabaseStatement & statement
+    );
+    
+    /**
+     * @brief 绑定 DROP COLLECTION 语句
+     * @param statement DROP COLLECTION 语句
+     * @return 绑定后的语句
+     */
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_collection(
+        const parser::ast::DropCollectionStatement & statement
+    );
+    
+    /**
+     * @brief 绑定 DROP INDEX 语句
+     * @param statement DROP INDEX 语句
+     * @return 绑定后的语句
+     */
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_index(
+        const parser::ast::DropIndexStatement & statement
+    );
+    
+    /**
+     * @brief 绑定 DROP VINDEX 语句
+     * @param statement DROP VINDEX 语句
+     * @return 绑定后的语句
+     */
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_vector_index(
+        const parser::ast::DropVectorIndexStatement & statement
+    );
+
+private:
+    BinderContext & context_;        ///< 绑定上下文
+};
+
+} // namespace litedb::core::binder

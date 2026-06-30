@@ -3,6 +3,7 @@
 #include <expected>
 #include <memory>
 
+#include "core/binder/binder_context.hpp"
 #include "core/binder/binder_error.hpp"
 
 namespace litedb::core::parser::ast
@@ -11,13 +12,6 @@ namespace litedb::core::parser::ast
 class StatementNode;
 
 } // namespace litedb::core::parser::ast
-
-namespace litedb::core::catalog
-{
-
-class CatalogReader;
-
-} // namespace litedb::core::catalog
 
 namespace litedb::core::binder::bound
 {
@@ -30,26 +24,26 @@ namespace litedb::core::binder
 {
 
 /**
- * @brief 绑定器主工作器
+ * @brief 绑定工作器
  */
 class BinderWorker
 {
 public:
-    explicit BinderWorker(const catalog::CatalogReader & catalog) noexcept;
+    BinderWorker(const catalog::CatalogReader & catalog, const SessionContext & session);
 
 public:
     /**
      * @brief 绑定语句
-     * @param node AST 节点
+     * @param statement 语句
      * @return 绑定后的语句
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind(
-        const parser::ast::StatementNode & node
-    ) const;
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_statement(
+        const parser::ast::StatementNode & statement
+    );
 
 private:
-    const catalog::CatalogReader & catalog_;    ///< 数据库读取器
+    BinderContext context_;         ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder
