@@ -18,4 +18,11 @@ void register_builtin_functions(FunctionRegistry & registry);
 [[nodiscard]]
 FunctionRegistry make_builtin_function_registry();
 
+/**
+ * @brief 获取共享的内置函数注册表
+ * @return 内置函数注册表
+ */
+[[nodiscard]]
+const FunctionRegistry & builtin_function_registry();
+
 } // namespace litedb::core::function::builtin

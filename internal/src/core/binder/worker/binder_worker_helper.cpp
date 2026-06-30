@@ -207,7 +207,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         arguments.push_back(std::move(bound_argument.value()));
     }
 
-    auto registry = function::builtin::make_builtin_function_registry();
+    const auto & registry = function::builtin::builtin_function_registry();
     auto binding = registry.bind_scalar(expression.name(), argument_types);
     if (!binding.has_value()) [[unlikely]] {
         const auto found = registry.find(expression.name());
