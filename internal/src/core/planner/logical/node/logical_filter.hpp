@@ -28,6 +28,12 @@ public:
     [[nodiscard]]
     const binder::bound::BoundExpression & predicate() const noexcept;
 
+    /**
+     * @brief 接受访问器
+     * @param visitor 访问器
+     */
+    void accept(LogicalPlanNodeVisitor & visitor) const override;
+
 private:
     std::unique_ptr<binder::bound::BoundExpression> predicate_;   ///< 谓词
 };

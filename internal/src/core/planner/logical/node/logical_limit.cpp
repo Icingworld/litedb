@@ -27,4 +27,9 @@ std::optional<std::size_t> LogicalLimit::offset() const noexcept
     return offset_;
 }
 
+void LogicalLimit::accept(LogicalPlanNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::planner::logical

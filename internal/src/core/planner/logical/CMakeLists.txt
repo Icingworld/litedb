@@ -18,9 +18,9 @@ set(LOGICAL_PLANNER_SOURCES
     ../statement/update_plan.cpp
     ../statement/use_plan.cpp
     ../access_path/access_path_selector.cpp
+    debug_printer.cpp
     logical_planner.cpp
     node/logical_filter.cpp
-    node/logical_index_scan.cpp
     node/logical_limit.cpp
     node/logical_order_by.cpp
     node/logical_plan_node.cpp

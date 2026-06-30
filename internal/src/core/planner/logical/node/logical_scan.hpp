@@ -44,9 +44,15 @@ public:
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
 
+    /**
+     * @brief 接受访问器
+     * @param visitor 访问器
+     */
+    void accept(LogicalPlanNodeVisitor & visitor) const override;
+
 private:
-    common::DatabaseId database_id_;                 ///< 数据库ID
-    common::CollectionId collection_id_;             ///< 集合ID
+    common::DatabaseId database_id_;                 ///< 数据库 ID
+    common::CollectionId collection_id_;             ///< 集合 ID
     std::string collection_name_;                    ///< 集合名称
 };
 

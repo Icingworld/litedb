@@ -20,4 +20,9 @@ const std::vector<binder::bound::BoundProjectionItem> & LogicalProjection::proje
     return projections_;
 }
 
+void LogicalProjection::accept(LogicalPlanNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::planner::logical

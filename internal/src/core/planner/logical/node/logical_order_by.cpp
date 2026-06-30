@@ -20,4 +20,9 @@ const std::vector<binder::bound::BoundOrderByItem> & LogicalOrderBy::order_by() 
     return order_by_;
 }
 
+void LogicalOrderBy::accept(LogicalPlanNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::planner::logical

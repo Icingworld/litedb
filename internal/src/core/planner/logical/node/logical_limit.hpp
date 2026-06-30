@@ -37,6 +37,12 @@ public:
     [[nodiscard]]
     std::optional<std::size_t> offset() const noexcept;
 
+    /**
+     * @brief 接受访问器
+     * @param visitor 访问器
+     */
+    void accept(LogicalPlanNodeVisitor & visitor) const override;
+
 private:
     std::optional<std::size_t> limit_;               ///< 限制
     std::optional<std::size_t> offset_;              ///< 偏移
