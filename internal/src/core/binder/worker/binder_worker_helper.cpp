@@ -94,7 +94,7 @@ std::expected<BindingCollection, BinderError> BinderWorkerHelper::bind_collectio
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_expression(
     const ExpressionNode & expression, const BindingCollection & collection
-)
+) const
 {
     switch (expression.kind()) {
     case AstNodeKind::Literal:
@@ -131,7 +131,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_literal(
     const LiteralExpression & expression
-)
+) const
 {
     switch (expression.literal_type()) {
     case TokenType::Null:
@@ -156,7 +156,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_column_reference(
     const ColumnReferenceExpression & expression, const BindingCollection & collection
-)
+) const
 {
     // 检查限定符是否匹配集合
     if (expression.qualifier().has_value()
@@ -191,7 +191,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_function(
     const FunctionCallExpression & expression, const BindingCollection & collection
-)
+) const
 {
     std::vector<std::unique_ptr<BoundExpression>> arguments;
     std::vector<LogicalType> argument_types;
@@ -262,7 +262,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_unary(
     const UnaryExpression & expression, const BindingCollection & collection
-)
+) const
 {
     auto operand = bind_expression(expression.operand(), collection);
     if (!operand.has_value()) [[unlikely]] {
@@ -305,7 +305,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_binary(
     const BinaryExpression & expression, const BindingCollection & collection
-)
+) const
 {
     auto left = bind_expression(expression.left(), collection);
     if (!left.has_value()) [[unlikely]] {
@@ -387,7 +387,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_vector(
     const VectorExpression & expression, const BindingCollection & collection
-)
+) const
 {
     std::vector<std::unique_ptr<BoundExpression>> elements;
     elements.reserve(expression.elements().size());
@@ -416,7 +416,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_in(
     const InExpression & expression, const BindingCollection & collection
-)
+) const
 {
     auto target = bind_expression(expression.expression(), collection);
     if (!target.has_value()) [[unlikely]] {
@@ -444,7 +444,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_between(
     const BetweenExpression & expression, const BindingCollection & collection
-)
+) const
 {
     auto target = bind_expression(expression.expression(), collection);
     if (!target.has_value()) [[unlikely]] {
@@ -478,7 +478,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_like(
     const LikeExpression & expression, const BindingCollection & collection
-)
+) const
 {
     auto target = bind_expression(expression.expression(), collection);
     if (!target.has_value()) [[unlikely]] {
@@ -506,7 +506,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> BinderWorkerHelper::expand_wildcard(
     const WildcardExpression & expression, const BindingCollection & collection
-)
+) const
 {
     if (expression.qualifier().has_value()
         && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
@@ -535,7 +535,7 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_default_expression(
     const catalog::CatalogDefaultExpression & expression, AstNodeLocation location
-)
+) const
 {
     if (expression.kind == catalog::CatalogDefaultExpressionKind::Vector) {
         std::vector<std::unique_ptr<BoundExpression>> elements;
@@ -579,7 +579,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 
 std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerHelper::bind_column_definitions(
     const ColumnDefinitionList & columns, AstNodeLocation location
-)
+) const
 {
     std::unordered_set<std::string> seen_columns;
     std::vector<catalog::ColumnDefinition> result;
@@ -626,7 +626,7 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
             .type = logical_type.value(),
             .primary_key = false,
             .unique = column.unique,
-            .nullable = true,
+            .nullable = column.nullable,
             .default_expression = std::move(default_expression),
             .comment = column.comment,
         });
@@ -637,7 +637,7 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
 
 std::expected<LogicalType, BinderError> BinderWorkerHelper::bind_data_type(
     const DataType & data_type, AstNodeLocation location
-)
+) const
 {
     switch (data_type.kind) {
     case DataTypeKind::Integer:
@@ -666,7 +666,7 @@ std::expected<LogicalType, BinderError> BinderWorkerHelper::bind_data_type(
 
 std::expected<catalog::CatalogDefaultExpression, BinderError> BinderWorkerHelper::snapshot_default_expression(
     const ExpressionNode & expression
-)
+) const
 {
     if (expression.kind() == AstNodeKind::Literal) {
         const auto & literal = static_cast<const LiteralExpression &>(expression);

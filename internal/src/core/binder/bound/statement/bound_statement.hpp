@@ -5,7 +5,7 @@
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/ast_node.hpp"
-#include "core/binder/bound/statement/bount_statement_visitor.hpp"
+#include "core/binder/bound/statement/bound_statement_visitor.hpp"
 
 namespace litedb::core::binder::bound
 {

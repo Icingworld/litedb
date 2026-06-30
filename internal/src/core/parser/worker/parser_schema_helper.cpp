@@ -130,7 +130,9 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
             if (!null_token.has_value()) [[unlikely]] {
                 return std::unexpected(null_token.error());
             }
+            column.nullable = false;
         } else if (context_.match(TokenType::Null)) {
+            column.nullable = true;
             // NULL 是默认行为，不需要额外处理
         } else if (context_.match(TokenType::Comment)) {
             auto comment = context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");

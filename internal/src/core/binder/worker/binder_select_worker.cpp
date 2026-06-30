@@ -95,7 +95,7 @@ const ExpressionNode * order_by_alias_target(
  * @return 绑定后的表达式
  */
 std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expression(
-    BinderWorkerHelper & helper,
+    const BinderWorkerHelper & helper,
     const ExpressionNode & expression,
     const BindingCollection & collection,
     const std::unordered_map<std::string, ProjectionAliasBinding> & aliases

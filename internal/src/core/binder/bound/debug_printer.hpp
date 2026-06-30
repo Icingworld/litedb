@@ -8,7 +8,7 @@
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/expression/bound_expression_visitor.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/binder/bound/statement/bount_statement_visitor.hpp"
+#include "core/binder/bound/statement/bound_statement_visitor.hpp"
 
 namespace litedb::core::binder::bound
 {

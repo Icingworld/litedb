@@ -302,11 +302,13 @@ void test_ddl_and_metadata_binding()
     require(bound_show_vector_indexes->collection_name() == "users", "SHOW VINDEXES collection name mismatch");
     require(bind_ok(fixture, "DESCRIBE users;")->kind() == BoundStatementKind::DescribeCollection, "DESCRIBE kind mismatch");
 
-    auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT, embedding VECTOR(3));");
+    auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT NOT NULL, embedding VECTOR(3) NULL);");
     require(create->kind() == BoundStatementKind::CreateCollection, "CREATE COLLECTION kind mismatch");
     const auto * create_collection = static_cast<const BoundCreateCollectionStatement *>(create.get());
     require(create_collection->columns().size() == 2, "CREATE COLLECTION column count mismatch");
+    require(!create_collection->columns()[0].nullable, "CREATE COLLECTION NOT NULL mismatch");
     require(create_collection->columns()[1].type.id == LogicalTypeId::Vector, "CREATE COLLECTION vector type mismatch");
+    require(create_collection->columns()[1].nullable, "CREATE COLLECTION NULL mismatch");
 
     require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").code == BinderErrorCode::InvalidType, "default type error mismatch");
 }

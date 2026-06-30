@@ -112,6 +112,7 @@ void test_create_collection_debug_print()
     require_contains(output, "  columns:\n");
     require_contains(output, "    [0] ColumnDefinition\n");
     require_contains(output, "      name: id\n");
+    require_contains(output, "      nullable: false\n");
     require_contains(output, "    [1] ColumnDefinition\n");
     require_contains(output, "      kind: Varchar\n");
     require_contains(output, "      parameter: 64\n");

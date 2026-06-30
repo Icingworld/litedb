@@ -89,7 +89,7 @@ public:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_expression(
         const parser::ast::ExpressionNode & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 展开通配符表达式
@@ -101,7 +101,7 @@ public:
     std::expected<std::vector<std::unique_ptr<bound::BoundExpression>>, BinderError> expand_wildcard(
         const parser::ast::WildcardExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定默认表达式
@@ -113,7 +113,7 @@ public:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_default_expression(
         const catalog::CatalogDefaultExpression & expression,
         parser::ast::AstNodeLocation location
-    );
+    ) const;
 
     /**
      * @brief 绑定列定义
@@ -125,7 +125,7 @@ public:
     std::expected<std::vector<catalog::ColumnDefinition>, BinderError> bind_column_definitions(
         const parser::ast::ColumnDefinitionList & columns,
         parser::ast::AstNodeLocation location
-    );
+    ) const;
 
     /**
      * @brief 绑定数据类型
@@ -137,7 +137,7 @@ public:
     std::expected<common::LogicalType, BinderError> bind_data_type(
         const parser::ast::DataType & data_type,
         parser::ast::AstNodeLocation location
-    );
+    ) const;
 
     /**
      * @brief 快照默认表达式
@@ -147,7 +147,7 @@ public:
     [[nodiscard]]
     std::expected<catalog::CatalogDefaultExpression, BinderError> snapshot_default_expression(
         const parser::ast::ExpressionNode & expression
-    );
+    ) const;
 
 private:
     [[nodiscard]]
@@ -158,7 +158,7 @@ private:
      */
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_literal(
         const parser::ast::LiteralExpression & expression
-    );
+    ) const;
 
     /**
      * @brief 绑定列引用表达式
@@ -170,7 +170,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_column_reference(
         const parser::ast::ColumnReferenceExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定一元表达式
@@ -182,7 +182,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_unary(
         const parser::ast::UnaryExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定二元表达式
@@ -194,7 +194,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_binary(
         const parser::ast::BinaryExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定向量表达式
@@ -206,7 +206,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_vector(
         const parser::ast::VectorExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定函数表达式
@@ -218,7 +218,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_function(
         const parser::ast::FunctionCallExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定包含表达式
@@ -230,7 +230,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_in(
         const parser::ast::InExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定范围表达式
@@ -242,7 +242,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_between(
         const parser::ast::BetweenExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
     /**
      * @brief 绑定模糊匹配表达式
@@ -254,7 +254,7 @@ private:
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_like(
         const parser::ast::LikeExpression & expression,
         const BindingCollection & collection
-    );
+    ) const;
 
 private:
     const BinderContext & context_;        ///< 绑定上下文

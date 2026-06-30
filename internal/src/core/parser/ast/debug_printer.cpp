@@ -374,6 +374,7 @@ void AstDebugPrinter::visit(const CreateCollectionStatement & node)
             write_optional_field("parameter", column.type.parameter);
         }
         write_field("unique", column.unique);
+        write_field("nullable", column.nullable);
         write_child_field("default_value", column.default_value.get());
         if (column.comment.has_value()) {
             write_field("comment", column.comment.value());
