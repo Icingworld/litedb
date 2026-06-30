@@ -51,7 +51,6 @@ struct ColumnDefinition
 {
     std::string name;                                 ///< 列名称
     DataType type;                                    ///< 数据类型
-    bool primary_key {false};                         ///< 是否为主键
     bool unique {false};                              ///< 是否唯一
     std::unique_ptr<ExpressionNode> default_value;    ///< 默认值
     std::optional<std::string> comment;               ///< 注释

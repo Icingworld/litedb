@@ -373,7 +373,6 @@ void AstDebugPrinter::visit(const CreateCollectionStatement & node)
             write_field("kind", data_type_kind_name(column.type.kind));
             write_optional_field("parameter", column.type.parameter);
         }
-        write_field("primary_key", column.primary_key);
         write_field("unique", column.unique);
         write_child_field("default_value", column.default_value.get());
         if (column.comment.has_value()) {

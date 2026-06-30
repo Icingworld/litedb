@@ -20,7 +20,6 @@ enum class BinderErrorCode
     ColumnNotFound,            ///< 列不存在
     IndexNotFound,             ///< 索引不存在
     DuplicateColumn,           ///< 列已存在
-    DuplicatePrimaryKey,       ///< 主键已存在
     InvalidQualifier,          ///< 无效的限定符
     InvalidType,               ///< 无效的类型
     InvalidValueCount,         ///< 无效的值数量

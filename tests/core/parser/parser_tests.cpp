@@ -107,7 +107,6 @@ void test_parse_create_collection_statement()
     require(create->columns().size() == 5, "CREATE COLLECTION column count mismatch");
     require(create->comment().has_value(), "CREATE COLLECTION comment missing");
     require(create->comment().value() == "user collection", "CREATE COLLECTION comment mismatch");
-    require(!create->columns()[0].primary_key, "PRIMARY KEY constraint mismatch");
     require(create->columns()[1].unique, "UNIQUE constraint mismatch");
     require(create->columns()[1].comment.has_value(), "COMMENT constraint mismatch");
     require(create->columns()[1].type.kind == DataTypeKind::Varchar, "VARCHAR type mismatch");

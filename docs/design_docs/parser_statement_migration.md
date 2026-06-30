@@ -53,19 +53,18 @@ Required downstream adaptation:
 
 ### ColumnDefinition `primary_key`
 
-Reason kept:
+Parser/Binder status:
 
 - `ParserSchemaHelper::parse_column_definition()` no longer accepts
   `PRIMARY KEY` in `CREATE COLLECTION` column definitions.
-- `ColumnDefinition::primary_key` still exists because binder, catalog, schema,
-  executor, persistence, and existing non-parser tests still reference primary
-  key metadata.
-- Removing the field now would force a broad downstream migration before the
-  parser statement migration is complete.
+- Parser AST no longer exposes `ColumnDefinition::primary_key`.
+- Binder no longer reads primary-key metadata from parser AST.
+- Catalog/schema/persistence primary-key metadata is still present for existing
+  storage and metadata paths, but it is no longer populated from SQL parser
+  column definitions.
 
-Deletion criteria:
+Remaining deletion criteria:
 
-- Binder no longer reads `ColumnDefinition::primary_key` from parser AST.
 - Catalog/schema/persistence primary-key metadata has either been removed or
   moved behind a separate design.
 - Tests and examples no longer use `CREATE COLLECTION ... PRIMARY KEY`.

@@ -582,7 +582,6 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
 )
 {
     std::unordered_set<std::string> seen_columns;
-    bool has_primary_key = false;
     std::vector<catalog::ColumnDefinition> result;
     result.reserve(columns.size());
 
@@ -594,17 +593,6 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
                 "Duplicate column: " + column.name
             ));
         }
-        if (column.primary_key) {
-            if (has_primary_key) [[unlikely]] {
-                return std::unexpected(make_binder_error(
-                    BinderErrorCode::DuplicatePrimaryKey,
-                    location,
-                    "Collection cannot have multiple primary keys"
-                ));
-            }
-            has_primary_key = true;
-        }
-
         auto logical_type = bind_data_type(column.type, location);
         if (!logical_type.has_value()) [[unlikely]] {
             return std::unexpected(std::move(logical_type.error()));
@@ -631,21 +619,14 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
                         + " type " + type_name(logical_type.value())
                 ));
             }
-            if (bound_default.value()->type().id == LogicalTypeId::Null && column.primary_key) [[unlikely]] {
-                return std::unexpected(make_binder_error(
-                    BinderErrorCode::NotNullable,
-                    column.default_value->location(),
-                    "PRIMARY KEY column cannot default to NULL: " + column.name
-                ));
-            }
         }
 
         result.push_back(catalog::ColumnDefinition {
             .name = column.name,
             .type = logical_type.value(),
-            .primary_key = column.primary_key,
+            .primary_key = false,
             .unique = column.unique,
-            .nullable = !column.primary_key,
+            .nullable = true,
             .default_expression = std::move(default_expression),
             .comment = column.comment,
         });
