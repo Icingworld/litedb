@@ -25,19 +25,23 @@ public:
 
 public:
     /**
-     * @brief 获取数据库ID
-     * @return 数据库ID
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
     /**
-     * @brief 获取集合ID
-     * @return 集合ID
+     * @brief 获取集合 ID
+     * @return 集合 ID
      */
     [[nodiscard]]
     std::optional<common::CollectionId> collection_id() const noexcept;
 
+    /**
+     * @brief 获取集合名称
+     * @return 集合名称
+     */
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
 
@@ -48,9 +52,15 @@ public:
     [[nodiscard]]
     bool if_exists() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
-    common::DatabaseId database_id_;                            ///< 数据库ID
-    std::optional<common::CollectionId> collection_id_;         ///< 集合ID
+    common::DatabaseId database_id_;                            ///< 数据库 ID
+    std::optional<common::CollectionId> collection_id_;         ///< 集合 ID
     std::string collection_name_;                               ///< 集合名称
     bool if_exists_;                                            ///< 是否存在
 };

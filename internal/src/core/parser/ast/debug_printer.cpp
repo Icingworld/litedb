@@ -28,7 +28,6 @@
 #include "core/parser/ast/statement/show_collections_statement.hpp"
 #include "core/parser/ast/statement/show_databases_statement.hpp"
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
-#include "core/parser/ast/statement/show_statement.hpp"
 #include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include "core/parser/ast/statement/use_statement.hpp"
@@ -251,7 +250,7 @@ private:
     AstDebugPrinter & printer_;         ///< 调试打印器
 };
 
-AstDebugPrinter::AstDebugPrinter(std::ostream & out, DebugPrinterOptions options)
+AstDebugPrinter::AstDebugPrinter(std::ostream & out, AstDebugPrinterOptions options)
     : out_(out)
     , options_(options)
 {
@@ -374,8 +373,8 @@ void AstDebugPrinter::visit(const CreateCollectionStatement & node)
             write_field("kind", data_type_kind_name(column.type.kind));
             write_optional_field("parameter", column.type.parameter);
         }
-        write_field("primary_key", column.primary_key);
         write_field("unique", column.unique);
+        write_field("nullable", column.nullable);
         write_child_field("default_value", column.default_value.get());
         if (column.comment.has_value()) {
             write_field("comment", column.comment.value());
@@ -545,13 +544,6 @@ void AstDebugPrinter::visit(const SelectStatement & node)
 
     write_optional_field("limit", node.limit());
     write_optional_field("offset", node.offset());
-}
-
-void AstDebugPrinter::visit(const ShowStatement & node)
-{
-    write_node_header("ShowStatement", node.location());
-    IndentScope scope(*this);
-    write_field("object_type", schema_object_type_name(node.object_type()));
 }
 
 void AstDebugPrinter::visit(const ShowCollectionsStatement & node)
@@ -750,14 +742,14 @@ void AstDebugPrinter::visit(const WildcardExpression & node)
     }
 }
 
-std::string debug_print(const AstNode & node, DebugPrinterOptions options)
+std::string debug_print(const AstNode & node, AstDebugPrinterOptions options)
 {
     std::ostringstream out;
     debug_print(out, node, options);
     return out.str();
 }
 
-void debug_print(std::ostream & out, const AstNode & node, DebugPrinterOptions options)
+void debug_print(std::ostream & out, const AstNode & node, AstDebugPrinterOptions options)
 {
     AstDebugPrinter printer(out, options);
     printer.print(node);

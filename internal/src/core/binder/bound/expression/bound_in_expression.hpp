@@ -36,6 +36,12 @@ public:
     [[nodiscard]]
     const std::vector<std::unique_ptr<BoundExpression>> & values() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
+
 private:
     std::unique_ptr<BoundExpression> expression_;               ///< 表达式
     std::vector<std::unique_ptr<BoundExpression>> values_;      ///< 值列表

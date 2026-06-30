@@ -22,6 +22,12 @@ public:
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
     common::DatabaseId database_id_;        ///< 数据库ID
 };

@@ -28,15 +28,15 @@ public:
 
 public:
     /**
-     * @brief 获取数据库ID
-     * @return 数据库ID
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
     /**
-     * @brief 获取集合ID
-     * @return 集合ID
+     * @brief 获取集合 ID
+     * @return 集合 ID
      */
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
@@ -49,8 +49,8 @@ public:
     const std::string & collection_name() const noexcept;
 
     /**
-     * @brief 获取列ID
-     * @return 列ID
+     * @brief 获取列 ID
+     * @return 列 ID
      */
     [[nodiscard]]
     common::ColumnId column_id() const noexcept;
@@ -69,11 +69,17 @@ public:
     [[nodiscard]]
     bool nullable() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
+
 private:
-    common::DatabaseId database_id_;            ///< 数据库ID
-    common::CollectionId collection_id_;        ///< 集合ID
+    common::DatabaseId database_id_;            ///< 数据库 ID
+    common::CollectionId collection_id_;        ///< 集合 ID
     std::string collection_name_;               ///< 集合名称
-    common::ColumnId column_id_;                ///< 列ID
+    common::ColumnId column_id_;                ///< 列 ID
     std::string column_name_;                   ///< 列名称
     bool nullable_;                             ///< 是否可为空
 };

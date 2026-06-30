@@ -20,7 +20,6 @@ litedb 下一阶段已确定接入：
 litedb 第一版暂不支持：
 
 - 聚合和分组：`COUNT`、`SUM`、`AVG`、`MIN`、`MAX`、`GROUP BY`、`HAVING`
-- 查询别名：`AS`
 - 多集合查询、连接查询、子查询
 - 事务语句
 
@@ -514,7 +513,7 @@ select_statement :=
 
 select_item := "*"
              | identifier "." "*"
-             | expression
+             | expression [ AS identifier ]
 
 order_item := expression [ ASC | DESC ]
 
@@ -523,9 +522,9 @@ column_reference := identifier [ "." identifier ]
 
 说明：
 
-- 第一版 `SELECT` 不支持 `AS` 别名。
 - `SELECT` 列表支持字段引用、通配符和普通表达式。
-- `ORDER BY` 支持普通表达式。
+- 普通表达式支持显式 `AS` 别名，通配符不支持别名。
+- `ORDER BY` 支持普通表达式，也支持引用显式投影别名。
 - `LIMIT` 和 `OFFSET` 只接受非负整数字面量。
 
 示例：
@@ -543,6 +542,10 @@ SELECT id, l2_distance(embedding, [0.1, 0.2, 0.3])
 FROM users
 ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3])
 LIMIT 10;
+
+SELECT age + 1 AS next_age
+FROM users
+ORDER BY next_age DESC;
 ```
 
 ## 9. 表达式语法

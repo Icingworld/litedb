@@ -47,4 +47,9 @@ bool BoundDropIndexStatement::if_exists() const noexcept
     return if_exists_;
 }
 
+void BoundDropIndexStatement::accept(BoundStatementVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::binder::bound

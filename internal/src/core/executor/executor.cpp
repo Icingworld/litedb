@@ -390,6 +390,15 @@ std::string projection_name(const BoundExpression & expression, std::size_t inde
 }
 
 [[nodiscard]]
+std::string projection_name(const binder::bound::BoundProjectionItem & projection, std::size_t index)
+{
+    if (projection.alias.has_value()) {
+        return projection.alias.value();
+    }
+    return projection_name(*projection.expression, index);
+}
+
+[[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_projection(
     const LogicalProjection & projection,
     catalog::Catalog & catalog,
@@ -407,8 +416,8 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
     input->columns.reserve(projections.size());
     for (std::size_t index = 0; index < projections.size(); ++index) {
         input->columns.push_back(ExecutionColumn {
-            .name = projection_name(*projections[index], index),
-            .type = projections[index]->type(),
+            .name = projection_name(projections[index], index),
+            .type = projections[index].expression->type(),
         });
     }
 
@@ -416,8 +425,8 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
     for (auto & row : input->rows) {
         std::vector<schema::Value> values;
         values.reserve(projections.size());
-        for (const auto & expression : projections) {
-            auto value = evaluator.evaluate(*expression, row.evaluation_record);
+        for (const auto & projection : projections) {
+            auto value = evaluator.evaluate(*projection.expression, row.evaluation_record);
             if (!value.has_value()) {
                 return std::unexpected(from_evaluation_error(std::move(value.error())));
             }

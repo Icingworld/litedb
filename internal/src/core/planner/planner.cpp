@@ -234,15 +234,6 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
             describe.location()
         );
     }
-    case BoundStatementKind::AlterDatabase:
-        // 显式提示编译器，fallthrough 是明确的意图
-        [[fallthrough]];
-    case BoundStatementKind::AlterCollection:
-        return std::unexpected(error(
-            PlannerErrorCode::UnsupportedStatement,
-            statement->location(),
-            "unsupported bound statement kind"
-        ));
     }
 
     return std::unexpected(error(

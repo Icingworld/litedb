@@ -1,5 +1,19 @@
 set(BINDER_SOURCES
     binder.cpp
+    binder_helper.cpp
+    binder_context.cpp
+    worker/binder_worker.cpp
+    worker/binder_worker_helper.cpp
+    worker/binder_use_worker.cpp
+    worker/binder_create_worker.cpp
+    worker/binder_drop_worker.cpp
+    worker/binder_show_worker.cpp
+    worker/binder_describe_worker.cpp
+    worker/binder_select_worker.cpp
+    worker/binder_insert_worker.cpp
+    worker/binder_update_worker.cpp
+    worker/binder_delete_worker.cpp
+    bound/debug_printer.cpp
     bound/expression/bound_binary_expression.cpp
     bound/expression/bound_between_expression.cpp
     bound/expression/bound_cast_expression.cpp
@@ -27,6 +41,8 @@ set(BINDER_SOURCES
     bound/statement/bound_select_statement.cpp
     bound/statement/bound_show_collections_statement.cpp
     bound/statement/bound_show_databases_statement.cpp
+    bound/statement/bound_show_indexes_statement.cpp
+    bound/statement/bound_show_vector_indexes_statement.cpp
     bound/statement/bound_statement.cpp
     bound/statement/bound_update_statement.cpp
     bound/statement/bound_use_statement.cpp

@@ -38,30 +38,74 @@ BoundCreateVectorIndexStatement::BoundCreateVectorIndexStatement(
 {
 }
 
-common::DatabaseId BoundCreateVectorIndexStatement::database_id() const noexcept { return database_id_; }
+common::DatabaseId BoundCreateVectorIndexStatement::database_id() const noexcept
+{
+    return database_id_;
+}
 
-common::CollectionId BoundCreateVectorIndexStatement::collection_id() const noexcept { return collection_id_; }
+common::CollectionId BoundCreateVectorIndexStatement::collection_id() const noexcept
+{
+    return collection_id_;
+}
 
-const std::string & BoundCreateVectorIndexStatement::collection_name() const noexcept { return collection_name_; }
+const std::string & BoundCreateVectorIndexStatement::collection_name() const noexcept
+{
+    return collection_name_;
+}
 
-common::ColumnId BoundCreateVectorIndexStatement::column_id() const noexcept { return column_id_; }
+common::ColumnId BoundCreateVectorIndexStatement::column_id() const noexcept
+{
+    return column_id_;
+}
 
-const std::string & BoundCreateVectorIndexStatement::column_name() const noexcept { return column_name_; }
+const std::string & BoundCreateVectorIndexStatement::column_name() const noexcept
+{
+    return column_name_;
+}
 
-const std::string & BoundCreateVectorIndexStatement::index_name() const noexcept { return index_name_; }
+const std::string & BoundCreateVectorIndexStatement::index_name() const noexcept
+{
+    return index_name_;
+}
 
-catalog::CatalogVectorIndexKind BoundCreateVectorIndexStatement::index_kind() const noexcept { return index_kind_; }
+catalog::CatalogVectorIndexKind BoundCreateVectorIndexStatement::index_kind() const noexcept
+{
+    return index_kind_;
+}
 
-catalog::CatalogVectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept { return metric_; }
+catalog::CatalogVectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept
+{
+    return metric_;
+}
 
-std::size_t BoundCreateVectorIndexStatement::max_neighbors() const noexcept { return max_neighbors_; }
+std::size_t BoundCreateVectorIndexStatement::max_neighbors() const noexcept
+{
+    return max_neighbors_;
+}
 
-std::size_t BoundCreateVectorIndexStatement::ef_construction() const noexcept { return ef_construction_; }
+std::size_t BoundCreateVectorIndexStatement::ef_construction() const noexcept
+{
+    return ef_construction_;
+}
 
-std::size_t BoundCreateVectorIndexStatement::ef_search_default() const noexcept { return ef_search_default_; }
+std::size_t BoundCreateVectorIndexStatement::ef_search_default() const noexcept
+{
+    return ef_search_default_;
+}
 
-std::size_t BoundCreateVectorIndexStatement::random_seed() const noexcept { return random_seed_; }
+std::size_t BoundCreateVectorIndexStatement::random_seed() const noexcept
+{
+    return random_seed_;
+}
 
-bool BoundCreateVectorIndexStatement::if_not_exists() const noexcept { return if_not_exists_; }
+bool BoundCreateVectorIndexStatement::if_not_exists() const noexcept
+{
+    return if_not_exists_;
+}
+
+void BoundCreateVectorIndexStatement::accept(BoundStatementVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
 
 } // namespace litedb::core::binder::bound

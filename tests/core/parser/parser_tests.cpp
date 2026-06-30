@@ -107,11 +107,12 @@ void test_parse_create_collection_statement()
     require(create->columns().size() == 5, "CREATE COLLECTION column count mismatch");
     require(create->comment().has_value(), "CREATE COLLECTION comment missing");
     require(create->comment().value() == "user collection", "CREATE COLLECTION comment mismatch");
-    require(!create->columns()[0].primary_key, "PRIMARY KEY constraint mismatch");
+    require(!create->columns()[0].nullable, "NOT NULL constraint mismatch");
     require(create->columns()[1].unique, "UNIQUE constraint mismatch");
     require(create->columns()[1].comment.has_value(), "COMMENT constraint mismatch");
     require(create->columns()[1].type.kind == DataTypeKind::Varchar, "VARCHAR type mismatch");
     require(create->columns()[1].type.parameter.value() == 64, "VARCHAR length mismatch");
+    require(create->columns()[2].nullable, "NULL constraint mismatch");
     require(create->columns()[2].default_value != nullptr, "DEFAULT literal missing");
     require(create->columns()[4].type.kind == DataTypeKind::Vector, "VECTOR type mismatch");
     require(create->columns()[4].type.parameter.value() == 128, "VECTOR dimension mismatch");

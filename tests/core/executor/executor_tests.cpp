@@ -73,7 +73,8 @@ std::unique_ptr<StatementPlan> plan_ok(
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = database_id};
-    Binder binder {catalog, session};
+    BinderContext context {catalog, session};
+    Binder binder {context};
     auto bound = binder.bind(*statement);
     if (!bound.has_value()) {
         throw std::runtime_error(bound.error().message);
@@ -142,7 +143,7 @@ struct Fixture
             storage,
             index_manager,
             "CREATE COLLECTION users ("
-            "id BIGINT PRIMARY KEY, "
+            "id BIGINT, "
             "name VARCHAR(64) DEFAULT 'unknown', "
             "age INTEGER, "
             "embedding VECTOR(3)"
@@ -215,7 +216,7 @@ void test_ddl_use_show_and_describe()
     require(describe.rows.size() == 4, "DESCRIBE row count mismatch");
     require(get_value<std::string>(describe.rows[0].values[0]) == "id", "DESCRIBE column name mismatch");
     require(get_value<std::string>(describe.rows[0].values[1]) == "BIGINT", "DESCRIBE type mismatch");
-    require(get_value<bool>(describe.rows[0].values[3]), "DESCRIBE primary key mismatch");
+    require(!get_value<bool>(describe.rows[0].values[3]), "DESCRIBE primary key mismatch");
 }
 
 void test_insert_select_update_and_delete()
@@ -238,6 +239,38 @@ void test_insert_select_update_and_delete()
     require(selected.rows.size() == 2, "SELECT row count mismatch");
     require(get_value<std::string>(selected.rows[0].values[0]) == "bob", "SELECT order mismatch");
     require(get_value<std::string>(selected.rows[1].values[0]) == "alice", "SELECT order mismatch");
+
+    auto alias_order = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT age + 1 AS next_age FROM users ORDER BY next_age ASC;",
+        fixture.database_id
+    );
+    require(alias_order.columns.size() == 1, "SELECT alias column count mismatch");
+    require(alias_order.columns[0].name == "next_age", "SELECT alias column name mismatch");
+    require(alias_order.rows.size() == 3, "SELECT alias row count mismatch");
+    require(get_value<std::int32_t>(alias_order.rows[0].values[0]) == 16, "ORDER BY alias first value mismatch");
+    require(get_value<std::int32_t>(alias_order.rows[1].values[0]) == 19, "ORDER BY alias second value mismatch");
+    require(get_value<std::int32_t>(alias_order.rows[2].values[0]) == 21, "ORDER BY alias third value mismatch");
+
+    auto column_alias = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT id AS user_id FROM users ORDER BY user_id ASC;",
+        fixture.database_id
+    );
+    require(column_alias.columns[0].name == "user_id", "SELECT column alias name mismatch");
+
+    auto expression_without_alias = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "SELECT age + 1 FROM users ORDER BY age ASC;",
+        fixture.database_id
+    );
+    require(expression_without_alias.columns[0].name == "expr1", "SELECT expression fallback name mismatch");
 
     auto update = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "UPDATE users SET age = age + 1 WHERE id = 1;", fixture.database_id);
     require(update.kind == ExecutionResultKind::Command, "UPDATE result kind mismatch");
@@ -354,7 +387,7 @@ void test_index_ddl_updates_catalog()
         fixture.catalog,
         fixture.storage,
         fixture.index_manager,
-        "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING HASH;",
+        "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING BTREE;",
         fixture.database_id
     );
     require(duplicate_if_not_exists.affected_rows == 0, "CREATE INDEX IF NOT EXISTS affected rows mismatch");
@@ -372,14 +405,14 @@ void test_index_ddl_updates_catalog()
 void test_index_scan_execution_paths()
 {
     Fixture fixture;
-    auto hash_index = execute_ok(
+    auto explicit_btree_index = execute_ok(
         fixture.catalog,
         fixture.storage,
         fixture.index_manager,
-        "CREATE INDEX idx_age_hash ON users (age) USING HASH;",
+        "CREATE INDEX idx_age_explicit ON users (age) USING BTREE;",
         fixture.database_id
     );
-    require(hash_index.affected_rows == 1, "hash index create affected rows mismatch");
+    require(explicit_btree_index.affected_rows == 1, "explicit btree index create affected rows mismatch");
 
     insert_user(fixture, 1, "alice", 18);
     insert_user(fixture, 2, "bob", 20);
@@ -393,18 +426,18 @@ void test_index_scan_execution_paths()
         "SELECT id FROM users WHERE age = 18 ORDER BY id ASC;",
         fixture.database_id
     );
-    require(equal.rows.size() == 2, "hash equality SELECT row count mismatch");
-    require(get_value<std::int64_t>(equal.rows[0].values[0]) == 1, "hash equality first row mismatch");
-    require(get_value<std::int64_t>(equal.rows[1].values[0]) == 4, "hash equality second row mismatch");
+    require(equal.rows.size() == 2, "btree equality SELECT row count mismatch");
+    require(get_value<std::int64_t>(equal.rows[0].values[0]) == 1, "btree equality first row mismatch");
+    require(get_value<std::int64_t>(equal.rows[1].values[0]) == 4, "btree equality second row mismatch");
 
-    auto hash_range_fallback = execute_ok(
+    auto btree_range_filter = execute_ok(
         fixture.catalog,
         fixture.storage,
         fixture.index_manager,
         "SELECT id FROM users WHERE age >= 18 ORDER BY id ASC;",
         fixture.database_id
     );
-    require(hash_range_fallback.rows.size() == 3, "hash-only range fallback row count mismatch");
+    require(btree_range_filter.rows.size() == 3, "btree range SELECT row count mismatch");
 
     auto btree_index = execute_ok(
         fixture.catalog,

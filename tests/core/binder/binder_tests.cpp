@@ -9,6 +9,8 @@
 #include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
+#include "core/binder/bound/statement/bound_show_indexes_statement.hpp"
+#include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
 #include "core/catalog/in_memory_catalog.hpp"
@@ -105,7 +107,8 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    Binder binder {fixture.catalog, session};
+    BinderContext context {fixture.catalog, session};
+    Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
@@ -117,7 +120,8 @@ BinderError bind_error(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    Binder binder {fixture.catalog, session};
+    BinderContext context {fixture.catalog, session};
+    Binder binder {context};
     auto result = binder.bind(*statement);
     require(!result.has_value(), "statement should fail to bind");
     return result.error();
@@ -133,7 +137,8 @@ void test_use_and_missing_database_context()
 
     auto select_ast = parse_ok("SELECT * FROM users;");
     SessionContext empty_session;
-    Binder binder {fixture.catalog, empty_session};
+    BinderContext context {fixture.catalog, empty_session};
+    Binder binder {context};
     auto result = binder.bind(*select_ast);
     require(!result.has_value(), "SELECT without database should fail");
     require(result.error().code == BinderErrorCode::DatabaseNotSelected, "missing database error mismatch");
@@ -151,7 +156,8 @@ void test_select_binding()
     const auto * select = static_cast<const BoundSelectStatement *>(statement.get());
     require(select->collection_id() == fixture.users_id, "SELECT collection id mismatch");
     require(select->projections().size() == 2, "SELECT projection count mismatch");
-    require(select->projections()[0]->kind() == BoundExpressionKind::ColumnRef, "SELECT projection kind mismatch");
+    require(select->projections()[0].expression->kind() == BoundExpressionKind::ColumnRef, "SELECT projection kind mismatch");
+    require(!select->projections()[0].alias.has_value(), "SELECT projection alias mismatch");
     require(select->where() != nullptr, "SELECT where missing");
     require(select->where()->type().id == LogicalTypeId::Boolean, "SELECT where type mismatch");
     require(select->order_by().size() == 1, "SELECT order count mismatch");
@@ -167,6 +173,37 @@ void test_select_binding()
     const auto * varchar_select = static_cast<const BoundSelectStatement *>(varchar_comparison.get());
     require(varchar_select->where() != nullptr, "VARCHAR comparison where missing");
     require(varchar_select->where()->type().id == LogicalTypeId::Boolean, "VARCHAR comparison should bind as boolean");
+}
+
+void test_select_alias_binding()
+{
+    Fixture fixture;
+
+    auto expression_alias = bind_ok(fixture, "SELECT age + 1 AS next_age FROM users;");
+    const auto * expression_select = static_cast<const BoundSelectStatement *>(expression_alias.get());
+    require(expression_select->projections().size() == 1, "SELECT alias projection count mismatch");
+    require(expression_select->projections()[0].alias.has_value(), "SELECT alias missing");
+    require(expression_select->projections()[0].alias.value() == "next_age", "SELECT alias name mismatch");
+    require(expression_select->projections()[0].expression->kind() == BoundExpressionKind::Binary, "SELECT alias expression kind mismatch");
+
+    auto order_by_alias = bind_ok(fixture, "SELECT age + 1 AS next_age FROM users ORDER BY next_age DESC;");
+    const auto * order_by_select = static_cast<const BoundSelectStatement *>(order_by_alias.get());
+    require(order_by_select->order_by().size() == 1, "ORDER BY alias count mismatch");
+    require(!order_by_select->order_by()[0].ascending, "ORDER BY alias direction mismatch");
+    require(order_by_select->order_by()[0].expression->kind() == BoundExpressionKind::Binary, "ORDER BY alias expression kind mismatch");
+
+    auto alias_shadows_column = bind_ok(fixture, "SELECT name AS age FROM users ORDER BY age;");
+    const auto * shadow_select = static_cast<const BoundSelectStatement *>(alias_shadows_column.get());
+    require(shadow_select->order_by()[0].expression->kind() == BoundExpressionKind::ColumnRef, "ORDER BY shadow alias kind mismatch");
+    require(shadow_select->order_by()[0].expression->type().id == LogicalTypeId::Varchar, "ORDER BY should prefer alias over source column");
+
+    auto duplicate_alias = bind_ok(fixture, "SELECT age AS x, name AS x FROM users;");
+    const auto * duplicate_select = static_cast<const BoundSelectStatement *>(duplicate_alias.get());
+    require(duplicate_select->projections().size() == 2, "duplicate alias projection count mismatch");
+    require(duplicate_select->projections()[0].alias.value() == "x", "first duplicate alias mismatch");
+    require(duplicate_select->projections()[1].alias.value() == "x", "second duplicate alias mismatch");
+
+    require(bind_error(fixture, "SELECT age AS x, name AS x FROM users ORDER BY x;").code == BinderErrorCode::AmbiguousAlias, "ambiguous ORDER BY alias error mismatch");
 }
 
 void test_select_errors()
@@ -250,15 +287,29 @@ void test_ddl_and_metadata_binding()
     require(bind_ok(fixture, "DROP DATABASE IF EXISTS missing;")->kind() == BoundStatementKind::DropDatabase, "DROP DATABASE IF EXISTS kind mismatch");
     require(bind_ok(fixture, "SHOW DATABASES;")->kind() == BoundStatementKind::ShowDatabases, "SHOW DATABASES kind mismatch");
     require(bind_ok(fixture, "SHOW COLLECTIONS;")->kind() == BoundStatementKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
+    auto show_indexes = bind_ok(fixture, "SHOW INDEXES FROM users;");
+    require(show_indexes->kind() == BoundStatementKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    const auto * bound_show_indexes = static_cast<const BoundShowIndexesStatement *>(show_indexes.get());
+    require(bound_show_indexes->database_id() == fixture.database_id, "SHOW INDEXES database id mismatch");
+    require(bound_show_indexes->collection_id() == fixture.users_id, "SHOW INDEXES collection id mismatch");
+    require(bound_show_indexes->collection_name() == "users", "SHOW INDEXES collection name mismatch");
+
+    auto show_vector_indexes = bind_ok(fixture, "SHOW VINDEXES FROM users;");
+    require(show_vector_indexes->kind() == BoundStatementKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    const auto * bound_show_vector_indexes = static_cast<const BoundShowVectorIndexesStatement *>(show_vector_indexes.get());
+    require(bound_show_vector_indexes->database_id() == fixture.database_id, "SHOW VINDEXES database id mismatch");
+    require(bound_show_vector_indexes->collection_id() == fixture.users_id, "SHOW VINDEXES collection id mismatch");
+    require(bound_show_vector_indexes->collection_name() == "users", "SHOW VINDEXES collection name mismatch");
     require(bind_ok(fixture, "DESCRIBE users;")->kind() == BoundStatementKind::DescribeCollection, "DESCRIBE kind mismatch");
 
-    auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+    auto create = bind_ok(fixture, "CREATE COLLECTION posts (id BIGINT NOT NULL, embedding VECTOR(3) NULL);");
     require(create->kind() == BoundStatementKind::CreateCollection, "CREATE COLLECTION kind mismatch");
     const auto * create_collection = static_cast<const BoundCreateCollectionStatement *>(create.get());
     require(create_collection->columns().size() == 2, "CREATE COLLECTION column count mismatch");
+    require(!create_collection->columns()[0].nullable, "CREATE COLLECTION NOT NULL mismatch");
     require(create_collection->columns()[1].type.id == LogicalTypeId::Vector, "CREATE COLLECTION vector type mismatch");
+    require(create_collection->columns()[1].nullable, "CREATE COLLECTION NULL mismatch");
 
-    require(bind_error(fixture, "CREATE COLLECTION bad (id BIGINT PRIMARY KEY, other BIGINT PRIMARY KEY);").code == BinderErrorCode::DuplicatePrimaryKey, "duplicate primary key error mismatch");
     require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").code == BinderErrorCode::InvalidType, "default type error mismatch");
 }
 
@@ -277,9 +328,9 @@ void test_index_binding()
     require(!bound_create_age->unique(), "CREATE INDEX unique mismatch");
     require(!bound_create_age->if_not_exists(), "CREATE INDEX if-not-exists mismatch");
 
-    auto create_name = bind_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_name ON users (name) USING HASH;");
+    auto create_name = bind_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_name ON users (name) USING BTREE;");
     const auto * bound_create_name = static_cast<const BoundCreateIndexStatement *>(create_name.get());
-    require(bound_create_name->index_kind() == CatalogIndexKind::Hash, "CREATE INDEX hash kind mismatch");
+    require(bound_create_name->index_kind() == CatalogIndexKind::BTree, "CREATE INDEX BTREE kind mismatch");
     require(bound_create_name->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
 
     require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").code == BinderErrorCode::InvalidType, "vector index type error mismatch");
@@ -377,6 +428,7 @@ int main()
     try {
         test_use_and_missing_database_context();
         test_select_binding();
+        test_select_alias_binding();
         test_select_errors();
         test_function_binding();
         test_insert_binding();

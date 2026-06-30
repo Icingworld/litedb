@@ -83,7 +83,8 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_parser_error(std::move(parsed.error())));
     }
 
-    binder::Binder binder {instance_->catalog(), session_};
+    binder::BinderContext context {instance_->catalog(), session_};
+    binder::Binder binder {context};
     auto bound = binder.bind(*parsed.value());
     if (!bound.has_value()) {
         return std::unexpected(from_binder_error(std::move(bound.error())));

@@ -17,4 +17,10 @@ FunctionRegistry make_builtin_function_registry()
     return registry;
 }
 
+const FunctionRegistry & builtin_function_registry()
+{
+    static const FunctionRegistry registry = make_builtin_function_registry();
+    return registry;
+}
+
 } // namespace litedb::core::function::builtin

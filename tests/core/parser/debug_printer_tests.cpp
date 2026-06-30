@@ -42,7 +42,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
 
 std::string print_without_location(const AstNode & node)
 {
-    DebugPrinterOptions options;
+    AstDebugPrinterOptions options;
     options.include_location = false;
     return debug_print(node, options);
 }
@@ -112,7 +112,7 @@ void test_create_collection_debug_print()
     require_contains(output, "  columns:\n");
     require_contains(output, "    [0] ColumnDefinition\n");
     require_contains(output, "      name: id\n");
-    require_contains(output, "      primary_key: false\n");
+    require_contains(output, "      nullable: false\n");
     require_contains(output, "    [1] ColumnDefinition\n");
     require_contains(output, "      kind: Varchar\n");
     require_contains(output, "      parameter: 64\n");

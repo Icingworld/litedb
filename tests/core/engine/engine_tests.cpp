@@ -76,7 +76,7 @@ void test_execute_sql_end_to_end()
     auto create_collection = execute_ok(
         engine,
         "CREATE COLLECTION users ("
-        "id BIGINT PRIMARY KEY, "
+        "id BIGINT, "
         "name VARCHAR(64), "
         "age INTEGER"
         ");"
@@ -100,6 +100,11 @@ void test_execute_sql_end_to_end()
     require(selected.rows.size() == 1, "SELECT row count mismatch");
     require(get_value<std::string>(selected.rows[0].values[0]) == "alice", "SELECT name mismatch");
     require(get_value<std::int32_t>(selected.rows[0].values[1]) == 18, "SELECT age mismatch");
+
+    auto alias_selected = execute_ok(engine, "SELECT age + 1 AS next_age FROM users ORDER BY next_age ASC;");
+    require(alias_selected.columns.size() == 1, "SELECT alias column count mismatch");
+    require(alias_selected.columns[0].name == "next_age", "SELECT alias column name mismatch");
+    require(get_value<std::int32_t>(alias_selected.rows[0].values[0]) == 19, "SELECT alias value mismatch");
     require(find_index_equal(engine, index_id, Value {std::int32_t {18}}).size() == 1, "CREATE INDEX should build existing data");
 
     auto update = execute_ok(engine, "UPDATE users SET age = 19 WHERE id = 1;");
@@ -122,7 +127,7 @@ void test_vector_distance_query()
     Engine engine;
     execute_ok(engine, "CREATE DATABASE vectors;");
     execute_ok(engine, "USE vectors;");
-    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, embedding VECTOR(3));");
     execute_ok(engine, "INSERT INTO docs VALUES (1, [0.0, 0.0, 0.0]);");
     execute_ok(engine, "INSERT INTO docs VALUES (2, [1.0, 0.0, 0.0]);");
     execute_ok(engine, "INSERT INTO docs VALUES (3, [0.2, 0.0, 0.0]);");
@@ -142,7 +147,7 @@ void test_vector_index_ddl()
     Engine engine;
     execute_ok(engine, "CREATE DATABASE vectors;");
     execute_ok(engine, "USE vectors;");
-    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, embedding VECTOR(3));");
 
     auto created = execute_ok(
         engine,

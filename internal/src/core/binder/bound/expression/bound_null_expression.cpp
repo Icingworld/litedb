@@ -8,4 +8,9 @@ BoundNullExpression::BoundNullExpression(common::LogicalType type, parser::ast::
 {
 }
 
+void BoundNullExpression::accept(BoundExpressionVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::binder::bound

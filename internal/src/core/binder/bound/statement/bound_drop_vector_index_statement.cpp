@@ -22,14 +22,34 @@ BoundDropVectorIndexStatement::BoundDropVectorIndexStatement(
 {
 }
 
-common::DatabaseId BoundDropVectorIndexStatement::database_id() const noexcept { return database_id_; }
+common::DatabaseId BoundDropVectorIndexStatement::database_id() const noexcept
+{
+    return database_id_;
+}
 
-common::CollectionId BoundDropVectorIndexStatement::collection_id() const noexcept { return collection_id_; }
+common::CollectionId BoundDropVectorIndexStatement::collection_id() const noexcept
+{
+    return collection_id_;
+}
 
-const std::string & BoundDropVectorIndexStatement::collection_name() const noexcept { return collection_name_; }
+const std::string & BoundDropVectorIndexStatement::collection_name() const noexcept
+{
+    return collection_name_;
+}
 
-const std::string & BoundDropVectorIndexStatement::index_name() const noexcept { return index_name_; }
+const std::string & BoundDropVectorIndexStatement::index_name() const noexcept
+{
+    return index_name_;
+}
 
-bool BoundDropVectorIndexStatement::if_exists() const noexcept { return if_exists_; }
+bool BoundDropVectorIndexStatement::if_exists() const noexcept
+{
+    return if_exists_;
+}
+
+void BoundDropVectorIndexStatement::accept(BoundStatementVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
 
 } // namespace litedb::core::binder::bound

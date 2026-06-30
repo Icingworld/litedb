@@ -37,6 +37,12 @@ public:
     [[nodiscard]]
     const BoundExpression & operand() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundExpressionVisitor & visitor) const override;
+
 private:
     parser::TokenType op_;                          ///< 操作符
     std::unique_ptr<BoundExpression> operand_;      ///< 操作数

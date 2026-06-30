@@ -15,21 +15,49 @@ BoundColumnRefExpression::BoundColumnRefExpression(
     bool nullable,
     parser::ast::AstNodeLocation location
 )
-    : BoundExpression(BoundExpressionKind::ColumnRef, type, location),
-      database_id_(database_id),
-      collection_id_(collection_id),
-      collection_name_(std::move(collection_name)),
-      column_id_(column_id),
-      column_name_(std::move(column_name)),
-      nullable_(nullable)
+    : BoundExpression(BoundExpressionKind::ColumnRef, type, location)
+    , database_id_(database_id)
+    , collection_id_(collection_id)
+    , collection_name_(std::move(collection_name))
+    , column_id_(column_id)
+    , column_name_(std::move(column_name))
+    , nullable_(nullable)
 {
 }
 
-common::DatabaseId BoundColumnRefExpression::database_id() const noexcept { return database_id_; }
-common::CollectionId BoundColumnRefExpression::collection_id() const noexcept { return collection_id_; }
-const std::string & BoundColumnRefExpression::collection_name() const noexcept { return collection_name_; }
-common::ColumnId BoundColumnRefExpression::column_id() const noexcept { return column_id_; }
-const std::string & BoundColumnRefExpression::column_name() const noexcept { return column_name_; }
-bool BoundColumnRefExpression::nullable() const noexcept { return nullable_; }
+common::DatabaseId BoundColumnRefExpression::database_id() const noexcept
+{
+    return database_id_;
+}
+
+common::CollectionId BoundColumnRefExpression::collection_id() const noexcept
+{
+    return collection_id_;
+}
+
+const std::string & BoundColumnRefExpression::collection_name() const noexcept
+{
+    return collection_name_;
+}
+
+common::ColumnId BoundColumnRefExpression::column_id() const noexcept
+{
+    return column_id_;
+}
+
+const std::string & BoundColumnRefExpression::column_name() const noexcept
+{
+    return column_name_;
+}
+
+bool BoundColumnRefExpression::nullable() const noexcept
+{
+    return nullable_;
+}
+
+void BoundColumnRefExpression::accept(BoundExpressionVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
 
 } // namespace litedb::core::binder::bound

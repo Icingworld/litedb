@@ -28,15 +28,15 @@ public:
 
 public:
     /**
-     * @brief 获取数据库ID
-     * @return 数据库ID
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
     /**
-     * @brief 获取集合ID
-     * @return 集合ID
+     * @brief 获取集合 ID
+     * @return 集合 ID
      */
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
@@ -62,12 +62,22 @@ public:
     [[nodiscard]]
     const std::vector<std::unique_ptr<BoundExpression>> & values() const noexcept;
 
+    /**
+     * @brief 获取值列表
+     * @return 值列表
+     */
     [[nodiscard]]
     std::vector<std::unique_ptr<BoundExpression>> take_values() noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
-    common::DatabaseId database_id_;                            ///< 数据库ID
-    common::CollectionId collection_id_;                        ///< 集合ID
+    common::DatabaseId database_id_;                            ///< 数据库 ID
+    common::CollectionId collection_id_;                        ///< 集合 ID
     std::string collection_name_;                               ///< 集合名称
     std::vector<BoundColumn> columns_;                          ///< 列列表
     std::vector<std::unique_ptr<BoundExpression>> values_;      ///< 值列表

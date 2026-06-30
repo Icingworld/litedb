@@ -62,12 +62,18 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & comment() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
     common::DatabaseId database_id_;                    ///< 数据库 ID
     std::string collection_name_;                       ///< 集合名称
     bool if_not_exists_;                                ///< 是否不存在
     std::vector<catalog::ColumnDefinition> columns_;    ///< 列定义列表
-    std::optional<std::string> comment_;                 ///< 集合注释
+    std::optional<std::string> comment_;                ///< 集合注释
 };
 
 } // namespace litedb::core::binder::bound

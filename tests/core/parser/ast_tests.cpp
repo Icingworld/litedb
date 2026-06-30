@@ -76,7 +76,6 @@ void test_create_collection_statement()
     ColumnDefinition id;
     id.name = "id";
     id.type = DataType {DataTypeKind::BigInt, std::nullopt};
-    id.primary_key = true;
 
     ColumnDefinition name;
     name.name = "name";
@@ -109,7 +108,6 @@ void test_create_collection_statement()
     require(statement.columns().size() == 4, "create collection columns size mismatch");
     require(statement.comment().has_value(), "create collection comment missing");
     require(statement.comment().value() == "user collection", "create collection comment mismatch");
-    require(statement.columns()[0].primary_key, "primary key column mismatch");
     require(statement.columns()[1].type.parameter.has_value(), "varchar parameter should exist");
     require(statement.columns()[1].type.parameter.value() == 64, "varchar parameter mismatch");
     require(statement.columns()[2].default_value != nullptr, "default value should exist");

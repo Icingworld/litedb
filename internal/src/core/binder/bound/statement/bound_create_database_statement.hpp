@@ -31,6 +31,12 @@ public:
     [[nodiscard]]
     bool if_not_exists() const noexcept;
 
+    /**
+     * @brief 接受访问器访问
+     * @param visitor 访问器
+     */
+    void accept(BoundStatementVisitor & visitor) const override;
+
 private:
     std::string database_name_;         ///< 数据库名称
     bool if_not_exists_;                ///< 是否不存在
