@@ -19,7 +19,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 
-BinderInsertWorker::BinderInsertWorker(BinderContext & context) noexcept
+BinderInsertWorker::BinderInsertWorker(const BinderContext & context) noexcept
     : context_(context)
 {
 }

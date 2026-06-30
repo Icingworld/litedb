@@ -5,8 +5,7 @@
 
 #include "core/binder/binder_error.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/binder/session_context.hpp"
-#include "core/catalog/catalog_reader.hpp"
+#include "core/binder/binder_context.hpp"
 
 namespace litedb::core::parser::ast
 {
@@ -27,10 +26,9 @@ class Binder
 public:
     /**
      * @brief 构造绑定器
-     * @param catalog 数据库读取器
-     * @param session 会话上下文
+     * @param context 绑定上下文
      */
-    Binder(const catalog::CatalogReader & catalog, const SessionContext & session) noexcept;
+    Binder(const BinderContext & context) noexcept;
 
 public:
     /**
@@ -44,8 +42,7 @@ public:
     ) const;
 
 private:
-    const catalog::CatalogReader & catalog_;    ///< 数据库读取器
-    const SessionContext & session_;            ///< 会话上下文
+    const BinderContext & context_;            ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder

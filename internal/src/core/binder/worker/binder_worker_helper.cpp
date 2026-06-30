@@ -42,7 +42,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 
-BinderWorkerHelper::BinderWorkerHelper(BinderContext & context)
+BinderWorkerHelper::BinderWorkerHelper(const BinderContext & context)
     : context_(context)
 {
 }

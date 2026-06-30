@@ -33,7 +33,7 @@ class BinderContext;
 class BinderCreateWorker
 {
 public:
-    explicit BinderCreateWorker(BinderContext & context) noexcept;
+    explicit BinderCreateWorker(const BinderContext & context) noexcept;
 
 public:
     /**
@@ -73,7 +73,7 @@ public:
     );
 
 private:
-    BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder

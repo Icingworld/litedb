@@ -35,8 +35,8 @@ namespace litedb::core::binder
 using namespace litedb::core::binder::bound;
 using namespace litedb::core::parser::ast;
 
-BinderWorker::BinderWorker(const catalog::CatalogReader & catalog, const SessionContext & session)
-    : context_(catalog, session)
+BinderWorker::BinderWorker(const BinderContext & context)
+    : context_(context)
 {
 }
 

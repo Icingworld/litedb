@@ -21,7 +21,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 
-BinderDropWorker::BinderDropWorker(BinderContext & context) noexcept
+BinderDropWorker::BinderDropWorker(const BinderContext & context) noexcept
     : context_(context)
 {
 }

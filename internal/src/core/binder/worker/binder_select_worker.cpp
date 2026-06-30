@@ -15,7 +15,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 
-BinderSelectWorker::BinderSelectWorker(BinderContext & context) noexcept
+BinderSelectWorker::BinderSelectWorker(const BinderContext & context) noexcept
     : context_(context)
 {
 }

@@ -32,7 +32,7 @@ class BinderContext;
 class BinderShowWorker
 {
 public:
-    explicit BinderShowWorker(BinderContext & context) noexcept;
+    explicit BinderShowWorker(const BinderContext & context) noexcept;
 
 public:
     /**
@@ -63,7 +63,7 @@ public:
     );
 
 private:
-    BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder

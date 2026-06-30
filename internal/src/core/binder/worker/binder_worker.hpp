@@ -29,7 +29,7 @@ namespace litedb::core::binder
 class BinderWorker
 {
 public:
-    BinderWorker(const catalog::CatalogReader & catalog, const SessionContext & session);
+    BinderWorker(const BinderContext & context);
 
 public:
     /**
@@ -43,7 +43,7 @@ public:
     );
 
 private:
-    BinderContext context_;         ///< 绑定上下文
+    const BinderContext & context_;         ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder

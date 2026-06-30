@@ -30,7 +30,7 @@ class BinderContext;
 class BinderDeleteWorker
 {
 public:
-    explicit BinderDeleteWorker(BinderContext & context) noexcept;
+    explicit BinderDeleteWorker(const BinderContext & context) noexcept;
 
 public:
     /**
@@ -43,7 +43,7 @@ public:
     );
 
 private:
-    BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder

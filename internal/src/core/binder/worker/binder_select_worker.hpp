@@ -30,7 +30,7 @@ class BinderContext;
 class BinderSelectWorker
 {
 public:
-    explicit BinderSelectWorker(BinderContext & context) noexcept;
+    explicit BinderSelectWorker(const BinderContext & context) noexcept;
 
 public:
     /**
@@ -43,7 +43,7 @@ public:
     );
 
 private:
-    BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder

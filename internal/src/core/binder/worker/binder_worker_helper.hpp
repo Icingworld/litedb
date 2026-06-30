@@ -56,7 +56,7 @@ struct BindingCollection
 class BinderWorkerHelper
 {
 public:
-    explicit BinderWorkerHelper(BinderContext & context);
+    explicit BinderWorkerHelper(const BinderContext & context);
 
 public:
     /**
@@ -257,7 +257,7 @@ private:
     );
 
 private:
-    BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        ///< 绑定上下文
 };
 
 } // namespace litedb::core::binder
