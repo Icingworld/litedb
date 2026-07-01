@@ -6,10 +6,10 @@
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/planner/statement/statement_plan.hpp"
+#include "core/planner/plan/statement_plan.hpp"
 #include "core/storage/storage_manager.hpp"
 
-namespace litedb::core::planner
+namespace litedb::core::planner::plan
 {
 
 class CreateCollectionPlan;
@@ -21,7 +21,7 @@ class DropDatabasePlan;
 class DropIndexPlan;
 class DropVectorIndexPlan;
 
-} // namespace litedb::core::planner
+} // namespace litedb::core::planner::plan
 
 namespace litedb::core::executor
 {
@@ -35,56 +35,56 @@ public:
     virtual ~DdlMutationHandler() noexcept = default;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_database(
-        const planner::CreateDatabasePlan & plan,
+        const planner::plan::CreateDatabasePlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_collection(
-        const planner::CreateCollectionPlan & plan,
+        const planner::plan::CreateCollectionPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_index(
-        const planner::CreateIndexPlan & plan,
+        const planner::plan::CreateIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
-        const planner::CreateVectorIndexPlan & plan,
+        const planner::plan::CreateVectorIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_database(
-        const planner::DropDatabasePlan & plan,
+        const planner::plan::DropDatabasePlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
-        const planner::DropCollectionPlan & plan,
+        const planner::plan::DropCollectionPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_index(
-        const planner::DropIndexPlan & plan,
+        const planner::plan::DropIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
-        const planner::DropVectorIndexPlan & plan,
+        const planner::plan::DropVectorIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
@@ -111,7 +111,7 @@ public:
      * @return 执行结果
      */
     [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(const planner::StatementPlan & plan);
+    std::expected<ExecutionResult, ExecutionError> execute(const planner::plan::StatementPlan & plan);
 
 private:
     catalog::Catalog & catalog_;                        ///< 目录

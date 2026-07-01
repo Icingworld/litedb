@@ -211,9 +211,9 @@ DDL 应保留为 command plan，不建议建成普通 logical operator。
 4. 将 DDL、USE、SHOW、DESCRIBE 的 plan 构造移动到 `statement_command_planner` 或 `command_planner` 文件，降低 `planner.cpp` 的 switch 压力。
 5. 将目录分组调整为概念更清楚的结构，可以先不移动文件，只在命名中体现：
    - `planner/logical`: 关系型 logical operators。
-   - `planner/statement`: 顶层 statement plans。
-   - `planner/command`: 可选，放 command lowering。
-   - `planner/mutation`: 可选，放 insert/update/delete lowering。
+   - `planner/plan`: 顶层 statement plans，按 `query` / `mutation` / `command` 分组。
+   - `planner/plan/command`: command statement plans。
+   - `planner/plan/mutation`: insert/update/delete statement plans。
 
 ### 第二阶段：为 physical plan 预留位置
 

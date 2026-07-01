@@ -12,22 +12,24 @@
 #include "core/planner/logical/logical_planner.hpp"
 #include "core/planner/logical/node/logical_projection.hpp"
 #include "core/planner/logical/node/logical_scan.hpp"
-#include "core/planner/statement/create_collection_plan.hpp"
-#include "core/planner/statement/create_database_plan.hpp"
-#include "core/planner/statement/create_index_plan.hpp"
-#include "core/planner/statement/create_vector_index_plan.hpp"
-#include "core/planner/statement/delete_plan.hpp"
-#include "core/planner/statement/describe_collection_plan.hpp"
-#include "core/planner/statement/drop_collection_plan.hpp"
-#include "core/planner/statement/drop_database_plan.hpp"
-#include "core/planner/statement/drop_index_plan.hpp"
-#include "core/planner/statement/drop_vector_index_plan.hpp"
-#include "core/planner/statement/insert_plan.hpp"
-#include "core/planner/statement/query_plan.hpp"
-#include "core/planner/statement/show_collections_plan.hpp"
-#include "core/planner/statement/statement_plan.hpp"
-#include "core/planner/statement/update_plan.hpp"
-#include "core/planner/statement/use_plan.hpp"
+#include "core/planner/plan/command/create_collection_plan.hpp"
+#include "core/planner/plan/command/create_database_plan.hpp"
+#include "core/planner/plan/command/create_index_plan.hpp"
+#include "core/planner/plan/command/create_vector_index_plan.hpp"
+#include "core/planner/plan/mutation/delete_plan.hpp"
+#include "core/planner/plan/command/describe_collection_plan.hpp"
+#include "core/planner/plan/command/drop_collection_plan.hpp"
+#include "core/planner/plan/command/drop_database_plan.hpp"
+#include "core/planner/plan/command/drop_index_plan.hpp"
+#include "core/planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/planner/plan/mutation/insert_plan.hpp"
+#include "core/planner/plan/query/query_plan.hpp"
+#include "core/planner/plan/command/show_collections_plan.hpp"
+#include "core/planner/plan/command/show_indexes_plan.hpp"
+#include "core/planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/planner/plan/statement_plan.hpp"
+#include "core/planner/plan/mutation/update_plan.hpp"
+#include "core/planner/plan/command/use_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -49,6 +51,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::parser;
 using namespace litedb::core::planner;
+using namespace litedb::core::planner::plan;
 using namespace litedb::core::planner::logical;
 using namespace litedb::core::storage;
 
@@ -429,6 +432,20 @@ void test_admin_and_ddl_plans()
     auto show_collections = plan_ok(fixture, "SHOW COLLECTIONS;");
     require(show_collections->kind() == StatementPlanKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
     require(static_cast<const ShowCollectionsPlan &>(*show_collections).database_id() == fixture.database_id, "SHOW COLLECTIONS database id mismatch");
+
+    auto show_indexes = plan_ok(fixture, "SHOW INDEXES FROM users;");
+    require(show_indexes->kind() == StatementPlanKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    const auto & show_indexes_node = static_cast<const ShowIndexesPlan &>(*show_indexes);
+    require(show_indexes_node.database_id() == fixture.database_id, "SHOW INDEXES database id mismatch");
+    require(show_indexes_node.collection_id() == fixture.users_id, "SHOW INDEXES collection id mismatch");
+    require(show_indexes_node.collection_name() == "users", "SHOW INDEXES collection name mismatch");
+
+    auto show_vector_indexes = plan_ok(fixture, "SHOW VINDEXES FROM users;");
+    require(show_vector_indexes->kind() == StatementPlanKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    const auto & show_vector_indexes_node = static_cast<const ShowVectorIndexesPlan &>(*show_vector_indexes);
+    require(show_vector_indexes_node.database_id() == fixture.database_id, "SHOW VINDEXES database id mismatch");
+    require(show_vector_indexes_node.collection_id() == fixture.users_id, "SHOW VINDEXES collection id mismatch");
+    require(show_vector_indexes_node.collection_name() == "users", "SHOW VINDEXES collection name mismatch");
 
     auto describe = plan_ok(fixture, "DESCRIBE users;");
     require(describe->kind() == StatementPlanKind::DescribeCollection, "DESCRIBE kind mismatch");
