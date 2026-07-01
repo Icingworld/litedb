@@ -6,14 +6,14 @@
 #include <utility>
 #include <vector>
 
-#include "core/planner/statement/create_collection_plan.hpp"
-#include "core/planner/statement/create_database_plan.hpp"
-#include "core/planner/statement/create_index_plan.hpp"
-#include "core/planner/statement/create_vector_index_plan.hpp"
-#include "core/planner/statement/drop_collection_plan.hpp"
-#include "core/planner/statement/drop_database_plan.hpp"
-#include "core/planner/statement/drop_index_plan.hpp"
-#include "core/planner/statement/drop_vector_index_plan.hpp"
+#include "core/planner/plan/command/create_collection_plan.hpp"
+#include "core/planner/plan/command/create_database_plan.hpp"
+#include "core/planner/plan/command/create_index_plan.hpp"
+#include "core/planner/plan/command/create_vector_index_plan.hpp"
+#include "core/planner/plan/command/drop_collection_plan.hpp"
+#include "core/planner/plan/command/drop_database_plan.hpp"
+#include "core/planner/plan/command/drop_index_plan.hpp"
+#include "core/planner/plan/command/drop_vector_index_plan.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_loader.hpp"
 
@@ -89,7 +89,7 @@ std::expected<void, storage::StorageError> PersistenceController::initialize()
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_database(
-    const planner::CreateDatabasePlan & plan,
+    const planner::plan::CreateDatabasePlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -125,7 +125,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_collection(
-    const planner::CreateCollectionPlan & plan,
+    const planner::plan::CreateCollectionPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -186,7 +186,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_index(
-    const planner::CreateIndexPlan & plan,
+    const planner::plan::CreateIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -261,7 +261,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_vector_index(
-    const planner::CreateVectorIndexPlan & plan,
+    const planner::plan::CreateVectorIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -309,7 +309,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_database(
-    const planner::DropDatabasePlan & plan,
+    const planner::plan::DropDatabasePlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -367,7 +367,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_collection(
-    const planner::DropCollectionPlan & plan,
+    const planner::plan::DropCollectionPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -414,7 +414,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_index(
-    const planner::DropIndexPlan & plan,
+    const planner::plan::DropIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -462,7 +462,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_vector_index(
-    const planner::DropVectorIndexPlan & plan,
+    const planner::plan::DropVectorIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &

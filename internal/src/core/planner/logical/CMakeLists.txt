@@ -1,26 +1,28 @@
 set(LOGICAL_PLANNER_SOURCES
     ../planner.cpp
-    ../statement/create_collection_plan.cpp
-    ../statement/create_database_plan.cpp
-    ../statement/create_index_plan.cpp
-    ../statement/create_vector_index_plan.cpp
-    ../statement/delete_plan.cpp
-    ../statement/describe_collection_plan.cpp
-    ../statement/drop_collection_plan.cpp
-    ../statement/drop_database_plan.cpp
-    ../statement/drop_index_plan.cpp
-    ../statement/drop_vector_index_plan.cpp
-    ../statement/insert_plan.cpp
-    ../statement/query_plan.cpp
-    ../statement/show_collections_plan.cpp
-    ../statement/show_databases_plan.cpp
-    ../statement/statement_plan.cpp
-    ../statement/update_plan.cpp
-    ../statement/use_plan.cpp
-    ../access_path/access_path_selector.cpp
+    ../planner_helper.cpp
+    ../plan/command/create_collection_plan.cpp
+    ../plan/command/create_database_plan.cpp
+    ../plan/command/create_index_plan.cpp
+    ../plan/command/create_vector_index_plan.cpp
+    ../plan/mutation/delete_plan.cpp
+    ../plan/command/describe_collection_plan.cpp
+    ../plan/command/drop_collection_plan.cpp
+    ../plan/command/drop_database_plan.cpp
+    ../plan/command/drop_index_plan.cpp
+    ../plan/command/drop_vector_index_plan.cpp
+    ../plan/mutation/insert_plan.cpp
+    ../plan/query/query_plan.cpp
+    ../plan/command/show_collections_plan.cpp
+    ../plan/command/show_databases_plan.cpp
+    ../plan/command/show_indexes_plan.cpp
+    ../plan/command/show_vector_indexes_plan.cpp
+    ../plan/statement_plan.cpp
+    ../plan/mutation/update_plan.cpp
+    ../plan/command/use_plan.cpp
+    debug_printer.cpp
     logical_planner.cpp
     node/logical_filter.cpp
-    node/logical_index_scan.cpp
     node/logical_limit.cpp
     node/logical_order_by.cpp
     node/logical_plan_node.cpp

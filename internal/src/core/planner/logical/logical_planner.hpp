@@ -2,11 +2,9 @@
 
 #include <memory>
 
-#include "core/index/index_manager.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
-#include "core/planner/access_path/access_path_selector.hpp"
 #include "core/planner/logical/node/logical_plan_node.hpp"
 
 namespace litedb::core::planner::logical
@@ -17,11 +15,6 @@ namespace litedb::core::planner::logical
  */
 class LogicalPlanner
 {
-public:
-    LogicalPlanner() noexcept;
-
-    explicit LogicalPlanner(const index::IndexManager * index_manager) noexcept;
-
 public:
     /**
      * @brief 计划 SELECT 语句
@@ -49,9 +42,6 @@ public:
      */
     [[nodiscard]]
     std::unique_ptr<LogicalPlanNode> plan_delete_input(binder::bound::BoundDeleteStatement & statement) const;
-
-private:
-    access_path::AccessPathSelector access_path_selector_;  ///< 访问路径选择器
 };
 
 } // namespace litedb::core::planner::logical

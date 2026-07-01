@@ -7,7 +7,7 @@
 #include "core/parser/parser.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/planner/planner.hpp"
-#include "core/planner/statement/insert_plan.hpp"
+#include "core/planner/plan/mutation/insert_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -31,6 +31,7 @@ using namespace litedb::core::index;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 using namespace litedb::core::planner;
+using namespace litedb::core::planner::plan;
 using namespace litedb::core::schema;
 using namespace litedb::core::storage;
 
@@ -210,6 +211,42 @@ void test_ddl_use_show_and_describe()
     auto collections = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "SHOW COLLECTIONS;", fixture.database_id);
     require(collections.rows.size() == 1, "SHOW COLLECTIONS row count mismatch");
     require(get_value<std::string>(collections.rows[0].values[0]) == "users", "SHOW COLLECTIONS value mismatch");
+
+    auto create_index = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "CREATE INDEX idx_age ON users (age) USING BTREE;", fixture.database_id);
+    require(create_index.affected_rows == 1, "CREATE INDEX for SHOW affected rows mismatch");
+
+    auto indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "SHOW INDEXES FROM users;", fixture.database_id);
+    require(indexes.kind == ExecutionResultKind::RowSet, "SHOW INDEXES result kind mismatch");
+    require(indexes.columns.size() == 4, "SHOW INDEXES column count mismatch");
+    require(indexes.rows.size() == 1, "SHOW INDEXES row count mismatch");
+    require(get_value<std::string>(indexes.rows[0].values[0]) == "idx_age", "SHOW INDEXES index name mismatch");
+    require(get_value<std::string>(indexes.rows[0].values[1]) == "age", "SHOW INDEXES column name mismatch");
+    require(get_value<std::string>(indexes.rows[0].values[2]) == "BTREE", "SHOW INDEXES type mismatch");
+    require(!get_value<bool>(indexes.rows[0].values[3]), "SHOW INDEXES unique mismatch");
+
+    auto create_vector_index = execute_ok(
+        fixture.catalog,
+        fixture.storage,
+        fixture.index_manager,
+        "CREATE VINDEX vidx_embedding ON users (embedding) USING HNSW "
+        "WITH (metric = COSINE, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 7);",
+        fixture.database_id
+    );
+    require(create_vector_index.affected_rows == 1, "CREATE VINDEX for SHOW affected rows mismatch");
+
+    auto vector_indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "SHOW VINDEXES FROM users;", fixture.database_id);
+    require(vector_indexes.kind == ExecutionResultKind::RowSet, "SHOW VINDEXES result kind mismatch");
+    require(vector_indexes.columns.size() == 9, "SHOW VINDEXES column count mismatch");
+    require(vector_indexes.rows.size() == 1, "SHOW VINDEXES row count mismatch");
+    require(get_value<std::string>(vector_indexes.rows[0].values[0]) == "vidx_embedding", "SHOW VINDEXES index name mismatch");
+    require(get_value<std::string>(vector_indexes.rows[0].values[1]) == "embedding", "SHOW VINDEXES column name mismatch");
+    require(get_value<std::string>(vector_indexes.rows[0].values[2]) == "HNSW", "SHOW VINDEXES type mismatch");
+    require(get_value<std::string>(vector_indexes.rows[0].values[3]) == "COSINE", "SHOW VINDEXES metric mismatch");
+    require(get_value<std::int64_t>(vector_indexes.rows[0].values[4]) == 3, "SHOW VINDEXES dimension mismatch");
+    require(get_value<std::int64_t>(vector_indexes.rows[0].values[5]) == 24, "SHOW VINDEXES max_neighbors mismatch");
+    require(get_value<std::int64_t>(vector_indexes.rows[0].values[6]) == 240, "SHOW VINDEXES ef_construction mismatch");
+    require(get_value<std::int64_t>(vector_indexes.rows[0].values[7]) == 80, "SHOW VINDEXES ef_search mismatch");
+    require(get_value<std::int64_t>(vector_indexes.rows[0].values[8]) == 7, "SHOW VINDEXES random_seed mismatch");
 
     auto describe = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DESCRIBE users;", fixture.database_id);
     require(describe.columns.size() == 7, "DESCRIBE column count mismatch");

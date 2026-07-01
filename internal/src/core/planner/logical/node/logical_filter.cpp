@@ -22,4 +22,9 @@ const binder::bound::BoundExpression & LogicalFilter::predicate() const noexcept
     return *predicate_;
 }
 
+void LogicalFilter::accept(LogicalPlanNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::planner::logical

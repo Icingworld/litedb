@@ -29,6 +29,12 @@ public:
     [[nodiscard]]
     const std::vector<binder::bound::BoundProjectionItem> & projections() const noexcept;
 
+    /**
+     * @brief 接受访问器
+     * @param visitor 访问器
+     */
+    void accept(LogicalPlanNodeVisitor & visitor) const override;
+
 private:
     std::vector<binder::bound::BoundProjectionItem> projections_;   ///< 投影项
 };

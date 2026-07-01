@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <string>
-#include <utility>
 
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_database_statement.hpp"
@@ -18,64 +17,50 @@
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/bound/statement/bound_show_collections_statement.hpp"
 #include "core/binder/bound/statement/bound_show_databases_statement.hpp"
+#include "core/binder/bound/statement/bound_show_indexes_statement.hpp"
+#include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
-#include "core/planner/statement/create_collection_plan.hpp"
-#include "core/planner/statement/create_database_plan.hpp"
-#include "core/planner/statement/create_index_plan.hpp"
-#include "core/planner/statement/create_vector_index_plan.hpp"
-#include "core/planner/statement/delete_plan.hpp"
-#include "core/planner/statement/describe_collection_plan.hpp"
-#include "core/planner/statement/drop_collection_plan.hpp"
-#include "core/planner/statement/drop_database_plan.hpp"
-#include "core/planner/statement/drop_index_plan.hpp"
-#include "core/planner/statement/drop_vector_index_plan.hpp"
-#include "core/planner/statement/insert_plan.hpp"
-#include "core/planner/statement/query_plan.hpp"
-#include "core/planner/statement/show_collections_plan.hpp"
-#include "core/planner/statement/show_databases_plan.hpp"
-#include "core/planner/statement/update_plan.hpp"
-#include "core/planner/statement/use_plan.hpp"
+#include "core/planner/logical/logical_planner.hpp"
+#include "core/planner/plan/command/create_collection_plan.hpp"
+#include "core/planner/plan/command/create_database_plan.hpp"
+#include "core/planner/plan/command/create_index_plan.hpp"
+#include "core/planner/plan/command/create_vector_index_plan.hpp"
+#include "core/planner/plan/mutation/delete_plan.hpp"
+#include "core/planner/plan/command/describe_collection_plan.hpp"
+#include "core/planner/plan/command/drop_collection_plan.hpp"
+#include "core/planner/plan/command/drop_database_plan.hpp"
+#include "core/planner/plan/command/drop_index_plan.hpp"
+#include "core/planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/planner/plan/mutation/insert_plan.hpp"
+#include "core/planner/plan/query/query_plan.hpp"
+#include "core/planner/plan/command/show_collections_plan.hpp"
+#include "core/planner/plan/command/show_databases_plan.hpp"
+#include "core/planner/plan/command/show_indexes_plan.hpp"
+#include "core/planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/planner/plan/mutation/update_plan.hpp"
+#include "core/planner/plan/command/use_plan.hpp"
+#include "core/planner/planner_helper.hpp"
 
 namespace litedb::core::planner
 {
+
+using namespace plan;
+using namespace logical;
 
 namespace
 {
 
 using namespace litedb::core::binder::bound;
 
-PlannerError error(
-    PlannerErrorCode code,
-    parser::ast::AstNodeLocation location,
-    std::string message
-)
-{
-    return PlannerError {
-        .code = code,
-        .location = location,
-        .message = std::move(message),
-    };
-}
-
 } // namespace
-
-Planner::Planner() noexcept
-    : logical_planner_(nullptr)
-{
-}
-
-Planner::Planner(const index::IndexManager * index_manager) noexcept
-    : logical_planner_(index_manager)
-{
-}
 
 std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     std::unique_ptr<BoundStatement> statement
 ) const
 {
     if (statement == nullptr) {
-        return std::unexpected(error(
+        return std::unexpected(make_planner_error(
             PlannerErrorCode::InvalidArgument,
             parser::ast::AstNodeLocation {},
             "cannot plan a null bound statement"
@@ -89,7 +74,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     }
     case BoundStatementKind::Select: {
         auto & select = static_cast<BoundSelectStatement &>(*statement);
-        return std::make_unique<QueryPlan>(logical_planner_.plan_select(select), select.location());
+        return std::make_unique<QueryPlan>(LogicalPlanner().plan_select(select), select.location());
     }
     case BoundStatementKind::Insert: {
         auto & insert = static_cast<BoundInsertStatement &>(*statement);
@@ -105,7 +90,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     case BoundStatementKind::Update: {
         auto & update = static_cast<BoundUpdateStatement &>(*statement);
         return std::make_unique<UpdatePlan>(
-            logical_planner_.plan_update_input(update),
+            LogicalPlanner().plan_update_input(update),
             update.database_id(),
             update.collection_id(),
             update.collection_name(),
@@ -116,7 +101,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     case BoundStatementKind::Delete: {
         auto & del = static_cast<BoundDeleteStatement &>(*statement);
         return std::make_unique<DeletePlan>(
-            logical_planner_.plan_delete_input(del),
+            LogicalPlanner().plan_delete_input(del),
             del.database_id(),
             del.collection_id(),
             del.collection_name(),
@@ -225,6 +210,24 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
         auto & show = static_cast<BoundShowCollectionsStatement &>(*statement);
         return std::make_unique<ShowCollectionsPlan>(show.database_id(), show.location());
     }
+    case BoundStatementKind::ShowIndexes: {
+        auto & show = static_cast<BoundShowIndexesStatement &>(*statement);
+        return std::make_unique<ShowIndexesPlan>(
+            show.database_id(),
+            show.collection_id(),
+            show.collection_name(),
+            show.location()
+        );
+    }
+    case BoundStatementKind::ShowVectorIndexes: {
+        auto & show = static_cast<BoundShowVectorIndexesStatement &>(*statement);
+        return std::make_unique<ShowVectorIndexesPlan>(
+            show.database_id(),
+            show.collection_id(),
+            show.collection_name(),
+            show.location()
+        );
+    }
     case BoundStatementKind::DescribeCollection: {
         auto & describe = static_cast<BoundDescribeCollectionStatement &>(*statement);
         return std::make_unique<DescribeCollectionPlan>(
@@ -236,7 +239,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     }
     }
 
-    return std::unexpected(error(
+    [[unlikely]] return std::unexpected(make_planner_error(
         PlannerErrorCode::UnsupportedStatement,
         statement->location(),
         "unknown bound statement kind"

@@ -1,17 +1,23 @@
 #pragma once
 
 #include "core/parser/ast/ast_node.hpp"
+#include "core/planner/logical/node/logical_plan_node_visitor.hpp"
 
 namespace litedb::core::planner::logical
 {
 
 /**
  * @brief 逻辑计划节点类型
+ * 逻辑计划节点大致树形结构
+ * Limit
+ *   └── OrderBy
+ *         └── Projection
+ *               └── Filter
+ *                     └── Scan
  */
 enum class LogicalPlanNodeKind
 {
     Scan,               ///< 扫描
-    IndexScan,          ///< 索引扫描
     Filter,             ///< 过滤
     Projection,         ///< 投影
     OrderBy,            ///< 排序
@@ -51,6 +57,12 @@ public:
      */
     [[nodiscard]]
     parser::ast::AstNodeLocation location() const noexcept;
+
+    /**
+     * @brief 接受访问器
+     * @param visitor 访问器
+     */
+    virtual void accept(LogicalPlanNodeVisitor & visitor) const = 0;
 
 private:
     LogicalPlanNodeKind kind_;                  ///< 节点类型

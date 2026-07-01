@@ -33,4 +33,9 @@ const std::string & LogicalScan::collection_name() const noexcept
     return collection_name_;
 }
 
+void LogicalScan::accept(LogicalPlanNodeVisitor & visitor) const
+{
+    visitor.visit(*this);
+}
+
 } // namespace litedb::core::planner::logical

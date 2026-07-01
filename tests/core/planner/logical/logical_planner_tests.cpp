@@ -4,7 +4,7 @@
 #include "core/parser/parser.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/planner/planner.hpp"
-#include "core/planner/logical/node/logical_index_scan.hpp"
+#include "core/planner/logical/debug_printer.hpp"
 #include "core/planner/logical/node/logical_filter.hpp"
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
@@ -12,22 +12,24 @@
 #include "core/planner/logical/logical_planner.hpp"
 #include "core/planner/logical/node/logical_projection.hpp"
 #include "core/planner/logical/node/logical_scan.hpp"
-#include "core/planner/statement/create_collection_plan.hpp"
-#include "core/planner/statement/create_database_plan.hpp"
-#include "core/planner/statement/create_index_plan.hpp"
-#include "core/planner/statement/create_vector_index_plan.hpp"
-#include "core/planner/statement/delete_plan.hpp"
-#include "core/planner/statement/describe_collection_plan.hpp"
-#include "core/planner/statement/drop_collection_plan.hpp"
-#include "core/planner/statement/drop_database_plan.hpp"
-#include "core/planner/statement/drop_index_plan.hpp"
-#include "core/planner/statement/drop_vector_index_plan.hpp"
-#include "core/planner/statement/insert_plan.hpp"
-#include "core/planner/statement/query_plan.hpp"
-#include "core/planner/statement/show_collections_plan.hpp"
-#include "core/planner/statement/statement_plan.hpp"
-#include "core/planner/statement/update_plan.hpp"
-#include "core/planner/statement/use_plan.hpp"
+#include "core/planner/plan/command/create_collection_plan.hpp"
+#include "core/planner/plan/command/create_database_plan.hpp"
+#include "core/planner/plan/command/create_index_plan.hpp"
+#include "core/planner/plan/command/create_vector_index_plan.hpp"
+#include "core/planner/plan/mutation/delete_plan.hpp"
+#include "core/planner/plan/command/describe_collection_plan.hpp"
+#include "core/planner/plan/command/drop_collection_plan.hpp"
+#include "core/planner/plan/command/drop_database_plan.hpp"
+#include "core/planner/plan/command/drop_index_plan.hpp"
+#include "core/planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/planner/plan/mutation/insert_plan.hpp"
+#include "core/planner/plan/query/query_plan.hpp"
+#include "core/planner/plan/command/show_collections_plan.hpp"
+#include "core/planner/plan/command/show_indexes_plan.hpp"
+#include "core/planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/planner/plan/statement_plan.hpp"
+#include "core/planner/plan/mutation/update_plan.hpp"
+#include "core/planner/plan/command/use_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -36,6 +38,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 
 namespace
@@ -48,6 +51,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::parser;
 using namespace litedb::core::planner;
+using namespace litedb::core::planner::plan;
 using namespace litedb::core::planner::logical;
 using namespace litedb::core::storage;
 
@@ -246,6 +250,10 @@ void test_select_minimal_chain()
     const auto & projection = static_cast<const LogicalProjection &>(root);
     require(projection.projections().size() == 2, "minimal SELECT projection count mismatch");
     require(projection.child().kind() == LogicalPlanNodeKind::Scan, "minimal SELECT child should be scan");
+
+    const auto printed = debug_print(root);
+    require(printed.find("LogicalProjection") != std::string::npos, "debug print should include projection");
+    require(printed.find("LogicalScan") != std::string::npos, "debug print should include scan");
 }
 
 void test_insert_plan()
@@ -288,33 +296,26 @@ void test_update_delete_plans()
     require(delete_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "DELETE without WHERE should scan directly");
 }
 
-void test_access_path_selector_uses_indexes()
+void test_indexes_do_not_change_logical_scan()
 {
     Fixture fixture;
-    const auto btree_id = create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
-    const auto hash_id = create_managed_index(fixture, "idx_age_hash", "age", CatalogIndexKind::Hash);
+    (void) create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
+    (void) create_managed_index(fixture, "idx_age_hash", "age", CatalogIndexKind::Hash);
 
     auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_manager);
     const auto & equal_projection = static_cast<const LogicalProjection &>(query_root(*equal));
     const auto & equal_filter = static_cast<const LogicalFilter &>(equal_projection.child());
-    require(equal_filter.child().kind() == LogicalPlanNodeKind::IndexScan, "equality should use index scan");
-    const auto & equal_scan = static_cast<const LogicalIndexScan &>(equal_filter.child());
-    require(equal_scan.index_id() == hash_id, "equality should prefer hash index");
-    require(equal_scan.index_kind() == IndexKind::Hash, "equality index kind mismatch");
-    require(equal_scan.lookup().kind == IndexLookupKind::Equal, "equality lookup kind mismatch");
+    require(equal_filter.child().kind() == LogicalPlanNodeKind::Scan, "equality should remain logical scan");
 
     auto range = plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;", &fixture.index_manager);
     const auto & range_projection = static_cast<const LogicalProjection &>(query_root(*range));
     const auto & range_filter = static_cast<const LogicalFilter &>(range_projection.child());
-    require(range_filter.child().kind() == LogicalPlanNodeKind::IndexScan, "range should use index scan");
-    const auto & range_scan = static_cast<const LogicalIndexScan &>(range_filter.child());
-    require(range_scan.index_id() == btree_id, "range should use btree index");
-    require(range_scan.lookup().kind == IndexLookupKind::Range, "range lookup kind mismatch");
+    require(range_filter.child().kind() == LogicalPlanNodeKind::Scan, "range should remain logical scan");
 
     auto between = plan_ok(fixture, "SELECT id FROM users WHERE age BETWEEN 18 AND 30;", &fixture.index_manager);
     const auto & between_projection = static_cast<const LogicalProjection &>(query_root(*between));
     const auto & between_filter = static_cast<const LogicalFilter &>(between_projection.child());
-    require(between_filter.child().kind() == LogicalPlanNodeKind::IndexScan, "between should use index scan");
+    require(between_filter.child().kind() == LogicalPlanNodeKind::Scan, "between should remain logical scan");
 
     auto fallback_like = plan_ok(fixture, "SELECT id FROM users WHERE name LIKE 'a%';", &fixture.index_manager);
     const auto & like_projection = static_cast<const LogicalProjection &>(query_root(*fallback_like));
@@ -325,20 +326,6 @@ void test_access_path_selector_uses_indexes()
     const auto & expr_projection = static_cast<const LogicalProjection &>(query_root(*fallback_expression));
     const auto & expr_filter = static_cast<const LogicalFilter &>(expr_projection.child());
     require(expr_filter.child().kind() == LogicalPlanNodeKind::Scan, "expression predicate should fall back to scan");
-}
-
-void test_access_path_selector_btree_equality()
-{
-    Fixture fixture;
-    const auto btree_id = create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
-
-    auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_manager);
-    const auto & projection = static_cast<const LogicalProjection &>(query_root(*equal));
-    const auto & filter = static_cast<const LogicalFilter &>(projection.child());
-    require(filter.child().kind() == LogicalPlanNodeKind::IndexScan, "btree equality should use index scan");
-    const auto & scan = static_cast<const LogicalIndexScan &>(filter.child());
-    require(scan.index_id() == btree_id, "btree equality index mismatch");
-    require(scan.index_kind() == IndexKind::BTree, "btree equality index kind mismatch");
 }
 
 void test_admin_and_ddl_plans()
@@ -353,13 +340,13 @@ void test_admin_and_ddl_plans()
     require(create_database->kind() == StatementPlanKind::CreateDatabase, "CREATE DATABASE kind mismatch");
     require(static_cast<const CreateDatabasePlan &>(*create_database).database_name() == "demo2", "CREATE DATABASE name mismatch");
 
-    auto create_collection = plan_ok(fixture, "CREATE COLLECTION posts (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+    auto create_collection = plan_ok(fixture, "CREATE COLLECTION posts (id BIGINT, embedding VECTOR(3));");
     require(create_collection->kind() == StatementPlanKind::CreateCollection, "CREATE COLLECTION kind mismatch");
     const auto & create_collection_node = static_cast<const CreateCollectionPlan &>(*create_collection);
     require(create_collection_node.database_id() == fixture.database_id, "CREATE COLLECTION database id mismatch");
     require(create_collection_node.columns().size() == 2, "CREATE COLLECTION column count mismatch");
 
-    auto create_index = plan_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING HASH;");
+    auto create_index = plan_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING BTREE;");
     require(create_index->kind() == StatementPlanKind::CreateIndex, "CREATE INDEX kind mismatch");
     const auto & create_index_node = static_cast<const CreateIndexPlan &>(*create_index);
     require(create_index_node.database_id() == fixture.database_id, "CREATE INDEX database id mismatch");
@@ -367,7 +354,7 @@ void test_admin_and_ddl_plans()
     require(create_index_node.collection_name() == "users", "CREATE INDEX collection name mismatch");
     require(create_index_node.column_name() == "age", "CREATE INDEX column name mismatch");
     require(create_index_node.index_name() == "idx_age", "CREATE INDEX index name mismatch");
-    require(create_index_node.index_kind() == CatalogIndexKind::Hash, "CREATE INDEX kind value mismatch");
+    require(create_index_node.index_kind() == CatalogIndexKind::BTree, "CREATE INDEX kind value mismatch");
     require(create_index_node.if_not_exists(), "CREATE INDEX if not exists mismatch");
     require(!create_index_node.unique(), "CREATE INDEX unique mismatch");
 
@@ -446,6 +433,20 @@ void test_admin_and_ddl_plans()
     require(show_collections->kind() == StatementPlanKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
     require(static_cast<const ShowCollectionsPlan &>(*show_collections).database_id() == fixture.database_id, "SHOW COLLECTIONS database id mismatch");
 
+    auto show_indexes = plan_ok(fixture, "SHOW INDEXES FROM users;");
+    require(show_indexes->kind() == StatementPlanKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    const auto & show_indexes_node = static_cast<const ShowIndexesPlan &>(*show_indexes);
+    require(show_indexes_node.database_id() == fixture.database_id, "SHOW INDEXES database id mismatch");
+    require(show_indexes_node.collection_id() == fixture.users_id, "SHOW INDEXES collection id mismatch");
+    require(show_indexes_node.collection_name() == "users", "SHOW INDEXES collection name mismatch");
+
+    auto show_vector_indexes = plan_ok(fixture, "SHOW VINDEXES FROM users;");
+    require(show_vector_indexes->kind() == StatementPlanKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    const auto & show_vector_indexes_node = static_cast<const ShowVectorIndexesPlan &>(*show_vector_indexes);
+    require(show_vector_indexes_node.database_id() == fixture.database_id, "SHOW VINDEXES database id mismatch");
+    require(show_vector_indexes_node.collection_id() == fixture.users_id, "SHOW VINDEXES collection id mismatch");
+    require(show_vector_indexes_node.collection_name() == "users", "SHOW VINDEXES collection name mismatch");
+
     auto describe = plan_ok(fixture, "DESCRIBE users;");
     require(describe->kind() == StatementPlanKind::DescribeCollection, "DESCRIBE kind mismatch");
     const auto & describe_node = static_cast<const DescribeCollectionPlan &>(*describe);
@@ -470,8 +471,7 @@ int main()
         test_select_minimal_chain();
         test_insert_plan();
         test_update_delete_plans();
-        test_access_path_selector_uses_indexes();
-        test_access_path_selector_btree_equality();
+        test_indexes_do_not_change_logical_scan();
         test_admin_and_ddl_plans();
         test_null_statement_error();
     } catch (const std::exception & exception) {

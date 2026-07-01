@@ -30,56 +30,56 @@ public:
     std::expected<void, storage::StorageError> initialize();
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_database(
-        const planner::CreateDatabasePlan & plan,
+        const planner::plan::CreateDatabasePlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_collection(
-        const planner::CreateCollectionPlan & plan,
+        const planner::plan::CreateCollectionPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_index(
-        const planner::CreateIndexPlan & plan,
+        const planner::plan::CreateIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_vector_index(
-        const planner::CreateVectorIndexPlan & plan,
+        const planner::plan::CreateVectorIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_database(
-        const planner::DropDatabasePlan & plan,
+        const planner::plan::DropDatabasePlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_collection(
-        const planner::DropCollectionPlan & plan,
+        const planner::plan::DropCollectionPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_index(
-        const planner::DropIndexPlan & plan,
+        const planner::plan::DropIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_vector_index(
-        const planner::DropVectorIndexPlan & plan,
+        const planner::plan::DropVectorIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
