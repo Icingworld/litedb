@@ -8,7 +8,7 @@ namespace litedb::core::planner::plan
 {
 
 /**
- * @brief CREATE DATABASE ????
+ * @brief CREATE DATABASE 语句计划
  */
 class CreateDatabasePlan final : public StatementPlan
 {
@@ -17,22 +17,22 @@ public:
 
 public:
     /**
-     * @brief ???????
-     * @return ?????
+     * @brief 获取数据库名称
+     * @return 数据库名称
      */
     [[nodiscard]]
     const std::string & database_name() const noexcept;
 
     /**
-     * @brief ????
-     * @return ????
+     * @brief 是否存在
+     * @return 是否存在
      */
     [[nodiscard]]
     bool if_not_exists() const noexcept;
 
 private:
-    std::string database_name_;     ///< ?????
-    bool if_not_exists_;            ///< ????
+    std::string database_name_;     ///< 数据库名称
+    bool if_not_exists_;            ///< 是否存在
 };
 
 } // namespace litedb::core::planner::plan

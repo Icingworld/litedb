@@ -20,7 +20,6 @@ set(LOGICAL_PLANNER_SOURCES
     ../plan/statement_plan.cpp
     ../plan/mutation/update_plan.cpp
     ../plan/command/use_plan.cpp
-    ../access_path/access_path_selector.cpp
     debug_printer.cpp
     logical_planner.cpp
     node/logical_filter.cpp

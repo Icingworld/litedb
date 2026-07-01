@@ -9,7 +9,7 @@ namespace litedb::core::planner::plan
 {
 
 /**
- * @brief USE ????
+ * @brief USE 语句计划
  */
 class UsePlan final : public StatementPlan
 {
@@ -18,22 +18,22 @@ public:
 
 public:
     /**
-     * @brief ????? ID
-     * @return ??? ID
+     * @brief 获取数据库 ID
+     * @return 数据库 ID
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
     /**
-     * @brief ???????
-     * @return ?????
+     * @brief 获取数据库名称
+     * @return 数据库名称
      */
     [[nodiscard]]
     const std::string & database_name() const noexcept;
 
 private:
-    common::DatabaseId database_id_;             ///< ??? ID
-    std::string database_name_;                  ///< ?????
+    common::DatabaseId database_id_;             ///< 数据库 ID
+    std::string database_name_;                  ///< 数据库名称
 };
 
 } // namespace litedb::core::planner::plan

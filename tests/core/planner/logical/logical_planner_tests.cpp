@@ -296,7 +296,7 @@ void test_update_delete_plans()
     require(delete_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "DELETE without WHERE should scan directly");
 }
 
-void test_access_path_selector_uses_indexes()
+void test_indexes_do_not_change_logical_scan()
 {
     Fixture fixture;
     (void) create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
@@ -471,7 +471,7 @@ int main()
         test_select_minimal_chain();
         test_insert_plan();
         test_update_delete_plans();
-        test_access_path_selector_uses_indexes();
+        test_indexes_do_not_change_logical_scan();
         test_admin_and_ddl_plans();
         test_null_statement_error();
     } catch (const std::exception & exception) {

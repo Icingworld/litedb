@@ -21,6 +21,7 @@
 #include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
+#include "core/planner/logical/logical_planner.hpp"
 #include "core/planner/plan/command/create_collection_plan.hpp"
 #include "core/planner/plan/command/create_database_plan.hpp"
 #include "core/planner/plan/command/create_index_plan.hpp"
@@ -45,6 +46,7 @@ namespace litedb::core::planner
 {
 
 using namespace plan;
+using namespace logical;
 
 namespace
 {
@@ -52,16 +54,6 @@ namespace
 using namespace litedb::core::binder::bound;
 
 } // namespace
-
-Planner::Planner() noexcept
-    : logical_planner_(nullptr)
-{
-}
-
-Planner::Planner(const index::IndexManager * index_manager) noexcept
-    : logical_planner_(index_manager)
-{
-}
 
 std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     std::unique_ptr<BoundStatement> statement
@@ -82,7 +74,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     }
     case BoundStatementKind::Select: {
         auto & select = static_cast<BoundSelectStatement &>(*statement);
-        return std::make_unique<QueryPlan>(logical_planner_.plan_select(select), select.location());
+        return std::make_unique<QueryPlan>(LogicalPlanner().plan_select(select), select.location());
     }
     case BoundStatementKind::Insert: {
         auto & insert = static_cast<BoundInsertStatement &>(*statement);
@@ -98,7 +90,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     case BoundStatementKind::Update: {
         auto & update = static_cast<BoundUpdateStatement &>(*statement);
         return std::make_unique<UpdatePlan>(
-            logical_planner_.plan_update_input(update),
+            LogicalPlanner().plan_update_input(update),
             update.database_id(),
             update.collection_id(),
             update.collection_name(),
@@ -109,7 +101,7 @@ std::expected<std::unique_ptr<StatementPlan>, PlannerError> Planner::plan(
     case BoundStatementKind::Delete: {
         auto & del = static_cast<BoundDeleteStatement &>(*statement);
         return std::make_unique<DeletePlan>(
-            logical_planner_.plan_delete_input(del),
+            LogicalPlanner().plan_delete_input(del),
             del.database_id(),
             del.collection_id(),
             del.collection_name(),

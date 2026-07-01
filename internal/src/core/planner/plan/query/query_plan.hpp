@@ -9,7 +9,7 @@ namespace litedb::core::planner::plan
 {
 
 /**
- * @brief QUERY ????
+ * @brief QUERY 语句计划
  */
 class QueryPlan final : public StatementPlan
 {
@@ -18,14 +18,14 @@ public:
 
 public:
     /**
-     * @brief ?????
-     * @return ???
+     * @brief 获取根节点
+     * @return 根节点
      */
     [[nodiscard]]
     const logical::LogicalPlanNode & root() const noexcept;
 
 private:
-    std::unique_ptr<logical::LogicalPlanNode> root_;             ///< ???
+    std::unique_ptr<logical::LogicalPlanNode> root_;             ///< 根节点
 };
 
 } // namespace litedb::core::planner::plan
