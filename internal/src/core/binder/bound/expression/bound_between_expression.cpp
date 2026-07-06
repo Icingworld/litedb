@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_between_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -36,6 +37,16 @@ const BoundExpression & BoundBetweenExpression::upper() const noexcept
 void BoundBetweenExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundBetweenExpression::clone() const
+{
+    return std::make_unique<BoundBetweenExpression>(
+        expression_->clone(),
+        lower_->clone(),
+        upper_->clone(),
+        location()
+    );
 }
 
 } // namespace litedb::core::binder::bound

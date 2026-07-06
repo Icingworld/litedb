@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_function_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -44,6 +45,23 @@ const std::vector<std::unique_ptr<BoundExpression>> & BoundFunctionExpression::a
 void BoundFunctionExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundFunctionExpression::clone() const
+{
+    std::vector<std::unique_ptr<BoundExpression>> arguments;
+    arguments.reserve(arguments_.size());
+    for (const auto & argument : arguments_) {
+        arguments.push_back(argument->clone());
+    }
+    return std::make_unique<BoundFunctionExpression>(
+        name_,
+        function_,
+        signature_,
+        std::move(arguments),
+        type(),
+        location()
+    );
 }
 
 } // namespace litedb::core::binder::bound

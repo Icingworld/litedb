@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/ast_node.hpp"
 #include "core/binder/bound/expression/bound_expression_visitor.hpp"
@@ -69,6 +71,13 @@ public:
      * @param visitor 访问器
      */
     virtual void accept(BoundExpressionVisitor & visitor) const = 0;
+
+    /**
+     * @brief 深拷贝绑定表达式
+     * @return 表达式副本
+     */
+    [[nodiscard]]
+    virtual std::unique_ptr<BoundExpression> clone() const = 0;
 
 protected:
     BoundExpression(BoundExpressionKind kind, common::LogicalType type, parser::ast::AstNodeLocation location) noexcept;

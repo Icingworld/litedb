@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -30,6 +31,13 @@ public:
      * @param visitor 访问器
      */
     void accept(BoundExpressionVisitor & visitor) const override;
+
+    /**
+     * @brief 深拷贝表达式
+     * @return 表达式副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> clone() const override;
 
 private:
     std::optional<std::string> qualifier_;    ///< 限定符

@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -29,6 +30,16 @@ const std::vector<std::unique_ptr<BoundExpression>> & BoundInExpression::values(
 void BoundInExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundInExpression::clone() const
+{
+    std::vector<std::unique_ptr<BoundExpression>> values;
+    values.reserve(values_.size());
+    for (const auto & value : values_) {
+        values.push_back(value->clone());
+    }
+    return std::make_unique<BoundInExpression>(expression_->clone(), std::move(values), location());
 }
 
 } // namespace litedb::core::binder::bound

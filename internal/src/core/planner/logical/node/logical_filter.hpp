@@ -34,6 +34,13 @@ public:
      */
     void accept(LogicalPlanNodeVisitor & visitor) const override;
 
+    /**
+     * @brief 深拷贝逻辑计划节点
+     * @return 逻辑计划节点副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<LogicalPlanNode> clone() const override;
+
 private:
     std::unique_ptr<binder::bound::BoundExpression> predicate_;   ///< 谓词
 };

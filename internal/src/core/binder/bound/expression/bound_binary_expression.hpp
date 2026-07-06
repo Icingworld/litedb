@@ -51,6 +51,13 @@ public:
      */
     void accept(BoundExpressionVisitor & visitor) const override;
 
+    /**
+     * @brief 深拷贝表达式
+     * @return 表达式副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> clone() const override;
+
 private:
     std::unique_ptr<BoundExpression> left_;     ///< 左操作数
     parser::TokenType op_;                      ///< 操作符

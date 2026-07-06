@@ -1,5 +1,6 @@
 #include "core/planner/logical/node/logical_scan.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::planner::logical
@@ -36,6 +37,11 @@ const std::string & LogicalScan::collection_name() const noexcept
 void LogicalScan::accept(LogicalPlanNodeVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<LogicalPlanNode> LogicalScan::clone() const
+{
+    return std::make_unique<LogicalScan>(database_id_, collection_id_, collection_name_, location());
 }
 
 } // namespace litedb::core::planner::logical

@@ -62,6 +62,13 @@ public:
      */
     void accept(BoundExpressionVisitor & visitor) const override;
 
+    /**
+     * @brief 深拷贝表达式
+     * @return 表达式副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> clone() const override;
+
 private:
     std::string name_;                                          ///< 函数名称
     std::shared_ptr<const function::ScalarFunction> function_;  ///< 函数

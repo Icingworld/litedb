@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -23,6 +24,11 @@ const std::string & BoundLiteralExpression::value() const noexcept
 void BoundLiteralExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundLiteralExpression::clone() const
+{
+    return std::make_unique<BoundLiteralExpression>(type(), value_, location());
 }
 
 } // namespace litedb::core::binder::bound

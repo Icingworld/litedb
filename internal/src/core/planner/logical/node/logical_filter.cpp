@@ -1,7 +1,8 @@
 #include "core/planner/logical/node/logical_filter.hpp"
 
-#include <utility>
 #include <cassert>
+#include <memory>
+#include <utility>
 
 namespace litedb::core::planner::logical
 {
@@ -25,6 +26,11 @@ const binder::bound::BoundExpression & LogicalFilter::predicate() const noexcept
 void LogicalFilter::accept(LogicalPlanNodeVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<LogicalPlanNode> LogicalFilter::clone() const
+{
+    return std::make_unique<LogicalFilter>(child().clone(), predicate_->clone(), location());
 }
 
 } // namespace litedb::core::planner::logical

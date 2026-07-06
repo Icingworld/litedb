@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -30,6 +31,11 @@ const BoundExpression & BoundUnaryExpression::operand() const noexcept
 void BoundUnaryExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundUnaryExpression::clone() const
+{
+    return std::make_unique<BoundUnaryExpression>(op_, operand_->clone(), type(), location());
 }
 
 } // namespace litedb::core::binder::bound

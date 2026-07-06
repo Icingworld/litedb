@@ -7,6 +7,7 @@
 
 #include "core/binder/binder.hpp"
 #include "core/executor/executor.hpp"
+#include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 #include "core/planner/planner.hpp"
@@ -57,6 +58,16 @@ EngineError from_planner_error(planner::PlannerError error)
 }
 
 [[nodiscard]]
+EngineError from_optimizer_error(optimizer::OptimizerError error)
+{
+    return EngineError {
+        .code = EngineErrorCode::OptimizerError,
+        .location = error.location,
+        .message = std::move(error.message),
+    };
+}
+
+[[nodiscard]]
 EngineError from_execution_error(executor::ExecutionError error)
 {
     return EngineError {
@@ -90,10 +101,16 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_binder_error(std::move(bound.error())));
     }
 
-    planner::Planner planner {&instance_->index_manager()};
+    planner::Planner planner;
     auto planned = planner.plan(std::move(bound.value()));
     if (!planned.has_value()) {
         return std::unexpected(from_planner_error(std::move(planned.error())));
+    }
+
+    optimizer::Optimizer optimizer;
+    auto optimized = optimizer.optimize(std::move(planned.value()));
+    if (!optimized.has_value()) {
+        return std::unexpected(from_optimizer_error(std::move(optimized.error())));
     }
 
     executor::Executor executor {
@@ -102,7 +119,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         instance_->index_manager(),
         instance_->ddl_handler(),
     };
-    auto executed = executor.execute(*planned.value());
+    auto executed = executor.execute(*optimized.value());
     if (!executed.has_value()) {
         return std::unexpected(from_execution_error(std::move(executed.error())));
     }

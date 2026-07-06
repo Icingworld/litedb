@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include "core/common/ids.hpp"
@@ -49,6 +50,13 @@ public:
      * @param visitor 访问器
      */
     void accept(LogicalPlanNodeVisitor & visitor) const override;
+
+    /**
+     * @brief 深拷贝逻辑计划节点
+     * @return 逻辑计划节点副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<LogicalPlanNode> clone() const override;
 
 private:
     common::DatabaseId database_id_;                 ///< 数据库 ID
