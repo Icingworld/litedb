@@ -39,7 +39,6 @@ public:
 public:
     void visit(const LogicalScan & node) override;
     void visit(const LogicalFilter & node) override;
-    void visit(const LogicalIndexScan & node) override;
     void visit(const LogicalProjection & node) override;
     void visit(const LogicalOrderBy & node) override;
     void visit(const LogicalLimit & node) override;

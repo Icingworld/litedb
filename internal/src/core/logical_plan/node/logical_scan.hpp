@@ -1,13 +1,45 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 
+#include "core/catalog/catalog_entry.hpp"
 #include "core/common/ids.hpp"
+#include "core/index/scalar_index_key.hpp"
 #include "core/logical_plan/node/logical_plan_node.hpp"
 
 namespace litedb::core::planner::logical
 {
+
+enum class LogicalIndexLookupKind
+{
+    Equal,
+    Range,
+};
+
+struct LogicalIndexBound
+{
+    index::ScalarIndexKey key;
+    bool inclusive {true};
+};
+
+struct LogicalIndexLookup
+{
+    LogicalIndexLookupKind kind {LogicalIndexLookupKind::Equal};
+    std::optional<LogicalIndexBound> lower;
+    std::optional<LogicalIndexBound> upper;
+};
+
+struct LogicalScanIndexHint
+{
+    common::IndexId index_id;
+    std::string index_name;
+    catalog::CatalogIndexKind index_kind;
+    common::ColumnId column_id;
+    std::string column_name;
+    LogicalIndexLookup lookup;
+};
 
 /**
  * @brief 逻辑扫描节点
@@ -16,6 +48,14 @@ namespace litedb::core::planner::logical
 class LogicalScan final : public LogicalPlanNode
 {
 public:
+    LogicalScan(
+        common::DatabaseId database_id,
+        common::CollectionId collection_id,
+        std::string collection_name,
+        std::optional<LogicalScanIndexHint> index_hint,
+        parser::ast::AstNodeLocation location
+    );
+
     LogicalScan(
         common::DatabaseId database_id,
         common::CollectionId collection_id,
@@ -45,6 +85,9 @@ public:
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
 
+    [[nodiscard]]
+    const std::optional<LogicalScanIndexHint> & index_hint() const noexcept;
+
     /**
      * @brief 接受访问器
      * @param visitor 访问器
@@ -62,6 +105,7 @@ private:
     common::DatabaseId database_id_;                 ///< 数据库 ID
     common::CollectionId collection_id_;             ///< 集合 ID
     std::string collection_name_;                    ///< 集合名称
+    std::optional<LogicalScanIndexHint> index_hint_; ///< index access hint
 };
 
 } // namespace litedb::core::planner::logical

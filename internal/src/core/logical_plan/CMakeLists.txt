@@ -3,7 +3,6 @@ set(LOGICAL_PLAN_SOURCES
     logical_planner.cpp
     logical_planner_helper.cpp
     node/logical_filter.cpp
-    node/logical_index_scan.cpp
     node/logical_limit.cpp
     node/logical_order_by.cpp
     node/logical_plan_node.cpp

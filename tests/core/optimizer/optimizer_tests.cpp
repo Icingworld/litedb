@@ -8,7 +8,6 @@
 #include "core/parser/parser.hpp"
 #include "core/logical_plan/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
-#include "core/logical_plan/node/logical_index_scan.hpp"
 #include "core/logical_plan/node/logical_plan_node.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
@@ -304,37 +303,39 @@ const LogicalPlanNode & filter_child_for_query(const StatementPlan & plan)
     return query_filter_child(plan).child();
 }
 
-void test_btree_equality_uses_logical_index_scan()
+void test_btree_equality_adds_scan_index_hint()
 {
     Fixture fixture;
     create_catalog_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
 
     auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age = 18;"));
     const auto & child = filter_child_for_query(*optimized);
-    require(child.kind() == LogicalPlanNodeKind::IndexScan, "BTREE equality should use LogicalIndexScan");
+    require(child.kind() == LogicalPlanNodeKind::Scan, "BTREE equality should keep LogicalScan");
 
-    const auto & index_scan = static_cast<const LogicalIndexScan &>(child);
-    require(index_scan.index_name() == "idx_age_btree", "index name mismatch");
-    require(index_scan.column_name() == "age", "index column mismatch");
-    require(index_scan.lookup().kind == LogicalIndexLookupKind::Equal, "equality lookup kind mismatch");
+    const auto & scan = static_cast<const LogicalScan &>(child);
+    require(scan.index_hint().has_value(), "BTREE equality should add scan index hint");
+    require(scan.index_hint()->index_name == "idx_age_btree", "index name mismatch");
+    require(scan.index_hint()->column_name == "age", "index column mismatch");
+    require(scan.index_hint()->lookup.kind == LogicalIndexLookupKind::Equal, "equality lookup kind mismatch");
 }
 
-void test_btree_range_uses_logical_index_scan()
+void test_btree_range_adds_scan_index_hint()
 {
     Fixture fixture;
     create_catalog_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
 
     auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;"));
     const auto & child = filter_child_for_query(*optimized);
-    require(child.kind() == LogicalPlanNodeKind::IndexScan, "BTREE range should use LogicalIndexScan");
+    require(child.kind() == LogicalPlanNodeKind::Scan, "BTREE range should keep LogicalScan");
 
-    const auto & index_scan = static_cast<const LogicalIndexScan &>(child);
-    require(index_scan.lookup().kind == LogicalIndexLookupKind::Range, "range lookup kind mismatch");
-    require(index_scan.lookup().lower.has_value(), "range lower bound should exist");
-    require(index_scan.lookup().lower->inclusive, "range lower bound should be inclusive");
+    const auto & scan = static_cast<const LogicalScan &>(child);
+    require(scan.index_hint().has_value(), "BTREE range should add scan index hint");
+    require(scan.index_hint()->lookup.kind == LogicalIndexLookupKind::Range, "range lookup kind mismatch");
+    require(scan.index_hint()->lookup.lower.has_value(), "range lower bound should exist");
+    require(scan.index_hint()->lookup.lower->inclusive, "range lower bound should be inclusive");
 }
 
-void test_hash_range_does_not_use_logical_index_scan()
+void test_hash_range_does_not_add_scan_index_hint()
 {
     Fixture fixture;
     create_catalog_index(fixture, "idx_age_hash", "age", CatalogIndexKind::Hash);
@@ -342,6 +343,7 @@ void test_hash_range_does_not_use_logical_index_scan()
     auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;"));
     const auto & child = filter_child_for_query(*optimized);
     require(child.kind() == LogicalPlanNodeKind::Scan, "HASH range should keep LogicalScan");
+    require(!static_cast<const LogicalScan &>(child).index_hint().has_value(), "HASH range should not add scan index hint");
 }
 
 } // namespace
@@ -357,9 +359,9 @@ int main()
         test_clone_debug_print_equivalence();
         test_disabled_optimizer_preserves_plan_shape();
         test_enabled_and_disabled_select_results_match();
-        test_btree_equality_uses_logical_index_scan();
-        test_btree_range_uses_logical_index_scan();
-        test_hash_range_does_not_use_logical_index_scan();
+        test_btree_equality_adds_scan_index_hint();
+        test_btree_range_adds_scan_index_hint();
+        test_hash_range_does_not_add_scan_index_hint();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

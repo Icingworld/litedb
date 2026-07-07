@@ -38,14 +38,14 @@ internal/src/core/executor
 
 ```text
 LogicalScan       -> PhysicalSeqScan
-LogicalIndexScan  -> PhysicalIndexScan
+LogicalScan + index_hint -> PhysicalIndexScan
 LogicalFilter     -> PhysicalFilter
 LogicalProjection -> PhysicalProjection
 LogicalOrderBy    -> PhysicalSort
 LogicalLimit      -> PhysicalLimit
 ```
 
-其中 `LogicalIndexScan` 是当前 optimizer 已经产生的过渡节点。长期更理想的形态是 logical 层只保留 `LogicalScan`，由 optimizer/physical planner 根据谓词、catalog 和统计信息选择 `PhysicalSeqScan`、`PhysicalIndexScan` 或 `PhysicalVectorIndexScan`。
+索引访问路径不再作为独立 logical node 出现。Optimizer 可以把索引候选信息挂到 `LogicalScan` 的 `index_hint` 上，真正的 `PhysicalIndexScan` 只在 physical planner lowering 时产生。
 
 ## 4. 第一版不做什么
 
@@ -66,5 +66,4 @@ LogicalLimit      -> PhysicalLimit
 1. 保持当前 physical planner 只做 deterministic lowering。
 2. 增加 `PhysicalStatementPlan`，让 query/update/delete 输入持有 physical root。
 3. 让 executor 增加执行 `PhysicalPlanNode` 的路径。
-4. 将 `LogicalIndexScan` 逐步收回到 physical 层。
-5. 增加 `PhysicalVectorIndexScan`、TopK、排序消除和基于统计信息的访问路径选择。
+4. 增加 `PhysicalVectorIndexScan`、TopK、排序消除和基于统计信息的访问路径选择。

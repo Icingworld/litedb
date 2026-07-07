@@ -6,7 +6,6 @@
 
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
-#include "core/logical_plan/node/logical_index_scan.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
@@ -28,13 +27,13 @@ using planner::logical::LogicalFilter;
 using planner::logical::LogicalIndexBound;
 using planner::logical::LogicalIndexLookup;
 using planner::logical::LogicalIndexLookupKind;
-using planner::logical::LogicalIndexScan;
 using planner::logical::LogicalLimit;
 using planner::logical::LogicalOrderBy;
 using planner::logical::LogicalPlanNode;
 using planner::logical::LogicalPlanNodeKind;
 using planner::logical::LogicalProjection;
 using planner::logical::LogicalScan;
+using planner::logical::LogicalScanIndexHint;
 
 std::vector<binder::bound::BoundProjectionItem> clone_projections(
     const std::vector<binder::bound::BoundProjectionItem> & projections
@@ -104,25 +103,25 @@ std::unique_ptr<PhysicalPlanNode> PhysicalPlanner::plan(const LogicalPlanNode & 
     switch (logical_root.kind()) {
     case LogicalPlanNodeKind::Scan: {
         const auto & scan = static_cast<const LogicalScan &>(logical_root);
+        if (scan.index_hint().has_value()) {
+            const auto & hint = scan.index_hint().value();
+            return std::make_unique<PhysicalIndexScan>(
+                scan.database_id(),
+                scan.collection_id(),
+                scan.collection_name(),
+                hint.index_id,
+                hint.index_name,
+                hint.index_kind,
+                hint.column_id,
+                hint.column_name,
+                lower_lookup(hint.lookup),
+                scan.location()
+            );
+        }
         return std::make_unique<PhysicalSeqScan>(
             scan.database_id(),
             scan.collection_id(),
             scan.collection_name(),
-            scan.location()
-        );
-    }
-    case LogicalPlanNodeKind::IndexScan: {
-        const auto & scan = static_cast<const LogicalIndexScan &>(logical_root);
-        return std::make_unique<PhysicalIndexScan>(
-            scan.database_id(),
-            scan.collection_id(),
-            scan.collection_name(),
-            scan.index_id(),
-            scan.index_name(),
-            scan.index_kind(),
-            scan.column_id(),
-            scan.column_name(),
-            lower_lookup(scan.lookup()),
             scan.location()
         );
     }

@@ -15,7 +15,6 @@ enum class LogicalPlanNodeKind
 {
     Scan,               ///< 扫描
     Filter,             ///< 过滤
-    IndexScan,          ///< 索引扫描
     Projection,         ///< 投影
     OrderBy,            ///< 排序
     Limit,              ///< 限制

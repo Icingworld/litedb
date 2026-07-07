@@ -7,7 +7,6 @@
 
 #include "core/binder/bound/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
-#include "core/logical_plan/node/logical_index_scan.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
@@ -155,6 +154,15 @@ void LogicalDebugPrinter::visit(const LogicalScan & node)
     write_field("database_id", static_cast<std::size_t>(node.database_id()));
     write_field("collection_id", static_cast<std::size_t>(node.collection_id()));
     write_field("collection_name", node.collection_name());
+    if (node.index_hint().has_value()) {
+        const auto & hint = node.index_hint().value();
+        write_field("index_hint", "true");
+        write_field("index_id", static_cast<std::size_t>(hint.index_id));
+        write_field("index_name", hint.index_name);
+        write_field("column_id", static_cast<std::size_t>(hint.column_id));
+        write_field("column_name", hint.column_name);
+        write_field("lookup", hint.lookup.kind == LogicalIndexLookupKind::Equal ? "equal" : "range");
+    }
 }
 
 void LogicalDebugPrinter::visit(const LogicalFilter & node)
@@ -163,20 +171,6 @@ void LogicalDebugPrinter::visit(const LogicalFilter & node)
     IndentScope scope {*this};
     write_bound_expression_field("predicate", node.predicate());
     write_child_field("child", node.child());
-}
-
-void LogicalDebugPrinter::visit(const LogicalIndexScan & node)
-{
-    write_node_header("LogicalIndexScan", node.location());
-    IndentScope scope {*this};
-    write_field("database_id", static_cast<std::size_t>(node.database_id()));
-    write_field("collection_id", static_cast<std::size_t>(node.collection_id()));
-    write_field("collection_name", node.collection_name());
-    write_field("index_id", static_cast<std::size_t>(node.index_id()));
-    write_field("index_name", node.index_name());
-    write_field("column_id", static_cast<std::size_t>(node.column_id()));
-    write_field("column_name", node.column_name());
-    write_field("lookup", node.lookup().kind == LogicalIndexLookupKind::Equal ? "equal" : "range");
 }
 
 void LogicalDebugPrinter::visit(const LogicalProjection & node)

@@ -2,7 +2,6 @@
 #include "core/catalog/catalog_entry.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
-#include "core/logical_plan/node/logical_index_scan.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
@@ -116,19 +115,18 @@ void test_lower_unary_chain()
 
 void test_lower_index_scan()
 {
-    LogicalIndexLookup lookup;
-    lookup.kind = LogicalIndexLookupKind::Range;
-
-    LogicalIndexScan logical {
+    LogicalScan logical {
         DatabaseId {1},
         CollectionId {2},
         "users",
-        IndexId {3},
-        "idx_age",
-        CatalogIndexKind::BTree,
-        ColumnId {4},
-        "age",
-        lookup,
+        LogicalScanIndexHint {
+            .index_id = IndexId {3},
+            .index_name = "idx_age",
+            .index_kind = CatalogIndexKind::BTree,
+            .column_id = ColumnId {4},
+            .column_name = "age",
+            .lookup = LogicalIndexLookup {.kind = LogicalIndexLookupKind::Range},
+        },
         loc,
     };
 
