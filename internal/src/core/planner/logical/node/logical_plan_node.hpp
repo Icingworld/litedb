@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "core/parser/ast/ast_node.hpp"
 #include "core/planner/logical/node/logical_plan_node_visitor.hpp"
 
@@ -8,17 +10,12 @@ namespace litedb::core::planner::logical
 
 /**
  * @brief 逻辑计划节点类型
- * 逻辑计划节点大致树形结构
- * Limit
- *   └── OrderBy
- *         └── Projection
- *               └── Filter
- *                     └── Scan
  */
 enum class LogicalPlanNodeKind
 {
     Scan,               ///< 扫描
     Filter,             ///< 过滤
+    IndexScan,          ///< 索引扫描
     Projection,         ///< 投影
     OrderBy,            ///< 排序
     Limit,              ///< 限制
@@ -63,6 +60,13 @@ public:
      * @param visitor 访问器
      */
     virtual void accept(LogicalPlanNodeVisitor & visitor) const = 0;
+
+    /**
+     * @brief 深拷贝逻辑计划节点
+     * @return 逻辑计划节点副本
+     */
+    [[nodiscard]]
+    virtual std::unique_ptr<LogicalPlanNode> clone() const = 0;
 
 private:
     LogicalPlanNodeKind kind_;                  ///< 节点类型

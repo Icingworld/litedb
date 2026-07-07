@@ -23,6 +23,7 @@ set(LOGICAL_PLANNER_SOURCES
     debug_printer.cpp
     logical_planner.cpp
     node/logical_filter.cpp
+    node/logical_index_scan.cpp
     node/logical_limit.cpp
     node/logical_order_by.cpp
     node/logical_plan_node.cpp

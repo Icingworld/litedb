@@ -14,6 +14,7 @@
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/planner/logical/node/logical_filter.hpp"
+#include "core/planner/logical/node/logical_index_scan.hpp"
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
 #include "core/planner/logical/node/logical_projection.hpp"
@@ -599,6 +600,12 @@ std::expected<PipelineResult, ExecutionError> execute_logical(
         return execute_scan(static_cast<const LogicalScan &>(node), catalog, storage);
     case LogicalPlanNodeKind::Filter:
         return execute_filter(static_cast<const LogicalFilter &>(node), catalog, storage, index_manager);
+    case LogicalPlanNodeKind::IndexScan:
+        return std::unexpected(make_error(
+            ExecutionErrorCode::InvalidPlan,
+            node.location(),
+            "LogicalIndexScan requires physical planner execution"
+        ));
     case LogicalPlanNodeKind::Projection:
         return execute_projection(static_cast<const LogicalProjection &>(node), catalog, storage, index_manager);
     case LogicalPlanNodeKind::OrderBy:

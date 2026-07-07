@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_like_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -29,6 +30,11 @@ const BoundExpression & BoundLikeExpression::pattern() const noexcept
 void BoundLikeExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundLikeExpression::clone() const
+{
+    return std::make_unique<BoundLikeExpression>(expression_->clone(), pattern_->clone(), location());
 }
 
 } // namespace litedb::core::binder::bound

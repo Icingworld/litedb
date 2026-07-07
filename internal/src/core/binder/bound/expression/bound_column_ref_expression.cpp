@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -58,6 +59,20 @@ bool BoundColumnRefExpression::nullable() const noexcept
 void BoundColumnRefExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundColumnRefExpression::clone() const
+{
+    return std::make_unique<BoundColumnRefExpression>(
+        database_id_,
+        collection_id_,
+        collection_name_,
+        column_id_,
+        column_name_,
+        type(),
+        nullable_,
+        location()
+    );
 }
 
 } // namespace litedb::core::binder::bound

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include "core/binder/bound/expression/bound_expression.hpp"
@@ -74,6 +75,13 @@ public:
      * @param visitor 访问器
      */
     void accept(BoundExpressionVisitor & visitor) const override;
+
+    /**
+     * @brief 深拷贝表达式
+     * @return 表达式副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> clone() const override;
 
 private:
     common::DatabaseId database_id_;            ///< 数据库 ID

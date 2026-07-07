@@ -1,5 +1,6 @@
 #include "core/planner/logical/node/logical_limit.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::planner::logical
@@ -30,6 +31,11 @@ std::optional<std::size_t> LogicalLimit::offset() const noexcept
 void LogicalLimit::accept(LogicalPlanNodeVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<LogicalPlanNode> LogicalLimit::clone() const
+{
+    return std::make_unique<LogicalLimit>(child().clone(), limit_, offset_, location());
 }
 
 } // namespace litedb::core::planner::logical

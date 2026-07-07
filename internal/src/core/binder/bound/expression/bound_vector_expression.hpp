@@ -35,6 +35,13 @@ public:
      */
     void accept(BoundExpressionVisitor & visitor) const override;
 
+    /**
+     * @brief 深拷贝表达式
+     * @return 表达式副本
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> clone() const override;
+
 private:
     std::vector<std::unique_ptr<BoundExpression>> elements_;      ///< 元素列表
 };

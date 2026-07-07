@@ -1,5 +1,6 @@
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -22,6 +23,11 @@ const std::optional<std::string> & BoundWildcardExpression::qualifier() const no
 void BoundWildcardExpression::accept(BoundExpressionVisitor & visitor) const
 {
     visitor.visit(*this);
+}
+
+std::unique_ptr<BoundExpression> BoundWildcardExpression::clone() const
+{
+    return std::make_unique<BoundWildcardExpression>(qualifier_, location());
 }
 
 } // namespace litedb::core::binder::bound
