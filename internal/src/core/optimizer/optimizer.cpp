@@ -25,8 +25,11 @@
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
+#include "core/catalog/catalog_entry.hpp"
+#include "core/catalog/catalog_reader.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/planner/logical/node/logical_filter.hpp"
+#include "core/planner/logical/node/logical_index_scan.hpp"
 #include "core/planner/logical/node/logical_limit.hpp"
 #include "core/planner/logical/node/logical_order_by.hpp"
 #include "core/planner/logical/node/logical_projection.hpp"
@@ -60,6 +63,10 @@ using binder::bound::BoundUnaryExpression;
 using binder::bound::BoundVectorExpression;
 using binder::bound::BoundWildcardExpression;
 using planner::logical::LogicalFilter;
+using planner::logical::LogicalIndexBound;
+using planner::logical::LogicalIndexLookup;
+using planner::logical::LogicalIndexLookupKind;
+using planner::logical::LogicalIndexScan;
 using planner::logical::LogicalLimit;
 using planner::logical::LogicalOrderBy;
 using planner::logical::LogicalPlanNode;
@@ -83,6 +90,13 @@ struct LogicalRewriteResult
 {
     std::unique_ptr<LogicalPlanNode> node;
     bool changed {false};
+};
+
+struct IndexCandidate
+{
+    common::CollectionId collection_id;
+    common::ColumnId column_id;
+    LogicalIndexLookup lookup;
 };
 
 [[nodiscard]]
@@ -215,6 +229,219 @@ std::optional<std::unique_ptr<BoundExpression>> try_fold_constant(
     }
 
     return value_to_expression(value.value(), expression);
+}
+
+[[nodiscard]]
+std::optional<index::ScalarIndexKey> expression_to_index_key(const BoundExpression & expression)
+{
+    if (!is_constant_foldable(expression)) {
+        return std::nullopt;
+    }
+
+    evaluator::ExpressionEvaluator evaluator;
+    auto value = evaluator.evaluate(expression, schema::Record {});
+    if (!value.has_value()) {
+        return std::nullopt;
+    }
+
+    auto key = index::ScalarIndexKey::from_value(std::move(value.value()));
+    if (!key.has_value()) {
+        return std::nullopt;
+    }
+    return std::move(key.value());
+}
+
+[[nodiscard]]
+const binder::bound::BoundColumnRefExpression * as_column_ref(const BoundExpression & expression)
+{
+    if (expression.kind() != BoundExpressionKind::ColumnRef) {
+        return nullptr;
+    }
+    return &static_cast<const binder::bound::BoundColumnRefExpression &>(expression);
+}
+
+[[nodiscard]]
+std::optional<TokenType> invert_comparison(TokenType op)
+{
+    switch (op) {
+    case TokenType::LessThan:
+        return TokenType::GreaterThan;
+    case TokenType::LessEqual:
+        return TokenType::GreaterEqual;
+    case TokenType::GreaterThan:
+        return TokenType::LessThan;
+    case TokenType::GreaterEqual:
+        return TokenType::LessEqual;
+    case TokenType::Equal:
+        return TokenType::Equal;
+    default:
+        return std::nullopt;
+    }
+}
+
+[[nodiscard]]
+std::optional<LogicalIndexLookup> lookup_from_comparison(TokenType op, index::ScalarIndexKey key)
+{
+    switch (op) {
+    case TokenType::Equal:
+        return LogicalIndexLookup {
+            .kind = LogicalIndexLookupKind::Equal,
+            .lower = LogicalIndexBound {.key = std::move(key), .inclusive = true},
+        };
+    case TokenType::GreaterThan:
+        return LogicalIndexLookup {
+            .kind = LogicalIndexLookupKind::Range,
+            .lower = LogicalIndexBound {.key = std::move(key), .inclusive = false},
+        };
+    case TokenType::GreaterEqual:
+        return LogicalIndexLookup {
+            .kind = LogicalIndexLookupKind::Range,
+            .lower = LogicalIndexBound {.key = std::move(key), .inclusive = true},
+        };
+    case TokenType::LessThan:
+        return LogicalIndexLookup {
+            .kind = LogicalIndexLookupKind::Range,
+            .upper = LogicalIndexBound {.key = std::move(key), .inclusive = false},
+        };
+    case TokenType::LessEqual:
+        return LogicalIndexLookup {
+            .kind = LogicalIndexLookupKind::Range,
+            .upper = LogicalIndexBound {.key = std::move(key), .inclusive = true},
+        };
+    default:
+        return std::nullopt;
+    }
+}
+
+[[nodiscard]]
+std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryExpression & expression)
+{
+    const auto * column = as_column_ref(expression.left());
+    const BoundExpression * value_expression = &expression.right();
+    auto op = expression.op();
+
+    if (column == nullptr) {
+        column = as_column_ref(expression.right());
+        value_expression = &expression.left();
+        auto inverted = invert_comparison(expression.op());
+        if (!inverted.has_value()) {
+            return std::nullopt;
+        }
+        op = inverted.value();
+    }
+
+    if (column == nullptr) {
+        return std::nullopt;
+    }
+
+    auto key = expression_to_index_key(*value_expression);
+    if (!key.has_value()) {
+        return std::nullopt;
+    }
+
+    auto lookup = lookup_from_comparison(op, std::move(key.value()));
+    if (!lookup.has_value()) {
+        return std::nullopt;
+    }
+
+    return IndexCandidate {
+        .collection_id = column->collection_id(),
+        .column_id = column->column_id(),
+        .lookup = std::move(lookup.value()),
+    };
+}
+
+[[nodiscard]]
+std::optional<IndexCandidate> candidate_from_between_predicate(const BoundBetweenExpression & expression)
+{
+    const auto * column = as_column_ref(expression.expression());
+    if (column == nullptr) {
+        return std::nullopt;
+    }
+
+    auto lower = expression_to_index_key(expression.lower());
+    auto upper = expression_to_index_key(expression.upper());
+    if (!lower.has_value() || !upper.has_value()) {
+        return std::nullopt;
+    }
+
+    return IndexCandidate {
+        .collection_id = column->collection_id(),
+        .column_id = column->column_id(),
+        .lookup = LogicalIndexLookup {
+            .kind = LogicalIndexLookupKind::Range,
+            .lower = LogicalIndexBound {.key = std::move(lower.value()), .inclusive = true},
+            .upper = LogicalIndexBound {.key = std::move(upper.value()), .inclusive = true},
+        },
+    };
+}
+
+[[nodiscard]]
+std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & expression)
+{
+    if (expression.kind() == BoundExpressionKind::Binary) {
+        return candidate_from_binary_predicate(static_cast<const BoundBinaryExpression &>(expression));
+    }
+    if (expression.kind() == BoundExpressionKind::Between) {
+        return candidate_from_between_predicate(static_cast<const BoundBetweenExpression &>(expression));
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]]
+bool index_supports_lookup(catalog::CatalogIndexKind index_kind, LogicalIndexLookupKind lookup_kind)
+{
+    if (lookup_kind == LogicalIndexLookupKind::Equal) {
+        return true;
+    }
+    return index_kind == catalog::CatalogIndexKind::BTree;
+}
+
+[[nodiscard]]
+std::unique_ptr<LogicalPlanNode> try_make_index_scan(
+    const LogicalScan & scan,
+    const BoundExpression & predicate,
+    const OptimizerOptions & options,
+    const catalog::CatalogReader * catalog
+)
+{
+    if (!options.enable_index_selection || catalog == nullptr) {
+        return nullptr;
+    }
+
+    auto candidate = candidate_from_predicate(predicate);
+    if (!candidate.has_value() || candidate->collection_id != scan.collection_id()) {
+        return nullptr;
+    }
+
+    for (const auto * index_entry : catalog->list_indexes(scan.collection_id())) {
+        if (index_entry == nullptr || index_entry->column_id() != candidate->column_id) {
+            continue;
+        }
+        if (!index_supports_lookup(index_entry->index_kind(), candidate->lookup.kind)) {
+            continue;
+        }
+
+        const auto * column = catalog->find_column(index_entry->column_id());
+        if (column == nullptr) {
+            continue;
+        }
+
+        return std::make_unique<LogicalIndexScan>(
+            scan.database_id(),
+            scan.collection_id(),
+            scan.collection_name(),
+            index_entry->id(),
+            index_entry->name(),
+            index_entry->index_kind(),
+            index_entry->column_id(),
+            column->name(),
+            std::move(candidate->lookup),
+            scan.location()
+        );
+    }
+
+    return nullptr;
 }
 
 [[nodiscard]]
@@ -445,18 +672,39 @@ std::vector<BoundOrderByItem> rewrite_order_by_items(
 }
 
 [[nodiscard]]
-LogicalRewriteResult rewrite_logical_once(const LogicalPlanNode & node, const OptimizerOptions & options)
+LogicalRewriteResult rewrite_logical_once(
+    const LogicalPlanNode & node,
+    const OptimizerOptions & options,
+    const catalog::CatalogReader * catalog
+)
 {
     switch (node.kind()) {
     case LogicalPlanNodeKind::Scan:
         return LogicalRewriteResult {node.clone(), false};
+    case LogicalPlanNodeKind::IndexScan:
+        return LogicalRewriteResult {node.clone(), false};
     case LogicalPlanNodeKind::Filter: {
         const auto & filter = static_cast<const LogicalFilter &>(node);
-        auto child = rewrite_logical_once(filter.child(), options);
+        auto child = rewrite_logical_once(filter.child(), options, catalog);
         auto predicate = rewrite_expression(filter.predicate(), options);
         const auto changed = child.changed || predicate.changed;
         if (options.enable_filter_elimination && is_true_literal(*predicate.expression)) {
             return LogicalRewriteResult {std::move(child.node), true};
+        }
+        if (child.node->kind() == LogicalPlanNodeKind::Scan) {
+            const auto & scan = static_cast<const LogicalScan &>(*child.node);
+            auto index_scan = try_make_index_scan(scan, *predicate.expression, options, catalog);
+            if (index_scan != nullptr) {
+                child.node = std::move(index_scan);
+                return LogicalRewriteResult {
+                    std::make_unique<LogicalFilter>(
+                        std::move(child.node),
+                        std::move(predicate.expression),
+                        filter.location()
+                    ),
+                    true,
+                };
+            }
         }
         return LogicalRewriteResult {
             std::make_unique<LogicalFilter>(
@@ -469,7 +717,7 @@ LogicalRewriteResult rewrite_logical_once(const LogicalPlanNode & node, const Op
     }
     case LogicalPlanNodeKind::Projection: {
         const auto & projection = static_cast<const LogicalProjection &>(node);
-        auto child = rewrite_logical_once(projection.child(), options);
+        auto child = rewrite_logical_once(projection.child(), options, catalog);
         bool changed = child.changed;
         auto projections = rewrite_projection_items(projection.projections(), options, changed);
         return LogicalRewriteResult {
@@ -483,7 +731,7 @@ LogicalRewriteResult rewrite_logical_once(const LogicalPlanNode & node, const Op
     }
     case LogicalPlanNodeKind::OrderBy: {
         const auto & order_by = static_cast<const LogicalOrderBy &>(node);
-        auto child = rewrite_logical_once(order_by.child(), options);
+        auto child = rewrite_logical_once(order_by.child(), options, catalog);
         bool changed = child.changed;
         auto items = rewrite_order_by_items(order_by.order_by(), options, changed);
         return LogicalRewriteResult {
@@ -497,7 +745,7 @@ LogicalRewriteResult rewrite_logical_once(const LogicalPlanNode & node, const Op
     }
     case LogicalPlanNodeKind::Limit: {
         const auto & limit = static_cast<const LogicalLimit &>(node);
-        auto child = rewrite_logical_once(limit.child(), options);
+        auto child = rewrite_logical_once(limit.child(), options, catalog);
         return LogicalRewriteResult {
             std::make_unique<LogicalLimit>(
                 std::move(child.node),
@@ -514,12 +762,16 @@ LogicalRewriteResult rewrite_logical_once(const LogicalPlanNode & node, const Op
 }
 
 [[nodiscard]]
-std::unique_ptr<LogicalPlanNode> optimize_logical(const LogicalPlanNode & node, const OptimizerOptions & options)
+std::unique_ptr<LogicalPlanNode> optimize_logical(
+    const LogicalPlanNode & node,
+    const OptimizerOptions & options,
+    const catalog::CatalogReader * catalog
+)
 {
     auto current = node.clone();
     const auto max_passes = std::max<std::size_t>(options.max_passes, 1);
     for (std::size_t pass = 0; pass < max_passes; ++pass) {
-        auto rewritten = rewrite_logical_once(*current, options);
+        auto rewritten = rewrite_logical_once(*current, options, catalog);
         current = std::move(rewritten.node);
         if (!rewritten.changed) {
             break;
@@ -544,8 +796,9 @@ std::vector<BoundAssignment> clone_assignments(const std::vector<BoundAssignment
 
 } // namespace
 
-Optimizer::Optimizer(OptimizerOptions options) noexcept
+Optimizer::Optimizer(OptimizerOptions options, const catalog::CatalogReader * catalog) noexcept
     : options_(options)
+    , catalog_(catalog)
 {
 }
 
@@ -568,12 +821,12 @@ std::expected<std::unique_ptr<StatementPlan>, OptimizerError> Optimizer::optimiz
     switch (plan->kind()) {
     case StatementPlanKind::Query: {
         const auto & query = static_cast<const QueryPlan &>(*plan);
-        return std::make_unique<QueryPlan>(optimize_logical(query.root(), options_), query.location());
+        return std::make_unique<QueryPlan>(optimize_logical(query.root(), options_, catalog_), query.location());
     }
     case StatementPlanKind::Update: {
         const auto & update = static_cast<const UpdatePlan &>(*plan);
         return std::make_unique<UpdatePlan>(
-            optimize_logical(update.input(), options_),
+            optimize_logical(update.input(), options_, catalog_),
             update.database_id(),
             update.collection_id(),
             update.collection_name(),
@@ -584,7 +837,7 @@ std::expected<std::unique_ptr<StatementPlan>, OptimizerError> Optimizer::optimiz
     case StatementPlanKind::Delete: {
         const auto & del = static_cast<const DeletePlan &>(*plan);
         return std::make_unique<DeletePlan>(
-            optimize_logical(del.input(), options_),
+            optimize_logical(del.input(), options_, catalog_),
             del.database_id(),
             del.collection_id(),
             del.collection_name(),

@@ -10,17 +10,12 @@ namespace litedb::core::planner::logical
 
 /**
  * @brief 逻辑计划节点类型
- * 逻辑计划节点大致树形结构
- * Limit
- *   └── OrderBy
- *         └── Projection
- *               └── Filter
- *                     └── Scan
  */
 enum class LogicalPlanNodeKind
 {
     Scan,               ///< 扫描
     Filter,             ///< 过滤
+    IndexScan,          ///< 索引扫描
     Projection,         ///< 投影
     OrderBy,            ///< 排序
     Limit,              ///< 限制
