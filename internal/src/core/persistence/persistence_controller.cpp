@@ -6,14 +6,14 @@
 #include <utility>
 #include <vector>
 
-#include "core/planner/plan/command/create_collection_plan.hpp"
-#include "core/planner/plan/command/create_database_plan.hpp"
-#include "core/planner/plan/command/create_index_plan.hpp"
-#include "core/planner/plan/command/create_vector_index_plan.hpp"
-#include "core/planner/plan/command/drop_collection_plan.hpp"
-#include "core/planner/plan/command/drop_database_plan.hpp"
-#include "core/planner/plan/command/drop_index_plan.hpp"
-#include "core/planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/logical_plan/statement/command/create_collection_plan.hpp"
+#include "core/logical_plan/statement/command/create_database_plan.hpp"
+#include "core/logical_plan/statement/command/create_index_plan.hpp"
+#include "core/logical_plan/statement/command/create_vector_index_plan.hpp"
+#include "core/logical_plan/statement/command/drop_collection_plan.hpp"
+#include "core/logical_plan/statement/command/drop_database_plan.hpp"
+#include "core/logical_plan/statement/command/drop_index_plan.hpp"
+#include "core/logical_plan/statement/command/drop_vector_index_plan.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_loader.hpp"
 

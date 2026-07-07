@@ -6,18 +6,18 @@
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
-#include "core/planner/logical/debug_printer.hpp"
-#include "core/planner/logical/node/logical_filter.hpp"
-#include "core/planner/logical/node/logical_index_scan.hpp"
-#include "core/planner/logical/node/logical_plan_node.hpp"
-#include "core/planner/logical/node/logical_projection.hpp"
-#include "core/planner/logical/node/logical_scan.hpp"
-#include "core/planner/plan/command/show_databases_plan.hpp"
-#include "core/planner/plan/mutation/delete_plan.hpp"
-#include "core/planner/plan/mutation/insert_plan.hpp"
-#include "core/planner/plan/mutation/update_plan.hpp"
-#include "core/planner/plan/query/query_plan.hpp"
-#include "core/planner/planner.hpp"
+#include "core/logical_plan/debug_printer.hpp"
+#include "core/logical_plan/node/logical_filter.hpp"
+#include "core/logical_plan/node/logical_index_scan.hpp"
+#include "core/logical_plan/node/logical_plan_node.hpp"
+#include "core/logical_plan/node/logical_projection.hpp"
+#include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/statement/command/show_databases_plan.hpp"
+#include "core/logical_plan/statement/mutation/delete_plan.hpp"
+#include "core/logical_plan/statement/mutation/insert_plan.hpp"
+#include "core/logical_plan/statement/mutation/update_plan.hpp"
+#include "core/logical_plan/statement/query/query_plan.hpp"
+#include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -113,7 +113,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 
 std::unique_ptr<StatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
 {
-    Planner planner;
+    LogicalPlanner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);

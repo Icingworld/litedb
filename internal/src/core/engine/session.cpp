@@ -9,7 +9,7 @@
 #include "core/executor/executor.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
-#include "core/planner/planner.hpp"
+#include "core/logical_plan/logical_planner.hpp"
 
 namespace litedb::core::engine
 {
@@ -90,7 +90,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_binder_error(std::move(bound.error())));
     }
 
-    planner::Planner planner;
+    planner::logical::LogicalPlanner planner;
     auto planned = planner.plan(std::move(bound.value()));
     if (!planned.has_value()) {
         return std::unexpected(from_planner_error(std::move(planned.error())));

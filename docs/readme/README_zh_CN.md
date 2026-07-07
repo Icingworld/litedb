@@ -233,7 +233,7 @@ internal/src/core/index        内存标量索引与 IndexManager
 internal/src/core/storage      集合存储接口与内存存储
 internal/src/core/persistence  持久化 catalog 快照与 row log
 internal/src/core/binder       名称解析与语义绑定
-internal/src/core/planner      逻辑计划构建
+internal/src/core/logical_plan      逻辑计划构建
 internal/src/core/evaluator    表达式求值
 internal/src/core/executor     语句与查询执行
 internal/src/core/engine       数据库实例与会话门面

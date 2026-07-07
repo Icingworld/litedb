@@ -6,7 +6,7 @@
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/planner/plan/statement_plan.hpp"
+#include "core/logical_plan/statement/statement_plan.hpp"
 #include "core/storage/storage_manager.hpp"
 
 namespace litedb::core::planner::plan

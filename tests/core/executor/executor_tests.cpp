@@ -6,8 +6,8 @@
 #include "core/index/scalar_index_key.hpp"
 #include "core/parser/parser.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
-#include "core/planner/planner.hpp"
-#include "core/planner/plan/mutation/insert_plan.hpp"
+#include "core/logical_plan/logical_planner.hpp"
+#include "core/logical_plan/statement/mutation/insert_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -31,6 +31,7 @@ using namespace litedb::core::index;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
 using namespace litedb::core::planner;
+using namespace litedb::core::planner::logical;
 using namespace litedb::core::planner::plan;
 using namespace litedb::core::schema;
 using namespace litedb::core::storage;
@@ -81,7 +82,8 @@ std::unique_ptr<StatementPlan> plan_ok(
         throw std::runtime_error(bound.error().message);
     }
 
-    Planner planner {&index_manager};
+    (void) index_manager;
+    LogicalPlanner planner;
     auto planned = planner.plan(std::move(bound.value()));
     if (!planned.has_value()) {
         throw std::runtime_error(planned.error().message);
