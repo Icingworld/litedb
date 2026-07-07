@@ -6,6 +6,9 @@
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/statement/command/show_databases_plan.hpp"
+#include "core/logical_plan/statement/mutation/delete_plan.hpp"
+#include "core/logical_plan/statement/query/query_plan.hpp"
 #include "core/physical_plan/node/physical_filter.hpp"
 #include "core/physical_plan/node/physical_index_scan.hpp"
 #include "core/physical_plan/node/physical_limit.hpp"
@@ -13,6 +16,9 @@
 #include "core/physical_plan/node/physical_seq_scan.hpp"
 #include "core/physical_plan/node/physical_sort.hpp"
 #include "core/physical_plan/physical_planner.hpp"
+#include "core/physical_plan/statement/physical_query_plan.hpp"
+#include "core/physical_plan/statement/physical_row_mutation_plan.hpp"
+#include "core/physical_plan/statement/physical_statement_plan.hpp"
 
 #include <exception>
 #include <iostream>
@@ -32,6 +38,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::parser::ast;
 using namespace litedb::core::physical_plan;
 using namespace litedb::core::planner::logical;
+using namespace litedb::core::planner::plan;
 
 constexpr AstNodeLocation loc {1, 1};
 
@@ -146,6 +153,54 @@ void test_lower_index_scan()
     require(scan.lookup().kind == PhysicalIndexLookupKind::Range, "index lookup kind mismatch");
 }
 
+void test_lower_query_statement()
+{
+    QueryPlan logical {
+        std::make_unique<LogicalScan>(DatabaseId {1}, CollectionId {2}, "users", loc),
+        loc,
+    };
+
+    PhysicalPlanner planner;
+    auto physical = planner.plan(logical);
+    require(physical->kind() == PhysicalStatementPlanKind::Query, "query statement kind mismatch");
+
+    const auto & query = static_cast<const PhysicalQueryPlan &>(*physical);
+    require(query.root().kind() == PhysicalPlanNodeKind::SeqScan, "query root should lower to seq scan");
+}
+
+void test_lower_simple_statement()
+{
+    ShowDatabasesPlan logical {loc};
+
+    PhysicalPlanner planner;
+    auto physical = planner.plan(logical);
+    require(
+        physical->kind() == PhysicalStatementPlanKind::ShowDatabases,
+        "SHOW DATABASES statement kind mismatch"
+    );
+}
+
+void test_lower_row_mutation_statement()
+{
+    DeletePlan logical {
+        std::make_unique<LogicalScan>(DatabaseId {1}, CollectionId {2}, "users", loc),
+        DatabaseId {1},
+        CollectionId {2},
+        "users",
+        loc,
+    };
+
+    PhysicalPlanner planner;
+    auto physical = planner.plan(logical);
+    require(physical->kind() == PhysicalStatementPlanKind::Delete, "DELETE statement kind mismatch");
+
+    const auto & del = static_cast<const PhysicalRowMutationPlan &>(*physical);
+    require(del.database_id() == DatabaseId {1}, "DELETE database id mismatch");
+    require(del.collection_id() == CollectionId {2}, "DELETE collection id mismatch");
+    require(del.collection_name() == "users", "DELETE collection name mismatch");
+    require(del.input().kind() == PhysicalPlanNodeKind::SeqScan, "DELETE input should lower to seq scan");
+}
+
 } // namespace
 
 int main()
@@ -153,6 +208,9 @@ int main()
     try {
         test_lower_unary_chain();
         test_lower_index_scan();
+        test_lower_query_statement();
+        test_lower_simple_statement();
+        test_lower_row_mutation_statement();
     } catch (const std::exception & e) {
         std::cerr << "physical_plan_tests failed: " << e.what() << '\n';
         return 1;

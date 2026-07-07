@@ -10,7 +10,7 @@ Physical Plan 的职责是把优化后的逻辑数据流转换成 executor 可�
 BoundStatement
   -> LogicalPlanner / StatementPlan
   -> Optimizer / optimized StatementPlan
-  -> PhysicalPlanner / PhysicalPlanNode
+  -> PhysicalPlanner / PhysicalStatementPlan
   -> Executor
 ```
 
@@ -47,6 +47,18 @@ LogicalLimit      -> PhysicalLimit
 
 索引访问路径不再作为独立 logical node 出现。Optimizer 可以把索引候选信息挂到 `LogicalScan` 的 `index_hint` 上，真正的 `PhysicalIndexScan` 只在 physical planner lowering 时产生。
 
+Statement lowering 的顶层结构为：
+
+```text
+StatementPlan
+  -> PhysicalStatementPlan
+     -> PhysicalQueryPlan(root: PhysicalPlanNode)
+     -> PhysicalRowMutationPlan(input: PhysicalPlanNode)
+     -> PhysicalSimpleStatementPlan
+```
+
+`PhysicalPlanNode` 只表达关系数据流算子。DDL、SHOW、DESCRIBE 和 INSERT 初期不强行包装成 operator tree，而是作为 statement-level physical plan 保留。
+
 ## 4. 第一版不做什么
 
 第一版 physical planner 不做：
@@ -64,6 +76,6 @@ LogicalLimit      -> PhysicalLimit
 建议实施顺序：
 
 1. 保持当前 physical planner 只做 deterministic lowering。
-2. 增加 `PhysicalStatementPlan`，让 query/update/delete 输入持有 physical root。
-3. 让 executor 增加执行 `PhysicalPlanNode` 的路径。
+2. 细化 `PhysicalSimpleStatementPlan` payload，为 DDL、SHOW、DESCRIBE 和 INSERT 提供 executor 物理入口。
+3. 让 executor 增加执行 `PhysicalStatementPlan` 的路径。
 4. 增加 `PhysicalVectorIndexScan`、TopK、排序消除和基于统计信息的访问路径选择。
