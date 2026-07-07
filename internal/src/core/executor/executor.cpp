@@ -13,29 +13,28 @@
 #include "core/catalog/catalog_entry.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/planner/logical/node/logical_filter.hpp"
-#include "core/planner/logical/node/logical_index_scan.hpp"
-#include "core/planner/logical/node/logical_limit.hpp"
-#include "core/planner/logical/node/logical_order_by.hpp"
-#include "core/planner/logical/node/logical_projection.hpp"
-#include "core/planner/logical/node/logical_scan.hpp"
-#include "core/planner/plan/command/create_collection_plan.hpp"
-#include "core/planner/plan/command/create_database_plan.hpp"
-#include "core/planner/plan/command/create_index_plan.hpp"
-#include "core/planner/plan/command/create_vector_index_plan.hpp"
-#include "core/planner/plan/mutation/delete_plan.hpp"
-#include "core/planner/plan/command/describe_collection_plan.hpp"
-#include "core/planner/plan/command/drop_collection_plan.hpp"
-#include "core/planner/plan/command/drop_database_plan.hpp"
-#include "core/planner/plan/command/drop_index_plan.hpp"
-#include "core/planner/plan/command/drop_vector_index_plan.hpp"
-#include "core/planner/plan/mutation/insert_plan.hpp"
-#include "core/planner/plan/query/query_plan.hpp"
-#include "core/planner/plan/command/show_collections_plan.hpp"
-#include "core/planner/plan/command/show_indexes_plan.hpp"
-#include "core/planner/plan/command/show_vector_indexes_plan.hpp"
-#include "core/planner/plan/mutation/update_plan.hpp"
-#include "core/planner/plan/command/use_plan.hpp"
+#include "core/logical_plan/node/logical_filter.hpp"
+#include "core/logical_plan/node/logical_limit.hpp"
+#include "core/logical_plan/node/logical_order_by.hpp"
+#include "core/logical_plan/node/logical_projection.hpp"
+#include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/statement/command/create_collection_plan.hpp"
+#include "core/logical_plan/statement/command/create_database_plan.hpp"
+#include "core/logical_plan/statement/command/create_index_plan.hpp"
+#include "core/logical_plan/statement/command/create_vector_index_plan.hpp"
+#include "core/logical_plan/statement/mutation/delete_plan.hpp"
+#include "core/logical_plan/statement/command/describe_collection_plan.hpp"
+#include "core/logical_plan/statement/command/drop_collection_plan.hpp"
+#include "core/logical_plan/statement/command/drop_database_plan.hpp"
+#include "core/logical_plan/statement/command/drop_index_plan.hpp"
+#include "core/logical_plan/statement/command/drop_vector_index_plan.hpp"
+#include "core/logical_plan/statement/mutation/insert_plan.hpp"
+#include "core/logical_plan/statement/query/query_plan.hpp"
+#include "core/logical_plan/statement/command/show_collections_plan.hpp"
+#include "core/logical_plan/statement/command/show_indexes_plan.hpp"
+#include "core/logical_plan/statement/command/show_vector_indexes_plan.hpp"
+#include "core/logical_plan/statement/mutation/update_plan.hpp"
+#include "core/logical_plan/statement/command/use_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 
 namespace litedb::core::executor
@@ -600,12 +599,6 @@ std::expected<PipelineResult, ExecutionError> execute_logical(
         return execute_scan(static_cast<const LogicalScan &>(node), catalog, storage);
     case LogicalPlanNodeKind::Filter:
         return execute_filter(static_cast<const LogicalFilter &>(node), catalog, storage, index_manager);
-    case LogicalPlanNodeKind::IndexScan:
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            node.location(),
-            "LogicalIndexScan requires physical planner execution"
-        ));
     case LogicalPlanNodeKind::Projection:
         return execute_projection(static_cast<const LogicalProjection &>(node), catalog, storage, index_manager);
     case LogicalPlanNodeKind::OrderBy:

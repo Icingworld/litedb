@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "core/optimizer/optimizer_error.hpp"
-#include "core/planner/plan/statement_plan.hpp"
+#include "core/logical_plan/statement/statement_plan.hpp"
 
 namespace litedb::core::catalog
 {

@@ -230,6 +230,7 @@ v0.2 阶段建议保持全局锁：
 - `sql_grammar.md`：定义 SQL 方言语法边界。
 - `sql_execution_pipeline.md`：定义从 SQL 文本到执行结果的处理链路。
 - `optimizer.md`：定义优化器边界、主流数据库设计借鉴、MVP 规则优化和后续成本优化路线。
+- `physical_plan.md`：定义物理计划边界、初始物理节点和 logical-to-physical lowering 路线。
 - `project_roadmap.md`：定义项目定位、版本规划和阶段目标。
 
 建议新增以下文档。

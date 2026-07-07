@@ -28,15 +28,14 @@
 #include "core/catalog/catalog_entry.hpp"
 #include "core/catalog/catalog_reader.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
-#include "core/planner/logical/node/logical_filter.hpp"
-#include "core/planner/logical/node/logical_index_scan.hpp"
-#include "core/planner/logical/node/logical_limit.hpp"
-#include "core/planner/logical/node/logical_order_by.hpp"
-#include "core/planner/logical/node/logical_projection.hpp"
-#include "core/planner/logical/node/logical_scan.hpp"
-#include "core/planner/plan/mutation/delete_plan.hpp"
-#include "core/planner/plan/mutation/update_plan.hpp"
-#include "core/planner/plan/query/query_plan.hpp"
+#include "core/logical_plan/node/logical_filter.hpp"
+#include "core/logical_plan/node/logical_limit.hpp"
+#include "core/logical_plan/node/logical_order_by.hpp"
+#include "core/logical_plan/node/logical_projection.hpp"
+#include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/statement/mutation/delete_plan.hpp"
+#include "core/logical_plan/statement/mutation/update_plan.hpp"
+#include "core/logical_plan/statement/query/query_plan.hpp"
 #include "core/schema/record.hpp"
 #include "core/schema/value.hpp"
 
@@ -66,13 +65,13 @@ using planner::logical::LogicalFilter;
 using planner::logical::LogicalIndexBound;
 using planner::logical::LogicalIndexLookup;
 using planner::logical::LogicalIndexLookupKind;
-using planner::logical::LogicalIndexScan;
 using planner::logical::LogicalLimit;
 using planner::logical::LogicalOrderBy;
 using planner::logical::LogicalPlanNode;
 using planner::logical::LogicalPlanNodeKind;
 using planner::logical::LogicalProjection;
 using planner::logical::LogicalScan;
+using planner::logical::LogicalScanIndexHint;
 using planner::plan::DeletePlan;
 using planner::plan::QueryPlan;
 using planner::plan::StatementPlan;
@@ -398,20 +397,20 @@ bool index_supports_lookup(catalog::CatalogIndexKind index_kind, LogicalIndexLoo
 }
 
 [[nodiscard]]
-std::unique_ptr<LogicalPlanNode> try_make_index_scan(
+std::optional<LogicalScanIndexHint> try_make_index_hint(
     const LogicalScan & scan,
     const BoundExpression & predicate,
     const OptimizerOptions & options,
     const catalog::CatalogReader * catalog
 )
 {
-    if (!options.enable_index_selection || catalog == nullptr) {
-        return nullptr;
+    if (!options.enable_index_selection || catalog == nullptr || scan.index_hint().has_value()) {
+        return std::nullopt;
     }
 
     auto candidate = candidate_from_predicate(predicate);
     if (!candidate.has_value() || candidate->collection_id != scan.collection_id()) {
-        return nullptr;
+        return std::nullopt;
     }
 
     for (const auto * index_entry : catalog->list_indexes(scan.collection_id())) {
@@ -427,21 +426,17 @@ std::unique_ptr<LogicalPlanNode> try_make_index_scan(
             continue;
         }
 
-        return std::make_unique<LogicalIndexScan>(
-            scan.database_id(),
-            scan.collection_id(),
-            scan.collection_name(),
-            index_entry->id(),
-            index_entry->name(),
-            index_entry->index_kind(),
-            index_entry->column_id(),
-            column->name(),
-            std::move(candidate->lookup),
-            scan.location()
-        );
+        return LogicalScanIndexHint {
+            .index_id = index_entry->id(),
+            .index_name = index_entry->name(),
+            .index_kind = index_entry->index_kind(),
+            .column_id = index_entry->column_id(),
+            .column_name = column->name(),
+            .lookup = std::move(candidate->lookup),
+        };
     }
 
-    return nullptr;
+    return std::nullopt;
 }
 
 [[nodiscard]]
@@ -681,8 +676,6 @@ LogicalRewriteResult rewrite_logical_once(
     switch (node.kind()) {
     case LogicalPlanNodeKind::Scan:
         return LogicalRewriteResult {node.clone(), false};
-    case LogicalPlanNodeKind::IndexScan:
-        return LogicalRewriteResult {node.clone(), false};
     case LogicalPlanNodeKind::Filter: {
         const auto & filter = static_cast<const LogicalFilter &>(node);
         auto child = rewrite_logical_once(filter.child(), options, catalog);
@@ -693,9 +686,15 @@ LogicalRewriteResult rewrite_logical_once(
         }
         if (child.node->kind() == LogicalPlanNodeKind::Scan) {
             const auto & scan = static_cast<const LogicalScan &>(*child.node);
-            auto index_scan = try_make_index_scan(scan, *predicate.expression, options, catalog);
-            if (index_scan != nullptr) {
-                child.node = std::move(index_scan);
+            auto index_hint = try_make_index_hint(scan, *predicate.expression, options, catalog);
+            if (index_hint.has_value()) {
+                child.node = std::make_unique<LogicalScan>(
+                    scan.database_id(),
+                    scan.collection_id(),
+                    scan.collection_name(),
+                    std::move(index_hint.value()),
+                    scan.location()
+                );
                 return LogicalRewriteResult {
                     std::make_unique<LogicalFilter>(
                         std::move(child.node),

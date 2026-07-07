@@ -2,7 +2,7 @@
 
 ## 1. 目标
 
-Optimizer 的职责是把 Planner 生成的逻辑数据流改写为更适合执行的计划，并在具备统计信息和物理算子之后选择访问路径。它不负责 SQL 语法解析、名称绑定、类型检查，也不直接执行存储操作。
+Optimizer 的职责是把 LogicalPlanner 生成的逻辑数据流改写为更适合执行的计划，并在具备统计信息和物理算子之后选择访问路径。它不负责 SQL 语法解析、名称绑定、类型检查，也不直接执行存储操作。
 
 当前 LiteDB 的 SQL 主链路可以保持为：
 
@@ -10,7 +10,7 @@ Optimizer 的职责是把 Planner 生成的逻辑数据流改写为更适合执�
 SQL text
   -> Parser / AST
   -> Binder / BoundStatement
-  -> Planner / StatementPlan
+  -> LogicalPlanner / StatementPlan
   -> Optimizer / optimized StatementPlan
   -> Physical Planner
   -> Executor
@@ -89,9 +89,7 @@ Volcano/Cascades 优化器把优化过程建模为表达式组、等价规则、
 
 ```text
 internal/src/core/binder
-internal/src/core/planner
-internal/src/core/planner/logical
-internal/src/core/planner/plan
+internal/src/core/logical_plan
 internal/src/core/executor
 internal/src/core/index
 internal/src/core/vindex
