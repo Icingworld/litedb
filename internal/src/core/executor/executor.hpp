@@ -6,22 +6,22 @@
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/storage/storage_manager.hpp"
 
-namespace litedb::core::planner::plan
+namespace litedb::core::physical_plan
 {
 
-class CreateCollectionPlan;
-class CreateDatabasePlan;
-class CreateIndexPlan;
-class CreateVectorIndexPlan;
-class DropCollectionPlan;
-class DropDatabasePlan;
-class DropIndexPlan;
-class DropVectorIndexPlan;
+class PhysicalCreateCollectionPlan;
+class PhysicalCreateDatabasePlan;
+class PhysicalCreateIndexPlan;
+class PhysicalCreateVectorIndexPlan;
+class PhysicalDropCollectionPlan;
+class PhysicalDropDatabasePlan;
+class PhysicalDropIndexPlan;
+class PhysicalDropVectorIndexPlan;
 
-} // namespace litedb::core::planner::plan
+} // namespace litedb::core::physical_plan
 
 namespace litedb::core::executor
 {
@@ -35,56 +35,56 @@ public:
     virtual ~DdlMutationHandler() noexcept = default;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_database(
-        const planner::plan::CreateDatabasePlan & plan,
+        const physical_plan::PhysicalCreateDatabasePlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_collection(
-        const planner::plan::CreateCollectionPlan & plan,
+        const physical_plan::PhysicalCreateCollectionPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_index(
-        const planner::plan::CreateIndexPlan & plan,
+        const physical_plan::PhysicalCreateIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
-        const planner::plan::CreateVectorIndexPlan & plan,
+        const physical_plan::PhysicalCreateVectorIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_database(
-        const planner::plan::DropDatabasePlan & plan,
+        const physical_plan::PhysicalDropDatabasePlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
-        const planner::plan::DropCollectionPlan & plan,
+        const physical_plan::PhysicalDropCollectionPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_index(
-        const planner::plan::DropIndexPlan & plan,
+        const physical_plan::PhysicalDropIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
-        const planner::plan::DropVectorIndexPlan & plan,
+        const physical_plan::PhysicalDropVectorIndexPlan & plan,
         catalog::Catalog & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
@@ -111,7 +111,7 @@ public:
      * @return 执行结果
      */
     [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(const planner::plan::StatementPlan & plan);
+    std::expected<ExecutionResult, ExecutionError> execute(const physical_plan::PhysicalStatementPlan & plan);
 
 private:
     catalog::Catalog & catalog_;                        ///< 目录

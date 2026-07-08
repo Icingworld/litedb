@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.3.2)
-project(litedb VERSION 0.3.0 LANGUAGES CXX)
+project(litedb VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

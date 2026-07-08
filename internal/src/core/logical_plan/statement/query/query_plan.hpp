@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "core/logical_plan/node/logical_plan_node.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::plan
 {
@@ -11,7 +11,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief QUERY 语句计划
  */
-class QueryPlan final : public StatementPlan
+class QueryPlan final : public LogicalStatementPlan
 {
 public:
     QueryPlan(std::unique_ptr<logical::LogicalPlanNode> root, parser::ast::AstNodeLocation location);

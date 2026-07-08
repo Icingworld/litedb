@@ -54,7 +54,7 @@ asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::strin
         require(use_database->kind == ExecutionResultKind::UseDatabase, "USE result kind mismatch");
 
         auto create_collection = co_await client.execute_sql(
-            "CREATE COLLECTION users (id BIGINT PRIMARY KEY, name VARCHAR(64), age INTEGER);"
+            "CREATE COLLECTION users (id BIGINT NOT NULL, name VARCHAR(64), age INTEGER);"
         );
         require(create_collection.has_value(), create_collection.has_value() ? "" : create_collection.error().message.c_str());
 
@@ -93,7 +93,7 @@ asio::awaitable<void> run_persistent_write_flow(Server & server, bool & passed, 
         require(connected.has_value(), connected.has_value() ? "" : connected.error().message.c_str());
         require((co_await client.execute_sql("CREATE DATABASE demo;")).has_value(), "CREATE DATABASE should succeed");
         require((co_await client.execute_sql("USE demo;")).has_value(), "USE should succeed");
-        require((co_await client.execute_sql("CREATE COLLECTION users (id BIGINT PRIMARY KEY, name VARCHAR(64));")).has_value(), "CREATE COLLECTION should succeed");
+        require((co_await client.execute_sql("CREATE COLLECTION users (id BIGINT NOT NULL, name VARCHAR(64));")).has_value(), "CREATE COLLECTION should succeed");
         require((co_await client.execute_sql("INSERT INTO users VALUES (1, 'persisted');")).has_value(), "INSERT should succeed");
 
         client.close();

@@ -3,7 +3,7 @@
 #include <string>
 
 #include "core/common/ids.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::plan
 {
@@ -11,7 +11,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief USE 语句计划
  */
-class UsePlan final : public StatementPlan
+class UsePlan final : public LogicalStatementPlan
 {
 public:
     UsePlan(common::DatabaseId database_id, std::string database_name, parser::ast::AstNodeLocation location);

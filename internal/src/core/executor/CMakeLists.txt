@@ -7,7 +7,7 @@ add_library(litedb_executor ${EXECUTOR_SOURCES})
 target_include_directories(litedb_executor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 target_link_libraries(litedb_executor PUBLIC
-    litedb_logical_plan
+    litedb_physical_plan
     litedb_evaluator
     litedb_index
     litedb_storage

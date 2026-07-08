@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::plan
 {
@@ -10,7 +10,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief CREATE DATABASE 语句计划
  */
-class CreateDatabasePlan final : public StatementPlan
+class CreateDatabasePlan final : public LogicalStatementPlan
 {
 public:
     CreateDatabasePlan(std::string database_name, bool if_not_exists, parser::ast::AstNodeLocation location);

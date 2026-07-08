@@ -13,7 +13,7 @@ DropIndexPlan::DropIndexPlan(
     bool if_exists,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::DropIndex, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::DropIndex, location)
     , database_id_(database_id)
     , collection_id_(collection_id)
     , collection_name_(std::move(collection_name))

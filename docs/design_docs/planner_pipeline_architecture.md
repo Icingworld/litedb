@@ -8,7 +8,7 @@
 SQL text
   -> Parser / AST StatementNode
   -> Binder / BoundStatement
-  -> Planner / StatementPlan
+  -> Planner / LogicalStatementPlan
   -> Executor / ExecutionResult
 ```
 
@@ -19,7 +19,7 @@ SQL text
 - `DeletePlan` 持有 `LogicalPlanNode input`。
 - `INSERT VALUES`、DDL、`USE`、`SHOW`、`DESCRIBE` 仍是 statement 级 plan，不进入 logical operator tree。
 
-这个设计方向总体是合理的，但当前命名容易制造一个概念混淆：`StatementPlan` 同时像“执行器入口的统一计划对象”，又像“查询优化意义上的 plan”。如果后续引入 optimizer、physical plan、prepared statement、事务、权限、EXPLAIN，这个混淆会放大。
+这个设计方向总体是合理的，但当前命名容易制造一个概念混淆：`LogicalStatementPlan` 同时像“执行器入口的统一计划对象”，又像“查询优化意义上的 plan”。如果后续引入 optimizer、physical plan、prepared statement、事务、权限、EXPLAIN，这个混淆会放大。
 
 ## 结论
 
@@ -28,7 +28,7 @@ SQL text
 更具体地说：
 
 - Parser 和 Binder 层继续统一处理所有 statement。这是合理的，因为所有 SQL 都需要语法、名字解析、类型检查、catalog 校验和错误位置。
-- Planner 对外继续返回一个统一的顶层对象，例如 `StatementPlan`，更建议将其语义命名为 `PlannedStatement` 或 `ExecutableStatementPlan`。
+- Planner 对外继续返回一个统一的顶层对象，例如 `LogicalStatementPlan`，更建议将其语义命名为 `PlannedStatement` 或 `ExecutableLogicalStatementPlan`。
 - 顶层对象内部应该明确分流：关系数据流语句走 `logical::LogicalPlanNode`；DDL、session command、metadata command 走 command plan。
 - `logical::LogicalPlanNode` 不应成为“所有 SQL 语句的公共 IR”。它应该只表达可优化的数据流或数据修改流。
 
@@ -85,13 +85,13 @@ DuckDB 更偏统一 logical operator 路线。它的 planner 在 `Planner::Creat
 当前设计的优点：
 
 - `Session::execute_sql()` 的主干非常清楚：parse -> bind -> plan -> execute。
-- `StatementPlan` 给 executor 提供了单一入口，利于错误处理和结果类型统一。
+- `LogicalStatementPlan` 给 executor 提供了单一入口，利于错误处理和结果类型统一。
 - 只有 `SELECT`、`UPDATE`、`DELETE` 使用 logical tree，避免了过度抽象。
 - `UPDATE`、`DELETE` 将“找出目标行”表达为 logical input，这个方向是对的；它为索引访问、谓词下推、limit/delete、后续物理计划留了位置。
 
 当前设计的主要问题：
 
-- `StatementPlan` 的名字容易被理解成“关系型 plan”，但它实际上是 statement 级 executable description。
+- `LogicalStatementPlan` 的名字容易被理解成“关系型 plan”，但它实际上是 statement 级 executable description。
 - `Planner::plan()` 当前是一个大 switch，同时承担 command lowering、query logical planning、mutation planning，后续会越来越厚。
 - `UpdatePlan` / `DeletePlan` 的 side effect 在 statement plan 外壳里，input 在 logical tree 里；这在当前执行器可以接受，但如果引入 physical plan，mutation sink 的位置需要重新定义。
 - `SHOW` / `DESCRIBE` 返回 row set，但它们现在是特殊 command。短期没问题，长期需要决定是否把系统 catalog 暴露为可查询数据源。
@@ -113,7 +113,7 @@ BoundStatement
             future INSERT SELECT -> InsertSelectPlan(input logical root, target)
        -> CommandPlanner
             DDL / USE / SHOW / DESCRIBE -> CommandPlan variants
-  -> PlannedStatement / StatementPlan
+  -> PlannedStatement / LogicalStatementPlan
   -> Executor
 ```
 
@@ -138,7 +138,7 @@ CommandPlan
   command payload
 ```
 
-这不一定要求立刻大改类继承。可以先保持当前 `StatementPlanKind`，但在目录和命名上体现分组。
+这不一定要求立刻大改类继承。可以先保持当前 `LogicalStatementPlanKind`，但在目录和命名上体现分组。
 
 ## 关于 UPDATE / DELETE 的两种路线
 
@@ -200,8 +200,8 @@ DDL 应保留为 command plan，不建议建成普通 logical operator。
 
 ### 第一阶段：只澄清边界，不大改行为
 
-1. 保留 `Planner::plan()` 返回 `std::unique_ptr<StatementPlan>`。
-2. 给 `StatementPlan` 添加文档：它是 statement 级执行计划，不等同于 logical operator tree。
+1. 保留 `Planner::plan()` 返回 `std::unique_ptr<LogicalStatementPlan>`。
+2. 给 `LogicalStatementPlan` 添加文档：它是 statement 级执行计划，不等同于 logical operator tree。
 3. 在 planner 内部拆私有函数：
    - `plan_query(BoundSelectStatement &)`
    - `plan_insert(BoundInsertStatement &)`
@@ -222,12 +222,12 @@ DDL 应保留为 command plan，不建议建成普通 logical operator。
    - query root -> physical source/transform/sink。
    - update/delete -> physical mutation sink + child pipeline。
    - insert values -> physical values source + insert sink，或保持 command executor 直到需要批量插入优化。
-3. `StatementPlan` 顶层可以持有 logical 或 physical，取决于 planner 阶段划分。例如：
+3. `LogicalStatementPlan` 顶层可以持有 logical 或 physical，取决于 planner 阶段划分。例如：
 
 ```text
 BoundStatement
-  -> LogicalStatementPlan
-  -> OptimizedStatementPlan
+  -> LogicalLogicalStatementPlan
+  -> OptimizedLogicalStatementPlan
   -> PhysicalStatementPlan
   -> Executor
 ```
@@ -236,7 +236,7 @@ BoundStatement
 
 ### 第三阶段：EXPLAIN / prepared statement / metadata
 
-当要支持这些功能时，顶层 `StatementPlan` 应该集中保存：
+当要支持这些功能时，顶层 `LogicalStatementPlan` 应该集中保存：
 
 - statement kind；
 - location；
@@ -253,8 +253,8 @@ BoundStatement
 
 如果愿意做一次轻量重命名，建议：
 
-- `StatementPlan` -> `PlannedStatement` 或 `ExecutableStatement`
-- `QueryPlan` -> `QueryStatementPlan`
+- `LogicalStatementPlan` -> `PlannedStatement` 或 `ExecutableStatement`
+- `QueryPlan` -> `QueryLogicalStatementPlan`
 - `InsertPlan` -> `InsertValuesPlan`
 - `logical::LogicalPlanNode` 保持不变
 - `LogicalPlanner` -> `RelationalPlanner` 或 `LogicalQueryPlanner`
@@ -262,7 +262,7 @@ BoundStatement
 如果暂时不想改动文件名，也至少在注释中明确：
 
 ```text
-StatementPlan is the top-level executable description of one SQL statement.
+LogicalStatementPlan is the top-level executable description of one SQL statement.
 Only relation-producing or relation-consuming statements own logical plan nodes.
 Command statements are represented as statement-level command plans.
 ```

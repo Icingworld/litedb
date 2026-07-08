@@ -4,7 +4,7 @@ namespace litedb::core::planner::plan
 {
 
 ShowCollectionsPlan::ShowCollectionsPlan(common::DatabaseId database_id, parser::ast::AstNodeLocation location)
-    : StatementPlan(StatementPlanKind::ShowCollections, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::ShowCollections, location)
     , database_id_(database_id)
 {
 }

@@ -11,7 +11,7 @@ ShowVectorIndexesPlan::ShowVectorIndexesPlan(
     std::string collection_name,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::ShowVectorIndexes, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::ShowVectorIndexes, location)
     , database_id_(database_id)
     , collection_id_(collection_id)
     , collection_name_(std::move(collection_name))

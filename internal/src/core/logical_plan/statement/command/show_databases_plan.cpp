@@ -4,7 +4,7 @@ namespace litedb::core::planner::plan
 {
 
 ShowDatabasesPlan::ShowDatabasesPlan(parser::ast::AstNodeLocation location)
-    : StatementPlan(StatementPlanKind::ShowDatabases, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::ShowDatabases, location)
 {
 }
 

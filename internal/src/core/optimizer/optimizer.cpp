@@ -74,8 +74,8 @@ using planner::logical::LogicalScan;
 using planner::logical::LogicalScanIndexHint;
 using planner::plan::DeletePlan;
 using planner::plan::QueryPlan;
-using planner::plan::StatementPlan;
-using planner::plan::StatementPlanKind;
+using planner::plan::LogicalStatementPlan;
+using planner::plan::LogicalStatementPlanKind;
 using planner::plan::UpdatePlan;
 using parser::TokenType;
 
@@ -801,8 +801,8 @@ Optimizer::Optimizer(OptimizerOptions options, const catalog::CatalogReader * ca
 {
 }
 
-std::expected<std::unique_ptr<StatementPlan>, OptimizerError> Optimizer::optimize(
-    std::unique_ptr<StatementPlan> plan
+std::expected<std::unique_ptr<LogicalStatementPlan>, OptimizerError> Optimizer::optimize(
+    std::unique_ptr<LogicalStatementPlan> plan
 ) const
 {
     if (plan == nullptr) {
@@ -818,11 +818,11 @@ std::expected<std::unique_ptr<StatementPlan>, OptimizerError> Optimizer::optimiz
     }
 
     switch (plan->kind()) {
-    case StatementPlanKind::Query: {
+    case LogicalStatementPlanKind::Query: {
         const auto & query = static_cast<const QueryPlan &>(*plan);
         return std::make_unique<QueryPlan>(optimize_logical(query.root(), options_, catalog_), query.location());
     }
-    case StatementPlanKind::Update: {
+    case LogicalStatementPlanKind::Update: {
         const auto & update = static_cast<const UpdatePlan &>(*plan);
         return std::make_unique<UpdatePlan>(
             optimize_logical(update.input(), options_, catalog_),
@@ -833,7 +833,7 @@ std::expected<std::unique_ptr<StatementPlan>, OptimizerError> Optimizer::optimiz
             update.location()
         );
     }
-    case StatementPlanKind::Delete: {
+    case LogicalStatementPlanKind::Delete: {
         const auto & del = static_cast<const DeletePlan &>(*plan);
         return std::make_unique<DeletePlan>(
             optimize_logical(del.input(), options_, catalog_),
@@ -843,21 +843,21 @@ std::expected<std::unique_ptr<StatementPlan>, OptimizerError> Optimizer::optimiz
             del.location()
         );
     }
-    case StatementPlanKind::Use:
-    case StatementPlanKind::CreateDatabase:
-    case StatementPlanKind::CreateCollection:
-    case StatementPlanKind::CreateIndex:
-    case StatementPlanKind::CreateVectorIndex:
-    case StatementPlanKind::DropDatabase:
-    case StatementPlanKind::DropCollection:
-    case StatementPlanKind::DropIndex:
-    case StatementPlanKind::DropVectorIndex:
-    case StatementPlanKind::ShowDatabases:
-    case StatementPlanKind::ShowCollections:
-    case StatementPlanKind::ShowIndexes:
-    case StatementPlanKind::ShowVectorIndexes:
-    case StatementPlanKind::DescribeCollection:
-    case StatementPlanKind::Insert:
+    case LogicalStatementPlanKind::Use:
+    case LogicalStatementPlanKind::CreateDatabase:
+    case LogicalStatementPlanKind::CreateCollection:
+    case LogicalStatementPlanKind::CreateIndex:
+    case LogicalStatementPlanKind::CreateVectorIndex:
+    case LogicalStatementPlanKind::DropDatabase:
+    case LogicalStatementPlanKind::DropCollection:
+    case LogicalStatementPlanKind::DropIndex:
+    case LogicalStatementPlanKind::DropVectorIndex:
+    case LogicalStatementPlanKind::ShowDatabases:
+    case LogicalStatementPlanKind::ShowCollections:
+    case LogicalStatementPlanKind::ShowIndexes:
+    case LogicalStatementPlanKind::ShowVectorIndexes:
+    case LogicalStatementPlanKind::DescribeCollection:
+    case LogicalStatementPlanKind::Insert:
         return plan;
     }
 

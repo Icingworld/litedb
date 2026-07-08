@@ -55,10 +55,4 @@ private:
     parser::ast::AstNodeLocation location_;
 };
 
-class PhysicalSimpleStatementPlan final : public PhysicalStatementPlan
-{
-public:
-    PhysicalSimpleStatementPlan(PhysicalStatementPlanKind kind, parser::ast::AstNodeLocation location) noexcept;
-};
-
 } // namespace litedb::core::physical_plan

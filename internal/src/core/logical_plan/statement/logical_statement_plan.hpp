@@ -8,7 +8,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief 语句计划类型
  */
-enum class StatementPlanKind
+enum class LogicalStatementPlanKind
 {
     // command
     Use,                    ///< 使用数据库
@@ -38,21 +38,21 @@ enum class StatementPlanKind
 /**
  * @brief 语句计划
  */
-class StatementPlan
+class LogicalStatementPlan
 {
 public:
-    StatementPlan(const StatementPlan &) = delete;
+    LogicalStatementPlan(const LogicalStatementPlan &) = delete;
 
-    StatementPlan & operator=(const StatementPlan &) = delete;
+    LogicalStatementPlan & operator=(const LogicalStatementPlan &) = delete;
 
-    StatementPlan(StatementPlan &&) noexcept = default;
+    LogicalStatementPlan(LogicalStatementPlan &&) noexcept = default;
 
-    StatementPlan & operator=(StatementPlan &&) noexcept = default;
+    LogicalStatementPlan & operator=(LogicalStatementPlan &&) noexcept = default;
 
-    virtual ~StatementPlan() noexcept = default;
+    virtual ~LogicalStatementPlan() noexcept = default;
 
 protected:
-    StatementPlan(StatementPlanKind kind, parser::ast::AstNodeLocation location) noexcept;
+    LogicalStatementPlan(LogicalStatementPlanKind kind, parser::ast::AstNodeLocation location) noexcept;
 
 public:
     /**
@@ -60,7 +60,7 @@ public:
      * @return 语句计划类型
      */
     [[nodiscard]]
-    StatementPlanKind kind() const noexcept;
+    LogicalStatementPlanKind kind() const noexcept;
 
     /**
      * @brief 获取语句计划位置
@@ -70,7 +70,7 @@ public:
     parser::ast::AstNodeLocation location() const noexcept;
 
 private:
-    StatementPlanKind kind_;                    ///< 语句计划类型
+    LogicalStatementPlanKind kind_;                    ///< 语句计划类型
     parser::ast::AstNodeLocation location_;     ///< 语句计划位置
 };
 

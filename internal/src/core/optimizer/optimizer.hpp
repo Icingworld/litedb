@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "core/optimizer/optimizer_error.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::catalog
 {
@@ -44,8 +44,8 @@ public:
      * @return 优化后的 statement plan
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<planner::plan::StatementPlan>, OptimizerError> optimize(
-        std::unique_ptr<planner::plan::StatementPlan> plan
+    std::expected<std::unique_ptr<planner::plan::LogicalStatementPlan>, OptimizerError> optimize(
+        std::unique_ptr<planner::plan::LogicalStatementPlan> plan
     ) const;
 
 private:

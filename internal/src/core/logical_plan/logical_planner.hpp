@@ -9,7 +9,7 @@
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/logical_plan/logical_planner_error.hpp"
 #include "core/logical_plan/node/logical_plan_node.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::logical
 {
@@ -21,7 +21,7 @@ class LogicalPlanner
 {
 public:
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::StatementPlan>, PlannerError> plan(
+    std::expected<std::unique_ptr<plan::LogicalStatementPlan>, PlannerError> plan(
         std::unique_ptr<binder::bound::BoundStatement> statement
     ) const;
 

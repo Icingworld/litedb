@@ -27,7 +27,7 @@ set(LOGICAL_PLAN_SOURCES
     statement/mutation/insert_plan.cpp
     statement/mutation/update_plan.cpp
     statement/query/query_plan.cpp
-    statement/statement_plan.cpp
+    statement/logical_statement_plan.cpp
 )
 
 add_library(litedb_logical_plan ${LOGICAL_PLAN_SOURCES})

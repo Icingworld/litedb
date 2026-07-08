@@ -98,7 +98,7 @@ std::unique_ptr<LogicalPlanNode> apply_optional_filter(
 
 } // namespace
 
-std::expected<std::unique_ptr<StatementPlan>, PlannerError> LogicalPlanner::plan(
+std::expected<std::unique_ptr<LogicalStatementPlan>, PlannerError> LogicalPlanner::plan(
     std::unique_ptr<BoundStatement> statement
 ) const
 {

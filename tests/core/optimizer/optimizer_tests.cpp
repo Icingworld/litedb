@@ -6,6 +6,7 @@
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
+#include "core/physical_plan/physical_planner.hpp"
 #include "core/logical_plan/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
 #include "core/logical_plan/node/logical_plan_node.hpp"
@@ -110,7 +111,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
+std::unique_ptr<LogicalStatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
 {
     LogicalPlanner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
@@ -120,7 +121,7 @@ std::unique_ptr<StatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> optimize_ok(std::unique_ptr<StatementPlan> plan, OptimizerOptions options = {})
+std::unique_ptr<LogicalStatementPlan> optimize_ok(std::unique_ptr<LogicalStatementPlan> plan, OptimizerOptions options = {})
 {
     Optimizer optimizer {options};
     auto result = optimizer.optimize(std::move(plan));
@@ -130,9 +131,9 @@ std::unique_ptr<StatementPlan> optimize_ok(std::unique_ptr<StatementPlan> plan, 
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> optimize_ok(
+std::unique_ptr<LogicalStatementPlan> optimize_ok(
     Fixture & fixture,
-    std::unique_ptr<StatementPlan> plan,
+    std::unique_ptr<LogicalStatementPlan> plan,
     OptimizerOptions options = {}
 )
 {
@@ -146,20 +147,22 @@ std::unique_ptr<StatementPlan> optimize_ok(
 
 std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::ExecutionError> execute_plan(
     Fixture & fixture,
-    const StatementPlan & plan
+    const LogicalStatementPlan & plan
 )
 {
     litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_manager};
-    return executor.execute(plan);
+    litedb::core::physical_plan::PhysicalPlanner physical_planner;
+    auto physical = physical_planner.plan(plan);
+    return executor.execute(*physical);
 }
 
-const LogicalPlanNode & query_root(const StatementPlan & plan)
+const LogicalPlanNode & query_root(const LogicalStatementPlan & plan)
 {
-    require(plan.kind() == StatementPlanKind::Query, "plan should be query");
+    require(plan.kind() == LogicalStatementPlanKind::Query, "plan should be query");
     return static_cast<const QueryPlan &>(plan).root();
 }
 
-const LogicalFilter & query_filter_child(const StatementPlan & plan)
+const LogicalFilter & query_filter_child(const LogicalStatementPlan & plan)
 {
     const auto & projection = static_cast<const LogicalProjection &>(query_root(plan));
     require(projection.child().kind() == LogicalPlanNodeKind::Filter, "projection child should be filter");
@@ -174,13 +177,13 @@ void test_passthrough_plans_keep_identity()
     auto * show_ptr = show.get();
     auto optimized_show = optimize_ok(std::move(show));
     require(optimized_show.get() == show_ptr, "command plans should pass through");
-    require(optimized_show->kind() == StatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
+    require(optimized_show->kind() == LogicalStatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
 
     auto insert = plan_ok(fixture, "INSERT INTO users (id, name, age) VALUES (1, 'alice', 18);");
     auto * insert_ptr = insert.get();
     auto optimized_insert = optimize_ok(std::move(insert));
     require(optimized_insert.get() == insert_ptr, "insert plans should pass through");
-    require(optimized_insert->kind() == StatementPlanKind::Insert, "INSERT kind mismatch");
+    require(optimized_insert->kind() == LogicalStatementPlanKind::Insert, "INSERT kind mismatch");
 }
 
 void test_query_update_delete_are_rebuilt()
@@ -188,17 +191,17 @@ void test_query_update_delete_are_rebuilt()
     Fixture fixture;
 
     auto query = optimize_ok(plan_ok(fixture, "SELECT id FROM users WHERE true AND age > 18;"));
-    require(query->kind() == StatementPlanKind::Query, "query kind mismatch");
+    require(query->kind() == LogicalStatementPlanKind::Query, "query kind mismatch");
     require(query_filter_child(*query).predicate().kind() == BoundExpressionKind::Binary, "query predicate should simplify");
 
     auto update = optimize_ok(plan_ok(fixture, "UPDATE users SET age = age + 1 WHERE true;"));
-    require(update->kind() == StatementPlanKind::Update, "update kind mismatch");
+    require(update->kind() == LogicalStatementPlanKind::Update, "update kind mismatch");
     const auto & update_plan = static_cast<const UpdatePlan &>(*update);
     require(update_plan.input().kind() == LogicalPlanNodeKind::Scan, "update Filter(true) should be eliminated");
     require(update_plan.assignments().size() == 1, "update assignments should be cloned");
 
     auto del = optimize_ok(plan_ok(fixture, "DELETE FROM users WHERE true;"));
-    require(del->kind() == StatementPlanKind::Delete, "delete kind mismatch");
+    require(del->kind() == LogicalStatementPlanKind::Delete, "delete kind mismatch");
     require(static_cast<const DeletePlan &>(*del).input().kind() == LogicalPlanNodeKind::Scan, "delete Filter(true) should be eliminated");
 }
 
@@ -298,7 +301,7 @@ void create_catalog_index(Fixture & fixture, std::string name, std::string_view 
     require(created.has_value(), "fixture catalog index create failed");
 }
 
-const LogicalPlanNode & filter_child_for_query(const StatementPlan & plan)
+const LogicalPlanNode & filter_child_for_query(const LogicalStatementPlan & plan)
 {
     return query_filter_child(plan).child();
 }

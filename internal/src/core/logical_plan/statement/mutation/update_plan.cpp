@@ -13,7 +13,7 @@ UpdatePlan::UpdatePlan(
     std::vector<binder::bound::BoundAssignment> assignments,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::Update, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::Update, location)
     , input_(std::move(input))
     , database_id_(database_id)
     , collection_id_(collection_id)

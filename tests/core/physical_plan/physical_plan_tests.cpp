@@ -6,8 +6,23 @@
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/statement/command/create_collection_plan.hpp"
+#include "core/logical_plan/statement/command/create_database_plan.hpp"
+#include "core/logical_plan/statement/command/create_index_plan.hpp"
+#include "core/logical_plan/statement/command/create_vector_index_plan.hpp"
+#include "core/logical_plan/statement/command/describe_collection_plan.hpp"
+#include "core/logical_plan/statement/command/drop_collection_plan.hpp"
+#include "core/logical_plan/statement/command/drop_database_plan.hpp"
+#include "core/logical_plan/statement/command/drop_index_plan.hpp"
+#include "core/logical_plan/statement/command/drop_vector_index_plan.hpp"
+#include "core/logical_plan/statement/command/show_collections_plan.hpp"
 #include "core/logical_plan/statement/command/show_databases_plan.hpp"
+#include "core/logical_plan/statement/command/show_indexes_plan.hpp"
+#include "core/logical_plan/statement/command/show_vector_indexes_plan.hpp"
+#include "core/logical_plan/statement/command/use_plan.hpp"
 #include "core/logical_plan/statement/mutation/delete_plan.hpp"
+#include "core/logical_plan/statement/mutation/insert_plan.hpp"
+#include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
 #include "core/physical_plan/node/physical_filter.hpp"
 #include "core/physical_plan/node/physical_index_scan.hpp"
@@ -16,6 +31,8 @@
 #include "core/physical_plan/node/physical_seq_scan.hpp"
 #include "core/physical_plan/node/physical_sort.hpp"
 #include "core/physical_plan/physical_planner.hpp"
+#include "core/physical_plan/statement/physical_command_plan.hpp"
+#include "core/physical_plan/statement/physical_insert_plan.hpp"
 #include "core/physical_plan/statement/physical_query_plan.hpp"
 #include "core/physical_plan/statement/physical_row_mutation_plan.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
@@ -170,14 +187,155 @@ void test_lower_query_statement()
 
 void test_lower_simple_statement()
 {
-    ShowDatabasesPlan logical {loc};
-
     PhysicalPlanner planner;
-    auto physical = planner.plan(logical);
+
+    UsePlan use {DatabaseId {7}, "demo", loc};
+    auto physical_use = planner.plan(use);
+    require(physical_use->kind() == PhysicalStatementPlanKind::Use, "USE statement kind mismatch");
+    const auto & lowered_use = static_cast<const PhysicalUsePlan &>(*physical_use);
+    require(lowered_use.database_id() == DatabaseId {7}, "USE database id mismatch");
+    require(lowered_use.database_name() == "demo", "USE database name mismatch");
+
+    CreateDatabasePlan create_database {"demo", true, loc};
+    auto physical_create_database = planner.plan(create_database);
     require(
-        physical->kind() == PhysicalStatementPlanKind::ShowDatabases,
-        "SHOW DATABASES statement kind mismatch"
+        physical_create_database->kind() == PhysicalStatementPlanKind::CreateDatabase,
+        "CREATE DATABASE statement kind mismatch"
     );
+    const auto & lowered_create_database = static_cast<const PhysicalCreateDatabasePlan &>(*physical_create_database);
+    require(lowered_create_database.database_name() == "demo", "CREATE DATABASE name mismatch");
+    require(lowered_create_database.if_not_exists(), "CREATE DATABASE if_not_exists mismatch");
+
+    std::vector<ColumnDefinition> columns {
+        ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
+    };
+    CreateCollectionPlan create_collection {DatabaseId {7}, "users", true, columns, std::string {"people"}, loc};
+    auto physical_create_collection = planner.plan(create_collection);
+    require(
+        physical_create_collection->kind() == PhysicalStatementPlanKind::CreateCollection,
+        "CREATE COLLECTION statement kind mismatch"
+    );
+    const auto & lowered_create_collection = static_cast<const PhysicalCreateCollectionPlan &>(*physical_create_collection);
+    require(lowered_create_collection.database_id() == DatabaseId {7}, "CREATE COLLECTION database id mismatch");
+    require(lowered_create_collection.collection_name() == "users", "CREATE COLLECTION name mismatch");
+    require(lowered_create_collection.columns().size() == 1, "CREATE COLLECTION columns mismatch");
+    require(lowered_create_collection.comment().value() == "people", "CREATE COLLECTION comment mismatch");
+
+    CreateIndexPlan create_index {
+        DatabaseId {7},
+        CollectionId {8},
+        "users",
+        ColumnId {9},
+        "age",
+        "idx_age",
+        CatalogIndexKind::BTree,
+        false,
+        true,
+        loc,
+    };
+    auto physical_create_index = planner.plan(create_index);
+    require(physical_create_index->kind() == PhysicalStatementPlanKind::CreateIndex, "CREATE INDEX kind mismatch");
+    const auto & lowered_create_index = static_cast<const PhysicalCreateIndexPlan &>(*physical_create_index);
+    require(lowered_create_index.collection_id() == CollectionId {8}, "CREATE INDEX collection id mismatch");
+    require(lowered_create_index.column_id() == ColumnId {9}, "CREATE INDEX column id mismatch");
+    require(lowered_create_index.index_name() == "idx_age", "CREATE INDEX name mismatch");
+
+    CreateVectorIndexPlan create_vindex {
+        DatabaseId {7},
+        CollectionId {8},
+        "users",
+        ColumnId {9},
+        "embedding",
+        "vidx_embedding",
+        CatalogVectorIndexKind::Hnsw,
+        CatalogVectorDistanceMetric::Cosine,
+        16,
+        64,
+        32,
+        11,
+        true,
+        loc,
+    };
+    auto physical_create_vindex = planner.plan(create_vindex);
+    require(
+        physical_create_vindex->kind() == PhysicalStatementPlanKind::CreateVectorIndex,
+        "CREATE VINDEX kind mismatch"
+    );
+    const auto & lowered_create_vindex = static_cast<const PhysicalCreateVectorIndexPlan &>(*physical_create_vindex);
+    require(lowered_create_vindex.index_name() == "vidx_embedding", "CREATE VINDEX name mismatch");
+    require(lowered_create_vindex.metric() == CatalogVectorDistanceMetric::Cosine, "CREATE VINDEX metric mismatch");
+
+    DropDatabasePlan drop_database {DatabaseId {7}, "demo", true, loc};
+    auto physical_drop_database = planner.plan(drop_database);
+    require(physical_drop_database->kind() == PhysicalStatementPlanKind::DropDatabase, "DROP DATABASE kind mismatch");
+    const auto & lowered_drop_database = static_cast<const PhysicalDropDatabasePlan &>(*physical_drop_database);
+    require(lowered_drop_database.database_id().value() == DatabaseId {7}, "DROP DATABASE id mismatch");
+
+    DropCollectionPlan drop_collection {DatabaseId {7}, CollectionId {8}, "users", true, loc};
+    auto physical_drop_collection = planner.plan(drop_collection);
+    require(physical_drop_collection->kind() == PhysicalStatementPlanKind::DropCollection, "DROP COLLECTION kind mismatch");
+    const auto & lowered_drop_collection = static_cast<const PhysicalDropCollectionPlan &>(*physical_drop_collection);
+    require(lowered_drop_collection.collection_id().value() == CollectionId {8}, "DROP COLLECTION id mismatch");
+
+    DropIndexPlan drop_index {DatabaseId {7}, CollectionId {8}, "users", "idx_age", true, loc};
+    auto physical_drop_index = planner.plan(drop_index);
+    require(physical_drop_index->kind() == PhysicalStatementPlanKind::DropIndex, "DROP INDEX kind mismatch");
+    const auto & lowered_drop_index = static_cast<const PhysicalDropIndexPlan &>(*physical_drop_index);
+    require(lowered_drop_index.index_name() == "idx_age", "DROP INDEX name mismatch");
+
+    DropVectorIndexPlan drop_vindex {DatabaseId {7}, CollectionId {8}, "users", "vidx_embedding", true, loc};
+    auto physical_drop_vindex = planner.plan(drop_vindex);
+    require(physical_drop_vindex->kind() == PhysicalStatementPlanKind::DropVectorIndex, "DROP VINDEX kind mismatch");
+    const auto & lowered_drop_vindex = static_cast<const PhysicalDropVectorIndexPlan &>(*physical_drop_vindex);
+    require(lowered_drop_vindex.index_name() == "vidx_embedding", "DROP VINDEX name mismatch");
+
+    ShowDatabasesPlan show_databases {loc};
+    auto physical_show_databases = planner.plan(show_databases);
+    require(physical_show_databases->kind() == PhysicalStatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
+
+    ShowCollectionsPlan show_collections {DatabaseId {7}, loc};
+    auto physical_show_collections = planner.plan(show_collections);
+    require(physical_show_collections->kind() == PhysicalStatementPlanKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
+    require(
+        static_cast<const PhysicalShowCollectionsPlan &>(*physical_show_collections).database_id() == DatabaseId {7},
+        "SHOW COLLECTIONS database id mismatch"
+    );
+
+    ShowIndexesPlan show_indexes {DatabaseId {7}, CollectionId {8}, "users", loc};
+    auto physical_show_indexes = planner.plan(show_indexes);
+    require(physical_show_indexes->kind() == PhysicalStatementPlanKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    require(
+        static_cast<const PhysicalShowIndexesPlan &>(*physical_show_indexes).collection_id() == CollectionId {8},
+        "SHOW INDEXES collection id mismatch"
+    );
+
+    ShowVectorIndexesPlan show_vindexes {DatabaseId {7}, CollectionId {8}, "users", loc};
+    auto physical_show_vindexes = planner.plan(show_vindexes);
+    require(physical_show_vindexes->kind() == PhysicalStatementPlanKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    require(
+        static_cast<const PhysicalShowVectorIndexesPlan &>(*physical_show_vindexes).collection_id() == CollectionId {8},
+        "SHOW VINDEXES collection id mismatch"
+    );
+
+    DescribeCollectionPlan describe {DatabaseId {7}, CollectionId {8}, "users", loc};
+    auto physical_describe = planner.plan(describe);
+    require(physical_describe->kind() == PhysicalStatementPlanKind::DescribeCollection, "DESCRIBE kind mismatch");
+    require(
+        static_cast<const PhysicalDescribeCollectionPlan &>(*physical_describe).collection_name() == "users",
+        "DESCRIBE collection name mismatch"
+    );
+
+    std::vector<BoundColumn> insert_columns {
+        BoundColumn {.column_id = ColumnId {9}, .name = "age", .type = type(LogicalTypeId::Integer), .nullable = true},
+    };
+    std::vector<std::unique_ptr<BoundExpression>> values;
+    values.push_back(literal(LogicalTypeId::Integer, "18"));
+    InsertPlan insert {DatabaseId {7}, CollectionId {8}, "users", std::move(insert_columns), std::move(values), loc};
+    auto physical_insert = planner.plan(insert);
+    require(physical_insert->kind() == PhysicalStatementPlanKind::Insert, "INSERT kind mismatch");
+    const auto & lowered_insert = static_cast<const PhysicalInsertPlan &>(*physical_insert);
+    require(lowered_insert.collection_id() == CollectionId {8}, "INSERT collection id mismatch");
+    require(lowered_insert.values().size() == 1, "INSERT values mismatch");
 }
 
 void test_lower_row_mutation_statement()
@@ -194,11 +352,39 @@ void test_lower_row_mutation_statement()
     auto physical = planner.plan(logical);
     require(physical->kind() == PhysicalStatementPlanKind::Delete, "DELETE statement kind mismatch");
 
-    const auto & del = static_cast<const PhysicalRowMutationPlan &>(*physical);
+    const auto & del = static_cast<const PhysicalDeletePlan &>(*physical);
     require(del.database_id() == DatabaseId {1}, "DELETE database id mismatch");
     require(del.collection_id() == CollectionId {2}, "DELETE collection id mismatch");
     require(del.collection_name() == "users", "DELETE collection name mismatch");
     require(del.input().kind() == PhysicalPlanNodeKind::SeqScan, "DELETE input should lower to seq scan");
+
+    std::vector<BoundAssignment> assignments;
+    assignments.push_back(BoundAssignment {
+        .column = BoundColumn {
+            .column_id = ColumnId {3},
+            .name = "age",
+            .type = type(LogicalTypeId::Integer),
+            .nullable = true,
+        },
+        .value = literal(LogicalTypeId::Integer, "42"),
+    });
+    UpdatePlan update {
+        std::make_unique<LogicalScan>(DatabaseId {1}, CollectionId {2}, "users", loc),
+        DatabaseId {1},
+        CollectionId {2},
+        "users",
+        std::move(assignments),
+        loc,
+    };
+
+    auto physical_update = planner.plan(update);
+    require(physical_update->kind() == PhysicalStatementPlanKind::Update, "UPDATE statement kind mismatch");
+
+    const auto & lowered_update = static_cast<const PhysicalUpdatePlan &>(*physical_update);
+    require(lowered_update.collection_id() == CollectionId {2}, "UPDATE collection id mismatch");
+    require(lowered_update.assignments().size() == 1, "UPDATE assignment count mismatch");
+    require(lowered_update.assignments()[0].column.column_id == ColumnId {3}, "UPDATE assignment column mismatch");
+    require(lowered_update.input().kind() == PhysicalPlanNodeKind::SeqScan, "UPDATE input should lower to seq scan");
 }
 
 } // namespace

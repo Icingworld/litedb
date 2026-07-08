@@ -6,7 +6,7 @@ namespace litedb::core::planner::plan
 {
 
 UsePlan::UsePlan(common::DatabaseId database_id, std::string database_name, parser::ast::AstNodeLocation location)
-    : StatementPlan(StatementPlanKind::Use, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::Use, location)
     , database_id_(database_id)
     , database_name_(std::move(database_name))
 {

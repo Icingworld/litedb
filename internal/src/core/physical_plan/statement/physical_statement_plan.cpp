@@ -22,12 +22,4 @@ parser::ast::AstNodeLocation PhysicalStatementPlan::location() const noexcept
     return location_;
 }
 
-PhysicalSimpleStatementPlan::PhysicalSimpleStatementPlan(
-    PhysicalStatementPlanKind kind,
-    parser::ast::AstNodeLocation location
-) noexcept
-    : PhysicalStatementPlan(kind, location)
-{
-}
-
 } // namespace litedb::core::physical_plan

@@ -7,7 +7,7 @@
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::plan
 {
@@ -15,7 +15,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief INSERT 语句计划
  */
-class InsertPlan final : public StatementPlan
+class InsertPlan final : public LogicalStatementPlan
 {
 public:
     InsertPlan(

@@ -4,10 +4,13 @@
 #include "core/executor/executor.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/index/scalar_index_key.hpp"
+#include "core/optimizer/optimizer.hpp"
 #include "core/parser/parser.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
+#include "core/physical_plan/physical_planner.hpp"
+#include "core/physical_plan/statement/physical_insert_plan.hpp"
+#include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/logical_plan/logical_planner.hpp"
-#include "core/logical_plan/statement/mutation/insert_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
 
@@ -28,11 +31,12 @@ using namespace litedb::core::catalog;
 using namespace litedb::core::common;
 using namespace litedb::core::executor;
 using namespace litedb::core::index;
+using namespace litedb::core::optimizer;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
+using namespace litedb::core::physical_plan;
 using namespace litedb::core::planner;
 using namespace litedb::core::planner::logical;
-using namespace litedb::core::planner::plan;
 using namespace litedb::core::schema;
 using namespace litedb::core::storage;
 
@@ -66,7 +70,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> plan_ok(
+std::unique_ptr<PhysicalStatementPlan> plan_ok(
     InMemoryCatalog & catalog,
     IndexManager & index_manager,
     std::string_view sql,
@@ -88,7 +92,15 @@ std::unique_ptr<StatementPlan> plan_ok(
     if (!planned.has_value()) {
         throw std::runtime_error(planned.error().message);
     }
-    return std::move(planned.value());
+
+    Optimizer optimizer {{}, &catalog};
+    auto optimized = optimizer.optimize(std::move(planned.value()));
+    if (!optimized.has_value()) {
+        throw std::runtime_error(optimized.error().message);
+    }
+
+    PhysicalPlanner physical_planner;
+    return physical_planner.plan(*optimized.value());
 }
 
 ExecutionResult execute_ok(
@@ -559,7 +571,7 @@ void test_error_mapping()
     std::vector<BoundColumn> columns;
     std::vector<std::unique_ptr<BoundExpression>> values;
     values.push_back(std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Integer), "not-an-int", loc));
-    InsertPlan bad_insert {
+    PhysicalInsertPlan bad_insert {
         fixture.database_id,
         fixture.users_id,
         "users",
