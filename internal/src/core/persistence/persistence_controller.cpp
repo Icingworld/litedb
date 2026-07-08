@@ -6,14 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "core/logical_plan/statement/command/create_collection_plan.hpp"
-#include "core/logical_plan/statement/command/create_database_plan.hpp"
-#include "core/logical_plan/statement/command/create_index_plan.hpp"
-#include "core/logical_plan/statement/command/create_vector_index_plan.hpp"
-#include "core/logical_plan/statement/command/drop_collection_plan.hpp"
-#include "core/logical_plan/statement/command/drop_database_plan.hpp"
-#include "core/logical_plan/statement/command/drop_index_plan.hpp"
-#include "core/logical_plan/statement/command/drop_vector_index_plan.hpp"
+#include "core/physical_plan/statement/physical_command_plan.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_loader.hpp"
 
@@ -89,7 +82,7 @@ std::expected<void, storage::StorageError> PersistenceController::initialize()
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_database(
-    const planner::plan::CreateDatabasePlan & plan,
+    const physical_plan::PhysicalCreateDatabasePlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -125,7 +118,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_collection(
-    const planner::plan::CreateCollectionPlan & plan,
+    const physical_plan::PhysicalCreateCollectionPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -186,7 +179,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_index(
-    const planner::plan::CreateIndexPlan & plan,
+    const physical_plan::PhysicalCreateIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -261,7 +254,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_vector_index(
-    const planner::plan::CreateVectorIndexPlan & plan,
+    const physical_plan::PhysicalCreateVectorIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -309,7 +302,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_database(
-    const planner::plan::DropDatabasePlan & plan,
+    const physical_plan::PhysicalDropDatabasePlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -367,7 +360,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_collection(
-    const planner::plan::DropCollectionPlan & plan,
+    const physical_plan::PhysicalDropCollectionPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -414,7 +407,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_index(
-    const planner::plan::DropIndexPlan & plan,
+    const physical_plan::PhysicalDropIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &
@@ -462,7 +455,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_vector_index(
-    const planner::plan::DropVectorIndexPlan & plan,
+    const physical_plan::PhysicalDropVectorIndexPlan & plan,
     catalog::Catalog &,
     storage::StorageManager &,
     index::IndexManager &

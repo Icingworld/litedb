@@ -13,28 +13,19 @@
 #include "core/catalog/catalog_entry.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/logical_plan/node/logical_filter.hpp"
-#include "core/logical_plan/node/logical_limit.hpp"
-#include "core/logical_plan/node/logical_order_by.hpp"
-#include "core/logical_plan/node/logical_projection.hpp"
-#include "core/logical_plan/node/logical_scan.hpp"
-#include "core/logical_plan/statement/command/create_collection_plan.hpp"
-#include "core/logical_plan/statement/command/create_database_plan.hpp"
-#include "core/logical_plan/statement/command/create_index_plan.hpp"
-#include "core/logical_plan/statement/command/create_vector_index_plan.hpp"
-#include "core/logical_plan/statement/mutation/delete_plan.hpp"
-#include "core/logical_plan/statement/command/describe_collection_plan.hpp"
-#include "core/logical_plan/statement/command/drop_collection_plan.hpp"
-#include "core/logical_plan/statement/command/drop_database_plan.hpp"
-#include "core/logical_plan/statement/command/drop_index_plan.hpp"
-#include "core/logical_plan/statement/command/drop_vector_index_plan.hpp"
-#include "core/logical_plan/statement/mutation/insert_plan.hpp"
-#include "core/logical_plan/statement/query/query_plan.hpp"
-#include "core/logical_plan/statement/command/show_collections_plan.hpp"
-#include "core/logical_plan/statement/command/show_indexes_plan.hpp"
-#include "core/logical_plan/statement/command/show_vector_indexes_plan.hpp"
-#include "core/logical_plan/statement/mutation/update_plan.hpp"
-#include "core/logical_plan/statement/command/use_plan.hpp"
+#include "core/index/scalar_index.hpp"
+#include "core/physical_plan/node/physical_filter.hpp"
+#include "core/physical_plan/node/physical_index_scan.hpp"
+#include "core/physical_plan/node/physical_limit.hpp"
+#include "core/physical_plan/node/physical_plan_node.hpp"
+#include "core/physical_plan/node/physical_projection.hpp"
+#include "core/physical_plan/node/physical_seq_scan.hpp"
+#include "core/physical_plan/node/physical_sort.hpp"
+#include "core/physical_plan/statement/physical_command_plan.hpp"
+#include "core/physical_plan/statement/physical_insert_plan.hpp"
+#include "core/physical_plan/statement/physical_query_plan.hpp"
+#include "core/physical_plan/statement/physical_row_mutation_plan.hpp"
+#include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 
 namespace litedb::core::executor
@@ -48,15 +39,34 @@ using binder::bound::BoundExpression;
 using common::LogicalType;
 using common::LogicalTypeId;
 using parser::ast::AstNodeLocation;
-using planner::plan::LogicalStatementPlan;
-using planner::plan::LogicalStatementPlanKind;
-using planner::logical::LogicalFilter;
-using planner::logical::LogicalLimit;
-using planner::logical::LogicalOrderBy;
-using planner::logical::LogicalPlanNode;
-using planner::logical::LogicalPlanNodeKind;
-using planner::logical::LogicalProjection;
-using planner::logical::LogicalScan;
+using physical_plan::PhysicalCreateCollectionPlan;
+using physical_plan::PhysicalCreateDatabasePlan;
+using physical_plan::PhysicalCreateIndexPlan;
+using physical_plan::PhysicalCreateVectorIndexPlan;
+using physical_plan::PhysicalDeletePlan;
+using physical_plan::PhysicalDescribeCollectionPlan;
+using physical_plan::PhysicalDropCollectionPlan;
+using physical_plan::PhysicalDropDatabasePlan;
+using physical_plan::PhysicalDropIndexPlan;
+using physical_plan::PhysicalDropVectorIndexPlan;
+using physical_plan::PhysicalFilter;
+using physical_plan::PhysicalIndexLookupKind;
+using physical_plan::PhysicalIndexScan;
+using physical_plan::PhysicalInsertPlan;
+using physical_plan::PhysicalLimit;
+using physical_plan::PhysicalPlanNode;
+using physical_plan::PhysicalPlanNodeKind;
+using physical_plan::PhysicalProjection;
+using physical_plan::PhysicalQueryPlan;
+using physical_plan::PhysicalSeqScan;
+using physical_plan::PhysicalShowCollectionsPlan;
+using physical_plan::PhysicalShowIndexesPlan;
+using physical_plan::PhysicalShowVectorIndexesPlan;
+using physical_plan::PhysicalSort;
+using physical_plan::PhysicalStatementPlan;
+using physical_plan::PhysicalStatementPlanKind;
+using physical_plan::PhysicalUpdatePlan;
+using physical_plan::PhysicalUsePlan;
 
 constexpr AstNodeLocation internal_location {0, 0};
 
@@ -276,8 +286,8 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
 }
 
 [[nodiscard]]
-std::expected<PipelineResult, ExecutionError> execute_logical(
-    const LogicalPlanNode & node,
+std::expected<PipelineResult, ExecutionError> execute_physical(
+    const PhysicalPlanNode & node,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
@@ -310,7 +320,7 @@ void append_scan_columns(PipelineResult & result, const schema::CollectionSchema
 
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_scan(
-    const LogicalScan & scan,
+    const PhysicalSeqScan & scan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage
 )
@@ -337,14 +347,109 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
 }
 
 [[nodiscard]]
-std::expected<PipelineResult, ExecutionError> execute_filter(
-    const LogicalFilter & filter,
+std::expected<index::IndexRange, ExecutionError> index_range_from_lookup(
+    const PhysicalIndexScan & scan
+)
+{
+    const auto & lookup = scan.lookup();
+    if (lookup.kind == PhysicalIndexLookupKind::Equal) {
+        if (!lookup.lower.has_value()) {
+            return std::unexpected(make_error(
+                ExecutionErrorCode::InvalidPlan,
+                scan.location(),
+                "Physical index equality lookup is missing its key"
+            ));
+        }
+        return index::IndexRange::closed(lookup.lower->key, lookup.lower->key);
+    }
+
+    if (lookup.lower.has_value() && lookup.upper.has_value()) {
+        return index::IndexRange::between(
+            lookup.lower->key,
+            lookup.lower->inclusive,
+            lookup.upper->key,
+            lookup.upper->inclusive
+        );
+    }
+    if (lookup.lower.has_value()) {
+        return index::IndexRange::lower_bound(lookup.lower->key, lookup.lower->inclusive);
+    }
+    if (lookup.upper.has_value()) {
+        return index::IndexRange::upper_bound(lookup.upper->key, lookup.upper->inclusive);
+    }
+    return index::IndexRange::all();
+}
+
+[[nodiscard]]
+std::expected<PipelineResult, ExecutionError> execute_index_scan(
+    const PhysicalIndexScan & scan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(filter.child(), catalog, storage, index_manager);
+    auto collection_schema = load_schema(catalog, scan.collection_id(), scan.location());
+    if (!collection_schema.has_value()) {
+        return std::unexpected(std::move(collection_schema.error()));
+    }
+
+    auto collection_storage = find_storage(storage, scan.collection_id(), scan.location());
+    if (!collection_storage.has_value()) {
+        return std::unexpected(std::move(collection_storage.error()));
+    }
+
+    auto index_view = index_manager.find_index(scan.index_id());
+    if (!index_view.has_value()) {
+        return std::unexpected(make_error(
+            ExecutionErrorCode::IndexError,
+            scan.location(),
+            "Physical index scan target index was not found"
+        ));
+    }
+
+    std::expected<std::vector<common::RecordId>, index::IndexError> record_ids;
+    if (scan.lookup().kind == PhysicalIndexLookupKind::Equal) {
+        if (!scan.lookup().lower.has_value()) {
+            return std::unexpected(make_error(
+                ExecutionErrorCode::InvalidPlan,
+                scan.location(),
+                "Physical index equality lookup is missing its key"
+            ));
+        }
+        record_ids = index_view->index.find_equal(scan.lookup().lower->key);
+    } else {
+        auto range = index_range_from_lookup(scan);
+        if (!range.has_value()) {
+            return std::unexpected(std::move(range.error()));
+        }
+        record_ids = index_view->index.scan_range(range.value());
+    }
+    if (!record_ids.has_value()) {
+        return std::unexpected(from_index_error(std::move(record_ids.error()), scan.location()));
+    }
+
+    PipelineResult result;
+    append_scan_columns(result, collection_schema.value());
+    for (const auto record_id : record_ids.value()) {
+        auto record = collection_storage.value()->get(record_id);
+        if (!record.has_value()) {
+            return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
+        }
+        append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
+    }
+
+    return result;
+}
+
+[[nodiscard]]
+std::expected<PipelineResult, ExecutionError> execute_filter(
+    const PhysicalFilter & filter,
+    catalog::Catalog & catalog,
+    storage::StorageManager & storage,
+    index::IndexManager & index_manager
+)
+{
+    auto input = execute_physical(filter.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -387,13 +492,13 @@ std::string projection_name(const binder::bound::BoundProjectionItem & projectio
 
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_projection(
-    const LogicalProjection & projection,
+    const PhysicalProjection & projection,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(projection.child(), catalog, storage, index_manager);
+    auto input = execute_physical(projection.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -467,7 +572,7 @@ int compare_values(const schema::Value & left, const schema::Value & right)
 
 [[nodiscard]]
 std::expected<std::vector<schema::Value>, ExecutionError> evaluate_order_keys(
-    const LogicalOrderBy & order_by,
+    const PhysicalSort & order_by,
     const PipelineRow & row
 )
 {
@@ -486,13 +591,13 @@ std::expected<std::vector<schema::Value>, ExecutionError> evaluate_order_keys(
 
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_order_by(
-    const LogicalOrderBy & order_by,
+    const PhysicalSort & order_by,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(order_by.child(), catalog, storage, index_manager);
+    auto input = execute_physical(order_by.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -557,13 +662,13 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
 
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_limit(
-    const LogicalLimit & limit,
+    const PhysicalLimit & limit,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
-    auto input = execute_logical(limit.child(), catalog, storage, index_manager);
+    auto input = execute_physical(limit.child(), catalog, storage, index_manager);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -587,38 +692,40 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
     return input;
 }
 
-std::expected<PipelineResult, ExecutionError> execute_logical(
-    const LogicalPlanNode & node,
+std::expected<PipelineResult, ExecutionError> execute_physical(
+    const PhysicalPlanNode & node,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
     switch (node.kind()) {
-    case LogicalPlanNodeKind::Scan:
-        return execute_scan(static_cast<const LogicalScan &>(node), catalog, storage);
-    case LogicalPlanNodeKind::Filter:
-        return execute_filter(static_cast<const LogicalFilter &>(node), catalog, storage, index_manager);
-    case LogicalPlanNodeKind::Projection:
-        return execute_projection(static_cast<const LogicalProjection &>(node), catalog, storage, index_manager);
-    case LogicalPlanNodeKind::OrderBy:
-        return execute_order_by(static_cast<const LogicalOrderBy &>(node), catalog, storage, index_manager);
-    case LogicalPlanNodeKind::Limit:
-        return execute_limit(static_cast<const LogicalLimit &>(node), catalog, storage, index_manager);
+    case PhysicalPlanNodeKind::SeqScan:
+        return execute_scan(static_cast<const PhysicalSeqScan &>(node), catalog, storage);
+    case PhysicalPlanNodeKind::IndexScan:
+        return execute_index_scan(static_cast<const PhysicalIndexScan &>(node), catalog, storage, index_manager);
+    case PhysicalPlanNodeKind::Filter:
+        return execute_filter(static_cast<const PhysicalFilter &>(node), catalog, storage, index_manager);
+    case PhysicalPlanNodeKind::Projection:
+        return execute_projection(static_cast<const PhysicalProjection &>(node), catalog, storage, index_manager);
+    case PhysicalPlanNodeKind::Sort:
+        return execute_order_by(static_cast<const PhysicalSort &>(node), catalog, storage, index_manager);
+    case PhysicalPlanNodeKind::Limit:
+        return execute_limit(static_cast<const PhysicalLimit &>(node), catalog, storage, index_manager);
     }
 
-    return std::unexpected(make_error(ExecutionErrorCode::InvalidPlan, node.location(), "Unknown logical plan node"));
+    return std::unexpected(make_error(ExecutionErrorCode::InvalidPlan, node.location(), "Unknown physical plan node"));
 }
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_query(
-    const planner::plan::QueryPlan & plan,
+    const PhysicalQueryPlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
-    auto pipeline = execute_logical(plan.root(), catalog, storage, index_manager);
+    auto pipeline = execute_physical(plan.root(), catalog, storage, index_manager);
     if (!pipeline.has_value()) {
         return std::unexpected(std::move(pipeline.error()));
     }
@@ -634,7 +741,7 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_database(
-    const planner::plan::CreateDatabasePlan & plan,
+    const PhysicalCreateDatabasePlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -651,7 +758,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_database(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_collection(
-    const planner::plan::CreateCollectionPlan & plan,
+    const PhysicalCreateCollectionPlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage
 )
@@ -686,7 +793,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_index(
-    const planner::plan::CreateIndexPlan & plan,
+    const PhysicalCreateIndexPlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
@@ -753,7 +860,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
-    const planner::plan::CreateVectorIndexPlan & plan,
+    const PhysicalCreateVectorIndexPlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -778,7 +885,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
-    const planner::plan::DropCollectionPlan & plan,
+    const PhysicalDropCollectionPlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
@@ -811,7 +918,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_index(
-    const planner::plan::DropIndexPlan & plan,
+    const PhysicalDropIndexPlan & plan,
     catalog::Catalog & catalog,
     index::IndexManager & index_manager
 )
@@ -843,7 +950,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_index(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
-    const planner::plan::DropVectorIndexPlan & plan,
+    const PhysicalDropVectorIndexPlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -866,7 +973,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_database(
-    const planner::plan::DropDatabasePlan & plan,
+    const PhysicalDropDatabasePlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
@@ -907,7 +1014,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_database(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_use(const planner::plan::UsePlan & plan)
+std::expected<ExecutionResult, ExecutionError> execute_use(const PhysicalUsePlan & plan)
 {
     ExecutionResult result;
     result.kind = ExecutionResultKind::UseDatabase;
@@ -918,7 +1025,7 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const planner::plan::
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_insert(
-    const planner::plan::InsertPlan & plan,
+    const PhysicalInsertPlan & plan,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -961,13 +1068,13 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_delete(
-    const planner::plan::DeletePlan & plan,
+    const PhysicalDeletePlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
-    auto rows = execute_logical(plan.input(), catalog, storage, index_manager);
+    auto rows = execute_physical(plan.input(), catalog, storage, index_manager);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -1014,7 +1121,7 @@ std::optional<std::size_t> ordinal_for_column(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_update(
-    const planner::plan::UpdatePlan & plan,
+    const PhysicalUpdatePlan & plan,
     catalog::Catalog & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
@@ -1025,7 +1132,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         return std::unexpected(std::move(collection_schema.error()));
     }
 
-    auto rows = execute_logical(plan.input(), catalog, storage, index_manager);
+    auto rows = execute_physical(plan.input(), catalog, storage, index_manager);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -1096,7 +1203,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_databases(catalog::C
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_collections(
-    const planner::plan::ShowCollectionsPlan & plan,
+    const PhysicalShowCollectionsPlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -1115,7 +1222,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_collections(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
-    const planner::plan::ShowIndexesPlan & plan,
+    const PhysicalShowIndexesPlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -1149,7 +1256,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
-    const planner::plan::ShowVectorIndexesPlan & plan,
+    const PhysicalShowVectorIndexesPlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -1193,7 +1300,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
-    const planner::plan::DescribeCollectionPlan & plan,
+    const PhysicalDescribeCollectionPlan & plan,
     catalog::Catalog & catalog
 )
 {
@@ -1246,69 +1353,69 @@ Executor::Executor(
 {
 }
 
-std::expected<ExecutionResult, ExecutionError> Executor::execute(const LogicalStatementPlan & plan)
+std::expected<ExecutionResult, ExecutionError> Executor::execute(const PhysicalStatementPlan & plan)
 {
     switch (plan.kind()) {
-    case LogicalStatementPlanKind::Use:
-        return execute_use(static_cast<const planner::plan::UsePlan &>(plan));
-    case LogicalStatementPlanKind::CreateDatabase:
+    case PhysicalStatementPlanKind::Use:
+        return execute_use(static_cast<const PhysicalUsePlan &>(plan));
+    case PhysicalStatementPlanKind::CreateDatabase:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_database(static_cast<const planner::plan::CreateDatabasePlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_create_database(static_cast<const PhysicalCreateDatabasePlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_create_database(static_cast<const planner::plan::CreateDatabasePlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::CreateCollection:
+        return execute_create_database(static_cast<const PhysicalCreateDatabasePlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::CreateCollection:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_collection(static_cast<const planner::plan::CreateCollectionPlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_create_collection(static_cast<const PhysicalCreateCollectionPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_create_collection(static_cast<const planner::plan::CreateCollectionPlan &>(plan), catalog_, storage_);
-    case LogicalStatementPlanKind::CreateIndex:
+        return execute_create_collection(static_cast<const PhysicalCreateCollectionPlan &>(plan), catalog_, storage_);
+    case PhysicalStatementPlanKind::CreateIndex:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_index(static_cast<const planner::plan::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_create_index(static_cast<const PhysicalCreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_create_index(static_cast<const planner::plan::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
-    case LogicalStatementPlanKind::CreateVectorIndex:
+        return execute_create_index(static_cast<const PhysicalCreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
+    case PhysicalStatementPlanKind::CreateVectorIndex:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_create_vector_index(static_cast<const planner::plan::CreateVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_create_vector_index(static_cast<const PhysicalCreateVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_create_vector_index(static_cast<const planner::plan::CreateVectorIndexPlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::DropDatabase:
+        return execute_create_vector_index(static_cast<const PhysicalCreateVectorIndexPlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::DropDatabase:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_database(static_cast<const planner::plan::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_drop_database(static_cast<const PhysicalDropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_database(static_cast<const planner::plan::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
-    case LogicalStatementPlanKind::DropCollection:
+        return execute_drop_database(static_cast<const PhysicalDropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
+    case PhysicalStatementPlanKind::DropCollection:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_collection(static_cast<const planner::plan::DropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_drop_collection(static_cast<const PhysicalDropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_collection(static_cast<const planner::plan::DropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
-    case LogicalStatementPlanKind::DropIndex:
+        return execute_drop_collection(static_cast<const PhysicalDropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
+    case PhysicalStatementPlanKind::DropIndex:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_index(static_cast<const planner::plan::DropIndexPlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_drop_index(static_cast<const PhysicalDropIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_index(static_cast<const planner::plan::DropIndexPlan &>(plan), catalog_, index_manager_);
-    case LogicalStatementPlanKind::DropVectorIndex:
+        return execute_drop_index(static_cast<const PhysicalDropIndexPlan &>(plan), catalog_, index_manager_);
+    case PhysicalStatementPlanKind::DropVectorIndex:
         if (ddl_handler_ != nullptr) {
-            return ddl_handler_->execute_drop_vector_index(static_cast<const planner::plan::DropVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
+            return ddl_handler_->execute_drop_vector_index(static_cast<const PhysicalDropVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
-        return execute_drop_vector_index(static_cast<const planner::plan::DropVectorIndexPlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::ShowDatabases:
+        return execute_drop_vector_index(static_cast<const PhysicalDropVectorIndexPlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::ShowDatabases:
         return execute_show_databases(catalog_);
-    case LogicalStatementPlanKind::ShowCollections:
-        return execute_show_collections(static_cast<const planner::plan::ShowCollectionsPlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::ShowIndexes:
-        return execute_show_indexes(static_cast<const planner::plan::ShowIndexesPlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::ShowVectorIndexes:
-        return execute_show_vector_indexes(static_cast<const planner::plan::ShowVectorIndexesPlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::DescribeCollection:
-        return execute_describe_collection(static_cast<const planner::plan::DescribeCollectionPlan &>(plan), catalog_);
-    case LogicalStatementPlanKind::Insert:
-        return execute_insert(static_cast<const planner::plan::InsertPlan &>(plan), storage_, index_manager_);
-    case LogicalStatementPlanKind::Update:
-        return execute_update(static_cast<const planner::plan::UpdatePlan &>(plan), catalog_, storage_, index_manager_);
-    case LogicalStatementPlanKind::Delete:
-        return execute_delete(static_cast<const planner::plan::DeletePlan &>(plan), catalog_, storage_, index_manager_);
-    case LogicalStatementPlanKind::Query:
-        return execute_query(static_cast<const planner::plan::QueryPlan &>(plan), catalog_, storage_, index_manager_);
+    case PhysicalStatementPlanKind::ShowCollections:
+        return execute_show_collections(static_cast<const PhysicalShowCollectionsPlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::ShowIndexes:
+        return execute_show_indexes(static_cast<const PhysicalShowIndexesPlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::ShowVectorIndexes:
+        return execute_show_vector_indexes(static_cast<const PhysicalShowVectorIndexesPlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::DescribeCollection:
+        return execute_describe_collection(static_cast<const PhysicalDescribeCollectionPlan &>(plan), catalog_);
+    case PhysicalStatementPlanKind::Insert:
+        return execute_insert(static_cast<const PhysicalInsertPlan &>(plan), storage_, index_manager_);
+    case PhysicalStatementPlanKind::Update:
+        return execute_update(static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_manager_);
+    case PhysicalStatementPlanKind::Delete:
+        return execute_delete(static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_manager_);
+    case PhysicalStatementPlanKind::Query:
+        return execute_query(static_cast<const PhysicalQueryPlan &>(plan), catalog_, storage_, index_manager_);
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::UnsupportedStatement, internal_location, "Unsupported statement"));

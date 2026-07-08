@@ -12,6 +12,8 @@ target_link_libraries(litedb_engine PUBLIC
     litedb_parser
     litedb_binder
     litedb_logical_plan
+    litedb_optimizer
+    litedb_physical_plan
     litedb_executor
     litedb_index
     litedb_persistence

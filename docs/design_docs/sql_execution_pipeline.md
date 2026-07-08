@@ -36,7 +36,7 @@ SELECT id, name FROM users WHERE age >= 18 LIMIT 10;
 第一版目标不是实现完整数据库优化器，也不是一次性完成复杂持久化和分布式能力，而是打通：
 
 ```text
-Parser -> Binder -> Plan -> Executor -> Storage Interface
+Parser -> Binder -> LogicalPlanner -> Optimizer -> PhysicalPlanner -> Executor -> Storage Interface
 ```
 
 之后再逐步扩展向量检索、索引、持久化和分布式调度。

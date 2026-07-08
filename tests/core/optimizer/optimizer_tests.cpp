@@ -6,6 +6,7 @@
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
+#include "core/physical_plan/physical_planner.hpp"
 #include "core/logical_plan/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
 #include "core/logical_plan/node/logical_plan_node.hpp"
@@ -150,7 +151,9 @@ std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::E
 )
 {
     litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_manager};
-    return executor.execute(plan);
+    litedb::core::physical_plan::PhysicalPlanner physical_planner;
+    auto physical = physical_planner.plan(plan);
+    return executor.execute(*physical);
 }
 
 const LogicalPlanNode & query_root(const LogicalStatementPlan & plan)

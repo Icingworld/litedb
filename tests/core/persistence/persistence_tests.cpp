@@ -279,7 +279,7 @@ void test_database_instance_reopens_persistent_data()
         execute_ok(
             session,
             "CREATE COLLECTION users ("
-            "id BIGINT PRIMARY KEY, "
+            "id BIGINT NOT NULL, "
             "name VARCHAR(64) COMMENT 'display name' DEFAULT 'unknown', "
             "age INTEGER, "
             "embedding VECTOR(3)"
@@ -320,9 +320,9 @@ void test_index_ddl_reopen()
         engine::Session session {instance};
         execute_ok(session, "CREATE DATABASE demo;");
         execute_ok(session, "USE demo;");
-        execute_ok(session, "CREATE COLLECTION users (id BIGINT PRIMARY KEY, age INTEGER);");
+        execute_ok(session, "CREATE COLLECTION users (id BIGINT NOT NULL, age INTEGER);");
         execute_ok(session, "INSERT INTO users VALUES (1, 18);");
-        auto created = execute_ok(session, "CREATE INDEX idx_age ON users (age) USING HASH;");
+        auto created = execute_ok(session, "CREATE INDEX idx_age ON users (age) USING BTREE;");
         require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
 
         const auto * database = instance.catalog().find_database("demo");
@@ -331,7 +331,7 @@ void test_index_ddl_reopen()
         require(collection != nullptr, "created collection lookup failed");
         const auto * index = instance.catalog().find_index(collection->id(), "idx_age");
         require(index != nullptr, "created index lookup failed");
-        require(index->index_kind() == catalog::CatalogIndexKind::Hash, "created index kind mismatch");
+        require(index->index_kind() == catalog::CatalogIndexKind::BTree, "created index kind mismatch");
         require(find_index_equal(instance, index->id(), schema::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
     }
 
@@ -345,7 +345,7 @@ void test_index_ddl_reopen()
         users_id = collection->id();
         const auto * index = reopened.catalog().find_index(users_id, "idx_age");
         require(index != nullptr, "reopened index missing");
-        require(index->index_kind() == catalog::CatalogIndexKind::Hash, "reopened index kind mismatch");
+        require(index->index_kind() == catalog::CatalogIndexKind::BTree, "reopened index kind mismatch");
         const auto index_id = index->id();
         require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {18}}).size() == 1, "reopened index should be rebuilt");
 
@@ -383,7 +383,7 @@ void test_vector_index_ddl_reopen()
         engine::Session session {instance};
         execute_ok(session, "CREATE DATABASE demo;");
         execute_ok(session, "USE demo;");
-        execute_ok(session, "CREATE COLLECTION docs (id BIGINT PRIMARY KEY, embedding VECTOR(3));");
+        execute_ok(session, "CREATE COLLECTION docs (id BIGINT NOT NULL, embedding VECTOR(3));");
 
         auto created = execute_ok(
             session,
@@ -451,7 +451,7 @@ void test_drop_collection_reopen()
         engine::Session session {instance};
         execute_ok(session, "CREATE DATABASE demo;");
         execute_ok(session, "USE demo;");
-        execute_ok(session, "CREATE COLLECTION users (id BIGINT PRIMARY KEY);");
+        execute_ok(session, "CREATE COLLECTION users (id BIGINT NOT NULL);");
         execute_ok(session, "INSERT INTO users VALUES (1);");
         execute_ok(session, "DROP COLLECTION users;");
     }

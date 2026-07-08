@@ -12,7 +12,7 @@ SQL text
   -> Binder / BoundStatement
   -> LogicalPlanner / LogicalStatementPlan
   -> Optimizer / optimized LogicalStatementPlan
-  -> Physical Planner
+  -> PhysicalPlanner / PhysicalStatementPlan
   -> Executor
 ```
 
