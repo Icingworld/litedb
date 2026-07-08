@@ -1,5 +1,6 @@
 add_subdirectory(parser)
 add_subdirectory(catalog)
+add_subdirectory(meta)
 add_subdirectory(schema)
 add_subdirectory(index)
 add_subdirectory(vindex)
