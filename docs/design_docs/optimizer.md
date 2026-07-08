@@ -10,8 +10,8 @@ Optimizer 的职责是把 LogicalPlanner 生成的逻辑数据流改写为更适
 SQL text
   -> Parser / AST
   -> Binder / BoundStatement
-  -> LogicalPlanner / StatementPlan
-  -> Optimizer / optimized StatementPlan
+  -> LogicalPlanner / LogicalStatementPlan
+  -> Optimizer / optimized LogicalStatementPlan
   -> Physical Planner
   -> Executor
 ```
@@ -65,7 +65,7 @@ DuckDB 更偏向统一 logical operator 路线，Binder 之后大量 statement �
 对 LiteDB 的借鉴：
 
 - 可以学习它的规则组织方式和 logical/physical 分层。
-- 当前不建议直接模仿“所有 statement 都是 logical operator”，因为 LiteDB 现有 `StatementPlan` 已经自然区分 command、mutation、query。
+- 当前不建议直接模仿“所有 statement 都是 logical operator”，因为 LiteDB 现有 `LogicalStatementPlan` 已经自然区分 command、mutation、query。
 
 ### 2.4 Volcano/Cascades 路线
 
@@ -140,8 +140,8 @@ class Optimizer
 {
 public:
     [[nodiscard]]
-    std::expected<std::unique_ptr<planner::plan::StatementPlan>, OptimizerError> optimize(
-        std::unique_ptr<planner::plan::StatementPlan> plan
+    std::expected<std::unique_ptr<planner::plan::LogicalStatementPlan>, OptimizerError> optimize(
+        std::unique_ptr<planner::plan::LogicalStatementPlan> plan
     ) const;
 };
 
@@ -151,7 +151,7 @@ public:
 内部按 plan kind 分流：
 
 ```text
-StatementPlan
+LogicalStatementPlan
   -> Optimizer
        -> QueryOptimizer
             QueryPlan.root
@@ -159,7 +159,7 @@ StatementPlan
             UpdatePlan.input
             DeletePlan.input
        -> Command passthrough
-  -> StatementPlan
+  -> LogicalStatementPlan
 ```
 
 第一版可以原地重建 logical tree，也可以把 logical node 改为支持 move-based rewrite。不要为了 optimizer 过早引入共享所有权，计划树仍应保持 `std::unique_ptr` 单所有者模型。
@@ -660,7 +660,7 @@ Rule ProjectionPruningRule set Scan(users).required_columns=[id,name,age]
 - `Projection`、`Filter`、`OrderBy` 共同决定 scan required columns。
 - `Limit -> OrderBy` 生成 limit hint，但不改变排序语义。
 
-### 11.3 StatementPlan 分流测试
+### 11.3 LogicalStatementPlan 分流测试
 
 覆盖：
 
@@ -696,7 +696,7 @@ struct OptimizerOptions
 目标：
 
 - 新增 `internal/src/core/optimizer`。
-- `Optimizer::optimize()` 接收并返回 `StatementPlan`。
+- `Optimizer::optimize()` 接收并返回 `LogicalStatementPlan`。
 - Query/Update/Delete 能识别 logical root/input。
 - Command/Insert passthrough。
 - 接入 engine 主链路，但默认行为不变。
@@ -764,7 +764,7 @@ struct OptimizerOptions
 1. Optimizer 不做 Binder 的事：不解析名称、不做类型检查、不修正非法 SQL。
 2. Optimizer 不直接做 Executor 的事：不访问 storage，不产生结果行。
 3. 第一版只做规则优化，不假装拥有统计信息。
-4. `StatementPlan` 是顶层执行计划容器，`LogicalPlanNode` 只表达可优化的数据流。
+4. `LogicalStatementPlan` 是顶层执行计划容器，`LogicalPlanNode` 只表达可优化的数据流。
 5. DDL/SHOW/DESCRIBE 第一版 passthrough，未来有系统表后再考虑 lower 成 catalog query。
 6. 投影裁剪应影响 scan 的 required columns，不应删除输出 Projection 语义。
 7. 所有规则必须可关闭、可测试、可通过 debug printer 观察。

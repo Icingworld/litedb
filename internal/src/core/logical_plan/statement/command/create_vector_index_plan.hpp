@@ -5,7 +5,7 @@
 
 #include "core/catalog/catalog_entry.hpp"
 #include "core/common/ids.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::plan
 {
@@ -13,7 +13,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief CREATE VINDEX 语句计划
  */
-class CreateVectorIndexPlan final : public StatementPlan
+class CreateVectorIndexPlan final : public LogicalStatementPlan
 {
 public:
     CreateVectorIndexPlan(

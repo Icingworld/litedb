@@ -12,7 +12,7 @@ DropCollectionPlan::DropCollectionPlan(
     bool if_exists,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::DropCollection, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::DropCollection, location)
     , database_id_(database_id)
     , collection_id_(collection_id)
     , collection_name_(std::move(collection_name))

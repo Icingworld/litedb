@@ -8,8 +8,8 @@ Physical Plan 的职责是把优化后的逻辑数据流转换成 executor 可�
 
 ```text
 BoundStatement
-  -> LogicalPlanner / StatementPlan
-  -> Optimizer / optimized StatementPlan
+  -> LogicalPlanner / LogicalStatementPlan
+  -> Optimizer / optimized LogicalStatementPlan
   -> PhysicalPlanner / PhysicalStatementPlan
   -> Executor
 ```
@@ -50,7 +50,7 @@ LogicalLimit      -> PhysicalLimit
 Statement lowering 的顶层结构为：
 
 ```text
-StatementPlan
+LogicalStatementPlan
   -> PhysicalStatementPlan
      -> PhysicalQueryPlan(root: PhysicalPlanNode)
      -> PhysicalRowMutationPlan(input: PhysicalPlanNode)

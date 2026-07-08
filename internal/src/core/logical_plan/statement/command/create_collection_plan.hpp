@@ -6,7 +6,7 @@
 
 #include "core/catalog/catalog_writer.hpp"
 #include "core/common/ids.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::planner::plan
 {
@@ -14,7 +14,7 @@ namespace litedb::core::planner::plan
 /**
  * @brief CREATE COLLECTION 语句计划
  */
-class CreateCollectionPlan final : public StatementPlan
+class CreateCollectionPlan final : public LogicalStatementPlan
 {
 public:
     CreateCollectionPlan(

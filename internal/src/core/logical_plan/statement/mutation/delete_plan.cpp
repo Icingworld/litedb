@@ -12,7 +12,7 @@ DeletePlan::DeletePlan(
     std::string collection_name,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::Delete, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::Delete, location)
     , input_(std::move(input))
     , database_id_(database_id)
     , collection_id_(collection_id)

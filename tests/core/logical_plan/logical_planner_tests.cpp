@@ -27,7 +27,7 @@
 #include "core/logical_plan/statement/command/show_collections_plan.hpp"
 #include "core/logical_plan/statement/command/show_indexes_plan.hpp"
 #include "core/logical_plan/statement/command/show_vector_indexes_plan.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/command/use_plan.hpp"
 #include "core/schema/schema_loader.hpp"
@@ -149,7 +149,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> plan_ok(
+std::unique_ptr<LogicalStatementPlan> plan_ok(
     Fixture & fixture,
     std::string_view sql,
     const IndexManager * index_manager = nullptr
@@ -164,9 +164,9 @@ std::unique_ptr<StatementPlan> plan_ok(
     return std::move(result.value());
 }
 
-const LogicalPlanNode & query_root(const StatementPlan & plan)
+const LogicalPlanNode & query_root(const LogicalStatementPlan & plan)
 {
-    require(plan.kind() == StatementPlanKind::Query, "plan should be query");
+    require(plan.kind() == LogicalStatementPlanKind::Query, "plan should be query");
     return static_cast<const QueryPlan &>(plan).root();
 }
 
@@ -262,7 +262,7 @@ void test_insert_plan()
     Fixture fixture;
     auto plan = plan_ok(fixture, "INSERT INTO users (id, age, embedding) VALUES (1, 18, [0.1, 0.2, 0.3]);");
 
-    require(plan->kind() == StatementPlanKind::Insert, "INSERT kind mismatch");
+    require(plan->kind() == LogicalStatementPlanKind::Insert, "INSERT kind mismatch");
     const auto & insert = static_cast<const InsertPlan &>(*plan);
     require(insert.database_id() == fixture.database_id, "INSERT database id mismatch");
     require(insert.collection_id() == fixture.users_id, "INSERT collection id mismatch");
@@ -274,7 +274,7 @@ void test_update_delete_plans()
 {
     Fixture fixture;
     auto update = plan_ok(fixture, "UPDATE users SET age = age + 1 WHERE id = 1;");
-    require(update->kind() == StatementPlanKind::Update, "UPDATE kind mismatch");
+    require(update->kind() == LogicalStatementPlanKind::Update, "UPDATE kind mismatch");
     const auto & update_node = static_cast<const UpdatePlan &>(*update);
     require(update_node.assignments().size() == 1, "UPDATE assignment count mismatch");
     require(update_node.input().kind() == LogicalPlanNodeKind::Filter, "UPDATE with WHERE should have filter input");
@@ -282,17 +282,17 @@ void test_update_delete_plans()
     require(update_filter.child().kind() == LogicalPlanNodeKind::Scan, "UPDATE filter child should be scan");
 
     auto update_without_where = plan_ok(fixture, "UPDATE users SET age = 20;");
-    require(update_without_where->kind() == StatementPlanKind::Update, "UPDATE without WHERE kind mismatch");
+    require(update_without_where->kind() == LogicalStatementPlanKind::Update, "UPDATE without WHERE kind mismatch");
     const auto & update_without_where_node = static_cast<const UpdatePlan &>(*update_without_where);
     require(update_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "UPDATE without WHERE should scan directly");
 
     auto del = plan_ok(fixture, "DELETE FROM users WHERE id = 1;");
-    require(del->kind() == StatementPlanKind::Delete, "DELETE kind mismatch");
+    require(del->kind() == LogicalStatementPlanKind::Delete, "DELETE kind mismatch");
     const auto & delete_node = static_cast<const DeletePlan &>(*del);
     require(delete_node.input().kind() == LogicalPlanNodeKind::Filter, "DELETE with WHERE should have filter input");
 
     auto delete_without_where = plan_ok(fixture, "DELETE FROM users;");
-    require(delete_without_where->kind() == StatementPlanKind::Delete, "DELETE without WHERE kind mismatch");
+    require(delete_without_where->kind() == LogicalStatementPlanKind::Delete, "DELETE without WHERE kind mismatch");
     const auto & delete_without_where_node = static_cast<const DeletePlan &>(*delete_without_where);
     require(delete_without_where_node.input().kind() == LogicalPlanNodeKind::Scan, "DELETE without WHERE should scan directly");
 }
@@ -334,21 +334,21 @@ void test_admin_and_ddl_plans()
     Fixture fixture;
 
     auto use = plan_ok(fixture, "USE demo;");
-    require(use->kind() == StatementPlanKind::Use, "USE kind mismatch");
+    require(use->kind() == LogicalStatementPlanKind::Use, "USE kind mismatch");
     require(static_cast<const UsePlan &>(*use).database_id() == fixture.database_id, "USE database id mismatch");
 
     auto create_database = plan_ok(fixture, "CREATE DATABASE demo2;");
-    require(create_database->kind() == StatementPlanKind::CreateDatabase, "CREATE DATABASE kind mismatch");
+    require(create_database->kind() == LogicalStatementPlanKind::CreateDatabase, "CREATE DATABASE kind mismatch");
     require(static_cast<const CreateDatabasePlan &>(*create_database).database_name() == "demo2", "CREATE DATABASE name mismatch");
 
     auto create_collection = plan_ok(fixture, "CREATE COLLECTION posts (id BIGINT, embedding VECTOR(3));");
-    require(create_collection->kind() == StatementPlanKind::CreateCollection, "CREATE COLLECTION kind mismatch");
+    require(create_collection->kind() == LogicalStatementPlanKind::CreateCollection, "CREATE COLLECTION kind mismatch");
     const auto & create_collection_node = static_cast<const CreateCollectionPlan &>(*create_collection);
     require(create_collection_node.database_id() == fixture.database_id, "CREATE COLLECTION database id mismatch");
     require(create_collection_node.columns().size() == 2, "CREATE COLLECTION column count mismatch");
 
     auto create_index = plan_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING BTREE;");
-    require(create_index->kind() == StatementPlanKind::CreateIndex, "CREATE INDEX kind mismatch");
+    require(create_index->kind() == LogicalStatementPlanKind::CreateIndex, "CREATE INDEX kind mismatch");
     const auto & create_index_node = static_cast<const CreateIndexPlan &>(*create_index);
     require(create_index_node.database_id() == fixture.database_id, "CREATE INDEX database id mismatch");
     require(create_index_node.collection_id() == fixture.users_id, "CREATE INDEX collection id mismatch");
@@ -364,7 +364,7 @@ void test_admin_and_ddl_plans()
         "CREATE VINDEX IF NOT EXISTS vidx_embedding ON users (embedding) USING HNSW "
         "WITH (metric = COSINE, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 7);"
     );
-    require(create_vector_index->kind() == StatementPlanKind::CreateVectorIndex, "CREATE VINDEX kind mismatch");
+    require(create_vector_index->kind() == LogicalStatementPlanKind::CreateVectorIndex, "CREATE VINDEX kind mismatch");
     const auto & create_vector_index_node = static_cast<const CreateVectorIndexPlan &>(*create_vector_index);
     require(create_vector_index_node.database_id() == fixture.database_id, "CREATE VINDEX database id mismatch");
     require(create_vector_index_node.collection_id() == fixture.users_id, "CREATE VINDEX collection id mismatch");
@@ -380,13 +380,13 @@ void test_admin_and_ddl_plans()
     require(create_vector_index_node.if_not_exists(), "CREATE VINDEX if not exists mismatch");
 
     auto drop_database = plan_ok(fixture, "DROP DATABASE IF EXISTS missing;");
-    require(drop_database->kind() == StatementPlanKind::DropDatabase, "DROP DATABASE kind mismatch");
+    require(drop_database->kind() == LogicalStatementPlanKind::DropDatabase, "DROP DATABASE kind mismatch");
     const auto & drop_database_node = static_cast<const DropDatabasePlan &>(*drop_database);
     require(drop_database_node.if_exists(), "DROP DATABASE if exists mismatch");
     require(drop_database_node.database_name() == "missing", "DROP DATABASE name mismatch");
 
     auto drop_collection = plan_ok(fixture, "DROP COLLECTION IF EXISTS missing;");
-    require(drop_collection->kind() == StatementPlanKind::DropCollection, "DROP COLLECTION kind mismatch");
+    require(drop_collection->kind() == LogicalStatementPlanKind::DropCollection, "DROP COLLECTION kind mismatch");
     const auto & drop_collection_node = static_cast<const DropCollectionPlan &>(*drop_collection);
     require(drop_collection_node.database_id() == fixture.database_id, "DROP COLLECTION database id mismatch");
     require(drop_collection_node.if_exists(), "DROP COLLECTION if exists mismatch");
@@ -402,7 +402,7 @@ void test_admin_and_ddl_plans()
     require(created_index.has_value(), "fixture index create failed");
 
     auto drop_index = plan_ok(fixture, "DROP INDEX idx_age ON users;");
-    require(drop_index->kind() == StatementPlanKind::DropIndex, "DROP INDEX kind mismatch");
+    require(drop_index->kind() == LogicalStatementPlanKind::DropIndex, "DROP INDEX kind mismatch");
     const auto & drop_index_node = static_cast<const DropIndexPlan &>(*drop_index);
     require(drop_index_node.database_id() == fixture.database_id, "DROP INDEX database id mismatch");
     require(drop_index_node.collection_id() == fixture.users_id, "DROP INDEX collection id mismatch");
@@ -420,7 +420,7 @@ void test_admin_and_ddl_plans()
     require(created_vector_index.has_value(), "fixture vector index create failed");
 
     auto drop_vector_index = plan_ok(fixture, "DROP VINDEX vidx_embedding ON users;");
-    require(drop_vector_index->kind() == StatementPlanKind::DropVectorIndex, "DROP VINDEX kind mismatch");
+    require(drop_vector_index->kind() == LogicalStatementPlanKind::DropVectorIndex, "DROP VINDEX kind mismatch");
     const auto & drop_vector_index_node = static_cast<const DropVectorIndexPlan &>(*drop_vector_index);
     require(drop_vector_index_node.database_id() == fixture.database_id, "DROP VINDEX database id mismatch");
     require(drop_vector_index_node.collection_id() == fixture.users_id, "DROP VINDEX collection id mismatch");
@@ -428,28 +428,28 @@ void test_admin_and_ddl_plans()
     require(drop_vector_index_node.index_name() == "vidx_embedding", "DROP VINDEX index name mismatch");
     require(!drop_vector_index_node.if_exists(), "DROP VINDEX if exists mismatch");
 
-    require(plan_ok(fixture, "SHOW DATABASES;")->kind() == StatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
+    require(plan_ok(fixture, "SHOW DATABASES;")->kind() == LogicalStatementPlanKind::ShowDatabases, "SHOW DATABASES kind mismatch");
 
     auto show_collections = plan_ok(fixture, "SHOW COLLECTIONS;");
-    require(show_collections->kind() == StatementPlanKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
+    require(show_collections->kind() == LogicalStatementPlanKind::ShowCollections, "SHOW COLLECTIONS kind mismatch");
     require(static_cast<const ShowCollectionsPlan &>(*show_collections).database_id() == fixture.database_id, "SHOW COLLECTIONS database id mismatch");
 
     auto show_indexes = plan_ok(fixture, "SHOW INDEXES FROM users;");
-    require(show_indexes->kind() == StatementPlanKind::ShowIndexes, "SHOW INDEXES kind mismatch");
+    require(show_indexes->kind() == LogicalStatementPlanKind::ShowIndexes, "SHOW INDEXES kind mismatch");
     const auto & show_indexes_node = static_cast<const ShowIndexesPlan &>(*show_indexes);
     require(show_indexes_node.database_id() == fixture.database_id, "SHOW INDEXES database id mismatch");
     require(show_indexes_node.collection_id() == fixture.users_id, "SHOW INDEXES collection id mismatch");
     require(show_indexes_node.collection_name() == "users", "SHOW INDEXES collection name mismatch");
 
     auto show_vector_indexes = plan_ok(fixture, "SHOW VINDEXES FROM users;");
-    require(show_vector_indexes->kind() == StatementPlanKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
+    require(show_vector_indexes->kind() == LogicalStatementPlanKind::ShowVectorIndexes, "SHOW VINDEXES kind mismatch");
     const auto & show_vector_indexes_node = static_cast<const ShowVectorIndexesPlan &>(*show_vector_indexes);
     require(show_vector_indexes_node.database_id() == fixture.database_id, "SHOW VINDEXES database id mismatch");
     require(show_vector_indexes_node.collection_id() == fixture.users_id, "SHOW VINDEXES collection id mismatch");
     require(show_vector_indexes_node.collection_name() == "users", "SHOW VINDEXES collection name mismatch");
 
     auto describe = plan_ok(fixture, "DESCRIBE users;");
-    require(describe->kind() == StatementPlanKind::DescribeCollection, "DESCRIBE kind mismatch");
+    require(describe->kind() == LogicalStatementPlanKind::DescribeCollection, "DESCRIBE kind mismatch");
     const auto & describe_node = static_cast<const DescribeCollectionPlan &>(*describe);
     require(describe_node.database_id() == fixture.database_id, "DESCRIBE database id mismatch");
     require(describe_node.collection_id() == fixture.users_id, "DESCRIBE collection id mismatch");

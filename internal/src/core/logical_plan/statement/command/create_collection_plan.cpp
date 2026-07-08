@@ -13,7 +13,7 @@ CreateCollectionPlan::CreateCollectionPlan(
     std::optional<std::string> comment,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::CreateCollection, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::CreateCollection, location)
     , database_id_(database_id)
     , collection_name_(std::move(collection_name))
     , if_not_exists_(if_not_exists)

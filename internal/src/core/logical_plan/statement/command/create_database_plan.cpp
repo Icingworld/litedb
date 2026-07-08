@@ -10,7 +10,7 @@ CreateDatabasePlan::CreateDatabasePlan(
     bool if_not_exists,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::CreateDatabase, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::CreateDatabase, location)
     , database_name_(std::move(database_name))
     , if_not_exists_(if_not_exists)
 {

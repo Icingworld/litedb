@@ -6,7 +6,7 @@
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 #include "core/storage/storage_manager.hpp"
 
 namespace litedb::core::planner::plan
@@ -111,7 +111,7 @@ public:
      * @return 执行结果
      */
     [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(const planner::plan::StatementPlan & plan);
+    std::expected<ExecutionResult, ExecutionError> execute(const planner::plan::LogicalStatementPlan & plan);
 
 private:
     catalog::Catalog & catalog_;                        ///< 目录

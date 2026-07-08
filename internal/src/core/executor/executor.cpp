@@ -48,8 +48,8 @@ using binder::bound::BoundExpression;
 using common::LogicalType;
 using common::LogicalTypeId;
 using parser::ast::AstNodeLocation;
-using planner::plan::StatementPlan;
-using planner::plan::StatementPlanKind;
+using planner::plan::LogicalStatementPlan;
+using planner::plan::LogicalStatementPlanKind;
 using planner::logical::LogicalFilter;
 using planner::logical::LogicalLimit;
 using planner::logical::LogicalOrderBy;
@@ -1246,68 +1246,68 @@ Executor::Executor(
 {
 }
 
-std::expected<ExecutionResult, ExecutionError> Executor::execute(const StatementPlan & plan)
+std::expected<ExecutionResult, ExecutionError> Executor::execute(const LogicalStatementPlan & plan)
 {
     switch (plan.kind()) {
-    case StatementPlanKind::Use:
+    case LogicalStatementPlanKind::Use:
         return execute_use(static_cast<const planner::plan::UsePlan &>(plan));
-    case StatementPlanKind::CreateDatabase:
+    case LogicalStatementPlanKind::CreateDatabase:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_create_database(static_cast<const planner::plan::CreateDatabasePlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_database(static_cast<const planner::plan::CreateDatabasePlan &>(plan), catalog_);
-    case StatementPlanKind::CreateCollection:
+    case LogicalStatementPlanKind::CreateCollection:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_create_collection(static_cast<const planner::plan::CreateCollectionPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_collection(static_cast<const planner::plan::CreateCollectionPlan &>(plan), catalog_, storage_);
-    case StatementPlanKind::CreateIndex:
+    case LogicalStatementPlanKind::CreateIndex:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_create_index(static_cast<const planner::plan::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_index(static_cast<const planner::plan::CreateIndexPlan &>(plan), catalog_, storage_, index_manager_);
-    case StatementPlanKind::CreateVectorIndex:
+    case LogicalStatementPlanKind::CreateVectorIndex:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_create_vector_index(static_cast<const planner::plan::CreateVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_create_vector_index(static_cast<const planner::plan::CreateVectorIndexPlan &>(plan), catalog_);
-    case StatementPlanKind::DropDatabase:
+    case LogicalStatementPlanKind::DropDatabase:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_drop_database(static_cast<const planner::plan::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_drop_database(static_cast<const planner::plan::DropDatabasePlan &>(plan), catalog_, storage_, index_manager_);
-    case StatementPlanKind::DropCollection:
+    case LogicalStatementPlanKind::DropCollection:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_drop_collection(static_cast<const planner::plan::DropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_drop_collection(static_cast<const planner::plan::DropCollectionPlan &>(plan), catalog_, storage_, index_manager_);
-    case StatementPlanKind::DropIndex:
+    case LogicalStatementPlanKind::DropIndex:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_drop_index(static_cast<const planner::plan::DropIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_drop_index(static_cast<const planner::plan::DropIndexPlan &>(plan), catalog_, index_manager_);
-    case StatementPlanKind::DropVectorIndex:
+    case LogicalStatementPlanKind::DropVectorIndex:
         if (ddl_handler_ != nullptr) {
             return ddl_handler_->execute_drop_vector_index(static_cast<const planner::plan::DropVectorIndexPlan &>(plan), catalog_, storage_, index_manager_);
         }
         return execute_drop_vector_index(static_cast<const planner::plan::DropVectorIndexPlan &>(plan), catalog_);
-    case StatementPlanKind::ShowDatabases:
+    case LogicalStatementPlanKind::ShowDatabases:
         return execute_show_databases(catalog_);
-    case StatementPlanKind::ShowCollections:
+    case LogicalStatementPlanKind::ShowCollections:
         return execute_show_collections(static_cast<const planner::plan::ShowCollectionsPlan &>(plan), catalog_);
-    case StatementPlanKind::ShowIndexes:
+    case LogicalStatementPlanKind::ShowIndexes:
         return execute_show_indexes(static_cast<const planner::plan::ShowIndexesPlan &>(plan), catalog_);
-    case StatementPlanKind::ShowVectorIndexes:
+    case LogicalStatementPlanKind::ShowVectorIndexes:
         return execute_show_vector_indexes(static_cast<const planner::plan::ShowVectorIndexesPlan &>(plan), catalog_);
-    case StatementPlanKind::DescribeCollection:
+    case LogicalStatementPlanKind::DescribeCollection:
         return execute_describe_collection(static_cast<const planner::plan::DescribeCollectionPlan &>(plan), catalog_);
-    case StatementPlanKind::Insert:
+    case LogicalStatementPlanKind::Insert:
         return execute_insert(static_cast<const planner::plan::InsertPlan &>(plan), storage_, index_manager_);
-    case StatementPlanKind::Update:
+    case LogicalStatementPlanKind::Update:
         return execute_update(static_cast<const planner::plan::UpdatePlan &>(plan), catalog_, storage_, index_manager_);
-    case StatementPlanKind::Delete:
+    case LogicalStatementPlanKind::Delete:
         return execute_delete(static_cast<const planner::plan::DeletePlan &>(plan), catalog_, storage_, index_manager_);
-    case StatementPlanKind::Query:
+    case LogicalStatementPlanKind::Query:
         return execute_query(static_cast<const planner::plan::QueryPlan &>(plan), catalog_, storage_, index_manager_);
     }
 

@@ -11,7 +11,7 @@ DropDatabasePlan::DropDatabasePlan(
     bool if_exists,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::DropDatabase, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::DropDatabase, location)
     , database_id_(database_id)
     , database_name_(std::move(database_name))
     , if_exists_(if_exists)

@@ -13,7 +13,7 @@ InsertPlan::InsertPlan(
     std::vector<std::unique_ptr<binder::bound::BoundExpression>> values,
     parser::ast::AstNodeLocation location
 )
-    : StatementPlan(StatementPlanKind::Insert, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::Insert, location)
     , database_id_(database_id)
     , collection_id_(collection_id)
     , collection_name_(std::move(collection_name))

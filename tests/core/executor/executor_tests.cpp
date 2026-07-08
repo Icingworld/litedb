@@ -66,7 +66,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
     return std::move(result.value());
 }
 
-std::unique_ptr<StatementPlan> plan_ok(
+std::unique_ptr<LogicalStatementPlan> plan_ok(
     InMemoryCatalog & catalog,
     IndexManager & index_manager,
     std::string_view sql,

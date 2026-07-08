@@ -13,7 +13,7 @@
 #include "core/logical_plan/statement/mutation/delete_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
-#include "core/logical_plan/statement/statement_plan.hpp"
+#include "core/logical_plan/statement/logical_statement_plan.hpp"
 #include "core/physical_plan/node/physical_filter.hpp"
 #include "core/physical_plan/node/physical_index_scan.hpp"
 #include "core/physical_plan/node/physical_limit.hpp"
@@ -43,8 +43,8 @@ using planner::logical::LogicalScan;
 using planner::logical::LogicalScanIndexHint;
 using planner::plan::DeletePlan;
 using planner::plan::QueryPlan;
-using planner::plan::StatementPlan;
-using planner::plan::StatementPlanKind;
+using planner::plan::LogicalStatementPlan;
+using planner::plan::LogicalStatementPlanKind;
 using planner::plan::UpdatePlan;
 
 std::vector<binder::bound::BoundProjectionItem> clone_projections(
@@ -108,44 +108,44 @@ PhysicalIndexLookup lower_lookup(const LogicalIndexLookup & lookup)
     };
 }
 
-PhysicalStatementPlanKind lower_statement_kind(StatementPlanKind kind) noexcept
+PhysicalStatementPlanKind lower_statement_kind(LogicalStatementPlanKind kind) noexcept
 {
     switch (kind) {
-    case StatementPlanKind::Use:
+    case LogicalStatementPlanKind::Use:
         return PhysicalStatementPlanKind::Use;
-    case StatementPlanKind::CreateDatabase:
+    case LogicalStatementPlanKind::CreateDatabase:
         return PhysicalStatementPlanKind::CreateDatabase;
-    case StatementPlanKind::CreateCollection:
+    case LogicalStatementPlanKind::CreateCollection:
         return PhysicalStatementPlanKind::CreateCollection;
-    case StatementPlanKind::CreateIndex:
+    case LogicalStatementPlanKind::CreateIndex:
         return PhysicalStatementPlanKind::CreateIndex;
-    case StatementPlanKind::CreateVectorIndex:
+    case LogicalStatementPlanKind::CreateVectorIndex:
         return PhysicalStatementPlanKind::CreateVectorIndex;
-    case StatementPlanKind::DropDatabase:
+    case LogicalStatementPlanKind::DropDatabase:
         return PhysicalStatementPlanKind::DropDatabase;
-    case StatementPlanKind::DropCollection:
+    case LogicalStatementPlanKind::DropCollection:
         return PhysicalStatementPlanKind::DropCollection;
-    case StatementPlanKind::DropIndex:
+    case LogicalStatementPlanKind::DropIndex:
         return PhysicalStatementPlanKind::DropIndex;
-    case StatementPlanKind::DropVectorIndex:
+    case LogicalStatementPlanKind::DropVectorIndex:
         return PhysicalStatementPlanKind::DropVectorIndex;
-    case StatementPlanKind::ShowDatabases:
+    case LogicalStatementPlanKind::ShowDatabases:
         return PhysicalStatementPlanKind::ShowDatabases;
-    case StatementPlanKind::ShowCollections:
+    case LogicalStatementPlanKind::ShowCollections:
         return PhysicalStatementPlanKind::ShowCollections;
-    case StatementPlanKind::ShowIndexes:
+    case LogicalStatementPlanKind::ShowIndexes:
         return PhysicalStatementPlanKind::ShowIndexes;
-    case StatementPlanKind::ShowVectorIndexes:
+    case LogicalStatementPlanKind::ShowVectorIndexes:
         return PhysicalStatementPlanKind::ShowVectorIndexes;
-    case StatementPlanKind::DescribeCollection:
+    case LogicalStatementPlanKind::DescribeCollection:
         return PhysicalStatementPlanKind::DescribeCollection;
-    case StatementPlanKind::Insert:
+    case LogicalStatementPlanKind::Insert:
         return PhysicalStatementPlanKind::Insert;
-    case StatementPlanKind::Update:
+    case LogicalStatementPlanKind::Update:
         return PhysicalStatementPlanKind::Update;
-    case StatementPlanKind::Delete:
+    case LogicalStatementPlanKind::Delete:
         return PhysicalStatementPlanKind::Delete;
-    case StatementPlanKind::Query:
+    case LogicalStatementPlanKind::Query:
         return PhysicalStatementPlanKind::Query;
     }
     return PhysicalStatementPlanKind::Query;
@@ -153,14 +153,14 @@ PhysicalStatementPlanKind lower_statement_kind(StatementPlanKind kind) noexcept
 
 } // namespace
 
-std::unique_ptr<PhysicalStatementPlan> PhysicalPlanner::plan(const StatementPlan & statement) const
+std::unique_ptr<PhysicalStatementPlan> PhysicalPlanner::plan(const LogicalStatementPlan & statement) const
 {
     switch (statement.kind()) {
-    case StatementPlanKind::Query: {
+    case LogicalStatementPlanKind::Query: {
         const auto & query = static_cast<const QueryPlan &>(statement);
         return std::make_unique<PhysicalQueryPlan>(plan(query.root()), query.location());
     }
-    case StatementPlanKind::Update: {
+    case LogicalStatementPlanKind::Update: {
         const auto & update = static_cast<const UpdatePlan &>(statement);
         return std::make_unique<PhysicalRowMutationPlan>(
             PhysicalStatementPlanKind::Update,
@@ -171,7 +171,7 @@ std::unique_ptr<PhysicalStatementPlan> PhysicalPlanner::plan(const StatementPlan
             update.location()
         );
     }
-    case StatementPlanKind::Delete: {
+    case LogicalStatementPlanKind::Delete: {
         const auto & del = static_cast<const DeletePlan &>(statement);
         return std::make_unique<PhysicalRowMutationPlan>(
             PhysicalStatementPlanKind::Delete,
@@ -182,21 +182,21 @@ std::unique_ptr<PhysicalStatementPlan> PhysicalPlanner::plan(const StatementPlan
             del.location()
         );
     }
-    case StatementPlanKind::Use:
-    case StatementPlanKind::CreateDatabase:
-    case StatementPlanKind::CreateCollection:
-    case StatementPlanKind::CreateIndex:
-    case StatementPlanKind::CreateVectorIndex:
-    case StatementPlanKind::DropDatabase:
-    case StatementPlanKind::DropCollection:
-    case StatementPlanKind::DropIndex:
-    case StatementPlanKind::DropVectorIndex:
-    case StatementPlanKind::ShowDatabases:
-    case StatementPlanKind::ShowCollections:
-    case StatementPlanKind::ShowIndexes:
-    case StatementPlanKind::ShowVectorIndexes:
-    case StatementPlanKind::DescribeCollection:
-    case StatementPlanKind::Insert:
+    case LogicalStatementPlanKind::Use:
+    case LogicalStatementPlanKind::CreateDatabase:
+    case LogicalStatementPlanKind::CreateCollection:
+    case LogicalStatementPlanKind::CreateIndex:
+    case LogicalStatementPlanKind::CreateVectorIndex:
+    case LogicalStatementPlanKind::DropDatabase:
+    case LogicalStatementPlanKind::DropCollection:
+    case LogicalStatementPlanKind::DropIndex:
+    case LogicalStatementPlanKind::DropVectorIndex:
+    case LogicalStatementPlanKind::ShowDatabases:
+    case LogicalStatementPlanKind::ShowCollections:
+    case LogicalStatementPlanKind::ShowIndexes:
+    case LogicalStatementPlanKind::ShowVectorIndexes:
+    case LogicalStatementPlanKind::DescribeCollection:
+    case LogicalStatementPlanKind::Insert:
         return std::make_unique<PhysicalSimpleStatementPlan>(
             lower_statement_kind(statement.kind()),
             statement.location()

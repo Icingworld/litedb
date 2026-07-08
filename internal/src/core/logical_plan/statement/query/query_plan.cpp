@@ -7,7 +7,7 @@ namespace litedb::core::planner::plan
 {
 
 QueryPlan::QueryPlan(std::unique_ptr<logical::LogicalPlanNode> root, parser::ast::AstNodeLocation location)
-    : StatementPlan(StatementPlanKind::Query, location)
+    : LogicalStatementPlan(LogicalStatementPlanKind::Query, location)
     , root_(std::move(root))
 {
 }
