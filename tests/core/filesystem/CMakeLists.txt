@@ -1,0 +1,7 @@
+add_executable(filesystem_contract_tests
+    filesystem_contract_tests.cpp
+)
+
+target_link_libraries(filesystem_contract_tests PRIVATE litedb_filesystem)
+
+add_test(NAME filesystem_contract_tests COMMAND filesystem_contract_tests)
