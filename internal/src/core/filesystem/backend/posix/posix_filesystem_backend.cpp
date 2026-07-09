@@ -1,0 +1,221 @@
+#ifndef _WIN32
+
+#include "core/filesystem/backend/posix/posix_filesystem_backend.hpp"
+
+#include <cerrno>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <utility>
+
+#include <fcntl.h>
+#include <unistd.h>
+
+#include "core/filesystem/backend/posix/posix_file_handle_backend.hpp"
+
+namespace litedb::core::filesystem::backend
+{
+
+namespace
+{
+
+FileSystemErrorCode map_error_code(const std::error_code & error)
+{
+    if (error == std::errc::no_such_file_or_directory) {
+        return FileSystemErrorCode::NotFound;
+    }
+    if (error == std::errc::file_exists) {
+        return FileSystemErrorCode::AlreadyExists;
+    }
+    if (error == std::errc::permission_denied) {
+        return FileSystemErrorCode::PermissionDenied;
+    }
+    if (error == std::errc::invalid_argument) {
+        return FileSystemErrorCode::InvalidArgument;
+    }
+    if (error == std::errc::filename_too_long) {
+        return FileSystemErrorCode::InvalidPath;
+    }
+    if (error == std::errc::not_a_directory) {
+        return FileSystemErrorCode::NotADirectory;
+    }
+    if (error == std::errc::is_a_directory) {
+        return FileSystemErrorCode::NotAFile;
+    }
+    if (error == std::errc::directory_not_empty) {
+        return FileSystemErrorCode::DirectoryNotEmpty;
+    }
+    if (error == std::errc::read_only_file_system) {
+        return FileSystemErrorCode::ReadOnly;
+    }
+    if (error == std::errc::no_space_on_device) {
+        return FileSystemErrorCode::NoSpace;
+    }
+    if (error == std::errc::device_or_resource_busy) {
+        return FileSystemErrorCode::ResourceBusy;
+    }
+    return FileSystemErrorCode::IoError;
+}
+
+FileSystemError make_error(const std::error_code & error, std::string operation)
+{
+    return FileSystemError {map_error_code(error), std::move(operation) + " failed: " + error.message()};
+}
+
+FileSystemError make_errno_error(int error, std::string operation)
+{
+    return make_error(std::error_code(error, std::generic_category()), std::move(operation));
+}
+
+int to_access_flags(FileAccess access)
+{
+    switch (access) {
+    case FileAccess::ReadOnly:
+        return O_RDONLY;
+    case FileAccess::WriteOnly:
+        return O_WRONLY;
+    case FileAccess::ReadWrite:
+        return O_RDWR;
+    }
+    return O_RDONLY;
+}
+
+int to_create_flags(FileCreateMode mode)
+{
+    switch (mode) {
+    case FileCreateMode::OpenExisting:
+        return 0;
+    case FileCreateMode::OpenOrCreate:
+        return O_CREAT;
+    case FileCreateMode::CreateNew:
+        return O_CREAT | O_EXCL;
+    case FileCreateMode::TruncateExisting:
+        return O_TRUNC;
+    case FileCreateMode::CreateOrTruncate:
+        return O_CREAT | O_TRUNC;
+    }
+    return 0;
+}
+
+} // namespace
+
+std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend()
+{
+    return std::make_unique<PosixFileSystemBackend>();
+}
+
+std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> PosixFileSystemBackend::open(
+    const std::filesystem::path & path,
+    const FileOpenOptions & options
+)
+{
+    const int flags = to_access_flags(options.access) | to_create_flags(options.create_mode) | O_CLOEXEC;
+    int fd = -1;
+    do {
+        fd = ::open(path.c_str(), flags, 0666);
+    } while (fd < 0 && errno == EINTR);
+
+    if (fd < 0) {
+        return std::unexpected(make_errno_error(errno, "open"));
+    }
+
+    std::unique_ptr<FileHandleBackend> backend = std::make_unique<PosixFileHandleBackend>(fd);
+    return backend;
+}
+
+std::expected<std::vector<std::filesystem::path>, FileSystemError> PosixFileSystemBackend::list_dir(
+    const std::filesystem::path & path
+)
+{
+    std::error_code error;
+    if (!std::filesystem::is_directory(path, error)) {
+        if (error) {
+            return std::unexpected(make_error(error, "is_directory"));
+        }
+        return std::unexpected(FileSystemError {FileSystemErrorCode::NotADirectory, "path is not a directory"});
+    }
+
+    std::vector<std::filesystem::path> entries;
+    for (std::filesystem::directory_iterator it {path, error}, end; it != end; it.increment(error)) {
+        if (error) {
+            return std::unexpected(make_error(error, "directory_iterator"));
+        }
+        entries.push_back(it->path().filename());
+    }
+    return entries;
+}
+
+std::expected<bool, FileSystemError> PosixFileSystemBackend::exists(const std::filesystem::path & path)
+{
+    std::error_code error;
+    const bool result = std::filesystem::exists(path, error);
+    if (error) {
+        return std::unexpected(make_error(error, "exists"));
+    }
+    return result;
+}
+
+std::expected<void, FileSystemError> PosixFileSystemBackend::create_dir_all(
+    const std::filesystem::path & path
+)
+{
+    std::error_code error;
+    std::filesystem::create_directories(path, error);
+    if (error) {
+        return std::unexpected(make_error(error, "create_directories"));
+    }
+    return {};
+}
+
+std::expected<void, FileSystemError> PosixFileSystemBackend::rename(
+    const std::filesystem::path & from,
+    const std::filesystem::path & to
+)
+{
+    std::error_code error;
+    std::filesystem::rename(from, to, error);
+    if (error) {
+        return std::unexpected(make_error(error, "rename"));
+    }
+    return {};
+}
+
+std::expected<void, FileSystemError> PosixFileSystemBackend::remove(const std::filesystem::path & path)
+{
+    std::error_code error;
+    std::filesystem::remove(path, error);
+    if (error) {
+        return std::unexpected(make_error(error, "remove"));
+    }
+    return {};
+}
+
+std::expected<void, FileSystemError> PosixFileSystemBackend::sync_directory(
+    const std::filesystem::path & path
+)
+{
+    int fd = -1;
+    do {
+        fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_DIRECTORY);
+    } while (fd < 0 && errno == EINTR);
+
+    if (fd < 0) {
+        return std::unexpected(make_errno_error(errno, "open directory"));
+    }
+
+    while (::fsync(fd) != 0) {
+        if (errno == EINTR) {
+            continue;
+        }
+        const int error = errno;
+        ::close(fd);
+        return std::unexpected(make_errno_error(error, "fsync directory"));
+    }
+    ::close(fd);
+    return {};
+}
+
+} // namespace litedb::core::filesystem::backend
+
+#endif // _WIN32

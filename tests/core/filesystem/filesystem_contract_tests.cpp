@@ -50,6 +50,11 @@ public:
         ++state_->handle_destructions;
     }
 
+    std::expected<void, FileSystemError> close() override
+    {
+        return {};
+    }
+
     std::expected<std::size_t, FileSystemError> read_at(
         std::uint64_t offset,
         std::span<std::byte> buffer
@@ -153,7 +158,7 @@ public:
         return path != "missing";
     }
 
-    std::expected<void, FileSystemError> create_dir(const std::filesystem::path & path) override
+    std::expected<void, FileSystemError> create_dir_all(const std::filesystem::path & path) override
     {
         state_->last_path = path;
         state_->directory_created = true;
@@ -243,8 +248,8 @@ int main()
         const auto entries = moved_filesystem.list_dir("root");
         require(entries && entries->size() == 2 && state->last_path == "root", "list_dir forwarding failed");
         require(moved_filesystem.exists("present").value(), "exists forwarding failed");
-        require(moved_filesystem.create_dir("new-dir").has_value(), "create_dir failed");
-        require(state->directory_created && state->last_path == "new-dir", "create_dir forwarding failed");
+        require(moved_filesystem.create_dir_all("new-dir").has_value(), "create_dir_all failed");
+        require(state->directory_created && state->last_path == "new-dir", "create_dir_all forwarding failed");
         require(moved_filesystem.rename("old", "new").has_value(), "rename failed");
         require(state->last_path == "old" && state->rename_to == "new", "rename forwarding failed");
         require(moved_filesystem.remove("obsolete").has_value(), "remove failed");

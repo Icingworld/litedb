@@ -20,6 +20,12 @@ FileHandle & FileHandle::operator=(FileHandle &&) noexcept = default;
 
 FileHandle::~FileHandle() = default;
 
+std::expected<void, FileSystemError> FileHandle::close()
+{
+    assert(backend_);
+    return backend_->close();
+}
+
 std::expected<std::size_t, FileSystemError> FileHandle::read_at(
     std::uint64_t offset,
     std::span<std::byte> buffer

@@ -38,6 +38,13 @@ public:
 
 public:
     /**
+     * @brief 关闭文件
+     * @return 结果
+     */
+    [[nodiscard]]
+    std::expected<void, FileSystemError> close();
+
+    /**
      * @brief 从指定偏移读取数据
      * @return 实际读取的字节数；到达文件末尾时允许小于缓冲区大小
      */

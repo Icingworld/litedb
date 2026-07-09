@@ -62,12 +62,12 @@ public:
     std::expected<bool, FileSystemError> exists(const std::filesystem::path & path);
 
     /**
-     * @brief 创建目录
+     * @brief 创建目录及其所有父目录
      * @param path 目录路径
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> create_dir(const std::filesystem::path & path);
+    std::expected<void, FileSystemError> create_dir_all(const std::filesystem::path & path);
 
     /**
      * @brief 重命名文件或目录

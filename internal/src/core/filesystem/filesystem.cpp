@@ -48,10 +48,10 @@ std::expected<bool, FileSystemError> FileSystem::exists(const std::filesystem::p
     return backend_->exists(path);
 }
 
-std::expected<void, FileSystemError> FileSystem::create_dir(const std::filesystem::path & path)
+std::expected<void, FileSystemError> FileSystem::create_dir_all(const std::filesystem::path & path)
 {
     assert(backend_);
-    return backend_->create_dir(path);
+    return backend_->create_dir_all(path);
 }
 
 std::expected<void, FileSystemError> FileSystem::rename(
