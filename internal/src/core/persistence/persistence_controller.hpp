@@ -5,6 +5,7 @@
 
 #include "core/catalog/in_memory_catalog.hpp"
 #include "core/executor/executor.hpp"
+#include "core/filesystem/filesystem.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/persistence/catalog_store.hpp"
@@ -92,7 +93,7 @@ private:
     [[nodiscard]]
     std::expected<std::unique_ptr<PersistentCollectionStorage>, storage::StorageError> make_collection_storage(
         const schema::CollectionSchema & collection_schema
-    ) const;
+    );
 
     [[nodiscard]]
     std::expected<void, storage::StorageError> restore_storage_from_catalog();
@@ -110,6 +111,7 @@ private:
     executor::ExecutionError from_index_error(index::IndexError error, parser::ast::AstNodeLocation location) const;
 
 private:
+    filesystem::FileSystem filesystem_;
     ManifestStore manifest_;
     CatalogStore catalog_store_;
     catalog::InMemoryCatalog * catalog_;

@@ -1,12 +1,14 @@
 #include "core/persistence/row_log.hpp"
 
 #include <algorithm>
-#include <fstream>
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
-#include "core/persistence/binary_io.hpp"
+#include "core/io/binary_io.hpp"
+#include "core/io/buffer_byte_reader.hpp"
+#include "core/io/buffer_byte_writer.hpp"
+#include "core/io/file_byte_reader.hpp"
+#include "core/io/file_byte_writer.hpp"
 #include "core/persistence/storage_format.hpp"
 
 namespace litedb::core::persistence
@@ -23,128 +25,187 @@ storage::StorageError make_error(storage::StorageErrorCode code, std::string mes
     return storage::StorageError {code, std::move(message)};
 }
 
-void write_file_header(BinaryWriter & writer, std::uint32_t magic)
+storage::StorageError from_filesystem_error(filesystem::FileSystemError error)
 {
-    writer.write_u32(magic);
-    writer.write_u16(StorageFormatVersion);
-    writer.write_u16(FileHeaderSize);
+    return storage::StorageError {
+        .code = storage::StorageErrorCode::IoError,
+        .message = std::move(error.message),
+    };
 }
 
-void read_file_header(BinaryReader & reader, std::uint32_t expected_magic)
+void require_io(std::expected<void, io::IoError> result)
 {
-    if (reader.read_u32() != expected_magic) {
+    if (!result.has_value()) {
+        throw std::runtime_error(result.error().message);
+    }
+}
+
+template <typename T>
+T require_io(std::expected<T, io::IoError> result)
+{
+    if (!result.has_value()) {
+        throw std::runtime_error(result.error().message);
+    }
+    return std::move(result.value());
+}
+
+void write_file_header(io::BinaryWriter & writer, std::uint32_t magic)
+{
+    require_io(writer.write_u32(magic));
+    require_io(writer.write_u16(StorageFormatVersion));
+    require_io(writer.write_u16(FileHeaderSize));
+}
+
+void read_file_header(io::BinaryReader & reader, std::uint32_t expected_magic)
+{
+    if (require_io(reader.read_u32()) != expected_magic) {
         throw std::runtime_error("invalid file magic");
     }
-    if (reader.read_u16() != StorageFormatVersion) {
+    if (require_io(reader.read_u16()) != StorageFormatVersion) {
         throw std::runtime_error("unsupported storage format version");
     }
-    if (reader.read_u16() < FileHeaderSize) {
+    if (require_io(reader.read_u16()) < FileHeaderSize) {
         throw std::runtime_error("invalid file header size");
     }
 }
 
-void write_record_data(BinaryWriter & writer, const schema::RecordData & data)
+void write_record_data(io::BinaryWriter & writer, const schema::RecordData & data)
 {
-    writer.write_u32(static_cast<std::uint32_t>(data.values.size()));
+    require_io(writer.write_u32(static_cast<std::uint32_t>(data.values.size())));
     for (const auto & value : data.values) {
-        writer.write_value(value);
+        require_io(writer.write_value(value));
     }
 }
 
-schema::RecordData read_record_data(BinaryReader & reader)
+schema::RecordData read_record_data(io::BinaryReader & reader)
 {
     schema::RecordData data;
-    const auto count = reader.read_u32();
+    const auto count = require_io(reader.read_u32());
     data.values.reserve(count);
     for (std::uint32_t index = 0; index < count; ++index) {
-        data.values.push_back(reader.read_value());
+        data.values.push_back(require_io(reader.read_value()));
     }
     return data;
 }
 
-std::vector<char> encode_payload(const schema::RecordData * data)
+std::vector<std::byte> encode_payload(const schema::RecordData * data)
 {
     if (data == nullptr) {
         return {};
     }
-    std::ostringstream buffer {std::ios::binary};
-    BinaryWriter writer {buffer};
+    io::BufferByteWriter buffer;
+    io::BinaryWriter writer {buffer};
     write_record_data(writer, *data);
-    const auto text = buffer.str();
-    return {text.begin(), text.end()};
+    return buffer.take_bytes();
 }
 
 } // namespace
 
-RowLog::RowLog(std::filesystem::path path, common::CollectionId collection_id)
+RowLog::RowLog(std::filesystem::path path, common::CollectionId collection_id, filesystem::FileSystem & filesystem)
     : path_(std::move(path))
     , collection_id_(collection_id)
+    , filesystem_(&filesystem)
 {
 }
 
 std::expected<RowLogReplay, storage::StorageError> RowLog::replay_or_create() const
 {
     try {
-        std::filesystem::create_directories(path_.parent_path());
-        if (!std::filesystem::exists(path_)) {
-            std::ofstream out {path_, std::ios::binary | std::ios::trunc};
-            if (!out) {
-                return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to create row log"));
+        auto created = filesystem_->create_dir_all(path_.parent_path());
+        if (!created.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(created.error())));
+        }
+        auto exists = filesystem_->exists(path_);
+        if (!exists.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(exists.error())));
+        }
+        if (!exists.value()) {
+            auto file = filesystem_->open(
+                path_,
+                filesystem::backend::FileOpenOptions {
+                    .access = filesystem::backend::FileAccess::ReadWrite,
+                    .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+                }
+            );
+            if (!file.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(file.error())));
             }
-            BinaryWriter writer {out};
+            io::FileByteWriter byte_writer {file.value()};
+            io::BinaryWriter writer {byte_writer};
             write_file_header(writer, RowsMagic);
-            writer.write_u64(collection_id_);
-            writer.write_u64(1);
-            out.flush();
-            if (!out) {
-                return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to flush row log"));
+            require_io(writer.write_u64(collection_id_));
+            require_io(writer.write_u64(1));
+            auto synced = file->sync_all();
+            if (!synced.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(synced.error())));
+            }
+            auto closed = file->close();
+            if (!closed.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(closed.error())));
             }
             return RowLogReplay {};
         }
 
-        std::ifstream in {path_, std::ios::binary};
-        if (!in) {
-            return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to open row log"));
+        auto file = filesystem_->open(
+            path_,
+            filesystem::backend::FileOpenOptions {
+                .access = filesystem::backend::FileAccess::ReadOnly,
+                .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            }
+        );
+        if (!file.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(file.error())));
         }
-        BinaryReader reader {in};
+        io::FileByteReader byte_reader {file.value()};
+        io::BinaryReader reader {byte_reader};
         read_file_header(reader, RowsMagic);
-        if (reader.read_u64() != collection_id_) {
+        if (require_io(reader.read_u64()) != collection_id_) {
             return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Row log collection id mismatch"));
         }
 
         RowLogReplay replay;
-        replay.next_record_id = reader.read_u64();
+        replay.next_record_id = require_io(reader.read_u64());
         common::RecordId max_record_id = 0;
 
         for (;;) {
             std::uint32_t magic = 0;
-            if (!reader.try_read_u32(magic)) {
+            auto magic_read = reader.read_u32(magic);
+            if (!magic_read.has_value()) {
+                return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(magic_read.error().message)));
+            }
+            if (!magic_read.value()) {
                 break;
             }
 
             std::uint8_t rest[RowRecordHeaderSize - sizeof(std::uint32_t)] {};
-            if (!reader.try_read_bytes(rest, sizeof(rest))) {
+            auto rest_read = reader.read_bytes(rest, sizeof(rest));
+            if (!rest_read.has_value()) {
+                return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(rest_read.error().message)));
+            }
+            if (!rest_read.value()) {
                 break;
             }
-            std::istringstream header_stream {
-                std::string(reinterpret_cast<const char *>(rest), sizeof(rest)),
-                std::ios::binary
-            };
-            BinaryReader header {header_stream};
+            auto rest_bytes = std::as_bytes(std::span {rest});
+            io::BufferByteReader header_buffer {rest_bytes};
+            io::BinaryReader header {header_buffer};
 
             if (magic != RowRecordMagic) {
                 return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Invalid row record magic"));
             }
 
-            const auto version = header.read_u16();
-            const auto header_size = header.read_u16();
-            const auto operation = static_cast<RowLogOperation>(header.read_u8());
+            const auto version = require_io(header.read_u16());
+            const auto header_size = require_io(header.read_u16());
+            const auto operation = static_cast<RowLogOperation>(require_io(header.read_u8()));
             std::uint8_t reserved[7] {};
-            if (!header.try_read_bytes(reserved, sizeof(reserved))) {
+            auto reserved_read = header.read_bytes(reserved, sizeof(reserved));
+            if (!reserved_read.has_value()) {
+                return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(reserved_read.error().message)));
+            }
+            if (!reserved_read.value()) {
                 return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Invalid row record header"));
             }
-            const auto record_id = header.read_u64();
-            const auto payload_size = header.read_u32();
+            const auto record_id = require_io(header.read_u64());
+            const auto payload_size = require_io(header.read_u32());
 
             if (version != RowRecordVersion || header_size != RowRecordHeaderSize) {
                 return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported row record version"));
@@ -154,8 +215,14 @@ std::expected<RowLogReplay, storage::StorageError> RowLog::replay_or_create() co
             }
 
             std::vector<char> payload(payload_size);
-            if (payload_size != 0 && !reader.try_read_bytes(payload.data(), payload.size())) {
-                break;
+            if (payload_size != 0) {
+                auto payload_read = reader.read_bytes(payload.data(), payload.size());
+                if (!payload_read.has_value()) {
+                    return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(payload_read.error().message)));
+                }
+                if (!payload_read.value()) {
+                    break;
+                }
             }
 
             RowLogRecord record {
@@ -164,8 +231,8 @@ std::expected<RowLogReplay, storage::StorageError> RowLog::replay_or_create() co
                 .data = {},
             };
             if (operation != RowLogOperation::Delete) {
-                std::istringstream payload_stream {std::string(payload.begin(), payload.end()), std::ios::binary};
-                BinaryReader payload_reader {payload_stream};
+                io::BufferByteReader payload_buffer {std::as_bytes(std::span {payload})};
+                io::BinaryReader payload_reader {payload_buffer};
                 record.data = read_record_data(payload_reader);
             }
             max_record_id = std::max(max_record_id, record_id);
@@ -203,14 +270,29 @@ std::expected<void, storage::StorageError> RowLog::append_delete(common::RecordI
 std::expected<void, storage::StorageError> RowLog::mark_dropped() const
 {
     try {
-        if (!std::filesystem::exists(path_)) {
+        auto exists = filesystem_->exists(path_);
+        if (!exists.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(exists.error())));
+        }
+        if (!exists.value()) {
             return {};
         }
         std::filesystem::path dropped = path_;
         dropped += ".dropped";
-        std::error_code ignored;
-        std::filesystem::remove(dropped, ignored);
-        std::filesystem::rename(path_, dropped);
+        auto dropped_exists = filesystem_->exists(dropped);
+        if (!dropped_exists.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(dropped_exists.error())));
+        }
+        if (dropped_exists.value()) {
+            auto removed = filesystem_->remove(dropped);
+            if (!removed.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(removed.error())));
+            }
+        }
+        auto renamed = filesystem_->rename(path_, dropped);
+        if (!renamed.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(renamed.error())));
+        }
         return {};
     } catch (const std::exception & exception) {
         return std::unexpected(make_error(storage::StorageErrorCode::IoError, exception.what()));
@@ -230,27 +312,47 @@ std::expected<void, storage::StorageError> RowLog::append(
 {
     try {
         const auto payload = encode_payload(data);
-        std::ofstream out {path_, std::ios::binary | std::ios::app};
-        if (!out) {
-            return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to open row log for append"));
+        io::BufferByteWriter record_buffer;
+        io::BinaryWriter record_writer {record_buffer};
+
+        require_io(record_writer.write_u32(RowRecordMagic));
+        require_io(record_writer.write_u16(RowRecordVersion));
+        require_io(record_writer.write_u16(RowRecordHeaderSize));
+        require_io(record_writer.write_u8(static_cast<std::uint8_t>(operation)));
+        for (std::size_t index = 0; index < 7; ++index) {
+            require_io(record_writer.write_u8(0));
+        }
+        require_io(record_writer.write_u64(record_id));
+        require_io(record_writer.write_u32(static_cast<std::uint32_t>(payload.size())));
+        if (!payload.empty()) {
+            auto payload_written = record_buffer.write_bytes(payload);
+            if (!payload_written.has_value()) {
+                return std::unexpected(make_error(storage::StorageErrorCode::IoError, std::move(payload_written.error().message)));
+            }
         }
 
-        BinaryWriter writer {out};
-        writer.write_u32(RowRecordMagic);
-        writer.write_u16(RowRecordVersion);
-        writer.write_u16(RowRecordHeaderSize);
-        writer.write_u8(static_cast<std::uint8_t>(operation));
-        for (std::size_t index = 0; index < 7; ++index) {
-            writer.write_u8(0);
+        auto file = filesystem_->open(
+            path_,
+            filesystem::backend::FileOpenOptions {
+                .access = filesystem::backend::FileAccess::WriteOnly,
+                .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            }
+        );
+        if (!file.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(file.error())));
         }
-        writer.write_u64(record_id);
-        writer.write_u32(static_cast<std::uint32_t>(payload.size()));
-        if (!payload.empty()) {
-            out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+        io::FileByteAppender appender {file.value()};
+        auto appended = appender.write_bytes(record_buffer.bytes());
+        if (!appended.has_value()) {
+            return std::unexpected(make_error(storage::StorageErrorCode::IoError, std::move(appended.error().message)));
         }
-        out.flush();
-        if (!out) {
-            return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to append row log record"));
+        auto synced = file->sync_data();
+        if (!synced.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(synced.error())));
+        }
+        auto closed = file->close();
+        if (!closed.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(closed.error())));
         }
         return {};
     } catch (const std::exception & exception) {

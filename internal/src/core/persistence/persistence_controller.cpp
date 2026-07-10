@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/filesystem/platform_filesystem.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_loader.hpp"
@@ -32,8 +33,9 @@ PersistenceController::PersistenceController(
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
-    : manifest_(std::move(data_dir))
-    , catalog_store_(manifest_.catalog_path())
+    : filesystem_(filesystem::create_platform_filesystem())
+    , manifest_(std::move(data_dir), filesystem_)
+    , catalog_store_(manifest_.catalog_path(), filesystem_)
     , catalog_(&catalog)
     , storage_(&storage)
     , index_manager_(&index_manager)
@@ -341,7 +343,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     for (const auto collection_id : collection_ids) {
-        (void) RowLog {row_log_path(collection_id), collection_id}.mark_dropped();
+        (void) RowLog {row_log_path(collection_id), collection_id, filesystem_}.mark_dropped();
     }
 
     auto committed = catalog_->restore(staged.snapshot());
@@ -391,7 +393,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     const auto collection_id = plan.collection_id().value();
-    (void) RowLog {row_log_path(collection_id), collection_id}.mark_dropped();
+    (void) RowLog {row_log_path(collection_id), collection_id, filesystem_}.mark_dropped();
 
     auto committed = catalog_->restore(staged.snapshot());
     if (!committed.has_value()) {
@@ -500,11 +502,11 @@ std::filesystem::path PersistenceController::row_log_path(common::CollectionId c
 }
 
 std::expected<std::unique_ptr<PersistentCollectionStorage>, storage::StorageError>
-PersistenceController::make_collection_storage(const schema::CollectionSchema & collection_schema) const
+PersistenceController::make_collection_storage(const schema::CollectionSchema & collection_schema)
 {
     return PersistentCollectionStorage::open(
         collection_schema,
-        RowLog {row_log_path(collection_schema.collection_id()), collection_schema.collection_id()}
+        RowLog {row_log_path(collection_schema.collection_id()), collection_schema.collection_id(), filesystem_}
     );
 }
 

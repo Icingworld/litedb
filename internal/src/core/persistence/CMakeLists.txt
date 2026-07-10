@@ -1,5 +1,4 @@
 set(PERSISTENCE_SOURCES
-    binary_io.cpp
     catalog_store.cpp
     manifest_store.cpp
     persistent_collection_storage.cpp
@@ -14,6 +13,7 @@ target_include_directories(litedb_persistence PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(litedb_persistence PUBLIC
     litedb_catalog
     litedb_index
+    litedb_io
     litedb_schema
     litedb_storage
     litedb_executor

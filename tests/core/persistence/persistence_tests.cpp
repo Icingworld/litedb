@@ -1,7 +1,10 @@
 #include "core/engine/database_instance.hpp"
 #include "core/engine/session.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
 #include "core/index/scalar_index_key.hpp"
-#include "core/persistence/binary_io.hpp"
+#include "core/io/binary_io.hpp"
+#include "core/io/buffer_byte_reader.hpp"
+#include "core/io/buffer_byte_writer.hpp"
 #include "core/persistence/catalog_store.hpp"
 #include "core/persistence/manifest_store.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
@@ -31,6 +34,22 @@ void require(bool condition, const char * message)
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+void require_io_ok(std::expected<void, io::IoError> result, const char * message)
+{
+    if (!result.has_value()) {
+        throw std::runtime_error(message);
+    }
+}
+
+template <typename T>
+T require_io_value(std::expected<T, io::IoError> result, const char * message)
+{
+    if (!result.has_value()) {
+        throw std::runtime_error(message);
+    }
+    return std::move(result.value());
 }
 
 template <typename T>
@@ -80,19 +99,21 @@ common::LogicalType type(common::LogicalTypeId id, std::optional<std::size_t> pa
 
 void test_binary_value_roundtrip()
 {
-    std::stringstream stream {std::ios::in | std::ios::out | std::ios::binary};
-    persistence::BinaryWriter writer {stream};
-    writer.write_u32(42);
-    writer.write_string("hello");
-    writer.write_value(schema::Value {std::int64_t {7}});
-    writer.write_value(schema::Value {schema::VectorValue {1.0, 2.0, 3.0}});
+    io::BufferByteWriter stream;
+    io::BinaryWriter writer {stream};
+    require_io_ok(writer.write_u32(42), "write u32 failed");
+    require_io_ok(writer.write_string("hello"), "write string failed");
+    require_io_ok(writer.write_value(schema::Value {std::int64_t {7}}), "write bigint failed");
+    require_io_ok(writer.write_value(schema::Value {schema::VectorValue {1.0, 2.0, 3.0}}), "write vector failed");
 
-    stream.seekg(0);
-    persistence::BinaryReader reader {stream};
-    require(reader.read_u32() == 42, "u32 roundtrip mismatch");
-    require(reader.read_string() == "hello", "string roundtrip mismatch");
-    require(get_value<std::int64_t>(reader.read_value()) == 7, "bigint value mismatch");
-    const auto vector = get_value<schema::VectorValue>(reader.read_value());
+    io::BufferByteReader input {stream.bytes()};
+    io::BinaryReader reader {input};
+    require(require_io_value(reader.read_u32(), "read u32 failed") == 42, "u32 roundtrip mismatch");
+    require(require_io_value(reader.read_string(), "read string failed") == "hello", "string roundtrip mismatch");
+    const auto bigint = require_io_value(reader.read_value(), "read bigint failed");
+    require(get_value<std::int64_t>(bigint) == 7, "bigint value mismatch");
+    const auto vector_value = require_io_value(reader.read_value(), "read vector failed");
+    const auto vector = get_value<schema::VectorValue>(vector_value);
     require(vector.size() == 3, "vector size mismatch");
     require(vector[1] == 2.0, "vector value mismatch");
 }
@@ -100,7 +121,8 @@ void test_binary_value_roundtrip()
 void test_manifest_and_catalog_store()
 {
     const auto dir = make_temp_dir("litedb_manifest_catalog_test");
-    persistence::ManifestStore manifest {dir};
+    auto filesystem = filesystem::create_platform_filesystem();
+    persistence::ManifestStore manifest {dir, filesystem};
     auto initialized = manifest.ensure_initialized();
     require(initialized.has_value(), "manifest init failed");
     require(std::filesystem::exists(dir / "manifest.ldb"), "manifest file missing");
@@ -170,7 +192,7 @@ void test_manifest_and_catalog_store()
         },
     });
 
-    persistence::CatalogStore store {manifest.catalog_path()};
+    persistence::CatalogStore store {manifest.catalog_path(), filesystem};
     auto saved = store.save(snapshot);
     require(saved.has_value(), "catalog save failed");
     auto loaded = store.load_or_empty();
@@ -208,7 +230,8 @@ schema::RecordData simple_record(std::int64_t id, std::string name)
 void test_persistent_collection_storage_get()
 {
     const auto dir = make_temp_dir("litedb_persistent_get_test");
-    persistence::RowLog log {dir / "1.rows", 1};
+    auto filesystem = filesystem::create_platform_filesystem();
+    persistence::RowLog log {dir / "1.rows", 1, filesystem};
     auto opened = persistence::PersistentCollectionStorage::open(simple_users_schema(), std::move(log));
     require(opened.has_value(), "persistent collection storage open failed");
 
@@ -244,7 +267,8 @@ void test_row_log_replay_and_partial_tail()
 {
     const auto dir = make_temp_dir("litedb_row_log_test");
     const auto path = dir / "1.rows";
-    persistence::RowLog log {path, 1};
+    auto filesystem = filesystem::create_platform_filesystem();
+    persistence::RowLog log {path, 1, filesystem};
     auto replay = log.replay_or_create();
     require(replay.has_value(), "row log create failed");
 

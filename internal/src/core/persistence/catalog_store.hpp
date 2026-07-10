@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "core/catalog/catalog_snapshot.hpp"
+#include "core/filesystem/filesystem.hpp"
 #include "core/storage/storage_error.hpp"
 
 namespace litedb::core::persistence
@@ -12,7 +13,7 @@ namespace litedb::core::persistence
 class CatalogStore
 {
 public:
-    explicit CatalogStore(std::filesystem::path path);
+    CatalogStore(std::filesystem::path path, filesystem::FileSystem & filesystem);
 
 public:
     [[nodiscard]]
@@ -23,6 +24,7 @@ public:
 
 private:
     std::filesystem::path path_;            ///< 路径
+    filesystem::FileSystem * filesystem_;   ///< 文件系统
 };
 
 } // namespace litedb::core::persistence

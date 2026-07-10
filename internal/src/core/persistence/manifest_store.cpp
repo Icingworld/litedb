@@ -1,10 +1,11 @@
 #include "core/persistence/manifest_store.hpp"
 
-#include <fstream>
 #include <stdexcept>
 #include <utility>
 
-#include "core/persistence/binary_io.hpp"
+#include "core/io/binary_io.hpp"
+#include "core/io/file_byte_reader.hpp"
+#include "core/io/file_byte_writer.hpp"
 #include "core/persistence/storage_format.hpp"
 
 namespace litedb::core::persistence
@@ -18,66 +19,116 @@ storage::StorageError make_error(storage::StorageErrorCode code, std::string mes
     return storage::StorageError {code, std::move(message)};
 }
 
-void write_file_header(BinaryWriter & writer, std::uint32_t magic)
+storage::StorageError from_filesystem_error(filesystem::FileSystemError error)
 {
-    writer.write_u32(magic);
-    writer.write_u16(StorageFormatVersion);
-    writer.write_u16(FileHeaderSize);
+    return storage::StorageError {
+        .code = storage::StorageErrorCode::IoError,
+        .message = std::move(error.message),
+    };
 }
 
-void read_file_header(BinaryReader & reader, std::uint32_t expected_magic)
+void require_io(std::expected<void, io::IoError> result)
 {
-    if (reader.read_u32() != expected_magic) {
+    if (!result.has_value()) {
+        throw std::runtime_error(result.error().message);
+    }
+}
+
+template <typename T>
+T require_io(std::expected<T, io::IoError> result)
+{
+    if (!result.has_value()) {
+        throw std::runtime_error(result.error().message);
+    }
+    return std::move(result.value());
+}
+
+void write_file_header(io::BinaryWriter & writer, std::uint32_t magic)
+{
+    require_io(writer.write_u32(magic));
+    require_io(writer.write_u16(StorageFormatVersion));
+    require_io(writer.write_u16(FileHeaderSize));
+}
+
+void read_file_header(io::BinaryReader & reader, std::uint32_t expected_magic)
+{
+    if (require_io(reader.read_u32()) != expected_magic) {
         throw std::runtime_error("invalid file magic");
     }
-    if (reader.read_u16() != StorageFormatVersion) {
+    if (require_io(reader.read_u16()) != StorageFormatVersion) {
         throw std::runtime_error("unsupported storage format version");
     }
-    if (reader.read_u16() < FileHeaderSize) {
+    if (require_io(reader.read_u16()) < FileHeaderSize) {
         throw std::runtime_error("invalid file header size");
     }
 }
 
 } // namespace
 
-ManifestStore::ManifestStore(std::filesystem::path data_dir)
+ManifestStore::ManifestStore(std::filesystem::path data_dir, filesystem::FileSystem & filesystem)
     : data_dir_(std::move(data_dir))
+    , filesystem_(&filesystem)
 {
 }
 
 std::expected<void, storage::StorageError> ManifestStore::ensure_initialized() const
 {
     try {
-        std::filesystem::create_directories(collections_dir());
+        auto created = filesystem_->create_dir_all(collections_dir());
+        if (!created.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(created.error())));
+        }
 
         const auto path = data_dir_ / ManifestFileName;
-        if (!std::filesystem::exists(path)) {
-            std::ofstream out {path, std::ios::binary | std::ios::trunc};
-            if (!out) {
-                return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to create manifest file"));
+        auto exists = filesystem_->exists(path);
+        if (!exists.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(exists.error())));
+        }
+        if (!exists.value()) {
+            auto file = filesystem_->open(
+                path,
+                filesystem::backend::FileOpenOptions {
+                    .access = filesystem::backend::FileAccess::ReadWrite,
+                    .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+                }
+            );
+            if (!file.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(file.error())));
             }
-            BinaryWriter writer {out};
+            io::FileByteWriter byte_writer {file.value()};
+            io::BinaryWriter writer {byte_writer};
             write_file_header(writer, ManifestMagic);
-            writer.write_u32(StorageFormatVersion);
-            writer.write_string(CatalogFileName);
-            writer.write_string(CollectionsDirName);
-            out.flush();
-            if (!out) {
-                return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to flush manifest file"));
+            require_io(writer.write_u32(StorageFormatVersion));
+            require_io(writer.write_string(CatalogFileName));
+            require_io(writer.write_string(CollectionsDirName));
+            auto synced = file->sync_all();
+            if (!synced.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(synced.error())));
+            }
+            auto closed = file->close();
+            if (!closed.has_value()) {
+                return std::unexpected(from_filesystem_error(std::move(closed.error())));
             }
             return {};
         }
 
-        std::ifstream in {path, std::ios::binary};
-        if (!in) {
-            return std::unexpected(make_error(storage::StorageErrorCode::IoError, "Failed to open manifest file"));
+        auto file = filesystem_->open(
+            path,
+            filesystem::backend::FileOpenOptions {
+                .access = filesystem::backend::FileAccess::ReadOnly,
+                .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            }
+        );
+        if (!file.has_value()) {
+            return std::unexpected(from_filesystem_error(std::move(file.error())));
         }
-        BinaryReader reader {in};
+        io::FileByteReader byte_reader {file.value()};
+        io::BinaryReader reader {byte_reader};
         read_file_header(reader, ManifestMagic);
-        if (reader.read_u32() != StorageFormatVersion) {
+        if (require_io(reader.read_u32()) != StorageFormatVersion) {
             return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported manifest storage format version"));
         }
-        if (reader.read_string() != CatalogFileName || reader.read_string() != CollectionsDirName) {
+        if (require_io(reader.read_string()) != CatalogFileName || require_io(reader.read_string()) != CollectionsDirName) {
             return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported manifest paths"));
         }
         return {};
