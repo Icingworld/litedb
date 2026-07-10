@@ -436,6 +436,9 @@ std::expected<schema::Value, IoError> BinaryReader::read_value()
         if (!count.has_value()) {
             return std::unexpected(count.error());
         }
+        if (count.value() > std::numeric_limits<std::uint32_t>::max()) {
+            return std::unexpected(make_io_error(IoErrorCode::ValueTooLarge, "vector is too large to decode"));
+        }
         schema::VectorValue values;
         values.reserve(count.value());
         for (std::uint32_t index = 0; index < count.value(); ++index) {
