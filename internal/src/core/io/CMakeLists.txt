@@ -1,4 +1,5 @@
 add_library(litedb_io
+    byte_reader.cpp
     binary_io.cpp
     buffer_byte_reader.cpp
     buffer_byte_writer.cpp

@@ -20,7 +20,7 @@ public:
      * @param data 字节数据
      * @return 结果
      */
-    std::expected<std::size_t, IoError> read_bytes(std::span<std::byte> data) override;
+    std::expected<std::size_t, IoError> read_some(std::span<std::byte> data) override;
 
     /**
      * @brief 获取文件偏移

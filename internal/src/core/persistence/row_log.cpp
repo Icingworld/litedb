@@ -1,6 +1,8 @@
 #include "core/persistence/row_log.hpp"
 
 #include <algorithm>
+#include <array>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -67,6 +69,21 @@ void read_file_header(io::BinaryReader & reader, std::uint32_t expected_magic)
     if (require_io(reader.read_u16()) < FileHeaderSize) {
         throw std::runtime_error("invalid file header size");
     }
+}
+
+std::expected<bool, storage::StorageError> try_read_record_bytes(io::ByteReader & reader, std::span<std::byte> data)
+{
+    while (!data.empty()) {
+        auto read = reader.read_some(data);
+        if (!read.has_value()) {
+            return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(read.error().message)));
+        }
+        if (read.value() == 0) {
+            return false;
+        }
+        data = data.subspan(read.value());
+    }
+    return true;
 }
 
 void write_record_data(io::BinaryWriter & writer, const schema::RecordData & data)
@@ -168,19 +185,22 @@ std::expected<RowLogReplay, storage::StorageError> RowLog::replay_or_create() co
         common::RecordId max_record_id = 0;
 
         for (;;) {
-            std::uint32_t magic = 0;
-            auto magic_read = reader.read_u32(magic);
+            std::array<std::byte, sizeof(std::uint32_t)> magic_bytes {};
+            auto magic_read = try_read_record_bytes(byte_reader, magic_bytes);
             if (!magic_read.has_value()) {
-                return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(magic_read.error().message)));
+                return std::unexpected(std::move(magic_read.error()));
             }
             if (!magic_read.value()) {
                 break;
             }
+            io::BufferByteReader magic_buffer {magic_bytes};
+            io::BinaryReader magic_reader {magic_buffer};
+            const auto magic = require_io(magic_reader.read_u32());
 
             std::uint8_t rest[RowRecordHeaderSize - sizeof(std::uint32_t)] {};
-            auto rest_read = reader.read_bytes(rest, sizeof(rest));
+            auto rest_read = try_read_record_bytes(byte_reader, std::as_writable_bytes(std::span {rest}));
             if (!rest_read.has_value()) {
-                return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(rest_read.error().message)));
+                return std::unexpected(std::move(rest_read.error()));
             }
             if (!rest_read.value()) {
                 break;
@@ -197,12 +217,9 @@ std::expected<RowLogReplay, storage::StorageError> RowLog::replay_or_create() co
             const auto header_size = require_io(header.read_u16());
             const auto operation = static_cast<RowLogOperation>(require_io(header.read_u8()));
             std::uint8_t reserved[7] {};
-            auto reserved_read = header.read_bytes(reserved, sizeof(reserved));
+            auto reserved_read = header_buffer.read_exact(std::as_writable_bytes(std::span {reserved}));
             if (!reserved_read.has_value()) {
                 return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(reserved_read.error().message)));
-            }
-            if (!reserved_read.value()) {
-                return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Invalid row record header"));
             }
             const auto record_id = require_io(header.read_u64());
             const auto payload_size = require_io(header.read_u32());
@@ -216,9 +233,9 @@ std::expected<RowLogReplay, storage::StorageError> RowLog::replay_or_create() co
 
             std::vector<char> payload(payload_size);
             if (payload_size != 0) {
-                auto payload_read = reader.read_bytes(payload.data(), payload.size());
+                auto payload_read = try_read_record_bytes(byte_reader, std::as_writable_bytes(std::span {payload}));
                 if (!payload_read.has_value()) {
-                    return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, std::move(payload_read.error().message)));
+                    return std::unexpected(std::move(payload_read.error()));
                 }
                 if (!payload_read.value()) {
                     break;

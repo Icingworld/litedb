@@ -1,7 +1,7 @@
 #include "core/io/binary_io.hpp"
 
-#include <array>
-#include <cstring>
+#include <bit>
+#include <concepts>
 #include <expected>
 #include <limits>
 #include <type_traits>
@@ -28,11 +28,15 @@ enum class EncodedValueKind : std::uint8_t
 };
 
 /**
- * @brief 写入小端编码的整�? * @tparam T 整数类型
- * @param writer 写入�? * @param value 整数�? * @return 结果
+ * @brief 写入小端编码的整数
+ * @tparam T 整数类型
+ * @param writer 写入器
+ * @param value 整数值
+ * @return 结果
  */
 template <typename T>
-std::expected<void, IoError> write_little_endian(BinaryWriter & writer, T value)
+[[nodiscard]]
+std::expected<void, IoError> write_little_endian_integer(BinaryWriter & writer, T value)
 {
     static_assert(std::is_integral_v<T>);
     using Unsigned = std::make_unsigned_t<T>;
@@ -46,8 +50,15 @@ std::expected<void, IoError> write_little_endian(BinaryWriter & writer, T value)
     return {};
 }
 
+/**
+ * @brief 读取小端编码的整数
+ * @tparam T 整数类型
+ * @param reader 读取器
+ * @return 整数值
+ */
 template <typename T>
-std::expected<T, IoError> read_little_endian(BinaryReader & reader)
+[[nodiscard]]
+std::expected<T, IoError> read_little_endian_integer(BinaryReader & reader)
 {
     static_assert(std::is_integral_v<T>);
     using Unsigned = std::make_unsigned_t<T>;
@@ -62,51 +73,90 @@ std::expected<T, IoError> read_little_endian(BinaryReader & reader)
     return static_cast<T>(result);
 }
 
-template <typename T>
-T bit_cast_from_bytes(const std::byte * bytes)
+/**
+ * @brief 按 IEEE 754 小端格式写入浮点数
+ * @tparam T 浮点数类型
+ * @param writer 写入器
+ * @param value 浮点数值
+ * @return 结果
+ * @note 浮点数必须使用 IEEE 754 小端格式
+ */
+template <std::floating_point T>
+[[nodiscard]]
+std::expected<void, IoError> write_little_endian_floating(
+    BinaryWriter& writer,
+    T value
+)
 {
-    T value {};
-    std::memcpy(&value, bytes, sizeof(T));
-    return value;
+    static_assert(std::numeric_limits<T>::is_iec559, "floating-point type must use IEEE 754");
+
+    if constexpr (std::same_as<T, float>) {
+        static_assert(sizeof(float) == sizeof(std::uint32_t));
+
+        const auto bits = std::bit_cast<std::uint32_t>(value);
+        return writer.write_u32(bits);
+    }
+    else if constexpr (std::same_as<T, double>) {
+        static_assert(sizeof(double) == sizeof(std::uint64_t));
+
+        const auto bits = std::bit_cast<std::uint64_t>(value);
+        return writer.write_u64(bits);
+    }
+    else {
+        static_assert(
+            std::same_as<T, float> || std::same_as<T, double>,
+            "unsupported floating-point type"
+        );
+    }
 }
 
 /**
- * @brief 写入浮点�? * @tparam T 浮点数类�? * @param writer 写入�? * @param value 浮点数�? * @return 结果
+ * @brief 按 IEEE 754 小端格式读取浮点数
+ * @tparam T 浮点数类型
+ * @param reader 读取器
+ * @return 浮点数值
+ * @note 浮点数必须使用 IEEE 754 小端格式
  */
-template <typename T>
-std::expected<void, IoError> write_floating(BinaryWriter & writer, T value)
+template <std::floating_point T>
+[[nodiscard]]
+std::expected<T, IoError> read_little_endian_floating(
+    BinaryReader& reader
+)
 {
-    std::array<std::byte, sizeof(T)> bytes {};
-    std::memcpy(bytes.data(), &value, sizeof(T));
-    for (const auto byte : bytes) {
-        auto result = writer.write_u8(std::to_integer<std::uint8_t>(byte));
-        if (!result.has_value()) {
-            return std::unexpected(result.error());
-        }
-    }
-    return {};
-}
+    static_assert(std::numeric_limits<T>::is_iec559, "floating-point type must use IEEE 754");
 
-template <typename T>
-std::expected<T, IoError> read_floating(BinaryReader & reader)
-{
-    std::array<std::byte, sizeof(T)> bytes {};
-    auto read = reader.read_bytes(bytes.data(), bytes.size());
-    if (!read.has_value()) {
-        return std::unexpected(read.error());
+    if constexpr (std::same_as<T, float>) {
+        static_assert(sizeof(float) == sizeof(std::uint32_t));
+
+        auto bits = reader.read_u32();
+        if (!bits) {
+            return std::unexpected(bits.error());
+        }
+
+        return std::bit_cast<float>(*bits);
     }
-    if (!read.value()) {
-        return std::unexpected(
-            make_io_error(IoErrorCode::UnexpectedEof, "unexpected end of floating point value")
+    else if constexpr (std::same_as<T, double>) {
+        static_assert(sizeof(double) == sizeof(std::uint64_t));
+
+        auto bits = reader.read_u64();
+        if (!bits) {
+            return std::unexpected(bits.error());
+        }
+
+        return std::bit_cast<double>(*bits);
+    }
+    else {
+        static_assert(
+            std::same_as<T, float> || std::same_as<T, double>,
+            "unsupported floating-point type"
         );
     }
-    return bit_cast_from_bytes<T>(bytes.data());
 }
 
 } // namespace
 
 BinaryWriter::BinaryWriter(ByteWriter & writer) noexcept
-    : writer_(&writer)
+    : writer_(writer)
 {
 }
 
@@ -117,37 +167,37 @@ std::expected<void, IoError> BinaryWriter::write_u8(std::uint8_t value)
 
 std::expected<void, IoError> BinaryWriter::write_u16(std::uint16_t value)
 {
-    return write_little_endian(*this, value);
+    return write_little_endian_integer(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_u32(std::uint32_t value)
 {
-    return write_little_endian(*this, value);
+    return write_little_endian_integer(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_u64(std::uint64_t value)
 {
-    return write_little_endian(*this, value);
+    return write_little_endian_integer(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_i32(std::int32_t value)
 {
-    return write_little_endian(*this, value);
+    return write_little_endian_integer(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_i64(std::int64_t value)
 {
-    return write_little_endian(*this, value);
+    return write_little_endian_integer(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_f32(float value)
 {
-    return write_floating(*this, value);
+    return write_little_endian_floating(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_f64(double value)
 {
-    return write_floating(*this, value);
+    return write_little_endian_floating(*this, value);
 }
 
 std::expected<void, IoError> BinaryWriter::write_string(const std::string & value)
@@ -257,40 +307,12 @@ std::expected<void, IoError> BinaryWriter::write_bytes(const void * data, std::s
         size,
     };
     
-    return writer_->write_bytes(bytes);
+    return writer_.write_bytes(bytes);
 }
 
 BinaryReader::BinaryReader(ByteReader & reader) noexcept
-    : reader_(&reader)
+    : reader_(reader)
 {
-}
-
-std::expected<bool, IoError> BinaryReader::read_u32(std::uint32_t & value)
-{
-    std::array<std::byte, sizeof(std::uint32_t)> bytes {};
-    auto read = reader_->read_bytes(bytes);
-    if (!read.has_value()) {
-        return std::unexpected(read.error());
-    }
-    if (read.value() != bytes.size()) {
-        return false;
-    }
-
-    std::uint32_t result = 0;
-    for (std::size_t index = 0; index < sizeof(std::uint32_t); ++index) {
-        result |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[index])) << (index * 8U);
-    }
-    value = result;
-    return true;
-}
-
-std::expected<bool, IoError> BinaryReader::read_bytes(void * data, std::size_t size)
-{
-    auto read = reader_->read_bytes(std::span {static_cast<std::byte *>(data), size});
-    if (!read.has_value()) {
-        return std::unexpected(read.error());
-    }
-    return read.value() == size;
 }
 
 std::expected<std::uint8_t, IoError> BinaryReader::read_u8()
@@ -305,37 +327,37 @@ std::expected<std::uint8_t, IoError> BinaryReader::read_u8()
 
 std::expected<std::uint16_t, IoError> BinaryReader::read_u16()
 {
-    return read_little_endian<std::uint16_t>(*this);
+    return read_little_endian_integer<std::uint16_t>(*this);
 }
 
 std::expected<std::uint32_t, IoError> BinaryReader::read_u32()
 {
-    return read_little_endian<std::uint32_t>(*this);
+    return read_little_endian_integer<std::uint32_t>(*this);
 }
 
 std::expected<std::uint64_t, IoError> BinaryReader::read_u64()
 {
-    return read_little_endian<std::uint64_t>(*this);
+    return read_little_endian_integer<std::uint64_t>(*this);
 }
 
 std::expected<std::int32_t, IoError> BinaryReader::read_i32()
 {
-    return read_little_endian<std::int32_t>(*this);
+    return read_little_endian_integer<std::int32_t>(*this);
 }
 
 std::expected<std::int64_t, IoError> BinaryReader::read_i64()
 {
-    return read_little_endian<std::int64_t>(*this);
+    return read_little_endian_integer<std::int64_t>(*this);
 }
 
 std::expected<float, IoError> BinaryReader::read_f32()
 {
-    return read_floating<float>(*this);
+    return read_little_endian_floating<float>(*this);
 }
 
 std::expected<double, IoError> BinaryReader::read_f64()
 {
-    return read_floating<double>(*this);
+    return read_little_endian_floating<double>(*this);
 }
 
 std::expected<std::string, IoError> BinaryReader::read_string()
@@ -343,6 +365,9 @@ std::expected<std::string, IoError> BinaryReader::read_string()
     const auto size = read_u32();
     if (!size.has_value()) {
         return std::unexpected(size.error());
+    }
+    if (size.value() > std::numeric_limits<std::uint32_t>::max()) {
+        return std::unexpected(make_io_error(IoErrorCode::ValueTooLarge, "string is too large to decode"));
     }
     std::string value(size.value(), '\0');
     if (size.value() != 0) {
@@ -429,14 +454,10 @@ std::expected<schema::Value, IoError> BinaryReader::read_value()
 
 std::expected<void, IoError> BinaryReader::read_exact_bytes(void * data, std::size_t size)
 {
-    auto read = read_bytes(data, size);
-    if (!read.has_value()) {
-        return std::unexpected(read.error());
-    }
-    if (!read.value()) {
-        return std::unexpected(make_io_error(IoErrorCode::UnexpectedEof, "unexpected end of binary data"));
-    }
-    return {};
+    return reader_.read_exact(std::span {
+        static_cast<std::byte *>(data),
+        size,
+    });
 }
 
 } // namespace litedb::core::io

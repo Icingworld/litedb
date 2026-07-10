@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <expected>
+#include <string>
 
 #include "core/io/io_error.hpp"
 #include "core/io/byte_reader.hpp"
@@ -101,7 +101,7 @@ private:
     std::expected<void, IoError> write_bytes(const void * data, std::size_t size);
 
 private:
-    ByteWriter * writer_;            ///< 字节写入器
+    ByteWriter & writer_;            ///< 字节写入器
 };
 
 /**
@@ -113,23 +113,6 @@ public:
     explicit BinaryReader(ByteReader & reader) noexcept;
 
 public:
-    /**
-     * @brief 尝试读取 32 位无符号整数
-     * @param value 输出参数，存放读取到的值
-     * @return 是否读取完整
-     */
-    [[nodiscard]]
-    std::expected<bool, IoError> read_u32(std::uint32_t & value);
-
-    /**
-     * @brief 尝试读取字节数据
-     * @param data 输出缓冲区
-     * @param size 要读取的字节数
-     * @return 是否读取完整
-     */
-    [[nodiscard]]
-    std::expected<bool, IoError> read_bytes(void * data, std::size_t size);
-
     /**
      * @brief 读取 8 位无符号整数
      * @return 读取结果
@@ -200,7 +183,7 @@ private:
     std::expected<void, IoError> read_exact_bytes(void * data, std::size_t size);
 
 private:
-    ByteReader * reader_;            ///< 字节读取器
+    ByteReader & reader_;            ///< 字节读取器
 };
 
 } // namespace litedb::core::io

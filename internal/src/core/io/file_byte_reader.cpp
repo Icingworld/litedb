@@ -24,7 +24,7 @@ FileByteReader::FileByteReader(filesystem::FileHandle & file) noexcept
 {
 }
 
-std::expected<std::size_t, IoError> FileByteReader::read_bytes(std::span<std::byte> data)
+std::expected<std::size_t, IoError> FileByteReader::read_some(std::span<std::byte> data)
 {
     auto result = file_->read_at(offset_, data);
     if (!result.has_value()) {

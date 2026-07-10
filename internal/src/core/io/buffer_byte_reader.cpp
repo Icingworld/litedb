@@ -12,7 +12,7 @@ BufferByteReader::BufferByteReader(std::span<const std::byte> data) noexcept
 {
 }
 
-std::expected<std::size_t, IoError> BufferByteReader::read_bytes(std::span<std::byte> data)
+std::expected<std::size_t, IoError> BufferByteReader::read_some(std::span<std::byte> data)
 {
     const auto remaining = static_cast<std::uint64_t>(data_.size()) - offset_;
     const auto count = std::min<std::uint64_t>(remaining, data.size());

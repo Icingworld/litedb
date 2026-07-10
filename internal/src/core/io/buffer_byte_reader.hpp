@@ -18,11 +18,12 @@ public:
 
 public:
     /**
-     * @brief 读取字节数据
+     * @brief 尽力读取字节数据
      * @param data 字节数据
      * @return 结果
+     * @note 允许短读，返回的字节数可能小于请求的字节数
      */
-    std::expected<std::size_t, IoError> read_bytes(std::span<std::byte> data) override;
+    std::expected<std::size_t, IoError> read_some(std::span<std::byte> data) override;
 
 private:
     std::span<const std::byte> data_;     ///< 字节数据
