@@ -413,9 +413,9 @@ void test_parse_failures()
     require(default_expression.code == ParserErrorCode::ExpectedLiteral, "DEFAULT expression error code mismatch");
     require(default_expression.message == "Expected literal after DEFAULT", "DEFAULT expression error mismatch");
 
-    auto primary_key_constraint = parse_error("CREATE COLLECTION users (id BIGINT PRIMARY KEY);");
-    require(primary_key_constraint.code == ParserErrorCode::UnexpectedToken, "PRIMARY KEY constraint error code mismatch");
-    require(primary_key_constraint.message == "Unexpected column constraint", "PRIMARY KEY constraint error mismatch");
+    auto primary_constraint = parse_error("CREATE COLLECTION users (id BIGINT PRIMARY KEY);");
+    require(primary_constraint.code == ParserErrorCode::UnexpectedToken, "PRIMARY KEY constraint error code mismatch");
+    require(primary_constraint.message == "Unexpected column constraint", "PRIMARY KEY constraint error mismatch");
 
     auto implicit_alias = parse_error("SELECT age + 1 next_age FROM users;");
     require(implicit_alias.code == ParserErrorCode::ExpectedToken, "implicit alias error code mismatch");

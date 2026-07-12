@@ -164,7 +164,7 @@ std::unique_ptr<BoundExpression> cast_if_needed(std::unique_ptr<BoundExpression>
     return std::make_unique<BoundCastExpression>(std::move(expression), target_type, location);
 }
 
-BoundColumn bound_column_from_entry(const catalog::ColumnEntry & column)
+BoundColumn bound_column_from_entry(const meta::entry::ColumnEntry & column)
 {
     return BoundColumn {
         .column_id = column.id(),
@@ -174,16 +174,16 @@ BoundColumn bound_column_from_entry(const catalog::ColumnEntry & column)
     };
 }
 
-catalog::CatalogIndexKind catalog_index_kind(CreateIndexMethod method)
+meta::entry::IndexKind meta_index_kind(CreateIndexMethod method)
 {
     switch (method) {
     case CreateIndexMethod::Default:
         [[fallthrough]];
     case CreateIndexMethod::BTree:
-        return catalog::CatalogIndexKind::BTree;
+        return meta::entry::IndexKind::BTree;
     }
 
-    return catalog::CatalogIndexKind::BTree;
+    return meta::entry::IndexKind::BTree;
 }
 
 } // namespace litedb::core::binder

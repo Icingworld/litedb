@@ -12,7 +12,7 @@ BoundCreateIndexStatement::BoundCreateIndexStatement(
     common::ColumnId column_id,
     std::string column_name,
     std::string index_name,
-    catalog::CatalogIndexKind index_kind,
+    meta::entry::IndexKind index_kind,
     bool unique,
     bool if_not_exists,
     parser::ast::AstNodeLocation location
@@ -60,7 +60,7 @@ const std::string & BoundCreateIndexStatement::index_name() const noexcept
     return index_name_;
 }
 
-catalog::CatalogIndexKind BoundCreateIndexStatement::index_kind() const noexcept
+meta::entry::IndexKind BoundCreateIndexStatement::index_kind() const noexcept
 {
     return index_kind_;
 }

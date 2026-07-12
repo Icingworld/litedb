@@ -10,7 +10,7 @@ DatabaseInstance::DatabaseInstance(DatabaseConfig config)
     if (config.data_dir.has_value()) {
         persistence_ = std::make_unique<persistence::PersistenceController>(
             config.data_dir.value(),
-            catalog_,
+            meta_,
             storage_,
             index_manager_
         );
@@ -21,14 +21,14 @@ DatabaseInstance::DatabaseInstance(DatabaseConfig config)
     }
 }
 
-catalog::InMemoryCatalog & DatabaseInstance::catalog() noexcept
+meta::MetaEngine & DatabaseInstance::meta() noexcept
 {
-    return catalog_;
+    return meta_;
 }
 
-const catalog::InMemoryCatalog & DatabaseInstance::catalog() const noexcept
+const meta::MetaEngine & DatabaseInstance::meta() const noexcept
 {
-    return catalog_;
+    return meta_;
 }
 
 storage::StorageManager & DatabaseInstance::storage() noexcept

@@ -7,7 +7,7 @@
 #include "core/binder/binder_error.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/ast_node.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
@@ -130,7 +130,7 @@ std::unique_ptr<bound::BoundExpression> cast_if_needed(
  * @return 绑定列
  */
 [[nodiscard]]
-bound::BoundColumn bound_column_from_entry(const catalog::ColumnEntry & column);
+bound::BoundColumn bound_column_from_entry(const meta::entry::ColumnEntry & column);
 
 /**
  * @brief 获取索引类型
@@ -138,6 +138,6 @@ bound::BoundColumn bound_column_from_entry(const catalog::ColumnEntry & column);
  * @return 索引类型
  */
 [[nodiscard]]
-catalog::CatalogIndexKind catalog_index_kind(parser::ast::CreateIndexMethod method);
+meta::entry::IndexKind meta_index_kind(parser::ast::CreateIndexMethod method);
 
 } // namespace litedb::core::binder

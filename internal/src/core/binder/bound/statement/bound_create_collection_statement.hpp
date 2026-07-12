@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/catalog/catalog_writer.hpp"
+#include "core/meta/meta.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -21,7 +21,7 @@ public:
         common::DatabaseId database_id,
         std::string collection_name,
         bool if_not_exists,
-        std::vector<catalog::ColumnDefinition> columns,
+        std::vector<meta::ColumnDefinition> columns,
         std::optional<std::string> comment,
         parser::ast::AstNodeLocation location
     );
@@ -53,7 +53,7 @@ public:
      * @return 列定义列表
      */
     [[nodiscard]]
-    const std::vector<catalog::ColumnDefinition> & columns() const noexcept;
+    const std::vector<meta::ColumnDefinition> & columns() const noexcept;
 
     /**
      * @brief 获取集合注释
@@ -72,7 +72,7 @@ private:
     common::DatabaseId database_id_;                    ///< 数据库 ID
     std::string collection_name_;                       ///< 集合名称
     bool if_not_exists_;                                ///< 是否不存在
-    std::vector<catalog::ColumnDefinition> columns_;    ///< 列定义列表
+    std::vector<meta::ColumnDefinition> columns_;    ///< 列定义列表
     std::optional<std::string> comment_;                ///< 集合注释
 };
 

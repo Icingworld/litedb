@@ -27,7 +27,7 @@ SQL text
 
 更具体地说：
 
-- Parser 和 Binder 层继续统一处理所有 statement。这是合理的，因为所有 SQL 都需要语法、名字解析、类型检查、catalog 校验和错误位置。
+- Parser 和 Binder 层继续统一处理所有 statement。这是合理的，因为所有 SQL 都需要语法、名字解析、类型检查、meta 校验和错误位置。
 - Planner 对外继续返回一个统一的顶层对象，例如 `LogicalStatementPlan`，更建议将其语义命名为 `PlannedStatement` 或 `ExecutableLogicalStatementPlan`。
 - 顶层对象内部应该明确分流：关系数据流语句走 `logical::LogicalPlanNode`；DDL、session command、metadata command 走 command plan。
 - `logical::LogicalPlanNode` 不应成为“所有 SQL 语句的公共 IR”。它应该只表达可优化的数据流或数据修改流。
@@ -49,7 +49,7 @@ SQL text
 
 把 DDL、`USE`、`SHOW`、`DESCRIBE` 都建成 logical operator tree 看似统一，但对 litedb 当前阶段不划算：
 
-1. 关系代数算子有明确含义：scan、filter、projection、join、aggregate、sort、limit、sink 等。DDL 的核心是 catalog/storage mutation，不是 tuple stream transformation。
+1. 关系代数算子有明确含义：scan、filter、projection、join、aggregate、sort、limit、sink 等。DDL 的核心是 meta/storage mutation，不是 tuple stream transformation。
 2. 优化器会被迫理解大量不可交换、不可重排、有副作用的 command operator，反而削弱 logical plan 的可推理性。
 3. 执行器会把“拉取 row 的 pipeline”和“一次性 command side effect”混在同一个递归执行函数里。
 4. 对 `USE` 这类 session state command，放入 logical tree 只会增加抽象成本。
@@ -94,7 +94,7 @@ DuckDB 更偏统一 logical operator 路线。它的 planner 在 `Planner::Creat
 - `LogicalStatementPlan` 的名字容易被理解成“关系型 plan”，但它实际上是 statement 级 executable description。
 - `Planner::plan()` 当前是一个大 switch，同时承担 command lowering、query logical planning、mutation planning，后续会越来越厚。
 - `UpdatePlan` / `DeletePlan` 的 side effect 在 statement plan 外壳里，input 在 logical tree 里；这在当前执行器可以接受，但如果引入 physical plan，mutation sink 的位置需要重新定义。
-- `SHOW` / `DESCRIBE` 返回 row set，但它们现在是特殊 command。短期没问题，长期需要决定是否把系统 catalog 暴露为可查询数据源。
+- `SHOW` / `DESCRIBE` 返回 row set，但它们现在是特殊 command。短期没问题，长期需要决定是否把系统 meta 暴露为可查询数据源。
 - `INSERT VALUES` 不走 logical tree 是合理的；但未来 `INSERT INTO ... SELECT ...` 会需要一个 input pipeline 和 insert sink。
 
 ## 推荐目标架构
@@ -191,8 +191,8 @@ DDL 应保留为 command plan，不建议建成普通 logical operator。
 
 `SHOW` / `DESCRIBE` 有两条可能路线：
 
-- 短期：继续 command plan，executor 直接从 catalog 组装 row set。
-- 长期：如果 litedb 引入系统 catalog 表，例如 `lite_databases`、`lite_collections`、`lite_indexes`，可以把 `SHOW` / `DESCRIBE` lower 成普通 catalog query，或者让它们共享 catalog scan 的执行逻辑。
+- 短期：继续 command plan，executor 直接从 meta 组装 row set。
+- 长期：如果 litedb 引入系统 meta 表，例如 `lite_databases`、`lite_collections`、`lite_indexes`，可以把 `SHOW` / `DESCRIBE` lower 成普通 meta query，或者让它们共享 meta scan 的执行逻辑。
 
 当前项目还没有系统表查询层，因此短期 command plan 更务实。
 
@@ -243,7 +243,7 @@ BoundStatement
 - result columns；
 - parameter metadata；
 - read/write classification；
-- catalog dependencies；
+- meta dependencies；
 - logical/physical root 或 command payload；
 - 是否需要事务写锁、DDL handler、session state mutation。
 
@@ -278,4 +278,4 @@ Command statements are represented as statement-level command plans.
 - 保留统一顶层 plan，但把它明确定位为 statement-level executable artifact。
 - 让 `logical` 只表达可优化的数据流；`UPDATE` / `DELETE` 当前可继续使用 input logical tree，未来 physical pipeline 成熟后再迁移成 mutation sink。
 
-这个方向既能保持当前代码简洁，也不会阻碍后续引入 optimizer、physical plan、EXPLAIN、prepared statement 和系统 catalog 查询。
+这个方向既能保持当前代码简洁，也不会阻碍后续引入 optimizer、physical plan、EXPLAIN、prepared statement 和系统 meta 查询。

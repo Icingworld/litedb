@@ -22,7 +22,7 @@ public:
     const std::filesystem::path & data_dir() const noexcept;
 
     [[nodiscard]]
-    std::filesystem::path catalog_path() const;
+    std::filesystem::path meta_path() const;
 
     [[nodiscard]]
     std::filesystem::path collections_dir() const;

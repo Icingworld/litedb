@@ -7,12 +7,12 @@
 #include "core/optimizer/optimizer_error.hpp"
 #include "core/logical_plan/statement/logical_statement_plan.hpp"
 
-namespace litedb::core::catalog
+namespace litedb::core::meta
 {
 
-class CatalogReader;
+class MetaEngine;
 
-} // namespace litedb::core::catalog
+} // namespace litedb::core::meta
 
 namespace litedb::core::optimizer
 {
@@ -36,7 +36,7 @@ struct OptimizerOptions
 class Optimizer
 {
 public:
-    explicit Optimizer(OptimizerOptions options = {}, const catalog::CatalogReader * catalog = nullptr) noexcept;
+    explicit Optimizer(OptimizerOptions options = {}, const meta::MetaEngine * catalog = nullptr) noexcept;
 
     /**
      * @brief 优化 statement plan
@@ -50,7 +50,7 @@ public:
 
 private:
     OptimizerOptions options_;
-    const catalog::CatalogReader * catalog_ {nullptr};
+    const meta::MetaEngine * catalog_ {nullptr};
 };
 
 } // namespace litedb::core::optimizer

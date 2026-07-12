@@ -30,7 +30,7 @@
 #include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
-#include "core/catalog/catalog_writer.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/token.hpp"
 
 #include <sstream>
@@ -87,31 +87,31 @@ const char * token_type_name(parser::TokenType type) noexcept
     }
 }
 
-const char * catalog_index_kind_name(catalog::CatalogIndexKind kind) noexcept
+const char * meta_index_kind_name(meta::entry::IndexKind kind) noexcept
 {
     switch (kind) {
-    case catalog::CatalogIndexKind::Hash: return "Hash";
-    case catalog::CatalogIndexKind::BTree: return "BTree";
+    case meta::entry::IndexKind::Hash: return "Hash";
+    case meta::entry::IndexKind::BTree: return "BTree";
     }
 
     return "Unknown";
 }
 
-const char * catalog_vector_index_kind_name(catalog::CatalogVectorIndexKind kind) noexcept
+const char * meta_vector_index_kind_name(meta::entry::VectorIndexKind kind) noexcept
 {
     switch (kind) {
-    case catalog::CatalogVectorIndexKind::Hnsw: return "Hnsw";
+    case meta::entry::VectorIndexKind::Hnsw: return "Hnsw";
     }
 
     return "Unknown";
 }
 
-const char * catalog_vector_metric_name(catalog::CatalogVectorDistanceMetric metric) noexcept
+const char * meta_vector_metric_name(meta::entry::VectorDistanceMetric metric) noexcept
 {
     switch (metric) {
-    case catalog::CatalogVectorDistanceMetric::L2: return "L2";
-    case catalog::CatalogVectorDistanceMetric::InnerProduct: return "InnerProduct";
-    case catalog::CatalogVectorDistanceMetric::Cosine: return "Cosine";
+    case meta::entry::VectorDistanceMetric::L2: return "L2";
+    case meta::entry::VectorDistanceMetric::InnerProduct: return "InnerProduct";
+    case meta::entry::VectorDistanceMetric::Cosine: return "Cosine";
     }
 
     return "Unknown";
@@ -288,7 +288,6 @@ void BoundDebugPrinter::visit(const BoundCreateCollectionStatement & statement)
         IndentScope column_scope(*this);
         write_field("name", column.name);
         write_type_field("type", column.type);
-        write_field("primary_key", column.primary_key);
         write_field("unique", column.unique);
         write_field("nullable", column.nullable);
         write_field("default_expression", column.default_expression.has_value() ? "<present>" : "<none>");
@@ -310,7 +309,7 @@ void BoundDebugPrinter::visit(const BoundCreateIndexStatement & statement)
     write_field("column_id", statement.column_id());
     write_field("column_name", statement.column_name());
     write_field("index_name", statement.index_name());
-    write_field("index_kind", catalog_index_kind_name(statement.index_kind()));
+    write_field("index_kind", meta_index_kind_name(statement.index_kind()));
     write_field("unique", statement.unique());
     write_field("if_not_exists", statement.if_not_exists());
 }
@@ -325,8 +324,8 @@ void BoundDebugPrinter::visit(const BoundCreateVectorIndexStatement & statement)
     write_field("column_id", statement.column_id());
     write_field("column_name", statement.column_name());
     write_field("index_name", statement.index_name());
-    write_field("index_kind", catalog_vector_index_kind_name(statement.index_kind()));
-    write_field("metric", catalog_vector_metric_name(statement.metric()));
+    write_field("index_kind", meta_vector_index_kind_name(statement.index_kind()));
+    write_field("metric", meta_vector_metric_name(statement.metric()));
     write_field("max_neighbors", statement.max_neighbors());
     write_field("ef_construction", statement.ef_construction());
     write_field("ef_search_default", statement.ef_search_default());

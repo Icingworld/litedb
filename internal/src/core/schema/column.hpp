@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-#include "core/catalog/catalog_default_expression.hpp"
+#include "core/meta/entry/default_expression.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 
@@ -23,9 +23,8 @@ public:
         std::string column_name,
         common::LogicalType type,
         bool nullable,
-        bool primary_key,
         bool unique,
-        std::optional<catalog::CatalogDefaultExpression> default_expression,
+        std::optional<meta::entry::DefaultExpression> default_expression,
         std::optional<std::string> comment
     );
 
@@ -73,13 +72,6 @@ public:
     bool nullable() const noexcept;
 
     /**
-     * @brief 是否为主键
-     * @return 是否为主键
-     */
-    [[nodiscard]]
-    bool primary_key() const noexcept;
-
-    /**
      * @brief 是否唯一
      * @return 是否唯一
      */
@@ -91,7 +83,7 @@ public:
      * @return 默认值
      */
     [[nodiscard]]
-    const std::optional<catalog::CatalogDefaultExpression> & default_expression() const noexcept;
+    const std::optional<meta::entry::DefaultExpression> & default_expression() const noexcept;
 
     /**
      * @brief 获取注释
@@ -107,9 +99,8 @@ private:
     std::string column_name_;                                               ///< 列名称
     common::LogicalType type_;                                              ///< 列类型
     bool nullable_;                                                         ///< 是否可为空
-    bool primary_key_;                                                      ///< 是否为主键
     bool unique_;                                                           ///< 是否唯一
-    std::optional<catalog::CatalogDefaultExpression> default_expression_;   ///< 默认值
+    std::optional<meta::entry::DefaultExpression> default_expression_;   ///< 默认值
     std::optional<std::string> comment_;                                    ///< 注释
 };
 

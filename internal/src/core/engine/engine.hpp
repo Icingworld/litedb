@@ -4,7 +4,7 @@
 #include <optional>
 #include <string_view>
 
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/common/ids.hpp"
 #include "core/engine/database_instance.hpp"
 #include "core/engine/engine_error.hpp"
@@ -45,14 +45,14 @@ public:
      * @return 目录
      */
     [[nodiscard]]
-    catalog::InMemoryCatalog & catalog() noexcept;
+    meta::MetaEngine & meta() noexcept;
 
     /**
      * @brief 获取目录
      * @return 目录
      */
     [[nodiscard]]
-    const catalog::InMemoryCatalog & catalog() const noexcept;
+    const meta::MetaEngine & meta() const noexcept;
 
     /**
      * @brief 获取存储管理器

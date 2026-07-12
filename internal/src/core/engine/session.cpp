@@ -95,7 +95,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_parser_error(std::move(parsed.error())));
     }
 
-    binder::BinderContext context {instance_->catalog(), session_};
+    binder::BinderContext context {instance_->meta(), session_};
     binder::Binder binder {context};
     auto bound = binder.bind(*parsed.value());
     if (!bound.has_value()) {
@@ -108,7 +108,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_planner_error(std::move(planned.error())));
     }
 
-    optimizer::Optimizer optimizer {{}, &instance_->catalog()};
+    optimizer::Optimizer optimizer {{}, &instance_->meta()};
     auto optimized = optimizer.optimize(std::move(planned.value()));
     if (!optimized.has_value()) {
         return std::unexpected(from_optimizer_error(std::move(optimized.error())));
@@ -118,7 +118,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
     auto physical = physical_planner.plan(*optimized.value());
 
     executor::Executor executor {
-        instance_->catalog(),
+        instance_->meta(),
         instance_->storage(),
         instance_->index_manager(),
         instance_->ddl_handler(),

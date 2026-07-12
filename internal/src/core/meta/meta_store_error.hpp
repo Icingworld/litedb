@@ -22,8 +22,8 @@ enum class MetaStoreErrorCode
  */
 struct MetaStoreError
 {
-    MetaStoreErrorCode code;
-    std::string message;
+    MetaStoreErrorCode code;     ///< 错误码
+    std::string message;         ///< 错误信息
 };
 
 } // namespace litedb::core::meta

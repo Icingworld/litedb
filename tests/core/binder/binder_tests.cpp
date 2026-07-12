@@ -13,7 +13,7 @@
 #include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/parser/ast/expression/function_call_expression.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
@@ -29,7 +29,8 @@ namespace
 
 using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::parser;
 
@@ -57,7 +58,7 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 
 struct Fixture
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -76,12 +77,12 @@ struct Fixture
             ColumnDefinition {
                 .name = "id",
                 .type = type(LogicalTypeId::BigInt),
-                .primary_key = true,
+                .nullable = false,
             },
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = CatalogDefaultExpression::literal(CatalogDefaultLiteralKind::String, "unknown"),
+                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",
@@ -324,13 +325,13 @@ void test_index_binding()
     require(bound_create_age->collection_name() == "users", "CREATE INDEX collection name mismatch");
     require(bound_create_age->column_name() == "age", "CREATE INDEX column name mismatch");
     require(bound_create_age->index_name() == "idx_age", "CREATE INDEX index name mismatch");
-    require(bound_create_age->index_kind() == CatalogIndexKind::BTree, "CREATE INDEX default kind mismatch");
+    require(bound_create_age->index_kind() == IndexKind::BTree, "CREATE INDEX default kind mismatch");
     require(!bound_create_age->unique(), "CREATE INDEX unique mismatch");
     require(!bound_create_age->if_not_exists(), "CREATE INDEX if-not-exists mismatch");
 
     auto create_name = bind_ok(fixture, "CREATE INDEX IF NOT EXISTS idx_name ON users (name) USING BTREE;");
     const auto * bound_create_name = static_cast<const BoundCreateIndexStatement *>(create_name.get());
-    require(bound_create_name->index_kind() == CatalogIndexKind::BTree, "CREATE INDEX BTREE kind mismatch");
+    require(bound_create_name->index_kind() == IndexKind::BTree, "CREATE INDEX BTREE kind mismatch");
     require(bound_create_name->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
 
     require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").code == BinderErrorCode::InvalidType, "vector index type error mismatch");
@@ -340,9 +341,9 @@ void test_index_binding()
     require(age_column != nullptr, "age column lookup failed");
     auto created_index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
-        .column_id = age_column->id(),
+        .column_ids = {age_column->id()},
         .name = "idx_age",
-        .index_kind = CatalogIndexKind::BTree,
+        .kind = IndexKind::BTree,
     });
     require(created_index.has_value(), "fixture index create failed");
 
@@ -377,8 +378,8 @@ void test_vector_index_binding()
     require(bound_create->collection_name() == "users", "CREATE VINDEX collection name mismatch");
     require(bound_create->column_name() == "embedding", "CREATE VINDEX column name mismatch");
     require(bound_create->index_name() == "vidx_embedding", "CREATE VINDEX index name mismatch");
-    require(bound_create->index_kind() == CatalogVectorIndexKind::Hnsw, "CREATE VINDEX kind value mismatch");
-    require(bound_create->metric() == CatalogVectorDistanceMetric::InnerProduct, "CREATE VINDEX metric mismatch");
+    require(bound_create->index_kind() == VectorIndexKind::Hnsw, "CREATE VINDEX kind value mismatch");
+    require(bound_create->metric() == VectorDistanceMetric::InnerProduct, "CREATE VINDEX metric mismatch");
     require(bound_create->max_neighbors() == 24, "CREATE VINDEX max_neighbors mismatch");
     require(bound_create->ef_construction() == 240, "CREATE VINDEX ef_construction mismatch");
     require(bound_create->ef_search_default() == 80, "CREATE VINDEX ef_search mismatch");
@@ -387,7 +388,7 @@ void test_vector_index_binding()
 
     auto defaults = bind_ok(fixture, "CREATE VINDEX vidx_embedding_default ON users (embedding) USING HNSW;");
     const auto * bound_defaults = static_cast<const BoundCreateVectorIndexStatement *>(defaults.get());
-    require(bound_defaults->metric() == CatalogVectorDistanceMetric::L2, "CREATE VINDEX default metric mismatch");
+    require(bound_defaults->metric() == VectorDistanceMetric::L2, "CREATE VINDEX default metric mismatch");
     require(bound_defaults->max_neighbors() == 16, "CREATE VINDEX default max_neighbors mismatch");
     require(bound_defaults->ef_construction() == 200, "CREATE VINDEX default ef_construction mismatch");
     require(bound_defaults->ef_search_default() == 64, "CREATE VINDEX default ef_search mismatch");

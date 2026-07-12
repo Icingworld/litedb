@@ -14,7 +14,7 @@ enum class ExecutionErrorCode
 {
     UnsupportedStatement,          ///< 不支持的语句
     InvalidPlan,                   ///< 无效计划
-    CatalogError,                  ///< 目录错误
+    MetaError,                     ///< 元数据错误
     SchemaError,                   ///< Schema 错误
     StorageError,                  ///< 存储错误
     IndexError,                    ///< 索引错误

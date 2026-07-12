@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
 #include "core/index/scalar_index_key.hpp"
 #include "core/physical_plan/node/physical_plan_node.hpp"
@@ -40,7 +40,7 @@ public:
         std::string collection_name,
         common::IndexId index_id,
         std::string index_name,
-        catalog::CatalogIndexKind index_kind,
+        meta::entry::IndexKind index_kind,
         common::ColumnId column_id,
         std::string column_name,
         PhysicalIndexLookup lookup,
@@ -63,7 +63,7 @@ public:
     const std::string & index_name() const noexcept;
 
     [[nodiscard]]
-    catalog::CatalogIndexKind index_kind() const noexcept;
+    meta::entry::IndexKind index_kind() const noexcept;
 
     [[nodiscard]]
     common::ColumnId column_id() const noexcept;
@@ -83,7 +83,7 @@ private:
     std::string collection_name_;
     common::IndexId index_id_;
     std::string index_name_;
-    catalog::CatalogIndexKind index_kind_;
+    meta::entry::IndexKind index_kind_;
     common::ColumnId column_id_;
     std::string column_name_;
     PhysicalIndexLookup lookup_;

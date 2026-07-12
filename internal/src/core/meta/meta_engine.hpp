@@ -22,6 +22,7 @@ namespace litedb::core::meta
 
 /**
  * @brief 元数据引擎
+ * @note 查询接口返回的 entry 指针仅在下一次 mutation 或 restore 前有效。
  */
 class MetaEngine
 {

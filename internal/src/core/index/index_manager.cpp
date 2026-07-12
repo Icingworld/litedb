@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "core/catalog/catalog_reader.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/index/btree_index.hpp"
 #include "core/index/hash_index.hpp"
 #include "core/schema/schema_loader.hpp"
@@ -23,12 +23,12 @@ IndexError make_error(IndexErrorCode code, std::string message)
 
 } // namespace
 
-std::unique_ptr<ScalarIndex> IndexManager::make_index(catalog::CatalogIndexKind index_kind)
+std::unique_ptr<ScalarIndex> IndexManager::make_index(meta::entry::IndexKind index_kind)
 {
     switch (index_kind) {
-    case catalog::CatalogIndexKind::Hash:
+    case meta::entry::IndexKind::Hash:
         return std::make_unique<HashIndex>();
-    case catalog::CatalogIndexKind::BTree:
+    case meta::entry::IndexKind::BTree:
         return std::make_unique<BTreeIndex>();
     }
     return nullptr;
@@ -153,7 +153,7 @@ std::expected<void, IndexError> IndexManager::build_index_from_storage(
 }
 
 std::expected<void, IndexError> IndexManager::create_index(
-    const catalog::IndexEntry & index_entry,
+    const meta::entry::IndexEntry & index_entry,
     const schema::CollectionSchema & collection_schema,
     const storage::CollectionStorage & storage
 )
@@ -162,7 +162,11 @@ std::expected<void, IndexError> IndexManager::create_index(
         return std::unexpected(make_error(IndexErrorCode::IndexAlreadyExists, "Index already exists"));
     }
 
-    const auto * column = collection_schema.find_column(index_entry.column_id());
+    const auto column_id = index_entry.column_id();
+    if (!column_id.has_value()) {
+        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
+    }
+    const auto * column = collection_schema.find_column(column_id.value());
     if (column == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is not in collection schema"));
     }
@@ -170,7 +174,7 @@ std::expected<void, IndexError> IndexManager::create_index(
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "VECTOR column cannot use scalar index"));
     }
 
-    auto index = make_index(index_entry.index_kind());
+    auto index = make_index(index_entry.kind());
     if (index == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
     }
@@ -178,7 +182,7 @@ std::expected<void, IndexError> IndexManager::create_index(
     ManagedIndex managed_index {
         .index_id = index_entry.id(),
         .collection_id = index_entry.collection_id(),
-        .column_id = index_entry.column_id(),
+        .column_id = column_id.value(),
         .column_ordinal = column->ordinal(),
         .kind = index->kind(),
         .unique = index_entry.unique(),
@@ -232,7 +236,7 @@ void IndexManager::drop_collection_indexes(common::CollectionId collection_id)
 }
 
 std::expected<void, IndexError> IndexManager::rebuild_all(
-    const catalog::CatalogReader & catalog,
+    const meta::MetaEngine & catalog,
     const storage::StorageManager & storage
 )
 {

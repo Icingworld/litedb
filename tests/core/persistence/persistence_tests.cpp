@@ -5,7 +5,7 @@
 #include "core/io/binary_io.hpp"
 #include "core/io/buffer_byte_reader.hpp"
 #include "core/io/buffer_byte_writer.hpp"
-#include "core/persistence/catalog_store.hpp"
+#include "core/meta/meta_store.hpp"
 #include "core/persistence/manifest_store.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/persistence/row_log.hpp"
@@ -118,7 +118,7 @@ void test_binary_value_roundtrip()
     require(vector[1] == 2.0, "vector value mismatch");
 }
 
-void test_manifest_and_catalog_store()
+void test_manifest_and_meta_store()
 {
     const auto dir = make_temp_dir("litedb_manifest_catalog_test");
     auto filesystem = filesystem::create_platform_filesystem();
@@ -128,37 +128,35 @@ void test_manifest_and_catalog_store()
     require(std::filesystem::exists(dir / "manifest.ldb"), "manifest file missing");
     require(std::filesystem::exists(dir / "collections"), "collections dir missing");
 
-    catalog::CatalogSnapshot snapshot;
+    meta::MetaSnapshot snapshot;
     snapshot.next_database_id = 2;
     snapshot.next_collection_id = 2;
     snapshot.next_column_id = 3;
     snapshot.next_index_id = 2;
     snapshot.next_vector_index_id = 2;
-    snapshot.databases.push_back(catalog::CatalogSnapshotDatabase {
+    snapshot.databases.push_back(meta::MetaSnapshotDatabase {
         .id = 1,
         .name = "demo",
         .collections = {
-            catalog::CatalogSnapshotCollection {
+            meta::MetaSnapshotCollection {
                 .id = 1,
                 .database_id = 1,
                 .name = "users",
                 .comment = std::string {"user collection"},
                 .columns = {
-                    catalog::CatalogSnapshotColumn {
+                    meta::MetaSnapshotColumn {
                         .id = 1,
                         .name = "id",
                         .type = type(common::LogicalTypeId::BigInt),
-                        .primary_key = true,
-                        .unique = false,
+                                .unique = false,
                         .nullable = false,
                         .default_expression = std::nullopt,
                         .comment = std::string {"primary id"},
                     },
-                    catalog::CatalogSnapshotColumn {
+                    meta::MetaSnapshotColumn {
                         .id = 2,
                         .name = "embedding",
                         .type = type(common::LogicalTypeId::Vector, 3),
-                        .primary_key = false,
                         .unique = false,
                         .nullable = true,
                         .default_expression = std::nullopt,
@@ -166,21 +164,21 @@ void test_manifest_and_catalog_store()
                     },
                 },
                 .indexes = {
-                    catalog::CatalogSnapshotIndex {
+                    meta::MetaSnapshotIndex {
                         .id = 1,
-                        .column_id = 1,
+                        .column_ids = {1},
                         .name = "idx_id",
-                        .index_kind = catalog::CatalogIndexKind::BTree,
+                        .index_kind = meta::entry::IndexKind::BTree,
                         .unique = false,
                     },
                 },
                 .vector_indexes = {
-                    catalog::CatalogSnapshotVectorIndex {
+                    meta::MetaSnapshotVectorIndex {
                         .id = 1,
                         .column_id = 2,
                         .name = "vidx_embedding",
-                        .index_kind = catalog::CatalogVectorIndexKind::Hnsw,
-                        .metric = catalog::CatalogVectorDistanceMetric::Cosine,
+                        .index_kind = meta::entry::VectorIndexKind::Hnsw,
+                        .metric = meta::entry::VectorDistanceMetric::Cosine,
                         .dimension = 3,
                         .max_neighbors = 24,
                         .ef_construction = 240,
@@ -192,10 +190,10 @@ void test_manifest_and_catalog_store()
         },
     });
 
-    persistence::CatalogStore store {manifest.catalog_path(), filesystem};
+    meta::MetaStore store {manifest.meta_path(), filesystem};
     auto saved = store.save(snapshot);
     require(saved.has_value(), "catalog save failed");
-    auto loaded = store.load_or_empty();
+    auto loaded = store.load();
     require(loaded.has_value(), "catalog load failed");
     require(loaded->databases.size() == 1, "catalog database count mismatch");
     require(loaded->databases[0].collections[0].columns.size() == 2, "catalog column count mismatch");
@@ -205,15 +203,15 @@ void test_manifest_and_catalog_store()
     require(loaded->databases[0].collections[0].indexes[0].name == "idx_id", "catalog index name mismatch");
     require(loaded->databases[0].collections[0].vector_indexes.size() == 1, "catalog vector index count mismatch");
     require(loaded->databases[0].collections[0].vector_indexes[0].name == "vidx_embedding", "catalog vector index name mismatch");
-    require(loaded->databases[0].collections[0].vector_indexes[0].metric == catalog::CatalogVectorDistanceMetric::Cosine, "catalog vector index metric mismatch");
+    require(loaded->databases[0].collections[0].vector_indexes[0].metric == meta::entry::VectorDistanceMetric::Cosine, "catalog vector index metric mismatch");
     require(loaded->databases[0].collections[0].vector_indexes[0].dimension == 3, "catalog vector index dimension mismatch");
 }
 
 schema::CollectionSchema simple_users_schema()
 {
     std::vector<schema::ColumnSchema> columns;
-    columns.emplace_back(1, 1, 0, "id", type(common::LogicalTypeId::BigInt), false, true, true, std::nullopt, std::nullopt);
-    columns.emplace_back(2, 1, 1, "name", type(common::LogicalTypeId::Varchar, 64), true, false, false, std::nullopt, std::nullopt);
+    columns.emplace_back(1, 1, 0, "id", type(common::LogicalTypeId::BigInt), false, true, std::nullopt, std::nullopt);
+    columns.emplace_back(2, 1, 1, "name", type(common::LogicalTypeId::Varchar, 64), true, false, std::nullopt, std::nullopt);
     return schema::CollectionSchema {1, 1, "users", std::move(columns)};
 }
 
@@ -327,8 +325,8 @@ void test_database_instance_reopens_persistent_data()
         require(get_value<schema::VectorValue>(selected.rows[0].values[2]).size() == 3, "reopen vector mismatch");
 
         auto describe = execute_ok(session, "DESCRIBE users;");
-        require(get_value<std::string>(describe.rows[1].values[5]) == "display name", "reopen column comment mismatch");
-        require(get_value<std::string>(describe.rows[1].values[6]) == "user collection", "reopen collection comment mismatch");
+        require(get_value<std::string>(describe.rows[1].values[4]) == "display name", "reopen column comment mismatch");
+        require(get_value<std::string>(describe.rows[1].values[5]) == "user collection", "reopen collection comment mismatch");
 
         auto remaining = execute_ok(session, "SELECT id FROM users ORDER BY id ASC;");
         require(remaining.rows.size() == 1, "deleted row should not reappear");
@@ -349,27 +347,27 @@ void test_index_ddl_reopen()
         auto created = execute_ok(session, "CREATE INDEX idx_age ON users (age) USING BTREE;");
         require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
 
-        const auto * database = instance.catalog().find_database("demo");
+        const auto * database = instance.meta().find_database("demo");
         require(database != nullptr, "created database lookup failed");
-        const auto * collection = instance.catalog().find_collection(database->id(), "users");
+        const auto * collection = instance.meta().find_collection(database->id(), "users");
         require(collection != nullptr, "created collection lookup failed");
-        const auto * index = instance.catalog().find_index(collection->id(), "idx_age");
+        const auto * index = instance.meta().find_index(collection->id(), "idx_age");
         require(index != nullptr, "created index lookup failed");
-        require(index->index_kind() == catalog::CatalogIndexKind::BTree, "created index kind mismatch");
+        require(index->kind() == meta::entry::IndexKind::BTree, "created index kind mismatch");
         require(find_index_equal(instance, index->id(), schema::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
     }
 
     common::CollectionId users_id {0};
     {
         engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
-        const auto * database = reopened.catalog().find_database("demo");
+        const auto * database = reopened.meta().find_database("demo");
         require(database != nullptr, "reopened database missing");
-        const auto * collection = reopened.catalog().find_collection(database->id(), "users");
+        const auto * collection = reopened.meta().find_collection(database->id(), "users");
         require(collection != nullptr, "reopened collection missing");
         users_id = collection->id();
-        const auto * index = reopened.catalog().find_index(users_id, "idx_age");
+        const auto * index = reopened.meta().find_index(users_id, "idx_age");
         require(index != nullptr, "reopened index missing");
-        require(index->index_kind() == catalog::CatalogIndexKind::BTree, "reopened index kind mismatch");
+        require(index->kind() == meta::entry::IndexKind::BTree, "reopened index kind mismatch");
         const auto index_id = index->id();
         require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {18}}).size() == 1, "reopened index should be rebuilt");
 
@@ -382,18 +380,18 @@ void test_index_ddl_reopen()
         require(find_index_equal(reopened, index_id, schema::Value {std::int32_t {19}}).empty(), "persistent DELETE should remove index key");
         auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
         require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
-        require(reopened.catalog().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
+        require(reopened.meta().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
         require(!reopened.index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
     }
 
     {
         engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
-        const auto * database = reopened.catalog().find_database("demo");
+        const auto * database = reopened.meta().find_database("demo");
         require(database != nullptr, "second reopen database missing");
-        const auto * collection = reopened.catalog().find_collection(database->id(), "users");
+        const auto * collection = reopened.meta().find_collection(database->id(), "users");
         require(collection != nullptr, "second reopen collection missing");
         require(collection->id() == users_id, "second reopen collection id mismatch");
-        require(reopened.catalog().find_index(users_id, "idx_age") == nullptr, "dropped index should not reappear");
+        require(reopened.meta().find_index(users_id, "idx_age") == nullptr, "dropped index should not reappear");
     }
 }
 
@@ -416,30 +414,30 @@ void test_vector_index_ddl_reopen()
         );
         require(created.affected_rows == 1, "CREATE VINDEX affected rows mismatch");
 
-        const auto * database = instance.catalog().find_database("demo");
+        const auto * database = instance.meta().find_database("demo");
         require(database != nullptr, "vector index database lookup failed");
-        const auto * collection = instance.catalog().find_collection(database->id(), "docs");
+        const auto * collection = instance.meta().find_collection(database->id(), "docs");
         require(collection != nullptr, "vector index collection lookup failed");
         docs_id = collection->id();
 
-        const auto * index = instance.catalog().find_vector_index(docs_id, "vidx_embedding");
+        const auto * index = instance.meta().find_vector_index(docs_id, "vidx_embedding");
         require(index != nullptr, "created vector index lookup failed");
-        require(index->metric() == catalog::CatalogVectorDistanceMetric::InnerProduct, "created vector index metric mismatch");
+        require(index->metric() == meta::entry::VectorDistanceMetric::InnerProduct, "created vector index metric mismatch");
         require(index->dimension() == 3, "created vector index dimension mismatch");
     }
 
     {
         engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
-        const auto * database = reopened.catalog().find_database("demo");
+        const auto * database = reopened.meta().find_database("demo");
         require(database != nullptr, "reopened vector index database missing");
-        const auto * collection = reopened.catalog().find_collection(database->id(), "docs");
+        const auto * collection = reopened.meta().find_collection(database->id(), "docs");
         require(collection != nullptr, "reopened vector index collection missing");
         require(collection->id() == docs_id, "reopened vector index collection id mismatch");
 
-        const auto * index = reopened.catalog().find_vector_index(docs_id, "vidx_embedding");
+        const auto * index = reopened.meta().find_vector_index(docs_id, "vidx_embedding");
         require(index != nullptr, "reopened vector index missing");
-        require(index->index_kind() == catalog::CatalogVectorIndexKind::Hnsw, "reopened vector index kind mismatch");
-        require(index->metric() == catalog::CatalogVectorDistanceMetric::InnerProduct, "reopened vector index metric mismatch");
+        require(index->index_kind() == meta::entry::VectorIndexKind::Hnsw, "reopened vector index kind mismatch");
+        require(index->metric() == meta::entry::VectorDistanceMetric::InnerProduct, "reopened vector index metric mismatch");
         require(index->dimension() == 3, "reopened vector index dimension mismatch");
         require(index->max_neighbors() == 24, "reopened vector index max_neighbors mismatch");
         require(index->ef_construction() == 240, "reopened vector index ef_construction mismatch");
@@ -452,17 +450,17 @@ void test_vector_index_ddl_reopen()
         require(existing.affected_rows == 0, "persistent CREATE VINDEX IF NOT EXISTS affected rows mismatch");
         auto dropped = execute_ok(session, "DROP VINDEX vidx_embedding ON docs;");
         require(dropped.affected_rows == 1, "persistent DROP VINDEX affected rows mismatch");
-        require(reopened.catalog().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should leave catalog");
+        require(reopened.meta().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should leave catalog");
     }
 
     {
         engine::DatabaseInstance reopened {engine::DatabaseConfig {.data_dir = dir}};
-        const auto * database = reopened.catalog().find_database("demo");
+        const auto * database = reopened.meta().find_database("demo");
         require(database != nullptr, "second vector index reopen database missing");
-        const auto * collection = reopened.catalog().find_collection(database->id(), "docs");
+        const auto * collection = reopened.meta().find_collection(database->id(), "docs");
         require(collection != nullptr, "second vector index reopen collection missing");
         require(collection->id() == docs_id, "second vector index reopen collection id mismatch");
-        require(reopened.catalog().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should not reappear");
+        require(reopened.meta().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should not reappear");
     }
 }
 
@@ -509,7 +507,7 @@ int main()
 {
     try {
         test_binary_value_roundtrip();
-        test_manifest_and_catalog_store();
+        test_manifest_and_meta_store();
         test_persistent_collection_storage_get();
         test_row_log_replay_and_partial_tail();
         test_database_instance_reopens_persistent_data();

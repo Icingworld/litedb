@@ -7,8 +7,8 @@
 
 #include "core/binder/binder_error.hpp"
 #include "core/binder/binder_context.hpp"
-#include "core/catalog/catalog_default_expression.hpp"
-#include "core/catalog/catalog_writer.hpp"
+#include "core/meta/entry/default_expression.hpp"
+#include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/ast_node.hpp"
@@ -47,7 +47,7 @@ namespace litedb::core::binder
 struct BindingCollection
 {
     common::DatabaseId database_id {0};                     ///< 数据库 ID
-    const catalog::CollectionEntry * collection {nullptr};  ///< 集合
+    const meta::entry::CollectionEntry * collection {nullptr};  ///< 集合
 };
 
 /**
@@ -111,7 +111,7 @@ public:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_default_expression(
-        const catalog::CatalogDefaultExpression & expression,
+        const meta::entry::DefaultExpression & expression,
         parser::ast::AstNodeLocation location
     ) const;
 
@@ -122,7 +122,7 @@ public:
      * @return 绑定后的列定义列表
      */
     [[nodiscard]]
-    std::expected<std::vector<catalog::ColumnDefinition>, BinderError> bind_column_definitions(
+    std::expected<std::vector<meta::ColumnDefinition>, BinderError> bind_column_definitions(
         const parser::ast::ColumnDefinitionList & columns,
         parser::ast::AstNodeLocation location
     ) const;
@@ -145,7 +145,7 @@ public:
      * @return 快照后的默认表达式
      */
     [[nodiscard]]
-    std::expected<catalog::CatalogDefaultExpression, BinderError> snapshot_default_expression(
+    std::expected<meta::entry::DefaultExpression, BinderError> snapshot_default_expression(
         const parser::ast::ExpressionNode & expression
     ) const;
 

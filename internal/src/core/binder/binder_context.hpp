@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/binder/session_context.hpp"
-#include "core/catalog/catalog_reader.hpp"
+#include "core/meta/meta_engine.hpp"
 
 namespace litedb::core::binder
 {
@@ -12,7 +12,7 @@ namespace litedb::core::binder
 class BinderContext
 {
 public:
-    BinderContext(const catalog::CatalogReader & catalog, const SessionContext & session) noexcept;
+    BinderContext(const meta::MetaEngine & meta, const SessionContext & session) noexcept;
 
 public:
     /**
@@ -20,7 +20,7 @@ public:
      * @return 数据库读取器
      */
     [[nodiscard]]
-    const catalog::CatalogReader & catalog() const noexcept;
+    const meta::MetaEngine & meta() const noexcept;
 
     /**
      * @brief 获取会话上下文
@@ -30,7 +30,7 @@ public:
     const SessionContext & session() const noexcept;
 
 private:
-    const catalog::CatalogReader & catalog_;    ///< 数据库读取器
+    const meta::MetaEngine & meta_;       ///< 元数据引擎
     const SessionContext & session_;            ///< 会话上下文
 };
 

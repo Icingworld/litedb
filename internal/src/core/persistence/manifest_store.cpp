@@ -99,7 +99,7 @@ std::expected<void, storage::StorageError> ManifestStore::ensure_initialized() c
             io::BinaryWriter writer {byte_writer};
             write_file_header(writer, ManifestMagic);
             require_io(writer.write_u32(StorageFormatVersion));
-            require_io(writer.write_string(CatalogFileName));
+            require_io(writer.write_string(MetaFileName));
             require_io(writer.write_string(CollectionsDirName));
             auto synced = file->sync_all();
             if (!synced.has_value()) {
@@ -128,7 +128,7 @@ std::expected<void, storage::StorageError> ManifestStore::ensure_initialized() c
         if (require_io(reader.read_u32()) != StorageFormatVersion) {
             return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported manifest storage format version"));
         }
-        if (require_io(reader.read_string()) != CatalogFileName || require_io(reader.read_string()) != CollectionsDirName) {
+        if (require_io(reader.read_string()) != MetaFileName || require_io(reader.read_string()) != CollectionsDirName) {
             return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported manifest paths"));
         }
         return {};
@@ -142,9 +142,9 @@ const std::filesystem::path & ManifestStore::data_dir() const noexcept
     return data_dir_;
 }
 
-std::filesystem::path ManifestStore::catalog_path() const
+std::filesystem::path ManifestStore::meta_path() const
 {
-    return data_dir_ / CatalogFileName;
+    return data_dir_ / MetaFileName;
 }
 
 std::filesystem::path ManifestStore::collections_dir() const

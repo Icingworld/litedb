@@ -1,4 +1,4 @@
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/schema/schema_loader.hpp"
 
 #include <exception>
@@ -8,8 +8,9 @@
 namespace
 {
 
-using namespace litedb::core::catalog;
 using namespace litedb::core::common;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::schema;
 
 void require(bool condition, const char * message)
@@ -24,7 +25,7 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
     return LogicalType {id, parameter};
 }
 
-CollectionId create_users_collection(InMemoryCatalog & catalog)
+CollectionId create_users_collection(MetaEngine & catalog)
 {
     auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
     if (!database.has_value()) {
@@ -38,14 +39,14 @@ CollectionId create_users_collection(InMemoryCatalog & catalog)
     request.columns.push_back(ColumnDefinition {
         .name = "id",
         .type = type(LogicalTypeId::BigInt),
-        .primary_key = true,
+        .nullable = false,
         .comment = "primary identifier",
     });
     request.columns.push_back(ColumnDefinition {
         .name = "name",
         .type = type(LogicalTypeId::Varchar, 64),
         .unique = true,
-        .default_expression = CatalogDefaultExpression::literal(CatalogDefaultLiteralKind::String, "unknown"),
+        .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
     });
     request.columns.push_back(ColumnDefinition {
         .name = "embedding",
@@ -62,7 +63,7 @@ CollectionId create_users_collection(InMemoryCatalog & catalog)
 
 void test_load_collection_schema_from_catalog()
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     const auto collection_id = create_users_collection(catalog);
 
     auto loaded = load_collection_schema(catalog, collection_id);
@@ -86,8 +87,7 @@ void test_load_collection_schema_from_catalog()
     require(id->ordinal() == 0, "id ordinal mismatch");
     require(id->column_name() == "id", "id column name mismatch");
     require(id->type().id == LogicalTypeId::BigInt, "id type mismatch");
-    require(!id->nullable(), "primary key should be non-nullable");
-    require(id->primary_key(), "primary key mismatch");
+    require(!id->nullable(), "id should be non-nullable");
     require(id->comment().has_value(), "comment missing");
 
     require(name->ordinal() == 1, "name ordinal mismatch");
@@ -104,7 +104,7 @@ void test_load_collection_schema_from_catalog()
 
 void test_load_missing_collection_schema_fails()
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     auto loaded = load_collection_schema(catalog, 999);
     require(!loaded.has_value(), "missing collection schema should fail");
     require(loaded.error().code == SchemaErrorCode::CollectionNotFound, "missing collection error code mismatch");

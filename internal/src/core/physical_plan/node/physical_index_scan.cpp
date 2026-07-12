@@ -12,7 +12,7 @@ PhysicalIndexScan::PhysicalIndexScan(
     std::string collection_name,
     common::IndexId index_id,
     std::string index_name,
-    catalog::CatalogIndexKind index_kind,
+    meta::entry::IndexKind index_kind,
     common::ColumnId column_id,
     std::string column_name,
     PhysicalIndexLookup lookup,
@@ -56,7 +56,7 @@ const std::string & PhysicalIndexScan::index_name() const noexcept
     return index_name_;
 }
 
-catalog::CatalogIndexKind PhysicalIndexScan::index_kind() const noexcept
+meta::entry::IndexKind PhysicalIndexScan::index_kind() const noexcept
 {
     return index_kind_;
 }

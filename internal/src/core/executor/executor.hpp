@@ -2,7 +2,7 @@
 
 #include <expected>
 
-#include "core/catalog/catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_manager.hpp"
@@ -36,56 +36,56 @@ public:
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_database(
         const physical_plan::PhysicalCreateDatabasePlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_collection(
         const physical_plan::PhysicalCreateCollectionPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_index(
         const physical_plan::PhysicalCreateIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
         const physical_plan::PhysicalCreateVectorIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_database(
         const physical_plan::PhysicalDropDatabasePlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
         const physical_plan::PhysicalDropCollectionPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_index(
         const physical_plan::PhysicalDropIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
 
     virtual std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
         const physical_plan::PhysicalDropVectorIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) = 0;
@@ -98,7 +98,7 @@ class Executor
 {
 public:
     Executor(
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager,
         DdlMutationHandler * ddl_handler = nullptr
@@ -114,7 +114,7 @@ public:
     std::expected<ExecutionResult, ExecutionError> execute(const physical_plan::PhysicalStatementPlan & plan);
 
 private:
-    catalog::Catalog & catalog_;                        ///< 目录
+    meta::MetaEngine & catalog_;                        ///< 目录
     storage::StorageManager & storage_;                 ///< 存储管理器
     index::IndexManager & index_manager_;               ///< 索引管理器
     DdlMutationHandler * ddl_handler_ {nullptr};        ///< DDL 变更处理器

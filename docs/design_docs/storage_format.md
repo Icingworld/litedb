@@ -4,13 +4,13 @@
 
 v0.2 的目标不是实现完整的生产级存储引擎，而是让当前以内存为主的数据库具备可重启能力：
 
-- catalog 元数据在重启后仍然存在；
+- meta 元数据在重启后仍然存在；
 - collection 中的记录在重启后仍然存在；
 - `INSERT`、`UPDATE`、`DELETE` 的效果在重启后仍然生效；
 - 恢复时可以忽略 row 文件尾部不完整的半条记录；
 - 文件格式版本不匹配时给出明确错误。
 
-运行时执行模型仍然复用当前的 catalog 和 collection storage 接口。启动时从磁盘加载数据到内存，运行期间的变更在应用到内存结构前追加写入磁盘。
+运行时执行模型仍然复用当前的 meta 和 collection storage 接口。启动时从磁盘加载数据到内存，运行期间的变更在应用到内存结构前追加写入磁盘。
 
 ## v0.2 非目标
 
@@ -30,7 +30,7 @@ litedb 的数据目录包含：
 ```text
 data/
   manifest.ldb
-  catalog.lcat
+  meta.lmeta
   collections/
     <collection_id>.rows
 ```
@@ -40,7 +40,7 @@ data/
 ```text
 data/
   manifest.ldb
-  catalog.lcat
+  meta.lmeta
   collections/
     1.rows
     2.rows
@@ -48,7 +48,7 @@ data/
 
 `manifest.ldb` 描述存储格式版本和顶层文件位置。
 
-`catalog.lcat` 是完整的 catalog 快照，保存 database、collection、collection 注释、column、逻辑类型、约束、默认表达式、列注释和下一组 ID 计数器。
+`meta.lmeta` 是完整的 meta 快照，保存 database、collection、collection 注释、column、逻辑类型、约束、默认表达式、列注释和下一组 ID 计数器。
 
 `collections/<collection_id>.rows` 是某个 collection 的 append-only 行变更日志。启动时，litedb 会 replay 该文件，把记录恢复到内存 collection storage 中。
 
@@ -66,9 +66,9 @@ data/
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
 ```
 
-不传 `--data-dir` 时，服务端保持纯内存模式，行为与早期版本一致：重启后 catalog 和 record 都不会保留。
+不传 `--data-dir` 时，服务端保持纯内存模式，行为与早期版本一致：重启后 meta 和 record 都不会保留。
 
-传入 `--data-dir` 后，服务端启动时会初始化或读取该目录下的 `manifest.ldb`、`catalog.lcat` 和 `collections/`，并在执行 DDL/DML 时按本文档定义的格式写入磁盘。v0.2 的格式仍然是实验性格式，不承诺与后续版本二进制兼容。
+传入 `--data-dir` 后，服务端启动时会初始化或读取该目录下的 `manifest.ldb`、`meta.lmeta` 和 `collections/`，并在执行 DDL/DML 时按本文档定义的格式写入磁盘。v0.2 的格式仍然是实验性格式，不承诺与后续版本二进制兼容。
 
 ## 通用编码规则
 
@@ -132,7 +132,7 @@ magic 以 little-endian 整数存储。下表中的字节拼写只用于阅读�
 
 ```text
 manifest.ldb      "LDMF"    0x464d444c
-catalog.lcat      "LDCT"    0x5443444c
+meta.lmeta      "LDCT"    0x5443444c
 *.rows            "LDRW"    0x5752444c
 ```
 
@@ -146,7 +146,7 @@ v0.2 的存储格式版本为 `1`。
 ManifestFile
   FileHeader magic="LDMF", format_version=1
   u32 storage_format_version
-  string catalog_path
+  string meta_path
   string collections_dir
 ```
 
@@ -154,7 +154,7 @@ v0.2 中固定为：
 
 ```text
 storage_format_version = 1
-catalog_path = "catalog.lcat"
+meta_path = "meta.lmeta"
 collections_dir = "collections"
 ```
 
@@ -165,26 +165,26 @@ collections_dir = "collections"
 3. 如果 `manifest.ldb` 存在，则校验 magic 和 version。
 4. 如果 version 不受支持，则启动失败并返回明确的 storage error。
 
-## Catalog 快照
+## Meta 快照
 
-`catalog.lcat` 保存完整的元数据快照。
+`meta.lmeta` 保存完整的元数据快照。
 
-v0.2 中 catalog 采用快照语义，而不是 append-only 日志语义。原因是 catalog 元数据较小，变化频率也低于 row data。每次 catalog 变更时，写入一个临时 catalog 文件，然后替换旧快照。
+v0.2 中 meta 采用快照语义，而不是 append-only 日志语义。原因是 meta 元数据较小，变化频率也低于 row data。每次 meta 变更时，写入一个临时 meta 文件，然后替换旧快照。
 
 推荐写入流程：
 
 ```text
-write catalog.lcat.tmp
+write meta.lmeta.tmp
 flush file
-rename catalog.lcat.tmp -> catalog.lcat
+rename meta.lmeta.tmp -> meta.lmeta
 ```
 
 如果某个平台不支持可移植的覆盖式 rename，则由 storage 层封装平台相关的 replace 逻辑。
 
-### Catalog 文件布局
+### Meta 文件布局
 
 ```text
-CatalogFile
+MetaFile
   FileHeader magic="LDCT", format_version=1
   u64 next_database_id
   u64 next_collection_id
@@ -223,7 +223,6 @@ ColumnEntry
   u8 logical_type_id
   OptionalU64 logical_type_parameter
   u8 nullable
-  u8 primary_key
   u8 unique
   OptionalDefaultExpression default_expression
   OptionalString comment
@@ -246,7 +245,7 @@ ColumnEntry
 
 ### 默认表达式编码
 
-默认表达式使用当前代码中已有的 catalog 表示：
+默认表达式使用当前代码中已有的 meta 表示：
 
 ```text
 DefaultExpression
@@ -257,14 +256,14 @@ DefaultExpression
   DefaultExpression[element_count]
 ```
 
-`expression_kind` 对应 `CatalogDefaultExpressionKind`：
+`expression_kind` 对应 `MetaDefaultExpressionKind`：
 
 ```text
 0 Literal
 1 Vector
 ```
 
-`literal_kind` 对应 `CatalogDefaultLiteralKind`：
+`literal_kind` 对应 `MetaDefaultLiteralKind`：
 
 ```text
 0 Null
@@ -361,7 +360,7 @@ RecordData
   Value[value_count]
 ```
 
-`value_count` 必须与当前 catalog schema 中 collection 的列数一致。
+`value_count` 必须与当前 meta schema 中 collection 的列数一致。
 
 ```text
 Value
@@ -413,7 +412,7 @@ Vector
 
 向量元素编码为 `f64`，因为当前运行时的 `schema::VectorValue` 是 `std::vector<double>`。
 
-恢复时必须根据 catalog schema 校验 value：
+恢复时必须根据 meta schema 校验 value：
 
 - 非 nullable column 不能包含 `Null`；
 - value kind 必须匹配 logical type；
@@ -426,8 +425,8 @@ Vector
 
 ```text
 load manifest
-load catalog snapshot
-for each collection in catalog:
+load meta snapshot
+for each collection in meta:
   open collections/<collection_id>.rows if it exists
   validate rows file header
   replay complete row records
@@ -448,10 +447,10 @@ create empty row file for collections without one
 DDL：
 
 ```text
-apply catalog mutation in memory
-write catalog snapshot to catalog.lcat.tmp
+apply meta mutation in memory
+write meta snapshot to meta.lmeta.tmp
 flush temp file
-replace catalog.lcat
+replace meta.lmeta
 create or remove collection row file if needed
 ```
 
@@ -472,7 +471,7 @@ v0.2 中每条 SQL 仍然由现有 database-level mutex 保护，因此不需要
 
 Drop collection：
 
-1. 从 catalog 快照中移除该 collection。
+1. 从 meta 快照中移除该 collection。
 2. 删除或重命名 `collections/<collection_id>.rows`。
 
 v0.2 推荐将被 drop 的文件重命名为：
@@ -483,18 +482,18 @@ collections/<collection_id>.rows.dropped
 
 这样早期开发阶段可以避免立即执行破坏性删除。后续可以通过 compaction 或 cleanup 命令清理 dropped 文件。
 
-Drop database 时，从 catalog 快照中移除该 database 下的 collections，并将对应 row 文件标记为 dropped。
+Drop database 时，从 meta 快照中移除该 database 下的 collections，并将对应 row 文件标记为 dropped。
 
 ## 错误处理
 
 存储加载阶段应对以下情况返回明确错误：
 
 - 发现非空 manifest 后缺少必要文件；
-- manifest、catalog 或 rows 的版本不受支持；
+- manifest、meta 或 rows 的版本不受支持；
 - magic 无效；
-- catalog 结构异常；
-- catalog 中存在重复 ID 或重复的 normalized name；
-- row 文件中的 collection ID 与 catalog 不匹配；
+- meta 结构异常；
+- meta 中存在重复 ID 或重复的 normalized name；
+- row 文件中的 collection ID 与 meta 不匹配；
 - row record operation 无效；
 - row value 编码无效；
 - row value 与 schema 不匹配。
@@ -505,7 +504,7 @@ v1 格式为后续能力保留扩展空间：
 
 - row record checksum；
 - 文件级 checksum；
-- catalog event log 替代完整快照；
+- meta event log 替代完整快照；
 - row log compaction；
 - vector payload 拆分文件；
 - 带 commit marker 的 WAL；

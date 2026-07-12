@@ -10,7 +10,6 @@ include(cmake/asio.cmake)
 
 add_subdirectory(internal/src/memory)
 add_subdirectory(internal/src/core/parser)
-add_subdirectory(internal/src/core/catalog)
 add_subdirectory(internal/src/core/meta)
 add_subdirectory(internal/src/core/schema)
 add_subdirectory(internal/src/core/function)

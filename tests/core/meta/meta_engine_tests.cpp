@@ -135,6 +135,19 @@ void test_invalid_snapshot_rejected()
             "invalid snapshot error code mismatch");
 }
 
+void test_empty_collection_snapshot_rejected()
+{
+    meta::MetaEngine engine;
+    meta::MetaSnapshot snapshot;
+    snapshot.next_database_id = 2;
+    snapshot.next_collection_id = 2;
+    snapshot.databases.push_back({1, "main", {{1, 1, "empty", std::nullopt, {}, {}, {}}}});
+    auto restored = engine.restore(snapshot);
+    require(!restored.has_value(), "empty collection snapshot should be rejected");
+    require(restored.error().code == meta::MetaEngineErrorCode::InvalidSnapshot,
+            "empty collection snapshot error code mismatch");
+}
+
 } // namespace
 
 int main()
@@ -146,6 +159,7 @@ int main()
         test_persistent_engine_roundtrip(directory / "meta.ldb");
         test_store_failure_rolls_back(directory / "rollback");
         test_invalid_snapshot_rejected();
+        test_empty_collection_snapshot_rejected();
         std::filesystem::remove_all(directory);
     } catch (const std::exception & exception) {
         std::filesystem::remove_all(directory);

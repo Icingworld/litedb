@@ -3,7 +3,7 @@
 #include <string>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -22,7 +22,7 @@ public:
         common::ColumnId column_id,
         std::string column_name,
         std::string index_name,
-        catalog::CatalogIndexKind index_kind,
+        meta::entry::IndexKind index_kind,
         bool unique,
         bool if_not_exists,
         parser::ast::AstNodeLocation location
@@ -76,7 +76,7 @@ public:
      * @return 索引类型
      */
     [[nodiscard]]
-    catalog::CatalogIndexKind index_kind() const noexcept;
+    meta::entry::IndexKind index_kind() const noexcept;
 
     /**
      * @brief 是否唯一
@@ -105,7 +105,7 @@ private:
     common::ColumnId column_id_;                ///< 列 ID
     std::string column_name_;                   ///< 列名称
     std::string index_name_;                    ///< 索引名称
-    catalog::CatalogIndexKind index_kind_;      ///< 索引类型
+    meta::entry::IndexKind index_kind_;      ///< 索引类型
     bool unique_;                               ///< 是否唯一
     bool if_not_exists_;                        ///< 是否不存在
 };

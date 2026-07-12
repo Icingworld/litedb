@@ -1,6 +1,6 @@
 #include "core/binder/binder.hpp"
 #include "core/binder/bound/debug_printer.hpp"
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/optimizer/optimizer.hpp"
@@ -33,7 +33,8 @@ namespace
 
 using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::optimizer;
 using namespace litedb::core::parser;
@@ -56,7 +57,7 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
 
 struct Fixture
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     StorageManager storage;
     litedb::core::index::IndexManager index_manager;
     DatabaseId database_id {0};
@@ -72,7 +73,7 @@ struct Fixture
         users.database_id = database_id;
         users.name = "users";
         users.columns = {
-            ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
+            ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .nullable = false},
             ColumnDefinition {.name = "name", .type = type(LogicalTypeId::Varchar, 64)},
             ColumnDefinition {.name = "age", .type = type(LogicalTypeId::Integer), .nullable = true},
         };
@@ -288,15 +289,15 @@ void test_enabled_and_disabled_select_results_match()
     );
 }
 
-void create_catalog_index(Fixture & fixture, std::string name, std::string_view column_name, CatalogIndexKind kind)
+void create_catalog_index(Fixture & fixture, std::string name, std::string_view column_name, IndexKind kind)
 {
     const auto * column = fixture.catalog.find_column(fixture.users_id, column_name);
     require(column != nullptr, "fixture index column missing");
     auto created = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
-        .column_id = column->id(),
+        .column_ids = {column->id()},
         .name = std::move(name),
-        .index_kind = kind,
+        .kind = kind,
     });
     require(created.has_value(), "fixture catalog index create failed");
 }
@@ -309,7 +310,7 @@ const LogicalPlanNode & filter_child_for_query(const LogicalStatementPlan & plan
 void test_btree_equality_adds_scan_index_hint()
 {
     Fixture fixture;
-    create_catalog_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
+    create_catalog_index(fixture, "idx_age_btree", "age", IndexKind::BTree);
 
     auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age = 18;"));
     const auto & child = filter_child_for_query(*optimized);
@@ -325,7 +326,7 @@ void test_btree_equality_adds_scan_index_hint()
 void test_btree_range_adds_scan_index_hint()
 {
     Fixture fixture;
-    create_catalog_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
+    create_catalog_index(fixture, "idx_age_btree", "age", IndexKind::BTree);
 
     auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;"));
     const auto & child = filter_child_for_query(*optimized);
@@ -341,7 +342,7 @@ void test_btree_range_adds_scan_index_hint()
 void test_hash_range_does_not_add_scan_index_hint()
 {
     Fixture fixture;
-    create_catalog_index(fixture, "idx_age_hash", "age", CatalogIndexKind::Hash);
+    create_catalog_index(fixture, "idx_age_hash", "age", IndexKind::Hash);
 
     auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;"));
     const auto & child = filter_child_for_query(*optimized);

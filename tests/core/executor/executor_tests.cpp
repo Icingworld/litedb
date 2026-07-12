@@ -1,6 +1,6 @@
 #include "core/binder/binder.hpp"
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/index/scalar_index_key.hpp"
@@ -27,7 +27,8 @@ namespace
 
 using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::executor;
 using namespace litedb::core::index;
@@ -71,7 +72,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
 }
 
 std::unique_ptr<PhysicalStatementPlan> plan_ok(
-    InMemoryCatalog & catalog,
+    MetaEngine & catalog,
     IndexManager & index_manager,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
@@ -104,7 +105,7 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
 }
 
 ExecutionResult execute_ok(
-    InMemoryCatalog & catalog,
+    MetaEngine & catalog,
     StorageManager & storage,
     IndexManager & index_manager,
     std::string_view sql,
@@ -121,7 +122,7 @@ ExecutionResult execute_ok(
 }
 
 ExecutionError execute_error(
-    InMemoryCatalog & catalog,
+    MetaEngine & catalog,
     StorageManager & storage,
     IndexManager & index_manager,
     std::string_view sql,
@@ -137,7 +138,7 @@ ExecutionError execute_error(
 
 struct Fixture
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     StorageManager storage;
     IndexManager index_manager;
     DatabaseId database_id {0};
@@ -263,11 +264,11 @@ void test_ddl_use_show_and_describe()
     require(get_value<std::int64_t>(vector_indexes.rows[0].values[8]) == 7, "SHOW VINDEXES random_seed mismatch");
 
     auto describe = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DESCRIBE users;", fixture.database_id);
-    require(describe.columns.size() == 7, "DESCRIBE column count mismatch");
+    require(describe.columns.size() == 6, "DESCRIBE column count mismatch");
     require(describe.rows.size() == 4, "DESCRIBE row count mismatch");
     require(get_value<std::string>(describe.rows[0].values[0]) == "id", "DESCRIBE column name mismatch");
     require(get_value<std::string>(describe.rows[0].values[1]) == "BIGINT", "DESCRIBE type mismatch");
-    require(!get_value<bool>(describe.rows[0].values[3]), "DESCRIBE primary key mismatch");
+    require(get_value<bool>(describe.rows[0].values[2]), "DESCRIBE nullable mismatch");
 }
 
 void test_insert_select_update_and_delete()
@@ -400,7 +401,7 @@ void test_index_ddl_updates_catalog()
     const auto * index = fixture.catalog.find_index(fixture.users_id, "idx_age");
     require(index != nullptr, "created index missing");
     const auto index_id = index->id();
-    require(index->index_kind() == CatalogIndexKind::BTree, "created index kind mismatch");
+    require(index->kind() == litedb::core::meta::entry::IndexKind::BTree, "created index kind mismatch");
     const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
     require(age_column != nullptr, "age column lookup failed");
     require(index->column_id() == age_column->id(), "created index column mismatch");
@@ -442,7 +443,7 @@ void test_index_ddl_updates_catalog()
         fixture.database_id
     );
     require(duplicate_if_not_exists.affected_rows == 0, "CREATE INDEX IF NOT EXISTS affected rows mismatch");
-    require(fixture.catalog.find_index(fixture.users_id, "idx_age")->index_kind() == CatalogIndexKind::BTree, "existing index should not be replaced");
+    require(fixture.catalog.find_index(fixture.users_id, "idx_age")->kind() == litedb::core::meta::entry::IndexKind::BTree, "existing index should not be replaced");
 
     auto dropped = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DROP INDEX idx_age ON users;", fixture.database_id);
     require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");

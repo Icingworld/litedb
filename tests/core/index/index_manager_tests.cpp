@@ -1,4 +1,4 @@
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_manager.hpp"
@@ -13,7 +13,8 @@
 namespace
 {
 
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::schema;
@@ -50,7 +51,7 @@ std::vector<RecordId> ids(std::expected<std::vector<RecordId>, IndexError> resul
 
 struct Fixture
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     StorageManager storage;
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -71,8 +72,7 @@ struct Fixture
                 ColumnDefinition {
                     .name = "id",
                     .type = type(LogicalTypeId::BigInt),
-                    .primary_key = true,
-                },
+                    },
                 ColumnDefinition {
                     .name = "age",
                     .type = type(LogicalTypeId::Integer),
@@ -125,13 +125,13 @@ struct Fixture
         return inserted.value();
     }
 
-    const IndexEntry & create_catalog_index(std::string name, CatalogIndexKind kind, bool unique = false)
+    const IndexEntry & create_catalog_index(std::string name, litedb::core::meta::entry::IndexKind kind, bool unique = false)
     {
         auto created = catalog.create_index(CreateIndexRequest {
             .collection_id = users_id,
-            .column_id = age_column_id,
+            .column_ids = {age_column_id},
             .name = std::move(name),
-            .index_kind = kind,
+            .kind = kind,
             .unique = unique,
         });
         if (!created.has_value()) {
@@ -158,7 +158,7 @@ void test_build_skips_nulls_and_views_index()
     fixture.insert_user(1, 18);
     fixture.insert_user(2, std::nullopt);
     fixture.insert_user(3, 20);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", CatalogIndexKind::BTree);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
     IndexManager manager;
     auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.users_storage());
@@ -168,7 +168,7 @@ void test_build_skips_nulls_and_views_index()
     require(view.has_value(), "managed index missing");
     require(view->collection_id == fixture.users_id, "managed index collection mismatch");
     require(view->column_id == fixture.age_column_id, "managed index column mismatch");
-    require(view->kind == IndexKind::BTree, "managed index kind mismatch");
+    require(view->kind == litedb::core::index::IndexKind::BTree, "managed index kind mismatch");
     require(!view->unique, "managed index unique mismatch");
     require(view->index.size() == 2, "NULL value should not be indexed");
     require(ids(view->index.find_equal(key(Value {std::int32_t {18}}))) == std::vector<RecordId> {1}, "index lookup mismatch");
@@ -178,7 +178,7 @@ void test_insert_update_delete_maintenance()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", CatalogIndexKind::Hash);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::Hash);
 
     IndexManager manager;
     auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.users_storage());
@@ -217,7 +217,7 @@ void test_unique_index_rejects_duplicates()
     Fixture fixture;
     fixture.insert_user(1, 18);
     fixture.insert_user(2, 18);
-    const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", CatalogIndexKind::BTree, true);
+    const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
 
     IndexManager manager;
     auto duplicate_build = manager.create_index(duplicate_index, fixture.users_schema(), fixture.users_storage());
@@ -226,7 +226,7 @@ void test_unique_index_rejects_duplicates()
 
     Fixture clean_fixture;
     clean_fixture.insert_user(1, 18);
-    const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", CatalogIndexKind::BTree, true);
+    const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
     auto created = manager.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.users_storage());
     require(created.has_value(), "unique index create failed");
 
@@ -240,7 +240,7 @@ void test_rebuild_all_is_atomic_on_failure()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", CatalogIndexKind::BTree);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
     IndexManager manager;
     auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.users_storage());
@@ -248,7 +248,7 @@ void test_rebuild_all_is_atomic_on_failure()
     require(manager.find_index(index_entry.id()).has_value(), "initial index missing");
 
     fixture.insert_user(2, 18);
-    const auto & unique_index = fixture.create_catalog_index("idx_age_unique", CatalogIndexKind::Hash, true);
+    const auto & unique_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::Hash, true);
     auto rebuilt = manager.rebuild_all(fixture.catalog, fixture.storage);
     require(!rebuilt.has_value(), "rebuild should fail on duplicate unique key");
     require(rebuilt.error().code == IndexErrorCode::DuplicateKey, "rebuild duplicate error mismatch");

@@ -49,7 +49,7 @@ Parser -> Binder -> LogicalPlanner -> Optimizer -> PhysicalPlanner -> Executor -
 | --- | --- | --- | --- |
 | Lexer | SQL 字符串 | Token 流 | 识别关键字、标识符、字面量、操作符 |
 | Parser | Token 流 | AST | 按语法生成抽象语法树 |
-| Binder | AST + Catalog | Bound Statement / Bound Expression | 名称解析、类型推导、语义校验 |
+| Binder | AST + Meta | Bound Statement / Bound Expression | 名称解析、类型推导、语义校验 |
 | Planner | Bound Statement | Logical Plan | 将语义节点转成逻辑算子树 |
 | Optimizer | Logical Plan + Statistics | Optimized Logical Plan | 谓词下推、投影裁剪、访问路径选择 |
 | Physical Planner | Optimized Logical Plan | Physical Plan | 选择具体物理算子和执行策略 |
@@ -63,7 +63,7 @@ Parser -> Binder -> LogicalPlanner -> Optimizer -> PhysicalPlanner -> Executor -
 ```text
 internal/src/core/
   parser/       # 已存在：Lexer、Parser、AST
-  catalog/      # 数据库、集合、字段、索引元数据
+  meta/      # 数据库、集合、字段、索引元数据
   binder/       # 语义绑定、类型检查
   plan/         # LogicalPlan、PhysicalPlan、PlanNode
   optimizer/    # 规则优化、代价优化预留
@@ -155,7 +155,7 @@ Expected at least one column definition
 
 Binder 是 Parser 和 Planner 之间最重要的一层。它把“语法上合法”的 AST 转换成“语义上合法”的绑定结构。
 
-Binder 依赖 Catalog。Catalog 提供：
+Binder 依赖 Meta。Meta 提供：
 
 - 当前数据库
 - 数据库是否存在
@@ -169,7 +169,7 @@ Binder 依赖 Catalog。Catalog 提供：
 输入：
 
 ```text
-AST + SessionContext + Catalog
+AST + SessionContext + Meta
 ```
 
 输出：
@@ -351,28 +351,27 @@ SELECT * FROM users WHERE name + 1 > 3;
 Operator + does not support VARCHAR and INTEGER
 ```
 
-## 5. Catalog 设计
+## 5. Meta 设计
 
-### 5.1 Catalog 职责
+### 5.1 Meta 职责
 
-Catalog 是 Binder、Planner、Executor 和 Storage 之间共享的元数据入口。
+Meta 是 Binder、Planner、Executor 和 Storage 之间共享的元数据入口。
 
-第一版 Catalog 至少需要描述：
+第一版 Meta 至少需要描述：
 
 ```text
-DatabaseCatalog
+DatabaseMeta
   name
   id
   collections
 
-CollectionCatalog
+CollectionMeta
   name
   id
   columns
-  primary_key
   comment
 
-ColumnCatalog
+ColumnMeta
   name
   id
   type
@@ -385,36 +384,36 @@ ColumnCatalog
 后续可以增加：
 
 ```text
-IndexCatalog
-VectorIndexCatalog
-ShardCatalog
-ReplicaCatalog
+IndexMeta
+VectorIndexMeta
+ShardMeta
+ReplicaMeta
 ```
 
-### 5.2 Catalog 与 Storage 的关系
+### 5.2 Meta 与 Storage 的关系
 
-Catalog 可以先由内存结构维护，持久化阶段再落盘。
+Meta 可以先由内存结构维护，持久化阶段再落盘。
 
 第一版建议：
 
 ```text
-CatalogManager
-  -> InMemoryCatalogStore
+MetaManager
+  -> InMemoryMetaStore
 ```
 
 第二版：
 
 ```text
-CatalogManager
-  -> DurableCatalogStore
-       catalog.json / catalog.bin
+MetaManager
+  -> DurableMetaStore
+       meta.json / meta.bin
        WAL
 ```
 
 分布式阶段：
 
 ```text
-CatalogManager
+MetaManager
   -> MetadataStore
        local mode: file
        distributed mode: raft / external metadata service
@@ -861,10 +860,10 @@ public:
 };
 ```
 
-也可以将 Catalog 操作与 Record 操作拆成两个接口：
+也可以将 Meta 操作与 Record 操作拆成两个接口：
 
 ```text
-CatalogStore
+MetaStore
 RecordStore
 ```
 
@@ -933,8 +932,8 @@ Collection
 
 ```text
 data/
-  catalog/
-    catalog.json
+  meta/
+    meta.json
   databases/
     demo/
       users.schema
@@ -1049,7 +1048,7 @@ Physical Planner
   -> PhysicalCreateCollection
 
 Executor
-  -> catalog.create_collection(...)
+  -> meta.create_collection(...)
   -> storage.create_collection(...)
 
 Result
@@ -1229,7 +1228,7 @@ Coordinator
 ### 14.1 MVP 1：语义和执行闭环
 
 1. 定义 `Value`、`Tuple`、`LogicalType`
-2. 定义 `CatalogManager`
+2. 定义 `MetaManager`
 3. 定义 `Binder`
 4. 定义 `BoundStatement` 和 `BoundExpression`
 5. 定义 `LogicalPlanNode`
@@ -1252,7 +1251,7 @@ Coordinator
 
 ### 14.3 MVP 3：持久化
 
-1. Catalog 落盘
+1. Meta 落盘
 2. Collection 数据落盘
 3. RowId 和记录编码
 4. WAL
@@ -1349,7 +1348,7 @@ distance order by
 
 ## 16. 关键设计原则
 
-1. Parser 保持纯语法层，不依赖 Catalog。
+1. Parser 保持纯语法层，不依赖 Meta。
 2. Binder 是所有名称解析、类型检查和 schema 校验的入口。
 3. Planner 只做结构转换，不混入执行细节。
 4. Optimizer 第一版保持规则化和保守化。

@@ -6,8 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include "core/catalog/catalog_entry.hpp"
-#include "core/catalog/catalog_writer.hpp"
+#include "core/meta/meta.hpp"
+#include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
 
@@ -71,7 +71,7 @@ public:
         common::DatabaseId database_id,
         std::string collection_name,
         bool if_not_exists,
-        std::vector<catalog::ColumnDefinition> columns,
+        std::vector<meta::ColumnDefinition> columns,
         std::optional<std::string> comment,
         parser::ast::AstNodeLocation location
     )
@@ -94,7 +94,7 @@ public:
     bool if_not_exists() const noexcept { return if_not_exists_; }
 
     [[nodiscard]]
-    const std::vector<catalog::ColumnDefinition> & columns() const noexcept { return columns_; }
+    const std::vector<meta::ColumnDefinition> & columns() const noexcept { return columns_; }
 
     [[nodiscard]]
     const std::optional<std::string> & comment() const noexcept { return comment_; }
@@ -103,7 +103,7 @@ private:
     common::DatabaseId database_id_;
     std::string collection_name_;
     bool if_not_exists_ {false};
-    std::vector<catalog::ColumnDefinition> columns_;
+    std::vector<meta::ColumnDefinition> columns_;
     std::optional<std::string> comment_;
 };
 
@@ -117,7 +117,7 @@ public:
         common::ColumnId column_id,
         std::string column_name,
         std::string index_name,
-        catalog::CatalogIndexKind index_kind,
+        meta::entry::IndexKind index_kind,
         bool unique,
         bool if_not_exists,
         parser::ast::AstNodeLocation location
@@ -154,7 +154,7 @@ public:
     const std::string & index_name() const noexcept { return index_name_; }
 
     [[nodiscard]]
-    catalog::CatalogIndexKind index_kind() const noexcept { return index_kind_; }
+    meta::entry::IndexKind index_kind() const noexcept { return index_kind_; }
 
     [[nodiscard]]
     bool unique() const noexcept { return unique_; }
@@ -169,7 +169,7 @@ private:
     common::ColumnId column_id_;
     std::string column_name_;
     std::string index_name_;
-    catalog::CatalogIndexKind index_kind_;
+    meta::entry::IndexKind index_kind_;
     bool unique_ {false};
     bool if_not_exists_ {false};
 };
@@ -184,8 +184,8 @@ public:
         common::ColumnId column_id,
         std::string column_name,
         std::string index_name,
-        catalog::CatalogVectorIndexKind index_kind,
-        catalog::CatalogVectorDistanceMetric metric,
+        meta::entry::VectorIndexKind index_kind,
+        meta::entry::VectorDistanceMetric metric,
         std::size_t max_neighbors,
         std::size_t ef_construction,
         std::size_t ef_search_default,
@@ -229,10 +229,10 @@ public:
     const std::string & index_name() const noexcept { return index_name_; }
 
     [[nodiscard]]
-    catalog::CatalogVectorIndexKind index_kind() const noexcept { return index_kind_; }
+    meta::entry::VectorIndexKind index_kind() const noexcept { return index_kind_; }
 
     [[nodiscard]]
-    catalog::CatalogVectorDistanceMetric metric() const noexcept { return metric_; }
+    meta::entry::VectorDistanceMetric metric() const noexcept { return metric_; }
 
     [[nodiscard]]
     std::size_t max_neighbors() const noexcept { return max_neighbors_; }
@@ -256,8 +256,8 @@ private:
     common::ColumnId column_id_;
     std::string column_name_;
     std::string index_name_;
-    catalog::CatalogVectorIndexKind index_kind_;
-    catalog::CatalogVectorDistanceMetric metric_;
+    meta::entry::VectorIndexKind index_kind_;
+    meta::entry::VectorDistanceMetric metric_;
     std::size_t max_neighbors_ {0};
     std::size_t ef_construction_ {0};
     std::size_t ef_search_default_ {0};

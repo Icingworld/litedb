@@ -638,6 +638,9 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
             if (collection_snapshot.id == 0 || collection_snapshot.database_id != database_snapshot.id || blank(collection_snapshot.name)) {
                 return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid collection in meta snapshot"));
             }
+            if (collection_snapshot.columns.empty()) {
+                return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Collection snapshot must contain columns"));
+            }
             auto collection = std::make_unique<entry::CollectionEntry>(collection_snapshot.id, database_snapshot.id,
                                                                         collection_snapshot.name, collection_snapshot.comment);
             if (rebuilt.collections_.contains(collection_snapshot.id) || database_ptr->contains_collection(collection->key())) {
@@ -665,7 +668,8 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
             }
             for (const auto & value : collection_snapshot.indexes) {
                 if (value.id == 0 || blank(value.name) || value.column_ids.empty() || rebuilt.indexes_.contains(value.id)
-                    || collection_ptr->contains_index(normalize_identifier(value.name))) {
+                    || collection_ptr->contains_index(normalize_identifier(value.name))
+                    || static_cast<std::uint8_t>(value.index_kind) > static_cast<std::uint8_t>(entry::IndexKind::BTree)) {
                     return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate index in meta snapshot"));
                 }
                 std::unordered_set<common::ColumnId> index_columns;
@@ -688,7 +692,9 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
                 if (value.id == 0 || blank(value.name) || rebuilt.vector_indexes_.contains(value.id)
                     || collection_ptr->contains_index(normalize_identifier(value.name))
                     || collection_ptr->contains_vector_index(normalize_identifier(value.name))
-                    || !collection_columns.contains(value.column_id)) {
+                    || !collection_columns.contains(value.column_id)
+                    || static_cast<std::uint8_t>(value.index_kind) > static_cast<std::uint8_t>(entry::VectorIndexKind::Hnsw)
+                    || static_cast<std::uint8_t>(value.metric) > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
                     return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate vector index in meta snapshot"));
                 }
                 const auto * column = rebuilt.find_column(value.column_id);
