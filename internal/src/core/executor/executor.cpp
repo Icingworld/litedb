@@ -254,21 +254,20 @@ schema::Record make_evaluation_record(
 }
 
 [[nodiscard]]
-std::expected<storage::CollectionStorage *, ExecutionError> find_storage(
-    storage::StorageManager & storage,
+std::expected<void, ExecutionError> find_storage(
+    storage::StorageEngine & storage,
     common::CollectionId collection_id,
     AstNodeLocation location
 )
 {
-    auto * collection_storage = storage.find_collection(collection_id);
-    if (collection_storage == nullptr) {
+    if (!storage.contains_collection(collection_id)) {
         return std::unexpected(make_error(
-            ExecutionErrorCode::CollectionStorageNotFound,
+            ExecutionErrorCode::CollectionNotFound,
             location,
             "Collection storage not found"
         ));
     }
-    return collection_storage;
+    return {};
 }
 
 [[nodiscard]]
@@ -289,7 +288,7 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
 std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 );
 
@@ -322,7 +321,7 @@ void append_scan_columns(PipelineResult & result, const schema::CollectionSchema
 std::expected<PipelineResult, ExecutionError> execute_scan(
     const PhysicalSeqScan & scan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage
+    storage::StorageEngine & storage
 )
 {
     auto collection_schema = load_schema(catalog, scan.collection_id(), scan.location());
@@ -338,9 +337,13 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
     PipelineResult result;
     append_scan_columns(result, collection_schema.value());
 
-    auto cursor = collection_storage.value()->scan();
-    while (auto record = cursor->next()) {
-        append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
+    auto cursor = storage.scan(scan.collection_id());
+    if (!cursor) return std::unexpected(from_storage_error(std::move(cursor.error()), scan.location()));
+    while (true) {
+        auto next = cursor->next();
+        if (!next) return std::unexpected(from_storage_error(std::move(next.error()), scan.location()));
+        if (!*next) break;
+        append_pipeline_row(result, collection_schema.value(), std::move(**next));
     }
 
     return result;
@@ -384,7 +387,7 @@ std::expected<index::IndexRange, ExecutionError> index_range_from_lookup(
 std::expected<PipelineResult, ExecutionError> execute_index_scan(
     const PhysicalIndexScan & scan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -431,7 +434,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
     PipelineResult result;
     append_scan_columns(result, collection_schema.value());
     for (const auto record_id : record_ids.value()) {
-        auto record = collection_storage.value()->get(record_id);
+        auto record = storage.get(scan.collection_id(), record_id);
         if (!record.has_value()) {
             return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
         }
@@ -445,7 +448,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 std::expected<PipelineResult, ExecutionError> execute_filter(
     const PhysicalFilter & filter,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -494,7 +497,7 @@ std::string projection_name(const binder::bound::BoundProjectionItem & projectio
 std::expected<PipelineResult, ExecutionError> execute_projection(
     const PhysicalProjection & projection,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -593,7 +596,7 @@ std::expected<std::vector<schema::Value>, ExecutionError> evaluate_order_keys(
 std::expected<PipelineResult, ExecutionError> execute_order_by(
     const PhysicalSort & order_by,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -664,7 +667,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
 std::expected<PipelineResult, ExecutionError> execute_limit(
     const PhysicalLimit & limit,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -695,7 +698,7 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
 std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -721,7 +724,7 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
 std::expected<ExecutionResult, ExecutionError> execute_query(
     const PhysicalQueryPlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -760,7 +763,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_database(
 std::expected<ExecutionResult, ExecutionError> execute_create_collection(
     const PhysicalCreateCollectionPlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage
+    storage::StorageEngine & storage
 )
 {
     const auto * existing = catalog.find_collection(plan.database_id(), plan.collection_name());
@@ -776,7 +779,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
     }
 
     const auto collection_id = created.value();
-    if (storage.find_collection(collection_id) == nullptr) {
+    if (!storage.contains_collection(collection_id)) {
         auto collection_schema = load_schema(catalog, collection_id, plan.location());
         if (!collection_schema.has_value()) {
             return std::unexpected(std::move(collection_schema.error()));
@@ -795,7 +798,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
 std::expected<ExecutionResult, ExecutionError> execute_create_index(
     const PhysicalCreateIndexPlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -845,7 +848,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    auto created_index = index_manager.create_index(*index_entry, collection_schema.value(), *collection_storage.value());
+    auto created_index = index_manager.create_index(*index_entry, collection_schema.value(), storage);
     if (!created_index.has_value()) {
         (void) catalog.drop_index(meta::DropIndexRequest {
             .collection_id = plan.collection_id(),
@@ -889,7 +892,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
 std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
     const PhysicalDropCollectionPlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -897,7 +900,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
         return command_result(0);
     }
 
-    if (storage.find_collection(plan.collection_id().value()) != nullptr) {
+    if (storage.contains_collection(plan.collection_id().value())) {
         auto dropped_storage = storage.drop_collection(plan.collection_id().value());
         if (!dropped_storage.has_value()) {
             return std::unexpected(from_storage_error(std::move(dropped_storage.error()), plan.location()));
@@ -977,7 +980,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
 std::expected<ExecutionResult, ExecutionError> execute_drop_database(
     const PhysicalDropDatabasePlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -992,7 +995,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_database(
         if (collection != nullptr) {
             collection_ids.push_back(collection->id());
         }
-        if (collection != nullptr && storage.find_collection(collection->id()) != nullptr) {
+        if (collection != nullptr && storage.contains_collection(collection->id())) {
             auto dropped = storage.drop_collection(collection->id());
             if (!dropped.has_value()) {
                 return std::unexpected(from_storage_error(std::move(dropped.error()), plan.location()));
@@ -1028,7 +1031,7 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const PhysicalUsePlan
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_insert(
     const PhysicalInsertPlan & plan,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -1054,14 +1057,14 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
     }
 
-    auto inserted = collection_storage.value()->insert(std::move(record_data));
+    auto inserted = storage.insert(plan.collection_id(), std::move(record_data));
     if (!inserted.has_value()) {
         return std::unexpected(from_storage_error(std::move(inserted.error()), plan.location()));
     }
 
     auto indexed = index_manager.on_insert(inserted.value(), index_bindings.value());
     if (!indexed.has_value()) {
-        (void) collection_storage.value()->erase(inserted.value());
+        (void) storage.erase(plan.collection_id(), inserted.value());
         return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
     }
 
@@ -1072,7 +1075,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 std::expected<ExecutionResult, ExecutionError> execute_delete(
     const PhysicalDeletePlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -1093,7 +1096,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
 
-        auto erased = collection_storage.value()->erase(row.source_record.record_id);
+        auto erased = storage.erase(plan.collection_id(), row.source_record.record_id);
         if (!erased.has_value()) {
             return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
         }
@@ -1125,7 +1128,7 @@ std::optional<std::size_t> ordinal_for_column(
 std::expected<ExecutionResult, ExecutionError> execute_update(
     const PhysicalUpdatePlan & plan,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
 {
@@ -1171,14 +1174,14 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
 
-        auto updated = collection_storage.value()->update(row.source_record.record_id, std::move(record_data));
+        auto updated = storage.update(plan.collection_id(), row.source_record.record_id, std::move(record_data));
         if (!updated.has_value()) {
             return std::unexpected(from_storage_error(std::move(updated.error()), plan.location()));
         }
 
         auto indexed = index_manager.on_update(row.source_record.record_id, index_bindings.value());
         if (!indexed.has_value()) {
-            (void) collection_storage.value()->update(row.source_record.record_id, row.source_record.data);
+            (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
         }
         ++affected_rows;
@@ -1343,7 +1346,7 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 
 Executor::Executor(
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager,
     DdlMutationHandler * ddl_handler
 ) noexcept

@@ -19,7 +19,7 @@ enum class ExecutionErrorCode
     StorageError,                  ///< 存储错误
     IndexError,                    ///< 索引错误
     EvaluationError,               ///< 表达式求值错误
-    CollectionStorageNotFound,     ///< 集合存储不存在
+    CollectionNotFound,            ///< 集合不存在
 };
 
 /**

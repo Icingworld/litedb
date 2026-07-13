@@ -31,7 +31,9 @@
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/command/use_plan.hpp"
 #include "core/schema/schema_loader.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
+#include "../storage/temporary_directory.hpp"
 
 #include <exception>
 #include <iostream>
@@ -80,8 +82,10 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 
 struct Fixture
 {
+    litedb::tests::TemporaryDirectory storage_directory {"litedb-logical-planner-tests"};
+    litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
-    StorageManager storage;
+    StorageEngine storage {storage_directory.path(), filesystem};
     IndexManager index_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -197,10 +201,8 @@ IndexId create_managed_index(
     if (!schema.has_value()) {
         throw std::runtime_error(schema.error().message);
     }
-    const auto * collection_storage = fixture.storage.find_collection(fixture.users_id);
-    require(collection_storage != nullptr, "fixture collection storage missing");
-
-    auto managed = fixture.index_manager.create_index(*entry, schema.value(), *collection_storage);
+    require(fixture.storage.contains_collection(fixture.users_id), "fixture collection storage missing");
+    auto managed = fixture.index_manager.create_index(*entry, schema.value(), fixture.storage);
     if (!managed.has_value()) {
         throw std::runtime_error(managed.error().message);
     }

@@ -8,7 +8,6 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -20,7 +19,7 @@ struct Options
 {
     std::string host {"127.0.0.1"};
     std::uint16_t port {5252};
-    std::optional<std::filesystem::path> data_dir;
+    std::filesystem::path data_dir {"litedb-data"};
 };
 
 [[nodiscard]]
@@ -73,11 +72,9 @@ int main(int argc, char ** argv)
         const auto options = parse_options(argc, argv);
 
         asio::io_context io;
-        auto instance = options.data_dir.has_value()
-            ? std::make_shared<litedb::core::engine::DatabaseInstance>(
-                  litedb::core::engine::DatabaseConfig {.data_dir = options.data_dir}
-              )
-            : std::make_shared<litedb::core::engine::DatabaseInstance>();
+        auto instance = std::make_shared<litedb::core::engine::DatabaseInstance>(
+            litedb::core::engine::DatabaseConfig {.data_dir = options.data_dir}
+        );
         litedb::server::Server server {
             io,
             litedb::server::ServerConfig {

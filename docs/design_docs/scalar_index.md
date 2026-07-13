@@ -148,7 +148,7 @@ SHOW INDEXES FROM users;
 
 如果实现成本需要拆分，也可以先只做 catalog API，再接 parser/binder/planner。
 
-### 4.2 给 CollectionStorage 增加回表能力
+### 4.2 通过 StorageEngine 提供回表能力
 
 索引查询返回的是 `RecordId`，因此 storage 必须支持按 id 读取记录：
 
@@ -161,7 +161,7 @@ std::expected<schema::Record, StorageError> get(common::RecordId record_id) cons
 - IndexScan 拿到 `RecordId` 后回表读取完整 record。
 - update/delete 维护索引前读取 old record。
 
-当前 `CollectionStorage` 只有 `scan/insert/update/erase`，不足以支撑索引回表和更新维护。
+Storage v2 由 `StorageEngine` 统一提供 `get/scan/insert/update/erase`，索引层不再接触 collection-level Store。
 
 ### 4.3 增加 IndexManager
 
@@ -268,7 +268,7 @@ LogicalIndexScan
 ```text
 LogicalIndexScan
   -> index.find_equal / index.scan_range
-  -> CollectionStorage.get(record_id)
+  -> StorageEngine.get(collection_id, record_id)
   -> make_evaluation_record
   -> 后续 Projection / OrderBy / Limit
 ```
@@ -350,7 +350,7 @@ v0.2 当前:
 
 v0.2 下一步:
   catalog 增加 IndexEntry
-  CollectionStorage 增加 get(record_id)
+  StorageEngine 提供 get(collection_id, record_id)
   IndexManager 管理内存索引生命周期
   insert/update/delete 自动维护内存索引
 

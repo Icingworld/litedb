@@ -1,6 +1,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/session.hpp"
 #include "core/index/scalar_index_key.hpp"
+#include "../storage/temporary_directory.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -62,7 +63,8 @@ EngineError execute_error(Engine & engine, std::string_view sql)
 
 void test_execute_sql_end_to_end()
 {
-    Engine engine;
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-end-to-end"};
+    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
 
     auto create_database = execute_ok(engine, "CREATE DATABASE demo;");
     require(create_database.kind == ExecutionResultKind::Command, "CREATE DATABASE result kind mismatch");
@@ -124,7 +126,8 @@ void test_execute_sql_end_to_end()
 
 void test_vector_distance_query()
 {
-    Engine engine;
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-vector-query"};
+    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
     execute_ok(engine, "CREATE DATABASE vectors;");
     execute_ok(engine, "USE vectors;");
     execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, embedding VECTOR(3));");
@@ -144,7 +147,8 @@ void test_vector_distance_query()
 
 void test_vector_index_ddl()
 {
-    Engine engine;
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-vector-index"};
+    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
     execute_ok(engine, "CREATE DATABASE vectors;");
     execute_ok(engine, "USE vectors;");
     execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, embedding VECTOR(3));");
@@ -181,7 +185,8 @@ void test_vector_index_ddl()
 
 void test_engine_error_mapping()
 {
-    Engine engine;
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-errors"};
+    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
 
     auto parse_error = execute_error(engine, "SELECT FROM;");
     require(parse_error.code == EngineErrorCode::ParserError, "parser error code mismatch");
@@ -192,7 +197,8 @@ void test_engine_error_mapping()
 
 void test_sessions_share_instance_but_keep_context()
 {
-    DatabaseInstance instance;
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-sessions"};
+    DatabaseInstance instance {DatabaseConfig {.data_dir = data_directory.path()}};
     Session first {instance};
     Session second {instance};
 

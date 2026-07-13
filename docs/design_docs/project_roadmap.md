@@ -67,7 +67,7 @@ data/
   databases/
     demo/
       users.schema
-      users.rows
+      collections/1.store
       users.vec
 ```
 

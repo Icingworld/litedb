@@ -1,8 +1,6 @@
 set(PERSISTENCE_SOURCES
     manifest_store.cpp
-    persistent_collection_storage.cpp
     persistence_controller.cpp
-    row_log.cpp
 )
 
 add_library(litedb_persistence ${PERSISTENCE_SOURCES})

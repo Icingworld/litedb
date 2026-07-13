@@ -1,7 +1,9 @@
 #include "core/meta/meta_engine.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/schema/schema_loader.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
+#include "../storage/temporary_directory.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -51,8 +53,10 @@ std::vector<RecordId> ids(std::expected<std::vector<RecordId>, IndexError> resul
 
 struct Fixture
 {
+    litedb::tests::TemporaryDirectory storage_directory {"litedb-index-manager-tests"};
+    litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
-    StorageManager storage;
+    StorageEngine storage {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
     ColumnId age_column_id {0};
@@ -99,26 +103,12 @@ struct Fixture
         }
     }
 
-    CollectionStorage & users_storage()
-    {
-        auto * collection_storage = storage.find_collection(users_id);
-        require(collection_storage != nullptr, "users storage missing");
-        return *collection_storage;
-    }
-
-    const CollectionStorage & users_storage() const
-    {
-        const auto * collection_storage = storage.find_collection(users_id);
-        require(collection_storage != nullptr, "users storage missing");
-        return *collection_storage;
-    }
-
     RecordId insert_user(std::int64_t id, std::optional<std::int32_t> age)
     {
         RecordData record_data;
         record_data.values.push_back(Value {id});
         record_data.values.push_back(age.has_value() ? Value {age.value()} : Value::null());
-        auto inserted = users_storage().insert(std::move(record_data));
+        auto inserted = storage.insert(users_id, std::move(record_data));
         if (!inserted.has_value()) {
             throw std::runtime_error(inserted.error().message);
         }
@@ -161,7 +151,7 @@ void test_build_skips_nulls_and_views_index()
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
     IndexManager manager;
-    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.users_storage());
+    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
     auto view = manager.find_index(index_entry.id());
@@ -181,7 +171,7 @@ void test_insert_update_delete_maintenance()
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::Hash);
 
     IndexManager manager;
-    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.users_storage());
+    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
     RecordData null_age {.values = {Value {std::int64_t {2}}, Value::null()}};
@@ -220,14 +210,14 @@ void test_unique_index_rejects_duplicates()
     const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
 
     IndexManager manager;
-    auto duplicate_build = manager.create_index(duplicate_index, fixture.users_schema(), fixture.users_storage());
+    auto duplicate_build = manager.create_index(duplicate_index, fixture.users_schema(), fixture.storage);
     require(!duplicate_build.has_value(), "unique index build should reject duplicates");
     require(duplicate_build.error().code == IndexErrorCode::DuplicateKey, "unique duplicate build error mismatch");
 
     Fixture clean_fixture;
     clean_fixture.insert_user(1, 18);
     const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
-    auto created = manager.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.users_storage());
+    auto created = manager.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.storage);
     require(created.has_value(), "unique index create failed");
 
     RecordData duplicate {.values = {Value {std::int64_t {2}}, Value {std::int32_t {18}}}};
@@ -243,7 +233,7 @@ void test_rebuild_all_is_atomic_on_failure()
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
     IndexManager manager;
-    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.users_storage());
+    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "initial create index failed");
     require(manager.find_index(index_entry.id()).has_value(), "initial index missing");
 
