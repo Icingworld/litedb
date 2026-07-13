@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/index/scalar_index.hpp"
@@ -96,9 +96,9 @@ ExecutionError make_error(ExecutionErrorCode code, AstNodeLocation location, std
 }
 
 [[nodiscard]]
-ExecutionError from_catalog_error(catalog::CatalogError error, AstNodeLocation location)
+ExecutionError from_meta_error(meta::MetaEngineError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::CatalogError, location, std::move(error.message));
+    return make_error(ExecutionErrorCode::MetaError, location, std::move(error.message));
 }
 
 [[nodiscard]]
@@ -182,36 +182,36 @@ std::string logical_type_name(const LogicalType & value)
 }
 
 [[nodiscard]]
-std::string index_kind_name(catalog::CatalogIndexKind kind)
+std::string index_kind_name(meta::entry::IndexKind kind)
 {
     switch (kind) {
-    case catalog::CatalogIndexKind::Hash:
+    case meta::entry::IndexKind::Hash:
         return "HASH";
-    case catalog::CatalogIndexKind::BTree:
+    case meta::entry::IndexKind::BTree:
         return "BTREE";
     }
     return "UNKNOWN";
 }
 
 [[nodiscard]]
-std::string vector_index_kind_name(catalog::CatalogVectorIndexKind kind)
+std::string vector_index_kind_name(meta::entry::VectorIndexKind kind)
 {
     switch (kind) {
-    case catalog::CatalogVectorIndexKind::Hnsw:
+    case meta::entry::VectorIndexKind::Hnsw:
         return "HNSW";
     }
     return "UNKNOWN";
 }
 
 [[nodiscard]]
-std::string vector_metric_name(catalog::CatalogVectorDistanceMetric metric)
+std::string vector_metric_name(meta::entry::VectorDistanceMetric metric)
 {
     switch (metric) {
-    case catalog::CatalogVectorDistanceMetric::L2:
+    case meta::entry::VectorDistanceMetric::L2:
         return "L2";
-    case catalog::CatalogVectorDistanceMetric::InnerProduct:
+    case meta::entry::VectorDistanceMetric::InnerProduct:
         return "INNER_PRODUCT";
-    case catalog::CatalogVectorDistanceMetric::Cosine:
+    case meta::entry::VectorDistanceMetric::Cosine:
         return "COSINE";
     }
     return "UNKNOWN";
@@ -273,7 +273,7 @@ std::expected<storage::CollectionStorage *, ExecutionError> find_storage(
 
 [[nodiscard]]
 std::expected<schema::CollectionSchema, ExecutionError> load_schema(
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     common::CollectionId collection_id,
     AstNodeLocation location
 )
@@ -288,7 +288,7 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 );
@@ -321,7 +321,7 @@ void append_scan_columns(PipelineResult & result, const schema::CollectionSchema
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_scan(
     const PhysicalSeqScan & scan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage
 )
 {
@@ -383,7 +383,7 @@ std::expected<index::IndexRange, ExecutionError> index_range_from_lookup(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_index_scan(
     const PhysicalIndexScan & scan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -444,7 +444,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_filter(
     const PhysicalFilter & filter,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -493,7 +493,7 @@ std::string projection_name(const binder::bound::BoundProjectionItem & projectio
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_projection(
     const PhysicalProjection & projection,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -592,7 +592,7 @@ std::expected<std::vector<schema::Value>, ExecutionError> evaluate_order_keys(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_order_by(
     const PhysicalSort & order_by,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -663,7 +663,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_limit(
     const PhysicalLimit & limit,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -694,7 +694,7 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
 
 std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -720,7 +720,7 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_query(
     const PhysicalQueryPlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -742,16 +742,16 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_database(
     const PhysicalCreateDatabasePlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     const auto existed = catalog.find_database(plan.database_name()) != nullptr;
-    auto created = catalog.create_database(catalog::CreateDatabaseRequest {
+    auto created = catalog.create_database(meta::CreateDatabaseRequest {
         .name = plan.database_name(),
         .if_not_exists = plan.if_not_exists(),
     });
     if (!created.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
     return command_result(existed ? 0 : 1);
 }
@@ -759,12 +759,12 @@ std::expected<ExecutionResult, ExecutionError> execute_create_database(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_collection(
     const PhysicalCreateCollectionPlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage
 )
 {
     const auto * existing = catalog.find_collection(plan.database_id(), plan.collection_name());
-    auto created = catalog.create_collection(catalog::CreateCollectionRequest {
+    auto created = catalog.create_collection(meta::CreateCollectionRequest {
         .database_id = plan.database_id(),
         .name = plan.collection_name(),
         .if_not_exists = plan.if_not_exists(),
@@ -772,7 +772,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
         .comment = plan.comment(),
     });
     if (!created.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
 
     const auto collection_id = created.value();
@@ -794,22 +794,22 @@ std::expected<ExecutionResult, ExecutionError> execute_create_collection(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_index(
     const PhysicalCreateIndexPlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
 {
     const auto * existing = catalog.find_index(plan.collection_id(), plan.index_name());
-    auto created = catalog.create_index(catalog::CreateIndexRequest {
+    auto created = catalog.create_index(meta::CreateIndexRequest {
         .collection_id = plan.collection_id(),
-        .column_id = plan.column_id(),
+        .column_ids = {plan.column_id()},
         .name = plan.index_name(),
-        .index_kind = plan.index_kind(),
+        .kind = plan.index_kind(),
         .unique = plan.unique(),
         .if_not_exists = plan.if_not_exists(),
     });
     if (!created.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
 
     if (existing != nullptr) {
@@ -819,7 +819,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
     const auto * index_entry = catalog.find_index(created.value());
     if (index_entry == nullptr) {
         return std::unexpected(make_error(
-            ExecutionErrorCode::CatalogError,
+            ExecutionErrorCode::MetaError,
             plan.location(),
             "Created index metadata not found"
         ));
@@ -827,7 +827,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
     if (!collection_schema.has_value()) {
-        (void) catalog.drop_index(catalog::DropIndexRequest {
+        (void) catalog.drop_index(meta::DropIndexRequest {
             .collection_id = plan.collection_id(),
             .name = plan.index_name(),
             .if_exists = true,
@@ -837,7 +837,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 
     auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
     if (!collection_storage.has_value()) {
-        (void) catalog.drop_index(catalog::DropIndexRequest {
+        (void) catalog.drop_index(meta::DropIndexRequest {
             .collection_id = plan.collection_id(),
             .name = plan.index_name(),
             .if_exists = true,
@@ -847,7 +847,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 
     auto created_index = index_manager.create_index(*index_entry, collection_schema.value(), *collection_storage.value());
     if (!created_index.has_value()) {
-        (void) catalog.drop_index(catalog::DropIndexRequest {
+        (void) catalog.drop_index(meta::DropIndexRequest {
             .collection_id = plan.collection_id(),
             .name = plan.index_name(),
             .if_exists = true,
@@ -861,24 +861,26 @@ std::expected<ExecutionResult, ExecutionError> execute_create_index(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
     const PhysicalCreateVectorIndexPlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     const auto * existing = catalog.find_vector_index(plan.collection_id(), plan.index_name());
-    auto created = catalog.create_vector_index(catalog::CreateVectorIndexRequest {
+    auto created = catalog.create_vector_index(meta::CreateVectorIndexRequest {
         .collection_id = plan.collection_id(),
         .column_id = plan.column_id(),
         .name = plan.index_name(),
-        .index_kind = plan.index_kind(),
+        .kind = plan.index_kind(),
         .metric = plan.metric(),
-        .max_neighbors = plan.max_neighbors(),
-        .ef_construction = plan.ef_construction(),
-        .ef_search_default = plan.ef_search_default(),
-        .random_seed = plan.random_seed(),
+        .hnsw_options = {
+            .max_neighbors = plan.max_neighbors(),
+            .ef_construction = plan.ef_construction(),
+            .ef_search_default = plan.ef_search_default(),
+            .random_seed = plan.random_seed(),
+        },
         .if_not_exists = plan.if_not_exists(),
     });
     if (!created.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
     return command_result(existing == nullptr ? 1 : 0);
 }
@@ -886,7 +888,7 @@ std::expected<ExecutionResult, ExecutionError> execute_create_vector_index(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
     const PhysicalDropCollectionPlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -902,13 +904,13 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
         }
     }
 
-    auto dropped_catalog = catalog.drop_collection(catalog::DropCollectionRequest {
+    auto dropped_catalog = catalog.drop_collection(meta::DropCollectionRequest {
         .database_id = plan.database_id(),
         .name = plan.collection_name(),
         .if_exists = plan.if_exists(),
     });
     if (!dropped_catalog.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(dropped_catalog.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped_catalog.error()), plan.location()));
     }
 
     index_manager.drop_collection_indexes(plan.collection_id().value());
@@ -919,7 +921,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_collection(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_index(
     const PhysicalDropIndexPlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     index::IndexManager & index_manager
 )
 {
@@ -929,13 +931,13 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_index(
     }
     const auto index_id = existing != nullptr ? std::optional<common::IndexId> {existing->id()} : std::nullopt;
 
-    auto dropped = catalog.drop_index(catalog::DropIndexRequest {
+    auto dropped = catalog.drop_index(meta::DropIndexRequest {
         .collection_id = plan.collection_id(),
         .name = plan.index_name(),
         .if_exists = plan.if_exists(),
     });
     if (!dropped.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(dropped.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
     if (index_id.has_value()) {
@@ -951,7 +953,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_index(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
     const PhysicalDropVectorIndexPlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     const auto * existing = catalog.find_vector_index(plan.collection_id(), plan.index_name());
@@ -959,13 +961,13 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
         return command_result(0);
     }
 
-    auto dropped = catalog.drop_vector_index(catalog::DropVectorIndexRequest {
+    auto dropped = catalog.drop_vector_index(meta::DropVectorIndexRequest {
         .collection_id = plan.collection_id(),
         .name = plan.index_name(),
         .if_exists = plan.if_exists(),
     });
     if (!dropped.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(dropped.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
     return command_result(existing == nullptr ? 0 : 1);
@@ -974,7 +976,7 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_vector_index(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_drop_database(
     const PhysicalDropDatabasePlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -998,12 +1000,12 @@ std::expected<ExecutionResult, ExecutionError> execute_drop_database(
         }
     }
 
-    auto dropped_catalog = catalog.drop_database(catalog::DropDatabaseRequest {
+    auto dropped_catalog = catalog.drop_database(meta::DropDatabaseRequest {
         .name = plan.database_name(),
         .if_exists = plan.if_exists(),
     });
     if (!dropped_catalog.has_value()) {
-        return std::unexpected(from_catalog_error(std::move(dropped_catalog.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped_catalog.error()), plan.location()));
     }
 
     for (const auto collection_id : collection_ids) {
@@ -1069,7 +1071,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_delete(
     const PhysicalDeletePlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -1122,7 +1124,7 @@ std::optional<std::size_t> ordinal_for_column(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_update(
     const PhysicalUpdatePlan & plan,
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager
 )
@@ -1186,7 +1188,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_databases(catalog::Catalog & catalog)
+std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::MetaEngine & catalog)
 {
     std::vector<ExecutionRow> rows;
     for (const auto * database : catalog.list_databases()) {
@@ -1204,7 +1206,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_databases(catalog::C
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_collections(
     const PhysicalShowCollectionsPlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     std::vector<ExecutionRow> rows;
@@ -1223,7 +1225,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_collections(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
     const PhysicalShowIndexesPlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     std::vector<ExecutionRow> rows;
@@ -1232,12 +1234,13 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
             continue;
         }
 
-        const auto * column = catalog.find_column(index->column_id());
+        const auto column_id = index->column_id();
+        const auto * column = column_id.has_value() ? catalog.find_column(column_id.value()) : nullptr;
         rows.push_back(ExecutionRow {
             .values = {
                 schema::Value {index->name()},
                 column != nullptr ? schema::Value {column->name()} : schema::Value::null(),
-                schema::Value {index_kind_name(index->index_kind())},
+                schema::Value {index_kind_name(index->kind())},
                 schema::Value {index->unique()},
             },
         });
@@ -1257,7 +1260,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
     const PhysicalShowVectorIndexesPlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     std::vector<ExecutionRow> rows;
@@ -1301,7 +1304,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
     const PhysicalDescribeCollectionPlan & plan,
-    catalog::Catalog & catalog
+    meta::MetaEngine & catalog
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -1316,7 +1319,6 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
                 schema::Value {column.column_name()},
                 schema::Value {logical_type_name(column.type())},
                 schema::Value {column.nullable()},
-                schema::Value {column.primary_key()},
                 schema::Value {column.unique()},
                 column.comment().has_value() ? schema::Value {column.comment().value()} : schema::Value::null(),
                 collection_schema->comment().has_value() ? schema::Value {collection_schema->comment().value()} : schema::Value::null(),
@@ -1329,7 +1331,6 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
             ExecutionColumn {.name = "column_name", .type = type(LogicalTypeId::Varchar)},
             ExecutionColumn {.name = "type", .type = type(LogicalTypeId::Varchar)},
             ExecutionColumn {.name = "nullable", .type = type(LogicalTypeId::Boolean)},
-            ExecutionColumn {.name = "primary_key", .type = type(LogicalTypeId::Boolean)},
             ExecutionColumn {.name = "unique", .type = type(LogicalTypeId::Boolean)},
             ExecutionColumn {.name = "comment", .type = type(LogicalTypeId::Varchar)},
             ExecutionColumn {.name = "collection_comment", .type = type(LogicalTypeId::Varchar)},
@@ -1341,7 +1342,7 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 } // namespace
 
 Executor::Executor(
-    catalog::Catalog & catalog,
+    meta::MetaEngine & catalog,
     storage::StorageManager & storage,
     index::IndexManager & index_manager,
     DdlMutationHandler * ddl_handler

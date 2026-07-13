@@ -3,7 +3,7 @@
 #include "core/binder/binder_helper.hpp"
 #include "core/binder/binder_context.hpp"
 #include "core/binder/bound/statement/bound_use_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/use_statement.hpp"
 
 namespace litedb::core::binder
@@ -23,7 +23,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUseWorker::bin
     const UseStatement & statement
 )
 {
-    const auto * database = context_.catalog().find_database(statement.database());
+    const auto * database = context_.meta().find_database(statement.database());
     if (database == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::DatabaseNotFound,

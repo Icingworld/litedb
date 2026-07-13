@@ -12,8 +12,8 @@ BoundCreateVectorIndexStatement::BoundCreateVectorIndexStatement(
     common::ColumnId column_id,
     std::string column_name,
     std::string index_name,
-    catalog::CatalogVectorIndexKind index_kind,
-    catalog::CatalogVectorDistanceMetric metric,
+    meta::entry::VectorIndexKind index_kind,
+    meta::entry::VectorDistanceMetric metric,
     std::size_t max_neighbors,
     std::size_t ef_construction,
     std::size_t ef_search_default,
@@ -68,12 +68,12 @@ const std::string & BoundCreateVectorIndexStatement::index_name() const noexcept
     return index_name_;
 }
 
-catalog::CatalogVectorIndexKind BoundCreateVectorIndexStatement::index_kind() const noexcept
+meta::entry::VectorIndexKind BoundCreateVectorIndexStatement::index_kind() const noexcept
 {
     return index_kind_;
 }
 
-catalog::CatalogVectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept
+meta::entry::VectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept
 {
     return metric_;
 }

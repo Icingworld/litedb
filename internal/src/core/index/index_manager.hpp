@@ -7,21 +7,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/scalar_index.hpp"
 #include "core/index/scalar_index_key.hpp"
 #include "core/schema/collection.hpp"
 #include "core/schema/record.hpp"
-
-namespace litedb::core::catalog
-{
-
-class CatalogReader;
-class IndexEntry;
-
-} // namespace litedb::core::catalog
 
 namespace litedb::core::storage
 {
@@ -77,7 +69,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> create_index(
-        const catalog::IndexEntry & index_entry,
+        const meta::entry::IndexEntry & index_entry,
         const schema::CollectionSchema & collection_schema,
         const storage::CollectionStorage & storage
     );
@@ -104,7 +96,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> rebuild_all(
-        const catalog::CatalogReader & catalog,
+        const meta::MetaEngine & catalog,
         const storage::StorageManager & storage
     );
 
@@ -228,7 +220,7 @@ private:
     };
 
     [[nodiscard]]
-    static std::unique_ptr<ScalarIndex> make_index(catalog::CatalogIndexKind index_kind);
+    static std::unique_ptr<ScalarIndex> make_index(meta::entry::IndexKind index_kind);
 
     [[nodiscard]]
     static std::expected<std::optional<ScalarIndexKey>, IndexError> make_key_from_record(

@@ -2,7 +2,7 @@
 
 [EN](../../README.md) | 简体中文
 
-`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.3.0 版本引入了标量函数框架与内置向量距离函数，可通过 `ORDER BY` 做暴力最近邻查询。更早的版本已建立可重启的数据库闭环：解析 SQL、在目录（catalog）上绑定、规划并执行语句，可通过 `--data-dir` 持久化 catalog 与行数据，并维护内存标量索引，为后续查询加速打下基础。
+`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.3.0 版本引入了标量函数框架与内置向量距离函数，可通过 `ORDER BY` 做暴力最近邻查询。更早的版本已建立可重启的数据库闭环：解析 SQL、在目录（meta）上绑定、规划并执行语句，可通过 `--data-dir` 持久化 meta 与行数据，并维护内存标量索引，为后续查询加速打下基础。
 
 本项目仍处于早期阶段。当前版本更适合作为数据库内核与学习/实验平台，而非可直接用于生产的存储引擎。
 
@@ -11,10 +11,10 @@
 - SQL 词法分析器、解析器、AST、绑定器（binder）、逻辑规划器、求值器（evaluator）、执行器（executor）以及引擎门面（facade）。
 - 内存目录、模式（schema）模型与集合（collection）存储。
 - 通过 `--data-dir` 显式启用的单机持久化能力。
-- 持久化 catalog 快照，以及用于 `INSERT`、`UPDATE`、`DELETE` 的 append-only row log。
+- 持久化 meta 快照，以及用于 `INSERT`、`UPDATE`、`DELETE` 的 append-only row log。
 - 启动时恢复已持久化的 database、collection、schema、索引定义、标量值与 `VECTOR(n)` 值。
 - 内存标量索引：`BTreeIndex`（范围与等值查找）。
-- catalog 中的索引元数据，写入 `catalog.lcat` 持久化，并在启动时从已有行数据重建内存索引。
+- meta 中的索引元数据，写入 `meta.lmeta` 持久化，并在启动时从已有行数据重建内存索引。
 - 索引 DDL：
   - `CREATE INDEX ... ON collection(column) [USING BTREE]`
   - `CREATE INDEX IF NOT EXISTS ...`
@@ -120,7 +120,7 @@ ctest --test-dir build --output-on-failure
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
 ```
 
-该目录中会生成 `manifest.ldb`、`catalog.lcat`，以及位于 `collections/` 下的 append-only row log。v0.3 的存储格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
+该目录中会生成 `manifest.ldb`、`meta.lmeta`，以及位于 `collections/` 下的 append-only row log。v0.3 的存储格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
 
 在另一个终端中启动客户端 CLI：
 
@@ -218,7 +218,7 @@ SQL text
   -> Binder
   -> Logical planner
   -> Executor
-  -> In-memory or persistent catalog/storage
+  -> In-memory or persistent meta/storage
   -> Execution result
 ```
 
@@ -226,12 +226,12 @@ SQL text
 
 ```text
 internal/src/core/parser       SQL 词法分析器、解析器与 AST
-internal/src/core/catalog      目录接口与内存目录
+internal/src/core/meta      目录接口与内存目录
 internal/src/core/schema       逻辑类型、值、记录与集合
 internal/src/core/function     标量函数注册表与内置函数
 internal/src/core/index        内存标量索引与 IndexManager
 internal/src/core/storage      集合存储接口与内存存储
-internal/src/core/persistence  持久化 catalog 快照与 row log
+internal/src/core/persistence  持久化 meta 快照与 row log
 internal/src/core/binder       名称解析与语义绑定
 internal/src/core/logical_plan      逻辑计划构建
 internal/src/core/evaluator    表达式求值

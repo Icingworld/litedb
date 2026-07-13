@@ -9,7 +9,7 @@ BoundCreateCollectionStatement::BoundCreateCollectionStatement(
     common::DatabaseId database_id,
     std::string collection_name,
     bool if_not_exists,
-    std::vector<catalog::ColumnDefinition> columns,
+    std::vector<meta::ColumnDefinition> columns,
     std::optional<std::string> comment,
     parser::ast::AstNodeLocation location
 )
@@ -37,7 +37,7 @@ bool BoundCreateCollectionStatement::if_not_exists() const noexcept
     return if_not_exists_;
 }
 
-const std::vector<catalog::ColumnDefinition> & BoundCreateCollectionStatement::columns() const noexcept
+const std::vector<meta::ColumnDefinition> & BoundCreateCollectionStatement::columns() const noexcept
 {
     return columns_;
 }

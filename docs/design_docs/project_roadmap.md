@@ -46,11 +46,11 @@ litedb 的长期定位是一个 CS 架构的轻量级向量数据库。
 核心任务：
 
 1. 设计二进制存储格式。
-2. 持久化 catalog。
+2. 持久化 meta。
 3. 持久化 collection schema。
 4. 持久化普通字段 record。
 5. 持久化 `VECTOR(n)` 字段。
-6. 启动时恢复 catalog 和 record directory。
+6. 启动时恢复 meta 和 record directory。
 7. 使用 append-only 方式实现 `INSERT`、`UPDATE`、`DELETE`。
 8. 支持 tombstone。
 9. 支持损坏尾部 record 的容错处理。
@@ -63,7 +63,7 @@ litedb 的长期定位是一个 CS 架构的轻量级向量数据库。
 ```text
 data/
   manifest.ldb
-  catalog.lcat
+  meta.lmeta
   databases/
     demo/
       users.schema
@@ -112,7 +112,7 @@ SeqScan metadata
 1. 支持 `CREATE VINDEX`。
 2. 支持 `DROP VINDEX`。
 3. 支持 `SHOW VINDEXES`。
-4. 在 catalog 中保存向量索引元数据。
+4. 在 meta 中保存向量索引元数据。
 5. 实现内存 HNSW 索引。
 6. 支持从持久化数据重建索引。
 7. Planner 能选择 brute-force 或向量索引。
@@ -146,7 +146,7 @@ SeqScan metadata
 1. WAL 设计和实现。
 2. commit marker。
 3. record checksum。
-4. catalog 变更恢复。
+4. meta 变更恢复。
 5. data 文件恢复。
 6. graceful shutdown。
 7. compaction。
@@ -158,7 +158,7 @@ SeqScan metadata
 
 ```text
 load manifest
-  -> load catalog
+  -> load meta
   -> scan rows
   -> validate vector payload offsets
   -> replay committed WAL records
@@ -169,7 +169,7 @@ load manifest
 
 1. 进程异常退出后，重启可以恢复到最后一个完整提交点。
 2. 未提交或不完整写入不会污染可见数据。
-3. catalog 和 data 的恢复语义一致。
+3. meta 和 data 的恢复语义一致。
 4. compaction 后数据可正常查询。
 5. 文件格式版本不匹配时给出明确错误。
 
@@ -250,7 +250,7 @@ v0.2 阶段建议保持全局锁：
 ## 2. 文件布局
 ## 3. 通用编码规则
 ## 4. Manifest 格式
-## 5. Catalog 格式
+## 5. Meta 格式
 ## 6. Schema 格式
 ## 7. Row 文件格式
 ## 8. Vector 文件格式
@@ -327,7 +327,7 @@ v0.2 只需要覆盖 brute-force。HNSW 的细节可以在 v0.3 新增 `hnsw_ind
 ## 4. Commit 协议
 ## 5. Checkpoint
 ## 6. 启动恢复流程
-## 7. Catalog 恢复
+## 7. Meta 恢复
 ## 8. Data 恢复
 ## 9. Vector payload 恢复
 ## 10. 测试策略
@@ -377,8 +377,8 @@ v0.2 只需要覆盖 brute-force。HNSW 的细节可以在 v0.3 新增 `hnsw_ind
 
 1. 编写 `storage_format.md`。
 2. 定义 `RowId`、record header、value encoding。
-3. 拆分或明确 `CatalogStore`、`RecordStore`、`VectorStore`。
-4. 实现 catalog 二进制落盘。
+3. 拆分或明确 `MetaStore`、`RecordStore`、`VectorStore`。
+4. 实现 meta 二进制落盘。
 5. 实现 append-only row 文件。
 6. 实现 vector payload 文件。
 7. 实现启动恢复。

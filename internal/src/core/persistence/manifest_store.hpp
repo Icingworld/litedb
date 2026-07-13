@@ -3,6 +3,7 @@
 #include <expected>
 #include <filesystem>
 
+#include "core/filesystem/filesystem.hpp"
 #include "core/storage/storage_error.hpp"
 
 namespace litedb::core::persistence
@@ -11,7 +12,7 @@ namespace litedb::core::persistence
 class ManifestStore
 {
 public:
-    explicit ManifestStore(std::filesystem::path data_dir);
+    ManifestStore(std::filesystem::path data_dir, filesystem::FileSystem & filesystem);
 
 public:
     [[nodiscard]]
@@ -21,13 +22,14 @@ public:
     const std::filesystem::path & data_dir() const noexcept;
 
     [[nodiscard]]
-    std::filesystem::path catalog_path() const;
+    std::filesystem::path meta_path() const;
 
     [[nodiscard]]
     std::filesystem::path collections_dir() const;
 
 private:
     std::filesystem::path data_dir_;            ///< 数据目录
+    filesystem::FileSystem * filesystem_;       ///< 文件系统
 };
 
 } // namespace litedb::core::persistence

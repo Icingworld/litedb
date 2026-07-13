@@ -12,8 +12,8 @@ CreateVectorIndexPlan::CreateVectorIndexPlan(
     common::ColumnId column_id,
     std::string column_name,
     std::string index_name,
-    catalog::CatalogVectorIndexKind index_kind,
-    catalog::CatalogVectorDistanceMetric metric,
+    meta::entry::VectorIndexKind index_kind,
+    meta::entry::VectorDistanceMetric metric,
     std::size_t max_neighbors,
     std::size_t ef_construction,
     std::size_t ef_search_default,
@@ -68,12 +68,12 @@ const std::string & CreateVectorIndexPlan::index_name() const noexcept
     return index_name_;
 }
 
-catalog::CatalogVectorIndexKind CreateVectorIndexPlan::index_kind() const noexcept
+meta::entry::VectorIndexKind CreateVectorIndexPlan::index_kind() const noexcept
 {
     return index_kind_;
 }
 
-catalog::CatalogVectorDistanceMetric CreateVectorIndexPlan::metric() const noexcept
+meta::entry::VectorDistanceMetric CreateVectorIndexPlan::metric() const noexcept
 {
     return metric_;
 }

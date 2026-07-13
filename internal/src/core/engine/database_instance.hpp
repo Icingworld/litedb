@@ -5,7 +5,7 @@
 #include <mutex>
 #include <optional>
 
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/persistence/persistence_controller.hpp"
@@ -38,10 +38,10 @@ public:
 
 public:
     [[nodiscard]]
-    catalog::InMemoryCatalog & catalog() noexcept;
+    meta::MetaEngine & meta() noexcept;
 
     [[nodiscard]]
-    const catalog::InMemoryCatalog & catalog() const noexcept;
+    const meta::MetaEngine & meta() const noexcept;
 
     [[nodiscard]]
     storage::StorageManager & storage() noexcept;
@@ -62,7 +62,7 @@ public:
     executor::DdlMutationHandler * ddl_handler() noexcept;
 
 private:
-    catalog::InMemoryCatalog catalog_;                                      ///< 目录
+    meta::MetaEngine meta_;                                         ///< 元数据
     storage::StorageManager storage_;                                       ///< 存储管理器
     index::IndexManager index_manager_;                                     ///< 索引管理器
     std::unique_ptr<persistence::PersistenceController> persistence_;       ///< 持久化控制器

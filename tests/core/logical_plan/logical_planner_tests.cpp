@@ -1,5 +1,5 @@
 #include "core/binder/binder.hpp"
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 #include "core/index/index_manager.hpp"
@@ -46,7 +46,8 @@ namespace
 
 using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::parser;
@@ -79,7 +80,7 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 
 struct Fixture
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     StorageManager storage;
     IndexManager index_manager;
     DatabaseId database_id {0};
@@ -100,12 +101,11 @@ struct Fixture
             ColumnDefinition {
                 .name = "id",
                 .type = type(LogicalTypeId::BigInt),
-                .primary_key = true,
             },
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = CatalogDefaultExpression::literal(CatalogDefaultLiteralKind::String, "unknown"),
+                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",
@@ -174,7 +174,7 @@ IndexId create_managed_index(
     Fixture & fixture,
     std::string name,
     std::string_view column_name,
-    CatalogIndexKind kind
+    litedb::core::meta::entry::IndexKind kind
 )
 {
     const auto * column = fixture.catalog.find_column(fixture.users_id, std::string(column_name));
@@ -182,9 +182,9 @@ IndexId create_managed_index(
 
     auto created = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
-        .column_id = column->id(),
+        .column_ids = {column->id()},
         .name = std::move(name),
-        .index_kind = kind,
+        .kind = kind,
     });
     if (!created.has_value()) {
         throw std::runtime_error(created.error().message);
@@ -300,8 +300,8 @@ void test_update_delete_plans()
 void test_indexes_do_not_change_logical_scan()
 {
     Fixture fixture;
-    (void) create_managed_index(fixture, "idx_age_btree", "age", CatalogIndexKind::BTree);
-    (void) create_managed_index(fixture, "idx_age_hash", "age", CatalogIndexKind::Hash);
+    (void) create_managed_index(fixture, "idx_age_btree", "age", litedb::core::meta::entry::IndexKind::BTree);
+    (void) create_managed_index(fixture, "idx_age_hash", "age", litedb::core::meta::entry::IndexKind::Hash);
 
     auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_manager);
     const auto & equal_projection = static_cast<const LogicalProjection &>(query_root(*equal));
@@ -355,7 +355,7 @@ void test_admin_and_ddl_plans()
     require(create_index_node.collection_name() == "users", "CREATE INDEX collection name mismatch");
     require(create_index_node.column_name() == "age", "CREATE INDEX column name mismatch");
     require(create_index_node.index_name() == "idx_age", "CREATE INDEX index name mismatch");
-    require(create_index_node.index_kind() == CatalogIndexKind::BTree, "CREATE INDEX kind value mismatch");
+    require(create_index_node.index_kind() == litedb::core::meta::entry::IndexKind::BTree, "CREATE INDEX kind value mismatch");
     require(create_index_node.if_not_exists(), "CREATE INDEX if not exists mismatch");
     require(!create_index_node.unique(), "CREATE INDEX unique mismatch");
 
@@ -371,8 +371,8 @@ void test_admin_and_ddl_plans()
     require(create_vector_index_node.collection_name() == "users", "CREATE VINDEX collection name mismatch");
     require(create_vector_index_node.column_name() == "embedding", "CREATE VINDEX column name mismatch");
     require(create_vector_index_node.index_name() == "vidx_embedding", "CREATE VINDEX index name mismatch");
-    require(create_vector_index_node.index_kind() == CatalogVectorIndexKind::Hnsw, "CREATE VINDEX kind value mismatch");
-    require(create_vector_index_node.metric() == CatalogVectorDistanceMetric::Cosine, "CREATE VINDEX metric mismatch");
+    require(create_vector_index_node.index_kind() == VectorIndexKind::Hnsw, "CREATE VINDEX kind value mismatch");
+    require(create_vector_index_node.metric() == VectorDistanceMetric::Cosine, "CREATE VINDEX metric mismatch");
     require(create_vector_index_node.max_neighbors() == 24, "CREATE VINDEX max_neighbors mismatch");
     require(create_vector_index_node.ef_construction() == 240, "CREATE VINDEX ef_construction mismatch");
     require(create_vector_index_node.ef_search_default() == 80, "CREATE VINDEX ef_search mismatch");
@@ -395,9 +395,9 @@ void test_admin_and_ddl_plans()
     require(age_column != nullptr, "age column lookup failed");
     auto created_index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
-        .column_id = age_column->id(),
+        .column_ids = {age_column->id()},
         .name = "idx_age",
-        .index_kind = CatalogIndexKind::BTree,
+        .kind = litedb::core::meta::entry::IndexKind::BTree,
     });
     require(created_index.has_value(), "fixture index create failed");
 

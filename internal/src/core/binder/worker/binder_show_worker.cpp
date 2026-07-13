@@ -6,7 +6,7 @@
 #include "core/binder/bound/statement/bound_show_collections_statement.hpp"
 #include "core/binder/bound/statement/bound_show_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/show_collections_statement.hpp"
 #include "core/parser/ast/statement/show_databases_statement.hpp"
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
@@ -40,7 +40,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
     BinderWorkerHelper helper(context_);
 
     if (statement.database_name().has_value()) {
-        const auto * database = context_.catalog().find_database(statement.database_name().value());
+        const auto * database = context_.meta().find_database(statement.database_name().value());
         if (database == nullptr) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DatabaseNotFound,

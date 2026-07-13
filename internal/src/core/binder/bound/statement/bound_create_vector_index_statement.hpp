@@ -4,7 +4,7 @@
 #include <string>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -23,8 +23,8 @@ public:
         common::ColumnId column_id,
         std::string column_name,
         std::string index_name,
-        catalog::CatalogVectorIndexKind index_kind,
-        catalog::CatalogVectorDistanceMetric metric,
+        meta::entry::VectorIndexKind index_kind,
+        meta::entry::VectorDistanceMetric metric,
         std::size_t max_neighbors,
         std::size_t ef_construction,
         std::size_t ef_search_default,
@@ -81,14 +81,14 @@ public:
      * @return 索引类型
      */
     [[nodiscard]]
-    catalog::CatalogVectorIndexKind index_kind() const noexcept;
+    meta::entry::VectorIndexKind index_kind() const noexcept;
 
     /**
      * @brief 获取距离度量
      * @return 距离度量
      */
     [[nodiscard]]
-    catalog::CatalogVectorDistanceMetric metric() const noexcept;
+    meta::entry::VectorDistanceMetric metric() const noexcept;
 
     /**
      * @brief 获取最大邻居数
@@ -138,8 +138,8 @@ private:
     common::ColumnId column_id_;                        ///< 列 ID
     std::string column_name_;                           ///< 列名称
     std::string index_name_;                            ///< 索引名称
-    catalog::CatalogVectorIndexKind index_kind_;        ///< 索引类型
-    catalog::CatalogVectorDistanceMetric metric_;       ///< 距离度量
+    meta::entry::VectorIndexKind index_kind_;        ///< 索引类型
+    meta::entry::VectorDistanceMetric metric_;       ///< 距离度量
     std::size_t max_neighbors_;                         ///< 最大邻居数
     std::size_t ef_construction_;                       ///< 构建时 EF 值
     std::size_t ef_search_default_;                     ///< 搜索时默认 EF 值

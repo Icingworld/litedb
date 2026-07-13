@@ -3,11 +3,12 @@
 #include <expected>
 #include <filesystem>
 
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
+#include "core/meta/meta_store.hpp"
 #include "core/executor/executor.hpp"
+#include "core/filesystem/filesystem.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/persistence/catalog_store.hpp"
 #include "core/persistence/manifest_store.hpp"
 #include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_error.hpp"
@@ -21,7 +22,7 @@ class PersistenceController final : public executor::DdlMutationHandler
 public:
     PersistenceController(
         std::filesystem::path data_dir,
-        catalog::InMemoryCatalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     );
@@ -31,56 +32,56 @@ public:
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_database(
         const physical_plan::PhysicalCreateDatabasePlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_collection(
         const physical_plan::PhysicalCreateCollectionPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_index(
         const physical_plan::PhysicalCreateIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_vector_index(
         const physical_plan::PhysicalCreateVectorIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_database(
         const physical_plan::PhysicalDropDatabasePlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_collection(
         const physical_plan::PhysicalDropCollectionPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_index(
         const physical_plan::PhysicalDropIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
 
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_vector_index(
         const physical_plan::PhysicalDropVectorIndexPlan & plan,
-        catalog::Catalog & catalog,
+        meta::MetaEngine & catalog,
         storage::StorageManager & storage,
         index::IndexManager & index_manager
     ) override;
@@ -92,13 +93,13 @@ private:
     [[nodiscard]]
     std::expected<std::unique_ptr<PersistentCollectionStorage>, storage::StorageError> make_collection_storage(
         const schema::CollectionSchema & collection_schema
-    ) const;
+    );
 
     [[nodiscard]]
-    std::expected<void, storage::StorageError> restore_storage_from_catalog();
+    std::expected<void, storage::StorageError> restore_storage_from_meta();
 
     [[nodiscard]]
-    executor::ExecutionError from_catalog_error(catalog::CatalogError error, parser::ast::AstNodeLocation location) const;
+    executor::ExecutionError from_meta_error(meta::MetaEngineError error, parser::ast::AstNodeLocation location) const;
 
     [[nodiscard]]
     executor::ExecutionError from_schema_error(schema::SchemaError error, parser::ast::AstNodeLocation location) const;
@@ -110,9 +111,10 @@ private:
     executor::ExecutionError from_index_error(index::IndexError error, parser::ast::AstNodeLocation location) const;
 
 private:
+    filesystem::FileSystem filesystem_;
     ManifestStore manifest_;
-    CatalogStore catalog_store_;
-    catalog::InMemoryCatalog * catalog_;
+    meta::MetaStore meta_store_;
+    meta::MetaEngine * catalog_;
     storage::StorageManager * storage_;
     index::IndexManager * index_manager_;
 };

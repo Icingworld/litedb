@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
+#include "core/filesystem/filesystem.hpp"
 #include "core/schema/record.hpp"
 #include "core/storage/storage_error.hpp"
 
@@ -47,7 +48,7 @@ struct RowLogReplay
 class RowLog
 {
 public:
-    RowLog(std::filesystem::path path, common::CollectionId collection_id);
+    RowLog(std::filesystem::path path, common::CollectionId collection_id, filesystem::FileSystem & filesystem);
 
 public:
     [[nodiscard]]
@@ -79,6 +80,7 @@ private:
 private:
     std::filesystem::path path_;            ///< 路径
     common::CollectionId collection_id_;    ///< 集合 ID
+    filesystem::FileSystem * filesystem_;   ///< 文件系统
 };
 
 } // namespace litedb::core::persistence

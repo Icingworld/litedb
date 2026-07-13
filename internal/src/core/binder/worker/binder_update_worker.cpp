@@ -4,7 +4,7 @@
 #include "core/binder/binder_context.hpp"
 #include <unordered_set>
 #include "core/binder/bound/statement/bound_update_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
 
@@ -35,7 +35,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
     std::vector<BoundAssignment> assignments;
     std::unordered_set<std::string> seen_columns;
     for (const auto & assignment : statement.assignments()) {
-        const auto column_key = catalog::normalize_identifier(assignment.column);
+        const auto column_key = meta::normalize_identifier(assignment.column);
         if (!seen_columns.emplace(column_key).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,
@@ -44,7 +44,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
             ));
         }
 
-        const auto * column = context_.catalog().find_column(collection->collection->id(), assignment.column);
+        const auto * column = context_.meta().find_column(collection->collection->id(), assignment.column);
         if (column == nullptr) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::ColumnNotFound,

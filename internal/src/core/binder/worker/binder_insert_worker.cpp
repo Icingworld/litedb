@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include "core/binder/bound/expression/bound_null_expression.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
 
@@ -35,8 +35,8 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
         return std::unexpected(std::move(collection.error()));
     }
 
-    const auto catalog_columns = context_.catalog().list_columns(collection->collection->id());
-    std::vector<const catalog::ColumnEntry *> target_columns;
+    const auto catalog_columns = context_.meta().list_columns(collection->collection->id());
+    std::vector<const meta::entry::ColumnEntry *> target_columns;
     target_columns.reserve(catalog_columns.size());
     std::vector<std::optional<std::size_t>> source_value_by_target;
 
@@ -66,7 +66,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
         // 检查列是否重复
         std::unordered_set<std::string> seen_columns;
         for (std::size_t index = 0; index < statement.columns().size(); ++index) {
-            const auto column_key = catalog::normalize_identifier(statement.columns()[index]);
+            const auto column_key = meta::normalize_identifier(statement.columns()[index]);
             if (!seen_columns.emplace(column_key).second) {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::DuplicateColumn,
@@ -84,7 +84,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
 
         // 遍历指定列，绑定列引用
         for (std::size_t index = 0; index < statement.columns().size(); ++index) {
-            const auto * column = context_.catalog().find_column(collection->collection->id(), statement.columns()[index]);
+            const auto * column = context_.meta().find_column(collection->collection->id(), statement.columns()[index]);
             if (column == nullptr) [[unlikely]] {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::ColumnNotFound,

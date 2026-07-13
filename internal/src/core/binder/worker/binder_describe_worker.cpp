@@ -3,7 +3,7 @@
 #include "core/binder/binder_helper.hpp"
 #include "core/binder/binder_context.hpp"
 #include "core/binder/bound/statement/bound_describe_collection_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/describe_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
 
@@ -39,7 +39,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDescribeWorker
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.catalog().find_collection(database_id.value(), statement.name());
+    const auto * collection = context_.meta().find_collection(database_id.value(), statement.name());
     if (collection == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,

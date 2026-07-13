@@ -49,27 +49,18 @@ Required downstream adaptation:
 - Add statement plan nodes for scalar and vector index listing.
 - Add executor row-set output for scalar and vector index metadata.
 
-## Legacy, Keep Until Migration Completes
+## Completed Legacy Cleanup
 
-### ColumnDefinition `primary_key`
+### Primary-key metadata removal
 
 Parser/Binder status:
 
 - `ParserSchemaHelper::parse_column_definition()` no longer accepts
   `PRIMARY KEY` in `CREATE COLLECTION` column definitions.
-- Parser AST no longer exposes `ColumnDefinition::primary_key`.
+- Parser AST no longer exposes primary-key metadata.
 - Binder no longer reads primary-key metadata from parser AST.
-- Catalog/schema/persistence primary-key metadata is still present for existing
-  storage and metadata paths, but it is no longer populated from SQL parser
-  column definitions.
-
-Remaining deletion criteria:
-
-- Catalog/schema/persistence primary-key metadata has either been removed or
-  moved behind a separate design.
-- Tests and examples no longer use `CREATE COLLECTION ... PRIMARY KEY`.
-- `DESCRIBE` / metadata output no longer exposes stale primary-key behavior
-  unless a replacement feature explicitly keeps it.
+- Meta、schema 和 persistence 中的历史主键字段已经删除。
+- `DESCRIBE` 不再输出主键列；解析器继续明确拒绝 `PRIMARY KEY`。
 
 ## Pending Review Before Moving To Binder
 

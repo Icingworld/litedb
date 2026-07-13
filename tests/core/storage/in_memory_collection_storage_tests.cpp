@@ -28,10 +28,10 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
 CollectionSchema users_schema()
 {
     std::vector<ColumnSchema> columns;
-    columns.emplace_back(1, 1, 0, "id", type(LogicalTypeId::BigInt), false, true, true, std::nullopt, std::nullopt);
-    columns.emplace_back(2, 1, 1, "name", type(LogicalTypeId::Varchar, 64), true, false, false, std::nullopt, std::nullopt);
-    columns.emplace_back(3, 1, 2, "score", type(LogicalTypeId::Double), true, false, false, std::nullopt, std::nullopt);
-    columns.emplace_back(4, 1, 3, "embedding", type(LogicalTypeId::Vector, 3), true, false, false, std::nullopt, std::nullopt);
+    columns.emplace_back(1, 1, 0, "id", type(LogicalTypeId::BigInt), false, true, std::nullopt, std::nullopt);
+    columns.emplace_back(2, 1, 1, "name", type(LogicalTypeId::Varchar, 64), true, false, std::nullopt, std::nullopt);
+    columns.emplace_back(3, 1, 2, "score", type(LogicalTypeId::Double), true, false, std::nullopt, std::nullopt);
+    columns.emplace_back(4, 1, 3, "embedding", type(LogicalTypeId::Vector, 3), true, false, std::nullopt, std::nullopt);
     return CollectionSchema {1, 1, "users", std::move(columns)};
 }
 
@@ -134,7 +134,7 @@ void test_insert_validation()
     require(!wrong_type.has_value(), "wrong type should fail");
     require(wrong_type.error().code == StorageErrorCode::TypeMismatch, "wrong type error mismatch");
 
-    auto null_primary_key = storage.insert(RecordData {
+    auto null_required_column = storage.insert(RecordData {
         .values = {
             Value::null(),
             Value {std::string {"alice"}},
@@ -142,8 +142,8 @@ void test_insert_validation()
             Value {VectorValue {0.1, 0.2, 0.3}},
         },
     });
-    require(!null_primary_key.has_value(), "null primary key should fail");
-    require(null_primary_key.error().code == StorageErrorCode::NullConstraintViolation, "null error mismatch");
+    require(!null_required_column.has_value(), "null required column should fail");
+    require(null_required_column.error().code == StorageErrorCode::NullConstraintViolation, "null error mismatch");
 
     auto nullable_column = storage.insert(RecordData {
         .values = {

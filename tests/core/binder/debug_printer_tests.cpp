@@ -2,7 +2,7 @@
 #include "core/binder/bound/debug_printer.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/binder/session_context.hpp"
-#include "core/catalog/in_memory_catalog.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 
@@ -20,7 +20,8 @@ namespace
 
 using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::parser;
 
@@ -55,7 +56,7 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 
 struct Fixture
 {
-    InMemoryCatalog catalog;
+    MetaEngine catalog;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -74,12 +75,12 @@ struct Fixture
             ColumnDefinition {
                 .name = "id",
                 .type = type(LogicalTypeId::BigInt),
-                .primary_key = true,
+                .nullable = false,
             },
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = CatalogDefaultExpression::literal(CatalogDefaultLiteralKind::String, "unknown"),
+                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",

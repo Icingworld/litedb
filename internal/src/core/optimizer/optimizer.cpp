@@ -25,8 +25,8 @@
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
-#include "core/catalog/catalog_entry.hpp"
-#include "core/catalog/catalog_reader.hpp"
+#include "core/meta/meta.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
@@ -388,12 +388,12 @@ std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & e
 }
 
 [[nodiscard]]
-bool index_supports_lookup(catalog::CatalogIndexKind index_kind, LogicalIndexLookupKind lookup_kind)
+bool index_supports_lookup(meta::entry::IndexKind index_kind, LogicalIndexLookupKind lookup_kind)
 {
     if (lookup_kind == LogicalIndexLookupKind::Equal) {
         return true;
     }
-    return index_kind == catalog::CatalogIndexKind::BTree;
+    return index_kind == meta::entry::IndexKind::BTree;
 }
 
 [[nodiscard]]
@@ -401,7 +401,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
     const LogicalScan & scan,
     const BoundExpression & predicate,
     const OptimizerOptions & options,
-    const catalog::CatalogReader * catalog
+    const meta::MetaEngine * catalog
 )
 {
     if (!options.enable_index_selection || catalog == nullptr || scan.index_hint().has_value()) {
@@ -417,11 +417,15 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
         if (index_entry == nullptr || index_entry->column_id() != candidate->column_id) {
             continue;
         }
-        if (!index_supports_lookup(index_entry->index_kind(), candidate->lookup.kind)) {
+        if (!index_supports_lookup(index_entry->kind(), candidate->lookup.kind)) {
             continue;
         }
 
-        const auto * column = catalog->find_column(index_entry->column_id());
+        const auto column_id = index_entry->column_id();
+        if (!column_id.has_value()) {
+            continue;
+        }
+        const auto * column = catalog->find_column(column_id.value());
         if (column == nullptr) {
             continue;
         }
@@ -429,8 +433,8 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
         return LogicalScanIndexHint {
             .index_id = index_entry->id(),
             .index_name = index_entry->name(),
-            .index_kind = index_entry->index_kind(),
-            .column_id = index_entry->column_id(),
+            .index_kind = index_entry->kind(),
+            .column_id = column_id.value(),
             .column_name = column->name(),
             .lookup = std::move(candidate->lookup),
         };
@@ -670,7 +674,7 @@ std::vector<BoundOrderByItem> rewrite_order_by_items(
 LogicalRewriteResult rewrite_logical_once(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
-    const catalog::CatalogReader * catalog
+    const meta::MetaEngine * catalog
 )
 {
     switch (node.kind()) {
@@ -764,7 +768,7 @@ LogicalRewriteResult rewrite_logical_once(
 std::unique_ptr<LogicalPlanNode> optimize_logical(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
-    const catalog::CatalogReader * catalog
+    const meta::MetaEngine * catalog
 )
 {
     auto current = node.clone();
@@ -795,7 +799,7 @@ std::vector<BoundAssignment> clone_assignments(const std::vector<BoundAssignment
 
 } // namespace
 
-Optimizer::Optimizer(OptimizerOptions options, const catalog::CatalogReader * catalog) noexcept
+Optimizer::Optimizer(OptimizerOptions options, const meta::MetaEngine * catalog) noexcept
     : options_(options)
     , catalog_(catalog)
 {

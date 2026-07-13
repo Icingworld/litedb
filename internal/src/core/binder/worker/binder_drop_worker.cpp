@@ -6,7 +6,7 @@
 #include "core/binder/bound/statement/bound_drop_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_index_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
@@ -30,7 +30,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
     const DropDatabaseStatement & statement
 )
 {
-    const auto * database = context_.catalog().find_database(statement.database_name());
+    const auto * database = context_.meta().find_database(statement.database_name());
     if (database == nullptr && !statement.if_exists()) {
         return std::unexpected(make_binder_error(
             BinderErrorCode::DatabaseNotFound,
@@ -58,7 +58,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.catalog().find_collection(database_id.value(), statement.collection_name());
+    const auto * collection = context_.meta().find_collection(database_id.value(), statement.collection_name());
     if (collection == nullptr && !statement.if_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
@@ -88,7 +88,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
     }
 
     // 查找索引
-    const auto * index = context_.catalog().find_index(collection->collection->id(), statement.index_name());
+    const auto * index = context_.meta().find_index(collection->collection->id(), statement.index_name());
     if (index == nullptr && !statement.if_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::IndexNotFound,
@@ -119,7 +119,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
         return std::unexpected(std::move(collection.error()));
     }
 
-    const auto * index = context_.catalog().find_vector_index(collection->collection->id(), statement.index_name());
+    const auto * index = context_.meta().find_vector_index(collection->collection->id(), statement.index_name());
     if (index == nullptr && !statement.if_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::IndexNotFound,

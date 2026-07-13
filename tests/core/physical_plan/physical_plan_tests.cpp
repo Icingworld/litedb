@@ -1,5 +1,5 @@
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
@@ -50,7 +50,8 @@ namespace
 
 using namespace litedb::core;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::catalog;
+using namespace litedb::core::meta;
+using namespace litedb::core::meta::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::parser::ast;
 using namespace litedb::core::physical_plan;
@@ -146,7 +147,7 @@ void test_lower_index_scan()
         LogicalScanIndexHint {
             .index_id = IndexId {3},
             .index_name = "idx_age",
-            .index_kind = CatalogIndexKind::BTree,
+            .index_kind = IndexKind::BTree,
             .column_id = ColumnId {4},
             .column_name = "age",
             .lookup = LogicalIndexLookup {.kind = LogicalIndexLookupKind::Range},
@@ -164,7 +165,7 @@ void test_lower_index_scan()
     require(scan.collection_name() == "users", "index scan collection name mismatch");
     require(scan.index_id() == IndexId {3}, "index scan id mismatch");
     require(scan.index_name() == "idx_age", "index scan name mismatch");
-    require(scan.index_kind() == CatalogIndexKind::BTree, "index kind mismatch");
+    require(scan.index_kind() == IndexKind::BTree, "index kind mismatch");
     require(scan.column_id() == ColumnId {4}, "index scan column id mismatch");
     require(scan.column_name() == "age", "index scan column name mismatch");
     require(scan.lookup().kind == PhysicalIndexLookupKind::Range, "index lookup kind mismatch");
@@ -207,7 +208,7 @@ void test_lower_simple_statement()
     require(lowered_create_database.if_not_exists(), "CREATE DATABASE if_not_exists mismatch");
 
     std::vector<ColumnDefinition> columns {
-        ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .primary_key = true},
+        ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .nullable = false},
     };
     CreateCollectionPlan create_collection {DatabaseId {7}, "users", true, columns, std::string {"people"}, loc};
     auto physical_create_collection = planner.plan(create_collection);
@@ -228,7 +229,7 @@ void test_lower_simple_statement()
         ColumnId {9},
         "age",
         "idx_age",
-        CatalogIndexKind::BTree,
+        IndexKind::BTree,
         false,
         true,
         loc,
@@ -247,8 +248,8 @@ void test_lower_simple_statement()
         ColumnId {9},
         "embedding",
         "vidx_embedding",
-        CatalogVectorIndexKind::Hnsw,
-        CatalogVectorDistanceMetric::Cosine,
+        VectorIndexKind::Hnsw,
+        VectorDistanceMetric::Cosine,
         16,
         64,
         32,
@@ -263,7 +264,7 @@ void test_lower_simple_statement()
     );
     const auto & lowered_create_vindex = static_cast<const PhysicalCreateVectorIndexPlan &>(*physical_create_vindex);
     require(lowered_create_vindex.index_name() == "vidx_embedding", "CREATE VINDEX name mismatch");
-    require(lowered_create_vindex.metric() == CatalogVectorDistanceMetric::Cosine, "CREATE VINDEX metric mismatch");
+    require(lowered_create_vindex.metric() == VectorDistanceMetric::Cosine, "CREATE VINDEX metric mismatch");
 
     DropDatabasePlan drop_database {DatabaseId {7}, "demo", true, loc};
     auto physical_drop_database = planner.plan(drop_database);

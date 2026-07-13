@@ -1,0 +1,15 @@
+add_executable(filesystem_contract_tests
+    filesystem_contract_tests.cpp
+)
+
+target_link_libraries(filesystem_contract_tests PRIVATE litedb_filesystem)
+
+add_test(NAME filesystem_contract_tests COMMAND filesystem_contract_tests)
+
+add_executable(filesystem_platform_backend_tests
+    filesystem_platform_backend_tests.cpp
+)
+
+target_link_libraries(filesystem_platform_backend_tests PRIVATE litedb_filesystem)
+
+add_test(NAME filesystem_platform_backend_tests COMMAND filesystem_platform_backend_tests)

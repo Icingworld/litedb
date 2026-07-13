@@ -1,6 +1,6 @@
 #include "core/schema/schema_loader.hpp"
 
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 
 #include <utility>
 
@@ -18,7 +18,7 @@ SchemaError make_error(SchemaErrorCode code, std::string message)
 } // namespace
 
 std::expected<CollectionSchema, SchemaError> load_collection_schema(
-    const catalog::CatalogReader & catalog,
+    const meta::MetaEngine & catalog,
     common::CollectionId collection_id
 )
 {
@@ -49,7 +49,6 @@ std::expected<CollectionSchema, SchemaError> load_collection_schema(
             column->name(),
             column->type(),
             column->nullable(),
-            column->primary_key(),
             column->unique(),
             column->default_expression(),
             column->comment()

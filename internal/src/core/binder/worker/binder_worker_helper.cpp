@@ -19,8 +19,8 @@
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
-#include "core/catalog/catalog_default_expression.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/entry/default_expression.hpp"
+#include "core/meta/meta.hpp"
 #include "core/function/builtin/builtin_functions.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
@@ -57,7 +57,7 @@ std::expected<DatabaseId, BinderError> BinderWorkerHelper::require_database(AstN
         ));
     }
 
-    if (context_.catalog().find_database(context_.session().current_database_id.value()) == nullptr) [[unlikely]] {
+    if (context_.meta().find_database(context_.session().current_database_id.value()) == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::DatabaseNotFound,
             location,
@@ -77,7 +77,7 @@ std::expected<BindingCollection, BinderError> BinderWorkerHelper::bind_collectio
         return std::unexpected(database_id.error());
     }
 
-    const auto * collection = context_.catalog().find_collection(database_id.value(), collection_name);
+    const auto * collection = context_.meta().find_collection(database_id.value(), collection_name);
     if (collection == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
@@ -160,7 +160,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 {
     // 检查限定符是否匹配集合
     if (expression.qualifier().has_value()
-        && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+        && meta::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidQualifier,
             expression.location(),
@@ -168,7 +168,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         ));
     }
 
-    const auto * column = context_.catalog().find_column(collection.collection->id(), expression.column());
+    const auto * column = context_.meta().find_column(collection.collection->id(), expression.column());
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
@@ -509,7 +509,7 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
 ) const
 {
     if (expression.qualifier().has_value()
-        && catalog::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+        && meta::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidQualifier,
             expression.location(),
@@ -518,7 +518,7 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
     }
 
     std::vector<std::unique_ptr<BoundExpression>> expressions;
-    for (const auto * column : context_.catalog().list_columns(collection.collection->id())) {
+    for (const auto * column : context_.meta().list_columns(collection.collection->id())) {
         expressions.push_back(std::make_unique<BoundColumnRefExpression>(
             collection.database_id,
             collection.collection->id(),
@@ -534,10 +534,10 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_default_expression(
-    const catalog::CatalogDefaultExpression & expression, AstNodeLocation location
+    const meta::entry::DefaultExpression & expression, AstNodeLocation location
 ) const
 {
-    if (expression.kind == catalog::CatalogDefaultExpressionKind::Vector) {
+    if (expression.kind == meta::entry::DefaultExpressionKind::Vector) {
         std::vector<std::unique_ptr<BoundExpression>> elements;
         elements.reserve(expression.elements.size());
         for (const auto & element : expression.elements) {
@@ -562,31 +562,31 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
     }
 
     switch (expression.literal_kind) {
-    case catalog::CatalogDefaultLiteralKind::Null:
+    case meta::entry::DefaultLiteralKind::Null:
         return std::make_unique<BoundNullExpression>(type(LogicalTypeId::Null), location);
-    case catalog::CatalogDefaultLiteralKind::Boolean:
+    case meta::entry::DefaultLiteralKind::Boolean:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Boolean), expression.value, location);
-    case catalog::CatalogDefaultLiteralKind::Integer:
+    case meta::entry::DefaultLiteralKind::Integer:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Integer), expression.value, location);
-    case catalog::CatalogDefaultLiteralKind::Float:
+    case meta::entry::DefaultLiteralKind::Float:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Double), expression.value, location);
-    case catalog::CatalogDefaultLiteralKind::String:
+    case meta::entry::DefaultLiteralKind::String:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Varchar), expression.value, location);
     }
 
     [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Unsupported default expression"));
 }
 
-std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerHelper::bind_column_definitions(
+std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelper::bind_column_definitions(
     const ColumnDefinitionList & columns, AstNodeLocation location
 ) const
 {
     std::unordered_set<std::string> seen_columns;
-    std::vector<catalog::ColumnDefinition> result;
+    std::vector<meta::ColumnDefinition> result;
     result.reserve(columns.size());
 
     for (const auto & column : columns) {
-        if (!seen_columns.emplace(catalog::normalize_identifier(column.name)).second) [[unlikely]] {
+        if (!seen_columns.emplace(meta::normalize_identifier(column.name)).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,
                 location,
@@ -598,7 +598,7 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
             return std::unexpected(std::move(logical_type.error()));
         }
 
-        std::optional<catalog::CatalogDefaultExpression> default_expression;
+        std::optional<meta::entry::DefaultExpression> default_expression;
         if (column.default_value != nullptr) {
             auto default_snapshot = snapshot_default_expression(*column.default_value);
             if (!default_snapshot.has_value()) [[unlikely]] {
@@ -621,10 +621,9 @@ std::expected<std::vector<catalog::ColumnDefinition>, BinderError> BinderWorkerH
             }
         }
 
-        result.push_back(catalog::ColumnDefinition {
+        result.push_back(meta::ColumnDefinition {
             .name = column.name,
             .type = logical_type.value(),
-            .primary_key = false,
             .unique = column.unique,
             .nullable = column.nullable,
             .default_expression = std::move(default_expression),
@@ -664,7 +663,7 @@ std::expected<LogicalType, BinderError> BinderWorkerHelper::bind_data_type(
     [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Unsupported data type"));
 }
 
-std::expected<catalog::CatalogDefaultExpression, BinderError> BinderWorkerHelper::snapshot_default_expression(
+std::expected<meta::entry::DefaultExpression, BinderError> BinderWorkerHelper::snapshot_default_expression(
     const ExpressionNode & expression
 ) const
 {
@@ -672,27 +671,27 @@ std::expected<catalog::CatalogDefaultExpression, BinderError> BinderWorkerHelper
         const auto & literal = static_cast<const LiteralExpression &>(expression);
         switch (literal.literal_type()) {
         case TokenType::Null:
-            return catalog::CatalogDefaultExpression::null_literal();
+            return meta::entry::DefaultExpression::null_literal();
         case TokenType::True:
             [[fallthrough]];
         case TokenType::False:
-            return catalog::CatalogDefaultExpression::literal(
-                catalog::CatalogDefaultLiteralKind::Boolean,
+            return meta::entry::DefaultExpression::literal(
+                meta::entry::DefaultLiteralKind::Boolean,
                 literal.value()
             );
         case TokenType::IntegerLiteral:
-            return catalog::CatalogDefaultExpression::literal(
-                catalog::CatalogDefaultLiteralKind::Integer,
+            return meta::entry::DefaultExpression::literal(
+                meta::entry::DefaultLiteralKind::Integer,
                 literal.value()
             );
         case TokenType::FloatLiteral:
-            return catalog::CatalogDefaultExpression::literal(
-                catalog::CatalogDefaultLiteralKind::Float,
+            return meta::entry::DefaultExpression::literal(
+                meta::entry::DefaultLiteralKind::Float,
                 literal.value()
             );
         case TokenType::StringLiteral:
-            return catalog::CatalogDefaultExpression::literal(
-                catalog::CatalogDefaultLiteralKind::String,
+            return meta::entry::DefaultExpression::literal(
+                meta::entry::DefaultLiteralKind::String,
                 literal.value()
             );
         default:
@@ -702,7 +701,7 @@ std::expected<catalog::CatalogDefaultExpression, BinderError> BinderWorkerHelper
 
     if (expression.kind() == AstNodeKind::Vector) {
         const auto & vector = static_cast<const VectorExpression &>(expression);
-        std::vector<catalog::CatalogDefaultExpression> elements;
+        std::vector<meta::entry::DefaultExpression> elements;
         elements.reserve(vector.elements().size());
         for (const auto & element : vector.elements()) {
             auto snapshot = snapshot_default_expression(*element);
@@ -711,7 +710,7 @@ std::expected<catalog::CatalogDefaultExpression, BinderError> BinderWorkerHelper
             }
             elements.push_back(std::move(snapshot.value()));
         }
-        return catalog::CatalogDefaultExpression::vector(std::move(elements));
+        return meta::entry::DefaultExpression::vector(std::move(elements));
     }
 
     [[unlikely]] return std::unexpected(make_binder_error(

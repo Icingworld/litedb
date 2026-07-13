@@ -19,14 +19,14 @@ std::optional<common::DatabaseId> Engine::current_database_id() const noexcept
     return session_.current_database_id();
 }
 
-catalog::InMemoryCatalog & Engine::catalog() noexcept
+meta::MetaEngine & Engine::meta() noexcept
 {
-    return instance_.catalog();
+    return instance_.meta();
 }
 
-const catalog::InMemoryCatalog & Engine::catalog() const noexcept
+const meta::MetaEngine & Engine::meta() const noexcept
 {
-    return instance_.catalog();
+    return instance_.meta();
 }
 
 storage::StorageManager & Engine::storage() noexcept

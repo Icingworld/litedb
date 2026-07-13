@@ -4,7 +4,7 @@
 #include "core/binder/binder_context.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 #include "core/parser/ast/expression/wildcard_expression.hpp"
@@ -78,7 +78,7 @@ const ExpressionNode * order_by_alias_target(
         return nullptr;
     }
 
-    const auto it = aliases.find(catalog::normalize_identifier(column.column()));
+    const auto it = aliases.find(meta::normalize_identifier(column.column()));
     if (it == aliases.end()) {
         return nullptr;
     }
@@ -102,7 +102,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expre
 )
 {
     if (const auto * alias_target = order_by_alias_target(expression, aliases); alias_target != nullptr) {
-        const auto alias_key = catalog::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
+        const auto alias_key = meta::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
         if (aliases.at(alias_key).count > 1) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::AmbiguousAlias,
@@ -160,7 +160,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
         }
 
         if (alias.has_value()) {
-            auto & binding = aliases[catalog::normalize_identifier(alias.value())];
+            auto & binding = aliases[meta::normalize_identifier(alias.value())];
             binding.expression = &expression_node;
             ++binding.count;
         }

@@ -6,7 +6,7 @@
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_create_vector_index_statement.hpp"
-#include "core/catalog/catalog_entry.hpp"
+#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
@@ -75,7 +75,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
     }
 
     // 查找列
-    const auto * column = context_.catalog().find_column(collection->collection->id(), statement.column_name());
+    const auto * column = context_.meta().find_column(collection->collection->id(), statement.column_name());
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
@@ -100,7 +100,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
         column->id(),
         column->name(),
         statement.index_name(),
-        catalog_index_kind(statement.method()),
+        meta_index_kind(statement.method()),
         false,
         statement.if_not_exists(),
         statement.location()
@@ -118,7 +118,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
         return std::unexpected(std::move(collection.error()));
     }
 
-    const auto * column = context_.catalog().find_column(collection->collection->id(), statement.column_name());
+    const auto * column = context_.meta().find_column(collection->collection->id(), statement.column_name());
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
@@ -136,19 +136,19 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
         ));
     }
 
-    catalog::CatalogVectorDistanceMetric metric = catalog::CatalogVectorDistanceMetric::L2;
+    meta::entry::VectorDistanceMetric metric = meta::entry::VectorDistanceMetric::L2;
     switch (statement.options().metric) {
     case VectorIndexMetric::Default:
-        metric = catalog::CatalogVectorDistanceMetric::L2;
+        metric = meta::entry::VectorDistanceMetric::L2;
         break;
     case VectorIndexMetric::L2:
-        metric = catalog::CatalogVectorDistanceMetric::L2;
+        metric = meta::entry::VectorDistanceMetric::L2;
         break;
     case VectorIndexMetric::InnerProduct:
-        metric = catalog::CatalogVectorDistanceMetric::InnerProduct;
+        metric = meta::entry::VectorDistanceMetric::InnerProduct;
         break;
     case VectorIndexMetric::Cosine:
-        metric = catalog::CatalogVectorDistanceMetric::Cosine;
+        metric = meta::entry::VectorDistanceMetric::Cosine;
         break;
     }
 
@@ -159,7 +159,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
         column->id(),
         column->name(),
         statement.index_name(),
-        catalog::CatalogVectorIndexKind::Hnsw,
+        meta::entry::VectorIndexKind::Hnsw,
         metric,
         statement.options().max_neighbors.value_or(16),
         statement.options().ef_construction.value_or(200),
