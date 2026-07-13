@@ -18,8 +18,7 @@
 namespace litedb::core::storage
 {
 
-class CollectionStorage;
-class StorageManager;
+class StorageEngine;
 
 } // namespace litedb::core::storage
 
@@ -71,7 +70,7 @@ public:
     std::expected<void, IndexError> create_index(
         const meta::entry::IndexEntry & index_entry,
         const schema::CollectionSchema & collection_schema,
-        const storage::CollectionStorage & storage
+        const storage::StorageEngine & storage
     );
 
     /**
@@ -97,7 +96,7 @@ public:
     [[nodiscard]]
     std::expected<void, IndexError> rebuild_all(
         const meta::MetaEngine & catalog,
-        const storage::StorageManager & storage
+        const storage::StorageEngine & storage
     );
 
     /**
@@ -237,7 +236,7 @@ private:
     [[nodiscard]]
     std::expected<void, IndexError> build_index_from_storage(
         ManagedIndex & managed_index,
-        const storage::CollectionStorage & storage
+        const storage::StorageEngine & storage
     ) const;
 
     [[nodiscard]]

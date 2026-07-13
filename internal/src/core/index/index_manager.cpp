@@ -7,8 +7,7 @@
 #include "core/index/btree_index.hpp"
 #include "core/index/hash_index.hpp"
 #include "core/schema/schema_loader.hpp"
-#include "core/storage/collection_storage.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
 
 namespace litedb::core::index
 {
@@ -126,12 +125,17 @@ std::vector<const IndexManager::ManagedIndex *> IndexManager::list_managed_index
 
 std::expected<void, IndexError> IndexManager::build_index_from_storage(
     ManagedIndex & managed_index,
-    const storage::CollectionStorage & storage
+    const storage::StorageEngine & storage
 ) const
 {
-    auto cursor = storage.scan();
-    while (const auto record = cursor->next()) {
-        auto key = make_key_from_record(record->data, managed_index.column_ordinal);
+    auto cursor = storage.scan(managed_index.collection_id);
+    if (!cursor) return std::unexpected(make_error(IndexErrorCode::StorageError, cursor.error().message));
+    while (true) {
+        auto next = cursor->next();
+        if (!next) return std::unexpected(make_error(IndexErrorCode::StorageError, next.error().message));
+        if (!*next) break;
+        const auto & record = **next;
+        auto key = make_key_from_record(record.data, managed_index.column_ordinal);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -144,7 +148,7 @@ std::expected<void, IndexError> IndexManager::build_index_from_storage(
             return std::unexpected(std::move(unique.error()));
         }
 
-        auto inserted = managed_index.index->insert(key->value(), record->record_id);
+        auto inserted = managed_index.index->insert(key->value(), record.record_id);
         if (!inserted.has_value()) {
             return std::unexpected(std::move(inserted.error()));
         }
@@ -155,7 +159,7 @@ std::expected<void, IndexError> IndexManager::build_index_from_storage(
 std::expected<void, IndexError> IndexManager::create_index(
     const meta::entry::IndexEntry & index_entry,
     const schema::CollectionSchema & collection_schema,
-    const storage::CollectionStorage & storage
+    const storage::StorageEngine & storage
 )
 {
     if (find_managed_index(index_entry.id()) != nullptr) {
@@ -237,7 +241,7 @@ void IndexManager::drop_collection_indexes(common::CollectionId collection_id)
 
 std::expected<void, IndexError> IndexManager::rebuild_all(
     const meta::MetaEngine & catalog,
-    const storage::StorageManager & storage
+    const storage::StorageEngine & storage
 )
 {
     IndexManager rebuilt;
@@ -252,8 +256,7 @@ std::expected<void, IndexError> IndexManager::rebuild_all(
                 continue;
             }
 
-            const auto * collection_storage = storage.find_collection(collection->id());
-            if (collection_storage == nullptr) {
+            if (!storage.contains_collection(collection->id())) {
                 continue;
             }
 
@@ -270,7 +273,7 @@ std::expected<void, IndexError> IndexManager::rebuild_all(
                     continue;
                 }
 
-                auto created = rebuilt.create_index(*index_entry, collection_schema.value(), *collection_storage);
+                auto created = rebuilt.create_index(*index_entry, collection_schema.value(), storage);
                 if (!created.has_value()) {
                     return std::unexpected(std::move(created.error()));
                 }

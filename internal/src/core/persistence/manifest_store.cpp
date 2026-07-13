@@ -22,8 +22,9 @@ storage::StorageError make_error(storage::StorageErrorCode code, std::string mes
 storage::StorageError from_filesystem_error(filesystem::FileSystemError error)
 {
     return storage::StorageError {
-        .code = storage::StorageErrorCode::IoError,
+        .code = storage::StorageErrorCode::StoreError,
         .message = std::move(error.message),
+        .storage_store_code = storage::StorageStoreErrorCode::FileSystemError,
     };
 }
 
@@ -126,14 +127,14 @@ std::expected<void, storage::StorageError> ManifestStore::ensure_initialized() c
         io::BinaryReader reader {byte_reader};
         read_file_header(reader, ManifestMagic);
         if (require_io(reader.read_u32()) != StorageFormatVersion) {
-            return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported manifest storage format version"));
+            return std::unexpected(make_error(storage::StorageErrorCode::StoreError, "Unsupported manifest storage format version"));
         }
         if (require_io(reader.read_string()) != MetaFileName || require_io(reader.read_string()) != CollectionsDirName) {
-            return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, "Unsupported manifest paths"));
+            return std::unexpected(make_error(storage::StorageErrorCode::StoreError, "Unsupported manifest paths"));
         }
         return {};
     } catch (const std::exception & exception) {
-        return std::unexpected(make_error(storage::StorageErrorCode::InvalidStorageFormat, exception.what()));
+        return std::unexpected(make_error(storage::StorageErrorCode::StoreError, exception.what()));
     }
 }
 

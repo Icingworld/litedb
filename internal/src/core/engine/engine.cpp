@@ -1,10 +1,12 @@
 #include "core/engine/engine.hpp"
 
+#include <utility>
+
 namespace litedb::core::engine
 {
 
-Engine::Engine()
-    : instance_()
+Engine::Engine(DatabaseConfig config)
+    : instance_(std::move(config))
     , session_(instance_)
 {
 }
@@ -29,12 +31,12 @@ const meta::MetaEngine & Engine::meta() const noexcept
     return instance_.meta();
 }
 
-storage::StorageManager & Engine::storage() noexcept
+storage::StorageEngine & Engine::storage() noexcept
 {
     return instance_.storage();
 }
 
-const storage::StorageManager & Engine::storage() const noexcept
+const storage::StorageEngine & Engine::storage() const noexcept
 {
     return instance_.storage();
 }

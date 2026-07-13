@@ -11,7 +11,7 @@
 #include "core/engine/session.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_manager.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
 
 namespace litedb::core::engine
 {
@@ -22,7 +22,7 @@ namespace litedb::core::engine
 class Engine
 {
 public:
-    Engine();
+    explicit Engine(DatabaseConfig config);
 
 public:
     /**
@@ -59,14 +59,14 @@ public:
      * @return 存储管理器
      */
     [[nodiscard]]
-    storage::StorageManager & storage() noexcept;
+    storage::StorageEngine & storage() noexcept;
 
     /**
      * @brief 获取存储管理器
      * @return 存储管理器
      */
     [[nodiscard]]
-    const storage::StorageManager & storage() const noexcept;
+    const storage::StorageEngine & storage() const noexcept;
 
     /**
      * @brief 获取索引管理器

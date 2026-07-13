@@ -7,8 +7,6 @@
 #include "core/io/buffer_byte_writer.hpp"
 #include "core/meta/meta_store.hpp"
 #include "core/persistence/manifest_store.hpp"
-#include "core/persistence/persistent_collection_storage.hpp"
-#include "core/persistence/row_log.hpp"
 #include "core/storage/storage_error.hpp"
 
 #include <cstdint>
@@ -225,70 +223,6 @@ schema::RecordData simple_record(std::int64_t id, std::string name)
     };
 }
 
-void test_persistent_collection_storage_get()
-{
-    const auto dir = make_temp_dir("litedb_persistent_get_test");
-    auto filesystem = filesystem::create_platform_filesystem();
-    persistence::RowLog log {dir / "1.rows", 1, filesystem};
-    auto opened = persistence::PersistentCollectionStorage::open(simple_users_schema(), std::move(log));
-    require(opened.has_value(), "persistent collection storage open failed");
-
-    auto & storage = **opened;
-    auto inserted = storage.insert(simple_record(1, "alice"));
-    require(inserted.has_value(), "persistent insert failed");
-
-    const storage::CollectionStorage & const_storage = storage;
-    auto fetched = const_storage.get(inserted.value());
-    require(fetched.has_value(), "persistent get existing record failed");
-    require(fetched->record_id == inserted.value(), "persistent get record id mismatch");
-    require(get_value<std::int64_t>(fetched->data.values[0]) == 1, "persistent get id mismatch");
-    require(get_value<std::string>(fetched->data.values[1]) == "alice", "persistent get name mismatch");
-
-    auto missing = const_storage.get(999);
-    require(!missing.has_value(), "persistent get missing record should fail");
-    require(missing.error().code == storage::StorageErrorCode::RecordNotFound, "persistent get missing error mismatch");
-
-    auto updated = storage.update(inserted.value(), simple_record(1, "alice-updated"));
-    require(updated.has_value(), "persistent update before get failed");
-    auto after_update = const_storage.get(inserted.value());
-    require(after_update.has_value(), "persistent get after update failed");
-    require(get_value<std::string>(after_update->data.values[1]) == "alice-updated", "persistent get after update mismatch");
-
-    auto erased = storage.erase(inserted.value());
-    require(erased.has_value(), "persistent erase before get failed");
-    auto after_erase = const_storage.get(inserted.value());
-    require(!after_erase.has_value(), "persistent get erased record should fail");
-    require(after_erase.error().code == storage::StorageErrorCode::RecordNotFound, "persistent get after erase error mismatch");
-}
-
-void test_row_log_replay_and_partial_tail()
-{
-    const auto dir = make_temp_dir("litedb_row_log_test");
-    const auto path = dir / "1.rows";
-    auto filesystem = filesystem::create_platform_filesystem();
-    persistence::RowLog log {path, 1, filesystem};
-    auto replay = log.replay_or_create();
-    require(replay.has_value(), "row log create failed");
-
-    schema::RecordData first {.values = {schema::Value {std::int64_t {1}}, schema::Value {"alice"}}};
-    auto inserted = log.append_insert(1, first);
-    require(inserted.has_value(), "row log insert failed");
-    schema::RecordData updated {.values = {schema::Value {std::int64_t {1}}, schema::Value {"alice-updated"}}};
-    auto update = log.append_update(1, updated);
-    require(update.has_value(), "row log update failed");
-
-    {
-        std::ofstream out {path, std::ios::binary | std::ios::app};
-        out.put('\x52');
-        out.put('\x52');
-    }
-
-    auto replayed = log.replay_or_create();
-    require(replayed.has_value(), "row log replay with partial tail failed");
-    require(replayed->records.size() == 2, "row log replay count mismatch");
-    require(replayed->next_record_id == 2, "row log next id mismatch");
-}
-
 void test_database_instance_reopens_persistent_data()
 {
     const auto dir = make_temp_dir("litedb_reopen_test");
@@ -487,20 +421,6 @@ void test_drop_collection_reopen()
     }
 }
 
-void test_default_instance_is_still_memory_only()
-{
-    engine::DatabaseInstance first;
-    {
-        engine::Session session {first};
-        execute_ok(session, "CREATE DATABASE demo;");
-    }
-
-    engine::DatabaseInstance second;
-    engine::Session session {second};
-    auto result = session.execute_sql("USE demo;");
-    require(!result.has_value(), "default in-memory instance should not persist data");
-}
-
 } // namespace
 
 int main()
@@ -508,13 +428,10 @@ int main()
     try {
         test_binary_value_roundtrip();
         test_manifest_and_meta_store();
-        test_persistent_collection_storage_get();
-        test_row_log_replay_and_partial_tail();
         test_database_instance_reopens_persistent_data();
         test_index_ddl_reopen();
         test_vector_index_ddl_reopen();
         test_drop_collection_reopen();
-        test_default_instance_is_still_memory_only();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

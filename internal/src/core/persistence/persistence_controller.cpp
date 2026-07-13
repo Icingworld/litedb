@@ -8,7 +8,6 @@
 
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
-#include "core/persistence/persistent_collection_storage.hpp"
 #include "core/schema/schema_loader.hpp"
 
 namespace litedb::core::persistence
@@ -20,10 +19,10 @@ namespace
 storage::StorageError from_meta_store_error(meta::MetaStoreError error)
 {
     return storage::StorageError {
-        .code = error.code == meta::MetaStoreErrorCode::FileSystemError
-            ? storage::StorageErrorCode::IoError
-            : storage::StorageErrorCode::InvalidStorageFormat,
+        .code = storage::StorageErrorCode::StoreError,
         .message = std::move(error.message),
+        .storage_store_code = error.code == meta::MetaStoreErrorCode::FileSystemError
+            ? storage::StorageStoreErrorCode::FileSystemError : storage::StorageStoreErrorCode::InvalidFormat,
     };
 }
 
@@ -40,16 +39,17 @@ executor::ExecutionResult command_result(std::size_t affected_rows)
 PersistenceController::PersistenceController(
     std::filesystem::path data_dir,
     meta::MetaEngine & catalog,
-    storage::StorageManager & storage,
+    storage::StorageEngine & storage,
     index::IndexManager & index_manager
 )
     : filesystem_(filesystem::create_platform_filesystem())
-    , manifest_(std::move(data_dir), filesystem_)
+    , manifest_(data_dir, filesystem_)
     , meta_store_(manifest_.meta_path(), filesystem_)
     , catalog_(&catalog)
     , storage_(&storage)
     , index_manager_(&index_manager)
 {
+    storage = storage::StorageEngine {std::move(data_dir), filesystem_};
 }
 
 std::expected<void, storage::StorageError> PersistenceController::initialize()
@@ -67,8 +67,9 @@ std::expected<void, storage::StorageError> PersistenceController::initialize()
     auto restored = catalog_->restore(snapshot.value());
     if (!restored.has_value()) {
         return std::unexpected(storage::StorageError {
-            .code = storage::StorageErrorCode::InvalidStorageFormat,
+            .code = storage::StorageErrorCode::StoreError,
             .message = std::move(restored.error().message),
+            .storage_store_code = storage::StorageStoreErrorCode::InvalidFormat,
         });
     }
 
@@ -85,8 +86,9 @@ std::expected<void, storage::StorageError> PersistenceController::initialize()
     auto indexes_rebuilt = index_manager_->rebuild_all(*catalog_, *storage_);
     if (!indexes_rebuilt.has_value()) {
         return std::unexpected(storage::StorageError {
-            .code = storage::StorageErrorCode::InvalidStorageState,
+            .code = storage::StorageErrorCode::StoreError,
             .message = std::move(indexes_rebuilt.error().message),
+            .storage_store_code = storage::StorageStoreErrorCode::InvalidStoreState,
         });
     }
 
@@ -96,7 +98,7 @@ std::expected<void, storage::StorageError> PersistenceController::initialize()
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_database(
     const physical_plan::PhysicalCreateDatabasePlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -132,7 +134,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_collection(
     const physical_plan::PhysicalCreateCollectionPlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -165,11 +167,6 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
     }
 
-    auto collection_storage = make_collection_storage(collection_schema.value());
-    if (!collection_storage.has_value()) {
-        return std::unexpected(from_storage_error(std::move(collection_storage.error()), plan.location()));
-    }
-
     auto saved = meta_store_.save(staged.snapshot());
     if (!saved.has_value()) {
         return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
@@ -180,11 +177,9 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
-    if (storage_->find_collection(collection_id) == nullptr) {
-        auto registered = storage_->register_collection(collection_id, std::move(collection_storage.value()));
-        if (!registered.has_value()) {
-            return std::unexpected(from_storage_error(std::move(registered.error()), plan.location()));
-        }
+    auto storage_created = storage_->create_collection(std::move(collection_schema.value()));
+    if (!storage_created.has_value()) {
+        return std::unexpected(from_storage_error(std::move(storage_created.error()), plan.location()));
     }
 
     return command_result(1);
@@ -193,7 +188,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_index(
     const physical_plan::PhysicalCreateIndexPlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -235,10 +230,9 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
     }
 
-    auto * collection_storage = storage_->find_collection(plan.collection_id());
-    if (collection_storage == nullptr) {
+    if (!storage_->contains_collection(plan.collection_id())) {
         return std::unexpected(executor::ExecutionError {
-            .code = executor::ExecutionErrorCode::CollectionStorageNotFound,
+            .code = executor::ExecutionErrorCode::CollectionNotFound,
             .location = plan.location(),
             .message = "Collection storage not found",
         });
@@ -268,7 +262,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_vector_index(
     const physical_plan::PhysicalCreateVectorIndexPlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -318,7 +312,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_database(
     const physical_plan::PhysicalDropDatabasePlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -355,7 +349,6 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     for (const auto collection_id : collection_ids) {
-        (void) RowLog {row_log_path(collection_id), collection_id, filesystem_}.mark_dropped();
     }
 
     auto committed = catalog_->restore(staged.snapshot());
@@ -364,7 +357,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     for (const auto collection_id : collection_ids) {
-        if (storage_->find_collection(collection_id) != nullptr) {
+        if (storage_->contains_collection(collection_id)) {
             (void) storage_->drop_collection(collection_id);
         }
         index_manager_->drop_collection_indexes(collection_id);
@@ -376,7 +369,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_collection(
     const physical_plan::PhysicalDropCollectionPlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -405,14 +398,12 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     const auto collection_id = plan.collection_id().value();
-    (void) RowLog {row_log_path(collection_id), collection_id, filesystem_}.mark_dropped();
-
     auto committed = catalog_->restore(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
-    if (storage_->find_collection(collection_id) != nullptr) {
+    if (storage_->contains_collection(collection_id)) {
         (void) storage_->drop_collection(collection_id);
     }
     index_manager_->drop_collection_indexes(collection_id);
@@ -423,7 +414,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_index(
     const physical_plan::PhysicalDropIndexPlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -471,7 +462,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
 std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_vector_index(
     const physical_plan::PhysicalDropVectorIndexPlan & plan,
     meta::MetaEngine &,
-    storage::StorageManager &,
+    storage::StorageEngine &,
     index::IndexManager &
 )
 {
@@ -508,20 +499,6 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(existing == nullptr ? 0 : 1);
 }
 
-std::filesystem::path PersistenceController::row_log_path(common::CollectionId collection_id) const
-{
-    return manifest_.collections_dir() / (std::to_string(collection_id) + ".rows");
-}
-
-std::expected<std::unique_ptr<PersistentCollectionStorage>, storage::StorageError>
-PersistenceController::make_collection_storage(const schema::CollectionSchema & collection_schema)
-{
-    return PersistentCollectionStorage::open(
-        collection_schema,
-        RowLog {row_log_path(collection_schema.collection_id()), collection_schema.collection_id(), filesystem_}
-    );
-}
-
 std::expected<void, storage::StorageError> PersistenceController::restore_storage_from_meta()
 {
     storage_->clear();
@@ -537,19 +514,15 @@ std::expected<void, storage::StorageError> PersistenceController::restore_storag
             auto collection_schema = schema::load_collection_schema(*catalog_, collection->id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(storage::StorageError {
-                    .code = storage::StorageErrorCode::InvalidStorageFormat,
+                    .code = storage::StorageErrorCode::StoreError,
                     .message = std::move(collection_schema.error().message),
+                    .storage_store_code = storage::StorageStoreErrorCode::InvalidFormat,
                 });
             }
 
-            auto collection_storage = make_collection_storage(collection_schema.value());
-            if (!collection_storage.has_value()) {
-                return std::unexpected(std::move(collection_storage.error()));
-            }
-
-            auto registered = storage_->register_collection(collection->id(), std::move(collection_storage.value()));
-            if (!registered.has_value()) {
-                return std::unexpected(std::move(registered.error()));
+            auto opened = storage_->open_collection(std::move(collection_schema.value()));
+            if (!opened.has_value()) {
+                return std::unexpected(std::move(opened.error()));
             }
         }
     }

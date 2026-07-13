@@ -18,6 +18,7 @@ enum class IndexErrorCode
     IndexAlreadyExists,     ///< 索引已存在
     IndexNotFound,          ///< 索引不存在
     InvalidIndexColumn,     ///< 索引列无效或不可索引
+    StorageError,           ///< 存储扫描失败
 };
 
 /**

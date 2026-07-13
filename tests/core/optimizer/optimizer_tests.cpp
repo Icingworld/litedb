@@ -19,7 +19,9 @@
 #include "core/logical_plan/statement/query/query_plan.hpp"
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
+#include "../storage/temporary_directory.hpp"
 
 #include <exception>
 #include <iostream>
@@ -57,8 +59,10 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
 
 struct Fixture
 {
+    litedb::tests::TemporaryDirectory storage_directory {"litedb-optimizer-tests"};
+    litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
-    StorageManager storage;
+    StorageEngine storage {storage_directory.path(), filesystem};
     litedb::core::index::IndexManager index_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};

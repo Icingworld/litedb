@@ -1,23 +1,22 @@
 #include "core/engine/database_instance.hpp"
 
 #include <stdexcept>
+#include <utility>
 
 namespace litedb::core::engine
 {
 
 DatabaseInstance::DatabaseInstance(DatabaseConfig config)
 {
-    if (config.data_dir.has_value()) {
-        persistence_ = std::make_unique<persistence::PersistenceController>(
-            config.data_dir.value(),
-            meta_,
-            storage_,
-            index_manager_
-        );
-        auto initialized = persistence_->initialize();
-        if (!initialized.has_value()) {
-            throw std::runtime_error(initialized.error().message);
-        }
+    persistence_ = std::make_unique<persistence::PersistenceController>(
+        std::move(config.data_dir),
+        meta_,
+        storage_,
+        index_manager_
+    );
+    auto initialized = persistence_->initialize();
+    if (!initialized.has_value()) {
+        throw std::runtime_error(initialized.error().message);
     }
 }
 
@@ -31,12 +30,12 @@ const meta::MetaEngine & DatabaseInstance::meta() const noexcept
     return meta_;
 }
 
-storage::StorageManager & DatabaseInstance::storage() noexcept
+storage::StorageEngine & DatabaseInstance::storage() noexcept
 {
     return storage_;
 }
 
-const storage::StorageManager & DatabaseInstance::storage() const noexcept
+const storage::StorageEngine & DatabaseInstance::storage() const noexcept
 {
     return storage_;
 }

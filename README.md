@@ -6,8 +6,8 @@ EN | [简体中文](docs/readme/README_zh_CN.md)
 v0.3.0 release adds a scalar function framework and built-in vector distance
 functions, enabling brute-force nearest-neighbor queries through `ORDER BY`.
 Earlier releases established a restartable database loop: parsing SQL, binding
-it against a catalog, planning and executing statements, optionally persisting
-catalog and row data through `--data-dir`, and maintaining in-memory scalar
+it against a catalog, planning and executing statements, persisting catalog
+and row data under the configured data directory, and maintaining in-memory scalar
 indexes for faster future query paths.
 
 This project is still early-stage. The current release is best viewed as a
@@ -19,9 +19,9 @@ storage engine.
 - SQL lexer, parser, AST, binder, logical planner, evaluator, executor, and
 engine facade.
 - In-memory catalog, schema model, and collection storage.
-- Optional single-node persistence enabled by `--data-dir`.
-- Persistent catalog snapshots and append-only row logs for `INSERT`, `UPDATE`,
-and `DELETE`.
+- Single-node persistent catalog and collection storage.
+- Persistent catalog snapshots and paged collection store files for `INSERT`,
+  `UPDATE`, and `DELETE`.
 - Startup recovery for persisted databases, collections, schemas, index
 definitions, scalar values, and `VECTOR(n)` values.
 - In-memory scalar indexes with `BTreeIndex` (range and equality lookup).
@@ -67,14 +67,14 @@ results against reference calculations.
 
 v0.3.0 intentionally keeps the scope small:
 
-- Persistence is opt-in. Without `--data-dir`, the server still runs in
-in-memory mode and restart loses catalog and records.
+- The example server uses `litedb-data` by default; `--data-dir` selects a
+  different persistent data directory.
 - No WAL, checksums, compaction, checkpointing, or crash-consistent commit
 protocol yet.
 - No transactions, MVCC, or isolation guarantees.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
 - Scalar indexes are in-memory only. Index definitions are persisted, but index
-data is rebuilt from row logs on startup rather than stored in separate index
+data is rebuilt from collection stores on startup rather than stored in separate index
 files.
 - Queries still use sequential scan plus filter. `IndexScan` and index-based
 query planning are not implemented yet.
@@ -119,8 +119,8 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
-The current suite covers parser, catalog, schema, scalar indexes, in-memory and
-persistent storage, binder, logical planner, evaluator, executor, engine,
+The current suite covers parser, catalog, schema, scalar indexes, persistent
+storage, binder, logical planner, evaluator, executor, engine,
 function registry, protocol, memory, and client/server behavior.
 
 ## Quick start
@@ -137,8 +137,8 @@ On Windows, the executable is usually:
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252
 ```
 
-By default the example server is in-memory only. To persist data across
-restarts, pass `--data-dir`:
+By default the example server persists data under `litedb-data`. To use a
+different location, pass `--data-dir`:
 
 ```sh
 ./build/examples/server/litedb_example_server --host 127.0.0.1 --port 5252 --data-dir ./data
@@ -151,7 +151,7 @@ On Windows:
 ```
 
 The data directory will contain `manifest.ldb`, `catalog.lcat`, and append-only
-row logs under `collections/`. The v0.3 storage format is experimental and does
+collection store files under `collections/`. The v0.3 storage format is experimental and does
 not promise compatibility with future versions.
 
 In another terminal, start the client CLI:
@@ -254,7 +254,7 @@ SQL text
   -> Binder
   -> Logical planner
   -> Executor
-  -> In-memory or persistent catalog/storage
+  -> Persistent catalog/storage
   -> Execution result
 ```
 
@@ -266,8 +266,8 @@ internal/src/core/catalog      Catalog interfaces and in-memory catalog
 internal/src/core/schema       Logical types, values, records, collections
 internal/src/core/function     Scalar function registry and built-in functions
 internal/src/core/index        In-memory scalar indexes and IndexManager
-internal/src/core/storage      Collection storage interface and in-memory storage
-internal/src/core/persistence  Persistent catalog snapshots and row logs
+internal/src/core/storage      Persistent collection storage engine and cursor
+internal/src/core/persistence  Manifest and persistent lifecycle coordination
 internal/src/core/binder       Name resolution and semantic binding
 internal/src/core/planner      Logical plan construction
 internal/src/core/evaluator    Expression evaluation

@@ -1,5 +1,6 @@
 #include "client/client.hpp"
 #include "server/server.hpp"
+#include "../core/storage/temporary_directory.hpp"
 
 #include <asio.hpp>
 
@@ -132,7 +133,8 @@ asio::awaitable<void> run_persistent_read_flow(Server & server, bool & passed, s
 void test_client_server_execute_sql()
 {
     asio::io_context io;
-    auto instance = std::make_shared<DatabaseInstance>();
+    litedb::tests::TemporaryDirectory data_directory {"litedb-client-server-tests"};
+    auto instance = std::make_shared<DatabaseInstance>(DatabaseConfig {.data_dir = data_directory.path()});
     Server server {
         io,
         ServerConfig {.host = "127.0.0.1", .port = 0},

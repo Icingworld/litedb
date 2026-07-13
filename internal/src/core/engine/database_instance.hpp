@@ -3,13 +3,12 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
-#include <optional>
 
 #include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
 #include "core/index/index_manager.hpp"
 #include "core/persistence/persistence_controller.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
 
 namespace litedb::core::engine
 {
@@ -19,7 +18,7 @@ namespace litedb::core::engine
  */
 struct DatabaseConfig
 {
-    std::optional<std::filesystem::path> data_dir;      ///< 数据目录
+    std::filesystem::path data_dir;      ///< 数据目录
 };
 
 /**
@@ -28,8 +27,6 @@ struct DatabaseConfig
 class DatabaseInstance
 {
 public:
-    DatabaseInstance() = default;
-
     explicit DatabaseInstance(DatabaseConfig config);
 
     DatabaseInstance(const DatabaseInstance &) = delete;
@@ -44,10 +41,10 @@ public:
     const meta::MetaEngine & meta() const noexcept;
 
     [[nodiscard]]
-    storage::StorageManager & storage() noexcept;
+    storage::StorageEngine & storage() noexcept;
 
     [[nodiscard]]
-    const storage::StorageManager & storage() const noexcept;
+    const storage::StorageEngine & storage() const noexcept;
 
     [[nodiscard]]
     index::IndexManager & index_manager() noexcept;
@@ -63,7 +60,7 @@ public:
 
 private:
     meta::MetaEngine meta_;                                         ///< 元数据
-    storage::StorageManager storage_;                                       ///< 存储管理器
+    storage::StorageEngine storage_;                                        ///< 存储引擎
     index::IndexManager index_manager_;                                     ///< 索引管理器
     std::unique_ptr<persistence::PersistenceController> persistence_;       ///< 持久化控制器
     std::mutex mutex_;                                                      ///< 互斥锁

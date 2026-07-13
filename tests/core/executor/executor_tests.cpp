@@ -12,7 +12,9 @@
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
-#include "core/storage/storage_manager.hpp"
+#include "core/storage/storage_engine.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
+#include "../storage/temporary_directory.hpp"
 
 #include <exception>
 #include <iostream>
@@ -106,7 +108,7 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
 
 ExecutionResult execute_ok(
     MetaEngine & catalog,
-    StorageManager & storage,
+    StorageEngine & storage,
     IndexManager & index_manager,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
@@ -123,7 +125,7 @@ ExecutionResult execute_ok(
 
 ExecutionError execute_error(
     MetaEngine & catalog,
-    StorageManager & storage,
+    StorageEngine & storage,
     IndexManager & index_manager,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
@@ -138,8 +140,10 @@ ExecutionError execute_error(
 
 struct Fixture
 {
+    litedb::tests::TemporaryDirectory storage_directory {"litedb-executor-tests"};
+    litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
-    StorageManager storage;
+    StorageEngine storage {storage_directory.path(), filesystem};
     IndexManager index_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -171,7 +175,7 @@ struct Fixture
         const auto * collection = catalog.find_collection(database_id, "users");
         require(collection != nullptr, "created collection missing");
         users_id = collection->id();
-        require(storage.find_collection(users_id) != nullptr, "created collection storage missing");
+        require(storage.contains_collection(users_id), "created collection storage missing");
     }
 };
 
@@ -332,10 +336,11 @@ void test_insert_select_update_and_delete()
     require(updated.rows.size() == 1, "updated SELECT row count mismatch");
     require(get_value<std::int32_t>(updated.rows[0].values[0]) == 19, "updated value mismatch");
 
-    auto before_delete_cursor = fixture.storage.find_collection(fixture.users_id)->scan();
+    auto before_delete_cursor = fixture.storage.scan(fixture.users_id);
+    require(before_delete_cursor.has_value(), "scan failed before delete");
     auto first_record = before_delete_cursor->next();
-    require(first_record.has_value(), "first record missing before delete");
-    const auto first_record_id = first_record->record_id;
+    require(first_record && first_record->has_value(), "first record missing before delete");
+    const auto first_record_id = (**first_record).record_id;
 
     auto del = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DELETE FROM users WHERE age < 18;", fixture.database_id);
     require(del.affected_rows == 1, "DELETE affected rows mismatch");
@@ -345,10 +350,11 @@ void test_insert_select_update_and_delete()
     require(get_value<std::int64_t>(remaining.rows[0].values[0]) == 1, "remaining first id mismatch");
     require(get_value<std::int64_t>(remaining.rows[1].values[0]) == 2, "remaining second id mismatch");
 
-    auto after_update_cursor = fixture.storage.find_collection(fixture.users_id)->scan();
+    auto after_update_cursor = fixture.storage.scan(fixture.users_id);
+    require(after_update_cursor.has_value(), "scan failed after update/delete");
     auto first_after_update = after_update_cursor->next();
-    require(first_after_update.has_value(), "first record missing after update/delete");
-    require(first_after_update->record_id == first_record_id, "UPDATE should preserve record id");
+    require(first_after_update && first_after_update->has_value(), "first record missing after update/delete");
+    require((**first_after_update).record_id == first_record_id, "UPDATE should preserve record id");
 }
 
 void test_order_by_keeps_null_last()
@@ -387,7 +393,7 @@ void test_drop_collection_removes_storage()
     auto dropped = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DROP COLLECTION users;", fixture.database_id);
     require(dropped.affected_rows == 1, "DROP COLLECTION affected rows mismatch");
     require(fixture.catalog.find_collection(fixture.users_id) == nullptr, "dropped collection should leave catalog");
-    require(fixture.storage.find_collection(fixture.users_id) == nullptr, "dropped collection should leave storage");
+    require(!fixture.storage.contains_collection(fixture.users_id), "dropped collection should leave storage");
 }
 
 void test_index_ddl_updates_catalog()
@@ -562,7 +568,7 @@ void test_error_mapping()
     require(dropped_storage.has_value(), "fixture storage drop failed");
 
     auto missing_storage = execute_error(fixture.catalog, fixture.storage, fixture.index_manager, "SELECT * FROM users;", fixture.database_id);
-    require(missing_storage.code == ExecutionErrorCode::CollectionStorageNotFound, "missing storage error mismatch");
+    require(missing_storage.code == ExecutionErrorCode::CollectionNotFound, "missing storage error mismatch");
 
     auto schema = load_collection_schema(fixture.catalog, fixture.users_id);
     require(schema.has_value(), "schema reload failed");
