@@ -12,7 +12,7 @@
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/meta/meta.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/index/scalar_index.hpp"
 #include "core/physical_plan/node/physical_filter.hpp"
 #include "core/physical_plan/node/physical_index_scan.hpp"
@@ -289,7 +289,7 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 );
 
 void append_pipeline_row(
@@ -388,7 +388,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
     const PhysicalIndexScan & scan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
     auto collection_schema = load_schema(catalog, scan.collection_id(), scan.location());
@@ -401,7 +401,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    auto index_view = index_manager.find_index(scan.index_id());
+    auto index_view = index_engine.find_index(scan.index_id());
     if (!index_view.has_value()) {
         return std::unexpected(make_error(
             ExecutionErrorCode::IndexError,
@@ -419,13 +419,13 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
                 "Physical index equality lookup is missing its key"
             ));
         }
-        record_ids = index_manager.find_equal(scan.index_id(), scan.lookup().lower->key);
+        record_ids = index_engine.find_equal(scan.index_id(), scan.lookup().lower->key);
     } else {
         auto range = index_range_from_lookup(scan);
         if (!range.has_value()) {
             return std::unexpected(std::move(range.error()));
         }
-        record_ids = index_manager.scan_range(scan.index_id(), range.value());
+        record_ids = index_engine.scan_range(scan.index_id(), range.value());
     }
     if (!record_ids.has_value()) {
         return std::unexpected(from_index_error(std::move(record_ids.error()), scan.location()));
@@ -449,10 +449,10 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
     const PhysicalFilter & filter,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
-    auto input = execute_physical(filter.child(), catalog, storage, index_manager);
+    auto input = execute_physical(filter.child(), catalog, storage, index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -498,10 +498,10 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
     const PhysicalProjection & projection,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
-    auto input = execute_physical(projection.child(), catalog, storage, index_manager);
+    auto input = execute_physical(projection.child(), catalog, storage, index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -597,10 +597,10 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
     const PhysicalSort & order_by,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
-    auto input = execute_physical(order_by.child(), catalog, storage, index_manager);
+    auto input = execute_physical(order_by.child(), catalog, storage, index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -668,10 +668,10 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
     const PhysicalLimit & limit,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
-    auto input = execute_physical(limit.child(), catalog, storage, index_manager);
+    auto input = execute_physical(limit.child(), catalog, storage, index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -699,22 +699,22 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
     switch (node.kind()) {
     case PhysicalPlanNodeKind::SeqScan:
         return execute_scan(static_cast<const PhysicalSeqScan &>(node), catalog, storage);
     case PhysicalPlanNodeKind::IndexScan:
-        return execute_index_scan(static_cast<const PhysicalIndexScan &>(node), catalog, storage, index_manager);
+        return execute_index_scan(static_cast<const PhysicalIndexScan &>(node), catalog, storage, index_engine);
     case PhysicalPlanNodeKind::Filter:
-        return execute_filter(static_cast<const PhysicalFilter &>(node), catalog, storage, index_manager);
+        return execute_filter(static_cast<const PhysicalFilter &>(node), catalog, storage, index_engine);
     case PhysicalPlanNodeKind::Projection:
-        return execute_projection(static_cast<const PhysicalProjection &>(node), catalog, storage, index_manager);
+        return execute_projection(static_cast<const PhysicalProjection &>(node), catalog, storage, index_engine);
     case PhysicalPlanNodeKind::Sort:
-        return execute_order_by(static_cast<const PhysicalSort &>(node), catalog, storage, index_manager);
+        return execute_order_by(static_cast<const PhysicalSort &>(node), catalog, storage, index_engine);
     case PhysicalPlanNodeKind::Limit:
-        return execute_limit(static_cast<const PhysicalLimit &>(node), catalog, storage, index_manager);
+        return execute_limit(static_cast<const PhysicalLimit &>(node), catalog, storage, index_engine);
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::InvalidPlan, node.location(), "Unknown physical plan node"));
@@ -725,10 +725,10 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
     const PhysicalQueryPlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
-    auto pipeline = execute_physical(plan.root(), catalog, storage, index_manager);
+    auto pipeline = execute_physical(plan.root(), catalog, storage, index_engine);
     if (!pipeline.has_value()) {
         return std::unexpected(std::move(pipeline.error()));
     }
@@ -756,7 +756,7 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const PhysicalUsePlan
 std::expected<ExecutionResult, ExecutionError> execute_insert(
     const PhysicalInsertPlan & plan,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
     auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
@@ -776,7 +776,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         record_data.values.push_back(std::move(value.value()));
     }
 
-    auto index_bindings = index_manager.prepare_insert(plan.collection_id(), record_data);
+    auto index_bindings = index_engine.prepare_insert(plan.collection_id(), record_data);
     if (!index_bindings.has_value()) {
         return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
     }
@@ -786,7 +786,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(from_storage_error(std::move(inserted.error()), plan.location()));
     }
 
-    auto indexed = index_manager.on_insert(inserted.value(), index_bindings.value());
+    auto indexed = index_engine.on_insert(inserted.value(), index_bindings.value());
     if (!indexed.has_value()) {
         (void) storage.erase(plan.collection_id(), inserted.value());
         return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
@@ -800,10 +800,10 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
     const PhysicalDeletePlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
-    auto rows = execute_physical(plan.input(), catalog, storage, index_manager);
+    auto rows = execute_physical(plan.input(), catalog, storage, index_engine);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -815,7 +815,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
 
     std::size_t affected_rows = 0;
     for (const auto & row : rows->rows) {
-        auto index_bindings = index_manager.prepare_delete(plan.collection_id(), row.source_record.data);
+        auto index_bindings = index_engine.prepare_delete(plan.collection_id(), row.source_record.data);
         if (!index_bindings.has_value()) {
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
@@ -825,7 +825,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
             return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
         }
 
-        auto indexed = index_manager.on_delete(row.source_record.record_id, index_bindings.value());
+        auto indexed = index_engine.on_delete(row.source_record.record_id, index_bindings.value());
         if (!indexed.has_value()) {
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
         }
@@ -853,7 +853,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
     const PhysicalUpdatePlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -861,7 +861,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         return std::unexpected(std::move(collection_schema.error()));
     }
 
-    auto rows = execute_physical(plan.input(), catalog, storage, index_manager);
+    auto rows = execute_physical(plan.input(), catalog, storage, index_engine);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -893,7 +893,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
             record_data.values[ordinal.value()] = std::move(value.value());
         }
 
-        auto index_bindings = index_manager.prepare_update(plan.collection_id(), row.source_record.data, record_data);
+        auto index_bindings = index_engine.prepare_update(plan.collection_id(), row.source_record.data, record_data);
         if (!index_bindings.has_value()) {
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
@@ -903,7 +903,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
             return std::unexpected(from_storage_error(std::move(updated.error()), plan.location()));
         }
 
-        auto indexed = index_manager.on_update(row.source_record.record_id, index_bindings.value());
+        auto indexed = index_engine.on_update(row.source_record.record_id, index_bindings.value());
         if (!indexed.has_value()) {
             (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
@@ -1071,11 +1071,11 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 Executor::Executor(
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexManager & index_manager
+    index::IndexEngine & index_engine
 ) noexcept
     : catalog_(catalog)
     , storage_(storage)
-    , index_manager_(index_manager)
+    , index_engine_(index_engine)
 {
 }
 
@@ -1104,13 +1104,13 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const PhysicalS
     case PhysicalStatementPlanKind::DescribeCollection:
         return execute_describe_collection(static_cast<const PhysicalDescribeCollectionPlan &>(plan), catalog_);
     case PhysicalStatementPlanKind::Insert:
-        return execute_insert(static_cast<const PhysicalInsertPlan &>(plan), storage_, index_manager_);
+        return execute_insert(static_cast<const PhysicalInsertPlan &>(plan), storage_, index_engine_);
     case PhysicalStatementPlanKind::Update:
-        return execute_update(static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_manager_);
+        return execute_update(static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_);
     case PhysicalStatementPlanKind::Delete:
-        return execute_delete(static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_manager_);
+        return execute_delete(static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_);
     case PhysicalStatementPlanKind::Query:
-        return execute_query(static_cast<const PhysicalQueryPlan &>(plan), catalog_, storage_, index_manager_);
+        return execute_query(static_cast<const PhysicalQueryPlan &>(plan), catalog_, storage_, index_engine_);
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::UnsupportedStatement, internal_location, "Unsupported statement"));

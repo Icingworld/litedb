@@ -17,7 +17,7 @@
 
 ## 2. 当前索引模块
 
-`internal/src/core/index` 提供标量索引键、索引能力接口和当前的纯内存索引实现。数据库级生命周期与自动维护目前仍由 `IndexManager` 负责。
+`internal/src/core/index` 提供标量索引键、纯内存索引实现、单索引 `IndexStore` 和数据库级 `IndexEngine`。一个 `IndexStore` 对应一个索引实例，`IndexEngine` 负责索引生命周期与自动维护。
 
 核心结构：
 
@@ -33,6 +33,9 @@ ScalarIndexKey
 
 IndexRange
 IndexError
+
+IndexStore -> ScalarIndex backend
+IndexEngine -> [IndexStore, IndexStore, ...]
 ```
 
 索引内部存储结构：
@@ -99,7 +102,7 @@ scan_range
 
 它提供未来 B+Tree 需要的外部能力：有序 key、等值查询、范围查询。
 
-`IndexManager` 记录每个索引列的 `LogicalType`，写入、更新、删除和查询入口都会校验键的精确物理类型，不匹配时返回 `KeyTypeMismatch`。它对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不再通过索引视图暴露内部 `ScalarIndex` 引用。Hash 索引收到范围查询时返回 `UnsupportedRangeScan`。这个边界将作为后续拆分 `IndexEngine + IndexStore` 的迁移基础。
+`IndexStore` 记录索引列的 `LogicalType`，写入、删除和查询入口都会校验键的精确物理类型，并在单个索引边界内维护唯一性约束。`IndexEngine` 对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不暴露内部 `ScalarIndex` 引用。Hash 索引收到范围查询时返回 `UnsupportedRangeScan`。
 
 后续如果实现数据库级索引，推荐最终实现成 B+Tree，而不是传统 B 树：
 
@@ -173,18 +176,23 @@ std::expected<schema::Record, StorageError> get(common::RecordId record_id) cons
 
 Storage v2 由 `StorageEngine` 统一提供 `get/scan/insert/update/erase`，索引层不再接触 collection-level Store。
 
-### 4.3 当前 IndexManager 边界
+### 4.3 当前 IndexEngine 与 IndexStore 边界
 
 不要把索引维护逻辑塞进 `BTreeIndex`，也不要让 executor 手动维护每个索引。
 
-当前 `IndexManager`：
+当前结构：
 
 ```text
-IndexManager
-  collection_id -> [index instances]
+IndexEngine
+  collection_id -> [index ids]
+  index_id -> IndexStore
+
+IndexStore
+  IndexDescriptor
+  ScalarIndex backend
 ```
 
-职责：
+`IndexEngine` 职责：
 
 ```cpp
 create_index(collection_schema, existing_records)
@@ -194,6 +202,8 @@ on_update(record_id, old_record_data, new_record_data)
 on_delete(record_id, old_record_data)
 find_indexes(collection_id)
 ```
+
+`IndexStore` 只负责一个索引实例的键类型校验、唯一性约束、增删、等值查询和范围扫描，不依赖 `MetaEngine` 或 `StorageEngine`。
 
 `create_index` 会从已有 records 全量构建索引：
 
@@ -362,10 +372,12 @@ B+Tree 删除是复杂点。可以分阶段：
   HashIndex 提供等值查询
   BTreeIndex 使用 map 提供等值和范围查询
 
-下一步:
+已完成:
   IndexManager 拆分为 IndexEngine + IndexStore
-  明确一个 IndexStore 对应一个索引实例
-  内存 Hash/Ordered 实现成为具体 Store 后端
+  一个 IndexStore 对应一个索引实例
+  IndexStore 封装内存 Hash/Ordered 后端及单索引约束
+
+下一步:
   增加稳定的 ScalarIndexKey 编解码契约
 
 后续:

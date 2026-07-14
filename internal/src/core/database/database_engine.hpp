@@ -11,7 +11,7 @@
 #include "core/executor/execution_result.hpp"
 #include "core/filesystem/filesystem.hpp"
 #include "core/index/index_error.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/meta/meta_store.hpp"
 #include "core/schema/schema_error.hpp"
@@ -96,7 +96,7 @@ public:
      * @return 索引管理器
      */
     [[nodiscard]]
-    const index::IndexManager & index_manager() const noexcept;
+    const index::IndexEngine & index_engine() const noexcept;
 
 private:
     friend class Session;
@@ -261,7 +261,7 @@ private:
     meta::MetaStore meta_store_;           ///< meta 存储
     meta::MetaEngine meta_;                ///< meta 引擎
     storage::StorageEngine storage_;       ///< 存储引擎
-    index::IndexManager index_manager_;    ///< 索引管理器
+    index::IndexEngine index_engine_;      ///< 索引引擎
     std::mutex mutex_;                     ///< 互斥锁
 };
 

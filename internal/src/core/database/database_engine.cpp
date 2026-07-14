@@ -108,9 +108,9 @@ const meta::MetaEngine & DatabaseEngine::meta() const noexcept
     return meta_;
 }
 
-const index::IndexManager & DatabaseEngine::index_manager() const noexcept
+const index::IndexEngine & DatabaseEngine::index_engine() const noexcept
 {
-    return index_manager_;
+    return index_engine_;
 }
 
 std::expected<void, DatabaseError> DatabaseEngine::initialize()
@@ -135,7 +135,7 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(storage_restored.error())));
     }
 
-    auto indexes_rebuilt = index_manager_.rebuild_all(meta_, storage_);
+    auto indexes_rebuilt = index_engine_.rebuild_all(meta_, storage_);
     if (!indexes_rebuilt.has_value()) {
         return std::unexpected(to_database_error(std::move(indexes_rebuilt.error())));
     }
@@ -167,7 +167,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     case PhysicalStatementPlanKind::DropVectorIndex:
         return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
     default:
-        executor::Executor executor {meta_, storage_, index_manager_};
+        executor::Executor executor {meta_, storage_, index_engine_};
         return executor.execute(plan);
     }
 }
@@ -296,7 +296,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         });
     }
 
-    index::IndexManager rebuilt_indexes;
+    index::IndexEngine rebuilt_indexes;
     auto rebuilt = rebuilt_indexes.rebuild_all(staged, storage_);
     if (!rebuilt.has_value()) {
         return std::unexpected(from_index_error(std::move(rebuilt.error()), plan.location()));
@@ -307,7 +307,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
-    index_manager_ = std::move(rebuilt_indexes);
+    index_engine_ = std::move(rebuilt_indexes);
 
     return command_result(1);
 }
@@ -394,7 +394,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         if (storage_.contains_collection(collection_id)) {
             (void) storage_.drop_collection(collection_id);
         }
-        index_manager_.drop_collection_indexes(collection_id);
+        index_engine_.drop_collection_indexes(collection_id);
     }
 
     return command_result(1);
@@ -432,7 +432,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     if (storage_.contains_collection(collection_id)) {
         (void) storage_.drop_collection(collection_id);
     }
-    index_manager_.drop_collection_indexes(collection_id);
+    index_engine_.drop_collection_indexes(collection_id);
 
     return command_result(1);
 }
@@ -468,7 +468,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
 
     if (index_id.has_value()) {
-        auto dropped_index = index_manager_.drop_index(index_id.value());
+        auto dropped_index = index_engine_.drop_index(index_id.value());
         if (!dropped_index.has_value() && dropped_index.error().code != index::IndexErrorCode::IndexNotFound) {
             return std::unexpected(from_index_error(std::move(dropped_index.error()), plan.location()));
         }

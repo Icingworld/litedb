@@ -1,7 +1,8 @@
 set(INDEX_SOURCES
     btree_index.cpp
     hash_index.cpp
-    index_manager.cpp
+    index_engine.cpp
+    index_store.cpp
     scalar_index.cpp
     scalar_index_key.cpp
 )

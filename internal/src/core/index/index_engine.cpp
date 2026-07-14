@@ -1,4 +1,4 @@
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -15,6 +15,9 @@ namespace litedb::core::index
 namespace
 {
 
+/**
+ * @brief 创建索引错误
+ */
 IndexError make_error(IndexErrorCode code, std::string message)
 {
     return IndexError {code, std::move(message)};
@@ -22,7 +25,7 @@ IndexError make_error(IndexErrorCode code, std::string message)
 
 } // namespace
 
-std::unique_ptr<ScalarIndex> IndexManager::make_index(meta::entry::IndexKind index_kind)
+std::unique_ptr<ScalarIndex> IndexEngine::make_backend(meta::entry::IndexKind index_kind)
 {
     switch (index_kind) {
     case meta::entry::IndexKind::Hash:
@@ -33,7 +36,7 @@ std::unique_ptr<ScalarIndex> IndexManager::make_index(meta::entry::IndexKind ind
     return nullptr;
 }
 
-std::expected<std::optional<ScalarIndexKey>, IndexError> IndexManager::make_key_from_record(
+std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_from_record(
     const schema::RecordData & record_data,
     std::size_t column_ordinal,
     const common::LogicalType & key_type
@@ -61,76 +64,44 @@ std::expected<std::optional<ScalarIndexKey>, IndexError> IndexManager::make_key_
     return std::optional<ScalarIndexKey>(std::move(key.value()));
 }
 
-std::expected<void, IndexError> IndexManager::validate_key_type(
-    const ManagedIndex & managed_index,
-    const ScalarIndexKey & key
-)
+ManagedIndexView IndexEngine::make_view(const IndexStore & store) noexcept
 {
-    if (!key.value().matches_type(managed_index.key_type)) {
-        return std::unexpected(make_error(
-            IndexErrorCode::KeyTypeMismatch,
-            "Index key type does not match indexed column type"
-        ));
-    }
-    return {};
-}
-
-std::expected<void, IndexError> IndexManager::validate_unique_key(
-    const ManagedIndex & managed_index,
-    const ScalarIndexKey & key
-)
-{
-    if (!managed_index.unique) {
-        return {};
-    }
-
-    auto existing = managed_index.index->find_equal(key);
-    if (!existing.has_value()) {
-        return std::unexpected(std::move(existing.error()));
-    }
-    if (!existing->empty()) {
-        return std::unexpected(make_error(IndexErrorCode::DuplicateKey, "Unique index key already exists"));
-    }
-    return {};
-}
-
-ManagedIndexView IndexManager::make_view(const ManagedIndex & managed_index) const noexcept
-{
+    const auto & descriptor = store.descriptor();
     return ManagedIndexView {
-        .index_id = managed_index.index_id,
-        .collection_id = managed_index.collection_id,
-        .column_id = managed_index.column_id,
-        .column_ordinal = managed_index.column_ordinal,
-        .key_type = managed_index.key_type,
-        .kind = managed_index.kind,
-        .unique = managed_index.unique,
-        .entry_count = managed_index.index->size(),
+        .index_id = descriptor.index_id,
+        .collection_id = descriptor.collection_id,
+        .column_id = descriptor.column_id,
+        .column_ordinal = descriptor.column_ordinal,
+        .key_type = descriptor.key_type,
+        .kind = descriptor.kind,
+        .unique = descriptor.unique,
+        .entry_count = store.size(),
     };
 }
 
-const IndexManager::ManagedIndex * IndexManager::find_managed_index(common::IndexId index_id) const noexcept
+const IndexStore * IndexEngine::find_store(common::IndexId index_id) const noexcept
 {
-    const auto it = indexes_by_id_.find(index_id);
-    if (it == indexes_by_id_.end()) {
+    const auto it = stores_by_id_.find(index_id);
+    if (it == stores_by_id_.end()) {
         return nullptr;
     }
     return &it->second;
 }
 
-IndexManager::ManagedIndex * IndexManager::find_managed_index(common::IndexId index_id) noexcept
+IndexStore * IndexEngine::find_store(common::IndexId index_id) noexcept
 {
-    const auto it = indexes_by_id_.find(index_id);
-    if (it == indexes_by_id_.end()) {
+    const auto it = stores_by_id_.find(index_id);
+    if (it == stores_by_id_.end()) {
         return nullptr;
     }
     return &it->second;
 }
 
-std::vector<const IndexManager::ManagedIndex *> IndexManager::list_managed_indexes(
+std::vector<const IndexStore *> IndexEngine::list_stores(
     common::CollectionId collection_id
 ) const
 {
-    std::vector<const ManagedIndex *> indexes;
+    std::vector<const IndexStore *> indexes;
     const auto it = indexes_by_collection_.find(collection_id);
     if (it == indexes_by_collection_.end()) {
         return indexes;
@@ -138,26 +109,27 @@ std::vector<const IndexManager::ManagedIndex *> IndexManager::list_managed_index
 
     indexes.reserve(it->second.size());
     for (const auto index_id : it->second) {
-        if (const auto * managed_index = find_managed_index(index_id); managed_index != nullptr) {
-            indexes.push_back(managed_index);
+        if (const auto * store = find_store(index_id); store != nullptr) {
+            indexes.push_back(store);
         }
     }
     return indexes;
 }
 
-std::expected<void, IndexError> IndexManager::build_index_from_storage(
-    ManagedIndex & managed_index,
+std::expected<void, IndexError> IndexEngine::build_index_from_storage(
+    IndexStore & store,
     const storage::StorageEngine & storage
 ) const
 {
-    auto cursor = storage.scan(managed_index.collection_id);
+    const auto & descriptor = store.descriptor();
+    auto cursor = storage.scan(descriptor.collection_id);
     if (!cursor) return std::unexpected(make_error(IndexErrorCode::StorageError, cursor.error().message));
     while (true) {
         auto next = cursor->next();
         if (!next) return std::unexpected(make_error(IndexErrorCode::StorageError, next.error().message));
         if (!*next) break;
         const auto & record = **next;
-        auto key = make_key_from_record(record.data, managed_index.column_ordinal, managed_index.key_type);
+        auto key = make_key_from_record(record.data, descriptor.column_ordinal, descriptor.key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -165,12 +137,7 @@ std::expected<void, IndexError> IndexManager::build_index_from_storage(
             continue;
         }
 
-        auto unique = validate_unique_key(managed_index, key->value());
-        if (!unique.has_value()) {
-            return std::unexpected(std::move(unique.error()));
-        }
-
-        auto inserted = managed_index.index->insert(key->value(), record.record_id);
+        auto inserted = store.insert(key->value(), record.record_id);
         if (!inserted.has_value()) {
             return std::unexpected(std::move(inserted.error()));
         }
@@ -178,13 +145,13 @@ std::expected<void, IndexError> IndexManager::build_index_from_storage(
     return {};
 }
 
-std::expected<void, IndexError> IndexManager::create_index(
+std::expected<void, IndexError> IndexEngine::create_index(
     const meta::entry::IndexEntry & index_entry,
     const schema::CollectionSchema & collection_schema,
     const storage::StorageEngine & storage
 )
 {
-    if (find_managed_index(index_entry.id()) != nullptr) {
+    if (find_store(index_entry.id()) != nullptr) {
         return std::unexpected(make_error(IndexErrorCode::IndexAlreadyExists, "Index already exists"));
     }
 
@@ -200,12 +167,12 @@ std::expected<void, IndexError> IndexManager::create_index(
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "VECTOR column cannot use scalar index"));
     }
 
-    auto index = make_index(index_entry.kind());
+    auto index = make_backend(index_entry.kind());
     if (index == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
     }
 
-    ManagedIndex managed_index {
+    IndexStore store {IndexDescriptor {
         .index_id = index_entry.id(),
         .collection_id = index_entry.collection_id(),
         .column_id = column_id.value(),
@@ -213,30 +180,29 @@ std::expected<void, IndexError> IndexManager::create_index(
         .key_type = column->type(),
         .kind = index->kind(),
         .unique = index_entry.unique(),
-        .index = std::move(index),
-    };
+    }, std::move(index)};
 
-    auto built = build_index_from_storage(managed_index, storage);
+    auto built = build_index_from_storage(store, storage);
     if (!built.has_value()) {
         return std::unexpected(std::move(built.error()));
     }
 
-    const auto index_id = managed_index.index_id;
-    const auto collection_id = managed_index.collection_id;
-    indexes_by_id_.emplace(index_id, std::move(managed_index));
+    const auto index_id = store.descriptor().index_id;
+    const auto collection_id = store.descriptor().collection_id;
+    stores_by_id_.emplace(index_id, std::move(store));
     indexes_by_collection_[collection_id].push_back(index_id);
     return {};
 }
 
-std::expected<void, IndexError> IndexManager::drop_index(common::IndexId index_id)
+std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id)
 {
-    const auto it = indexes_by_id_.find(index_id);
-    if (it == indexes_by_id_.end()) {
+    const auto it = stores_by_id_.find(index_id);
+    if (it == stores_by_id_.end()) {
         return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
     }
 
-    const auto collection_id = it->second.collection_id;
-    indexes_by_id_.erase(it);
+    const auto collection_id = it->second.descriptor().collection_id;
+    stores_by_id_.erase(it);
 
     const auto collection_it = indexes_by_collection_.find(collection_id);
     if (collection_it != indexes_by_collection_.end()) {
@@ -249,7 +215,7 @@ std::expected<void, IndexError> IndexManager::drop_index(common::IndexId index_i
     return {};
 }
 
-void IndexManager::drop_collection_indexes(common::CollectionId collection_id)
+void IndexEngine::drop_collection_indexes(common::CollectionId collection_id)
 {
     const auto it = indexes_by_collection_.find(collection_id);
     if (it == indexes_by_collection_.end()) {
@@ -257,17 +223,17 @@ void IndexManager::drop_collection_indexes(common::CollectionId collection_id)
     }
 
     for (const auto index_id : it->second) {
-        indexes_by_id_.erase(index_id);
+        stores_by_id_.erase(index_id);
     }
     indexes_by_collection_.erase(it);
 }
 
-std::expected<void, IndexError> IndexManager::rebuild_all(
+std::expected<void, IndexError> IndexEngine::rebuild_all(
     const meta::MetaEngine & catalog,
     const storage::StorageEngine & storage
 )
 {
-    IndexManager rebuilt;
+    IndexEngine rebuilt;
 
     for (const auto * database : catalog.list_databases()) {
         if (database == nullptr) {
@@ -308,14 +274,14 @@ std::expected<void, IndexError> IndexManager::rebuild_all(
     return {};
 }
 
-std::expected<IndexKeyBindings, IndexError> IndexManager::prepare_insert(
+std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_insert(
     common::CollectionId collection_id,
     const schema::RecordData & record_data
 ) const
 {
     IndexKeyBindings bindings;
-    for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        auto key = make_key_from_record(record_data, managed_index->column_ordinal, managed_index->key_type);
+    for (const auto * store : list_stores(collection_id)) {
+        auto key = make_key_from_record(record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -323,20 +289,20 @@ std::expected<IndexKeyBindings, IndexError> IndexManager::prepare_insert(
             continue;
         }
 
-        auto unique = validate_unique_key(*managed_index, key->value());
+        auto unique = store->validate_insert(key->value());
         if (!unique.has_value()) {
             return std::unexpected(std::move(unique.error()));
         }
 
         bindings.push_back(IndexKeyBinding {
-            .index_id = managed_index->index_id,
+            .index_id = store->descriptor().index_id,
             .key = std::move(key->value()),
         });
     }
     return bindings;
 }
 
-std::expected<void, IndexError> IndexManager::on_insert(
+std::expected<void, IndexError> IndexEngine::on_insert(
     common::RecordId record_id,
     const IndexKeyBindings & bindings
 )
@@ -345,20 +311,15 @@ std::expected<void, IndexError> IndexManager::on_insert(
     inserted_bindings.reserve(bindings.size());
 
     for (const auto & binding : bindings) {
-        auto * managed_index = find_managed_index(binding.index_id);
-        if (managed_index == nullptr) {
+        auto * store = find_store(binding.index_id);
+        if (store == nullptr) {
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
-        auto valid_key = validate_key_type(*managed_index, binding.key);
-        if (!valid_key.has_value()) {
-            return std::unexpected(std::move(valid_key.error()));
-        }
-
-        auto inserted = managed_index->index->insert(binding.key, record_id);
+        auto inserted = store->insert(binding.key, record_id);
         if (!inserted.has_value()) {
             for (auto it = inserted_bindings.rbegin(); it != inserted_bindings.rend(); ++it) {
-                if (auto * rollback_index = find_managed_index(it->index_id); rollback_index != nullptr) {
-                    (void) rollback_index->index->erase(it->key, record_id);
+                if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
+                    (void) rollback_index->erase(it->key, record_id);
                 }
             }
             return std::unexpected(std::move(inserted.error()));
@@ -368,26 +329,26 @@ std::expected<void, IndexError> IndexManager::on_insert(
     return {};
 }
 
-std::expected<IndexUpdateBindings, IndexError> IndexManager::prepare_update(
+std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
     common::CollectionId collection_id,
     const schema::RecordData & old_record_data,
     const schema::RecordData & new_record_data
 ) const
 {
     IndexUpdateBindings bindings;
-    for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        auto old_key = make_key_from_record(old_record_data, managed_index->column_ordinal, managed_index->key_type);
+    for (const auto * store : list_stores(collection_id)) {
+        auto old_key = make_key_from_record(old_record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
         if (!old_key.has_value()) {
             return std::unexpected(std::move(old_key.error()));
         }
 
-        auto new_key = make_key_from_record(new_record_data, managed_index->column_ordinal, managed_index->key_type);
+        auto new_key = make_key_from_record(new_record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
         if (!new_key.has_value()) {
             return std::unexpected(std::move(new_key.error()));
         }
 
         IndexUpdateBinding binding {
-            .index_id = managed_index->index_id,
+            .index_id = store->descriptor().index_id,
             .old_key = std::move(old_key.value()),
             .new_key = std::move(new_key.value()),
         };
@@ -401,7 +362,7 @@ std::expected<IndexUpdateBindings, IndexError> IndexManager::prepare_update(
         }
 
         if (binding.key_changed && binding.new_key.has_value()) {
-            auto unique = validate_unique_key(*managed_index, binding.new_key.value());
+            auto unique = store->validate_insert(binding.new_key.value());
             if (!unique.has_value()) {
                 return std::unexpected(std::move(unique.error()));
             }
@@ -412,7 +373,7 @@ std::expected<IndexUpdateBindings, IndexError> IndexManager::prepare_update(
     return bindings;
 }
 
-std::expected<void, IndexError> IndexManager::on_update(
+std::expected<void, IndexError> IndexEngine::on_update(
     common::RecordId record_id,
     const IndexUpdateBindings & bindings
 )
@@ -420,8 +381,8 @@ std::expected<void, IndexError> IndexManager::on_update(
     std::vector<IndexUpdateBinding> applied_bindings;
 
     for (const auto & binding : bindings) {
-        auto * managed_index = find_managed_index(binding.index_id);
-        if (managed_index == nullptr) {
+        auto * store = find_store(binding.index_id);
+        if (store == nullptr) {
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
 
@@ -429,29 +390,16 @@ std::expected<void, IndexError> IndexManager::on_update(
             continue;
         }
 
-        if (binding.old_key.has_value()) {
-            auto valid_key = validate_key_type(*managed_index, binding.old_key.value());
-            if (!valid_key.has_value()) {
-                return std::unexpected(std::move(valid_key.error()));
-            }
-        }
         if (binding.new_key.has_value()) {
-            auto valid_key = validate_key_type(*managed_index, binding.new_key.value());
-            if (!valid_key.has_value()) {
-                return std::unexpected(std::move(valid_key.error()));
-            }
-        }
-
-        if (binding.new_key.has_value()) {
-            auto inserted = managed_index->index->insert(binding.new_key.value(), record_id);
+            auto inserted = store->insert(binding.new_key.value(), record_id);
             if (!inserted.has_value()) {
                 for (auto it = applied_bindings.rbegin(); it != applied_bindings.rend(); ++it) {
-                    if (auto * rollback_index = find_managed_index(it->index_id); rollback_index != nullptr) {
+                    if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
                         if (it->new_key.has_value()) {
-                            (void) rollback_index->index->erase(it->new_key.value(), record_id);
+                            (void) rollback_index->erase(it->new_key.value(), record_id);
                         }
                         if (it->old_key.has_value()) {
-                            (void) rollback_index->index->insert(it->old_key.value(), record_id);
+                            (void) rollback_index->insert(it->old_key.value(), record_id);
                         }
                     }
                 }
@@ -460,18 +408,18 @@ std::expected<void, IndexError> IndexManager::on_update(
         }
 
         if (binding.old_key.has_value()) {
-            auto erased = managed_index->index->erase(binding.old_key.value(), record_id);
+            auto erased = store->erase(binding.old_key.value(), record_id);
             if (!erased.has_value()) {
                 if (binding.new_key.has_value()) {
-                    (void) managed_index->index->erase(binding.new_key.value(), record_id);
+                    (void) store->erase(binding.new_key.value(), record_id);
                 }
                 for (auto it = applied_bindings.rbegin(); it != applied_bindings.rend(); ++it) {
-                    if (auto * rollback_index = find_managed_index(it->index_id); rollback_index != nullptr) {
+                    if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
                         if (it->new_key.has_value()) {
-                            (void) rollback_index->index->erase(it->new_key.value(), record_id);
+                            (void) rollback_index->erase(it->new_key.value(), record_id);
                         }
                         if (it->old_key.has_value()) {
-                            (void) rollback_index->index->insert(it->old_key.value(), record_id);
+                            (void) rollback_index->insert(it->old_key.value(), record_id);
                         }
                     }
                 }
@@ -484,14 +432,14 @@ std::expected<void, IndexError> IndexManager::on_update(
     return {};
 }
 
-std::expected<IndexKeyBindings, IndexError> IndexManager::prepare_delete(
+std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_delete(
     common::CollectionId collection_id,
     const schema::RecordData & old_record_data
 ) const
 {
     IndexKeyBindings bindings;
-    for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        auto key = make_key_from_record(old_record_data, managed_index->column_ordinal, managed_index->key_type);
+    for (const auto * store : list_stores(collection_id)) {
+        auto key = make_key_from_record(old_record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -500,14 +448,14 @@ std::expected<IndexKeyBindings, IndexError> IndexManager::prepare_delete(
         }
 
         bindings.push_back(IndexKeyBinding {
-            .index_id = managed_index->index_id,
+            .index_id = store->descriptor().index_id,
             .key = std::move(key->value()),
         });
     }
     return bindings;
 }
 
-std::expected<void, IndexError> IndexManager::on_delete(
+std::expected<void, IndexError> IndexEngine::on_delete(
     common::RecordId record_id,
     const IndexKeyBindings & bindings
 )
@@ -516,20 +464,15 @@ std::expected<void, IndexError> IndexManager::on_delete(
     erased_bindings.reserve(bindings.size());
 
     for (const auto & binding : bindings) {
-        auto * managed_index = find_managed_index(binding.index_id);
-        if (managed_index == nullptr) {
+        auto * store = find_store(binding.index_id);
+        if (store == nullptr) {
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
-        auto valid_key = validate_key_type(*managed_index, binding.key);
-        if (!valid_key.has_value()) {
-            return std::unexpected(std::move(valid_key.error()));
-        }
-
-        auto erased = managed_index->index->erase(binding.key, record_id);
+        auto erased = store->erase(binding.key, record_id);
         if (!erased.has_value()) {
             for (auto it = erased_bindings.rbegin(); it != erased_bindings.rend(); ++it) {
-                if (auto * rollback_index = find_managed_index(it->index_id); rollback_index != nullptr) {
-                    (void) rollback_index->index->insert(it->key, record_id);
+                if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
+                    (void) rollback_index->insert(it->key, record_id);
                 }
             }
             return std::unexpected(std::move(erased.error()));
@@ -539,88 +482,65 @@ std::expected<void, IndexError> IndexManager::on_delete(
     return {};
 }
 
-std::optional<ManagedIndexView> IndexManager::find_index(common::IndexId index_id) const noexcept
+std::optional<ManagedIndexView> IndexEngine::find_index(common::IndexId index_id) const noexcept
 {
-    const auto * managed_index = find_managed_index(index_id);
-    if (managed_index == nullptr) {
+    const auto * store = find_store(index_id);
+    if (store == nullptr) {
         return std::nullopt;
     }
-    return make_view(*managed_index);
+    return make_view(*store);
 }
 
-std::vector<ManagedIndexView> IndexManager::list_indexes(common::CollectionId collection_id) const
+std::vector<ManagedIndexView> IndexEngine::list_indexes(common::CollectionId collection_id) const
 {
     std::vector<ManagedIndexView> views;
-    for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        views.push_back(make_view(*managed_index));
+    for (const auto * store : list_stores(collection_id)) {
+        views.push_back(make_view(*store));
     }
     return views;
 }
 
-std::vector<ManagedIndexView> IndexManager::find_indexes_for_column(
+std::vector<ManagedIndexView> IndexEngine::find_indexes_for_column(
     common::CollectionId collection_id,
     common::ColumnId column_id
 ) const
 {
     std::vector<ManagedIndexView> views;
-    for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        if (managed_index->column_id == column_id) {
-            views.push_back(make_view(*managed_index));
+    for (const auto * store : list_stores(collection_id)) {
+        if (store->descriptor().column_id == column_id) {
+            views.push_back(make_view(*store));
         }
     }
     return views;
 }
 
-std::expected<std::vector<common::RecordId>, IndexError> IndexManager::find_equal(
+std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::find_equal(
     common::IndexId index_id,
     const ScalarIndexKey & key
 ) const
 {
-    const auto * managed_index = find_managed_index(index_id);
-    if (managed_index == nullptr) {
+    const auto * store = find_store(index_id);
+    if (store == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
     }
-    auto valid_key = validate_key_type(*managed_index, key);
-    if (!valid_key.has_value()) {
-        return std::unexpected(std::move(valid_key.error()));
-    }
-    return managed_index->index->find_equal(key);
+    return store->find_equal(key);
 }
 
-std::expected<std::vector<common::RecordId>, IndexError> IndexManager::scan_range(
+std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::scan_range(
     common::IndexId index_id,
     const IndexRange & range
 ) const
 {
-    const auto * managed_index = find_managed_index(index_id);
-    if (managed_index == nullptr) {
+    const auto * store = find_store(index_id);
+    if (store == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
     }
-    const auto * ordered_index = dynamic_cast<const OrderedScalarIndex *>(managed_index->index.get());
-    if (ordered_index == nullptr) {
-        return std::unexpected(make_error(
-            IndexErrorCode::UnsupportedRangeScan,
-            "Index does not support range scans"
-        ));
-    }
-    if (range.lower().has_value()) {
-        auto valid_key = validate_key_type(*managed_index, range.lower()->key);
-        if (!valid_key.has_value()) {
-            return std::unexpected(std::move(valid_key.error()));
-        }
-    }
-    if (range.upper().has_value()) {
-        auto valid_key = validate_key_type(*managed_index, range.upper()->key);
-        if (!valid_key.has_value()) {
-            return std::unexpected(std::move(valid_key.error()));
-        }
-    }
-    return ordered_index->scan_range(range);
+    return store->scan_range(range);
 }
 
-void IndexManager::clear() noexcept
+void IndexEngine::clear() noexcept
 {
-    indexes_by_id_.clear();
+    stores_by_id_.clear();
     indexes_by_collection_.clear();
 }
 

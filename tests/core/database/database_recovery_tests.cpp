@@ -46,10 +46,10 @@ std::vector<common::RecordId> find_index_equal(
     auto key = index::ScalarIndexKey::from_value(std::move(value));
     require(key.has_value(), "index key creation failed");
 
-    auto index_view = engine.index_manager().find_index(index_id);
+    auto index_view = engine.index_engine().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = engine.index_manager().find_equal(index_id, key.value());
+    auto found = engine.index_engine().find_equal(index_id, key.value());
     require(found.has_value(), "index lookup failed");
     return std::move(found.value());
 }
@@ -237,7 +237,7 @@ void test_index_ddl_reopen()
         auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
         require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
         require(reopened->meta().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
-        require(!reopened->index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
+        require(!reopened->index_engine().find_index(index_id).has_value(), "dropped index should leave engine");
     }
 
     {

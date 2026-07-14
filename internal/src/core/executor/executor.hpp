@@ -5,7 +5,7 @@
 #include "core/meta/meta_engine.hpp"
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/storage/storage_engine.hpp"
 
@@ -21,7 +21,7 @@ public:
     Executor(
         meta::MetaEngine & catalog,
         storage::StorageEngine & storage,
-        index::IndexManager & index_manager
+        index::IndexEngine & index_engine
     ) noexcept;
 
 public:
@@ -36,7 +36,7 @@ public:
 private:
     meta::MetaEngine & catalog_;                        ///< 目录
     storage::StorageEngine & storage_;                  ///< 存储引擎
-    index::IndexManager & index_manager_;               ///< 索引管理器
+    index::IndexEngine & index_engine_;                  ///< 索引引擎
 };
 
 } // namespace litedb::core::executor

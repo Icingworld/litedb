@@ -2,7 +2,7 @@
 #include "core/meta/meta_engine.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/logical_plan/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
@@ -86,7 +86,7 @@ struct Fixture
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
-    IndexManager index_manager;
+    IndexEngine index_engine;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -156,10 +156,10 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 std::unique_ptr<LogicalStatementPlan> plan_ok(
     Fixture & fixture,
     std::string_view sql,
-    const IndexManager * index_manager = nullptr
+    const IndexEngine * index_engine = nullptr
 )
 {
-    (void) index_manager;
+    (void) index_engine;
     LogicalPlanner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
@@ -202,7 +202,7 @@ IndexId create_managed_index(
         throw std::runtime_error(schema.error().message);
     }
     require(fixture.storage.contains_collection(fixture.users_id), "fixture collection storage missing");
-    auto managed = fixture.index_manager.create_index(*entry, schema.value(), fixture.storage);
+    auto managed = fixture.index_engine.create_index(*entry, schema.value(), fixture.storage);
     if (!managed.has_value()) {
         throw std::runtime_error(managed.error().message);
     }
@@ -305,27 +305,27 @@ void test_indexes_do_not_change_logical_scan()
     (void) create_managed_index(fixture, "idx_age_btree", "age", litedb::core::meta::entry::IndexKind::BTree);
     (void) create_managed_index(fixture, "idx_age_hash", "age", litedb::core::meta::entry::IndexKind::Hash);
 
-    auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_manager);
+    auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_engine);
     const auto & equal_projection = static_cast<const LogicalProjection &>(query_root(*equal));
     const auto & equal_filter = static_cast<const LogicalFilter &>(equal_projection.child());
     require(equal_filter.child().kind() == LogicalPlanNodeKind::Scan, "equality should remain logical scan");
 
-    auto range = plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;", &fixture.index_manager);
+    auto range = plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;", &fixture.index_engine);
     const auto & range_projection = static_cast<const LogicalProjection &>(query_root(*range));
     const auto & range_filter = static_cast<const LogicalFilter &>(range_projection.child());
     require(range_filter.child().kind() == LogicalPlanNodeKind::Scan, "range should remain logical scan");
 
-    auto between = plan_ok(fixture, "SELECT id FROM users WHERE age BETWEEN 18 AND 30;", &fixture.index_manager);
+    auto between = plan_ok(fixture, "SELECT id FROM users WHERE age BETWEEN 18 AND 30;", &fixture.index_engine);
     const auto & between_projection = static_cast<const LogicalProjection &>(query_root(*between));
     const auto & between_filter = static_cast<const LogicalFilter &>(between_projection.child());
     require(between_filter.child().kind() == LogicalPlanNodeKind::Scan, "between should remain logical scan");
 
-    auto fallback_like = plan_ok(fixture, "SELECT id FROM users WHERE name LIKE 'a%';", &fixture.index_manager);
+    auto fallback_like = plan_ok(fixture, "SELECT id FROM users WHERE name LIKE 'a%';", &fixture.index_engine);
     const auto & like_projection = static_cast<const LogicalProjection &>(query_root(*fallback_like));
     const auto & like_filter = static_cast<const LogicalFilter &>(like_projection.child());
     require(like_filter.child().kind() == LogicalPlanNodeKind::Scan, "LIKE should fall back to scan");
 
-    auto fallback_expression = plan_ok(fixture, "SELECT id FROM users WHERE age + 1 = 19;", &fixture.index_manager);
+    auto fallback_expression = plan_ok(fixture, "SELECT id FROM users WHERE age + 1 = 19;", &fixture.index_engine);
     const auto & expr_projection = static_cast<const LogicalProjection &>(query_root(*fallback_expression));
     const auto & expr_filter = static_cast<const LogicalFilter &>(expr_projection.child());
     require(expr_filter.child().kind() == LogicalPlanNodeKind::Scan, "expression predicate should fall back to scan");

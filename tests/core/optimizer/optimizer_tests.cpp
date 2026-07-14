@@ -2,7 +2,7 @@
 #include "core/binder/bound/debug_printer.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
@@ -63,7 +63,7 @@ struct Fixture
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
-    litedb::core::index::IndexManager index_manager;
+    litedb::core::index::IndexEngine index_engine;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -155,7 +155,7 @@ std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::E
     const LogicalStatementPlan & plan
 )
 {
-    litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_manager};
+    litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_engine};
     litedb::core::physical_plan::PhysicalPlanner physical_planner;
     auto physical = physical_planner.plan(plan);
     return executor.execute(*physical);

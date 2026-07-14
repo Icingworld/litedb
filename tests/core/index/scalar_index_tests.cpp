@@ -1,5 +1,6 @@
 #include "core/index/btree_index.hpp"
 #include "core/index/hash_index.hpp"
+#include "core/index/index_store.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -7,6 +8,7 @@
 #include <exception>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -202,6 +204,37 @@ void test_btree_index_erase_errors_and_cleanup()
     require(missing_key.error().code == IndexErrorCode::KeyNotFound, "btree missing key error mismatch");
 }
 
+void test_index_store_enforces_descriptor_constraints()
+{
+    IndexStore store {IndexDescriptor {
+        .index_id = 1,
+        .collection_id = 2,
+        .column_id = 3,
+        .column_ordinal = 0,
+        .key_type = LogicalType {LogicalTypeId::Integer, std::nullopt},
+        .kind = IndexKind::Hash,
+        .unique = true,
+    }, std::make_unique<HashIndex>()};
+
+    const auto one = key(Value {std::int32_t {1}});
+    require(store.insert(one, 10).has_value(), "store insert failed");
+
+    auto duplicate_key = store.validate_insert(one);
+    require(!duplicate_key.has_value(), "unique store should reject an existing key");
+    require(duplicate_key.error().code == IndexErrorCode::DuplicateKey, "unique store error mismatch");
+
+    auto wrong_type = store.find_equal(key(Value {std::int64_t {1}}));
+    require(!wrong_type.has_value(), "store should reject a mismatched key type");
+    require(wrong_type.error().code == IndexErrorCode::KeyTypeMismatch, "store key type error mismatch");
+
+    auto unsupported_range = store.scan_range(IndexRange::all());
+    require(!unsupported_range.has_value(), "hash store should reject range scans");
+    require(
+        unsupported_range.error().code == IndexErrorCode::UnsupportedRangeScan,
+        "hash store range error mismatch"
+    );
+}
+
 } // namespace
 
 int main()
@@ -213,6 +246,7 @@ int main()
         test_hash_index_equal_lookup_and_erase();
         test_btree_index_equal_lookup_and_ranges();
         test_btree_index_erase_errors_and_cleanup();
+        test_index_store_enforces_descriptor_constraints();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;
