@@ -419,13 +419,13 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
                 "Physical index equality lookup is missing its key"
             ));
         }
-        record_ids = index_view->index.find_equal(scan.lookup().lower->key);
+        record_ids = index_manager.find_equal(scan.index_id(), scan.lookup().lower->key);
     } else {
         auto range = index_range_from_lookup(scan);
         if (!range.has_value()) {
             return std::unexpected(std::move(range.error()));
         }
-        record_ids = index_view->index.scan_range(range.value());
+        record_ids = index_manager.scan_range(scan.index_id(), range.value());
     }
     if (!record_ids.has_value()) {
         return std::unexpected(from_index_error(std::move(record_ids.error()), scan.location()));

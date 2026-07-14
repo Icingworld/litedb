@@ -25,13 +25,6 @@ public:
     IndexKind kind() const noexcept override;
 
     /**
-     * @brief 是否支持范围扫描
-     * @return 是否支持范围扫描
-     */
-    [[nodiscard]]
-    bool supports_range_scan() const noexcept override;
-
-    /**
      * @brief 插入键值对
      * @param key 键
      * @param record_id 记录 ID
@@ -61,16 +54,6 @@ public:
     [[nodiscard]]
     std::expected<std::vector<common::RecordId>, IndexError> find_equal(
         const ScalarIndexKey & key
-    ) const override;
-
-    /**
-     * @brief 扫描 range 范围内的记录 ID
-     * @param range 范围
-     * @return 记录 ID 列表
-     */
-    [[nodiscard]]
-    std::expected<std::vector<common::RecordId>, IndexError> scan_range(
-        const IndexRange & range
     ) const override;
 
     /**

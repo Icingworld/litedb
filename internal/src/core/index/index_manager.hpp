@@ -9,6 +9,7 @@
 
 #include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
+#include "core/common/logical_type.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/scalar_index.hpp"
 #include "core/index/scalar_index_key.hpp"
@@ -48,9 +49,10 @@ struct ManagedIndexView
     common::CollectionId collection_id;
     common::ColumnId column_id;
     std::size_t column_ordinal;
+    common::LogicalType key_type;
     IndexKind kind;
     bool unique {false};
-    const ScalarIndex & index;
+    std::size_t entry_count {0};
 };
 
 class IndexManager
@@ -202,6 +204,30 @@ public:
     ) const;
 
     /**
+     * @brief 在指定索引中查找等值键
+     * @param index_id 索引 ID
+     * @param key 索引键
+     * @return 记录 ID 列表
+     */
+    [[nodiscard]]
+    std::expected<std::vector<common::RecordId>, IndexError> find_equal(
+        common::IndexId index_id,
+        const ScalarIndexKey & key
+    ) const;
+
+    /**
+     * @brief 在指定有序索引中执行范围扫描
+     * @param index_id 索引 ID
+     * @param range 索引范围
+     * @return 记录 ID 列表
+     */
+    [[nodiscard]]
+    std::expected<std::vector<common::RecordId>, IndexError> scan_range(
+        common::IndexId index_id,
+        const IndexRange & range
+    ) const;
+
+    /**
      * @brief 清空索引管理器
      */
     void clear() noexcept;
@@ -213,6 +239,7 @@ private:
         common::CollectionId collection_id;
         common::ColumnId column_id;
         std::size_t column_ordinal;
+        common::LogicalType key_type;
         IndexKind kind;
         bool unique {false};
         std::unique_ptr<ScalarIndex> index;
@@ -224,7 +251,14 @@ private:
     [[nodiscard]]
     static std::expected<std::optional<ScalarIndexKey>, IndexError> make_key_from_record(
         const schema::RecordData & record_data,
-        std::size_t column_ordinal
+        std::size_t column_ordinal,
+        const common::LogicalType & key_type
+    );
+
+    [[nodiscard]]
+    static std::expected<void, IndexError> validate_key_type(
+        const ManagedIndex & managed_index,
+        const ScalarIndexKey & key
     );
 
     [[nodiscard]]

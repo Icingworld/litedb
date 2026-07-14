@@ -12,7 +12,7 @@ namespace litedb::core::index
  * @brief B+ 树索引
  * @todo 实现 B+ 树索引，暂时使用 std::map 模拟 B+ 树
  */
-class BTreeIndex final : public ScalarIndex
+class BTreeIndex final : public OrderedScalarIndex
 {
 public:
     BTreeIndex();
@@ -24,13 +24,6 @@ public:
      */
     [[nodiscard]]
     IndexKind kind() const noexcept override;
-
-    /**
-     * @brief 是否支持范围扫描
-     * @return 是否支持范围扫描
-     */
-    [[nodiscard]]
-    bool supports_range_scan() const noexcept override;
 
     /**
      * @brief 插入键值对

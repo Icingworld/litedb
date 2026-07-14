@@ -68,7 +68,7 @@ std::vector<litedb::core::common::RecordId> find_index_equal(TestDatabase & engi
     auto index_view = engine.index_manager().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = index_view->index.find_equal(key.value());
+    auto found = engine.index_manager().find_equal(index_id, key.value());
     require(found.has_value(), "index lookup failed");
     return std::move(found.value());
 }

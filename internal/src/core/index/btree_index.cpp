@@ -29,18 +29,19 @@ IndexKind BTreeIndex::kind() const noexcept
     return IndexKind::BTree;
 }
 
-bool BTreeIndex::supports_range_scan() const noexcept
-{
-    return true;
-}
-
 std::expected<void, IndexError> BTreeIndex::insert(
     const ScalarIndexKey & key,
     common::RecordId record_id
 )
 {
-    // 插入键值对
-    buckets_[key].push_back(record_id);
+    auto & records = buckets_[key];
+    if (std::find(records.begin(), records.end(), record_id) != records.end()) [[unlikely]] {
+        return std::unexpected(make_index_error(
+            IndexErrorCode::DuplicateEntry,
+            "Index entry already exists"
+        ));
+    }
+    records.push_back(record_id);
     // 更新键值对数量
     ++entry_count_;
     return {};

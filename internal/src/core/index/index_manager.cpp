@@ -35,7 +35,8 @@ std::unique_ptr<ScalarIndex> IndexManager::make_index(meta::entry::IndexKind ind
 
 std::expected<std::optional<ScalarIndexKey>, IndexError> IndexManager::make_key_from_record(
     const schema::RecordData & record_data,
-    std::size_t column_ordinal
+    std::size_t column_ordinal,
+    const common::LogicalType & key_type
 )
 {
     if (column_ordinal >= record_data.values.size()) {
@@ -46,12 +47,32 @@ std::expected<std::optional<ScalarIndexKey>, IndexError> IndexManager::make_key_
     if (value.is_null()) {
         return std::nullopt;
     }
+    if (!value.matches_type(key_type)) {
+        return std::unexpected(make_error(
+            IndexErrorCode::KeyTypeMismatch,
+            "Index key type does not match indexed column type"
+        ));
+    }
 
     auto key = ScalarIndexKey::from_value(value);
     if (!key.has_value()) {
         return std::unexpected(std::move(key.error()));
     }
     return std::optional<ScalarIndexKey>(std::move(key.value()));
+}
+
+std::expected<void, IndexError> IndexManager::validate_key_type(
+    const ManagedIndex & managed_index,
+    const ScalarIndexKey & key
+)
+{
+    if (!key.value().matches_type(managed_index.key_type)) {
+        return std::unexpected(make_error(
+            IndexErrorCode::KeyTypeMismatch,
+            "Index key type does not match indexed column type"
+        ));
+    }
+    return {};
 }
 
 std::expected<void, IndexError> IndexManager::validate_unique_key(
@@ -80,9 +101,10 @@ ManagedIndexView IndexManager::make_view(const ManagedIndex & managed_index) con
         .collection_id = managed_index.collection_id,
         .column_id = managed_index.column_id,
         .column_ordinal = managed_index.column_ordinal,
+        .key_type = managed_index.key_type,
         .kind = managed_index.kind,
         .unique = managed_index.unique,
-        .index = *managed_index.index,
+        .entry_count = managed_index.index->size(),
     };
 }
 
@@ -135,7 +157,7 @@ std::expected<void, IndexError> IndexManager::build_index_from_storage(
         if (!next) return std::unexpected(make_error(IndexErrorCode::StorageError, next.error().message));
         if (!*next) break;
         const auto & record = **next;
-        auto key = make_key_from_record(record.data, managed_index.column_ordinal);
+        auto key = make_key_from_record(record.data, managed_index.column_ordinal, managed_index.key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -188,6 +210,7 @@ std::expected<void, IndexError> IndexManager::create_index(
         .collection_id = index_entry.collection_id(),
         .column_id = column_id.value(),
         .column_ordinal = column->ordinal(),
+        .key_type = column->type(),
         .kind = index->kind(),
         .unique = index_entry.unique(),
         .index = std::move(index),
@@ -292,7 +315,7 @@ std::expected<IndexKeyBindings, IndexError> IndexManager::prepare_insert(
 {
     IndexKeyBindings bindings;
     for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        auto key = make_key_from_record(record_data, managed_index->column_ordinal);
+        auto key = make_key_from_record(record_data, managed_index->column_ordinal, managed_index->key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -326,6 +349,10 @@ std::expected<void, IndexError> IndexManager::on_insert(
         if (managed_index == nullptr) {
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
+        auto valid_key = validate_key_type(*managed_index, binding.key);
+        if (!valid_key.has_value()) {
+            return std::unexpected(std::move(valid_key.error()));
+        }
 
         auto inserted = managed_index->index->insert(binding.key, record_id);
         if (!inserted.has_value()) {
@@ -349,12 +376,12 @@ std::expected<IndexUpdateBindings, IndexError> IndexManager::prepare_update(
 {
     IndexUpdateBindings bindings;
     for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        auto old_key = make_key_from_record(old_record_data, managed_index->column_ordinal);
+        auto old_key = make_key_from_record(old_record_data, managed_index->column_ordinal, managed_index->key_type);
         if (!old_key.has_value()) {
             return std::unexpected(std::move(old_key.error()));
         }
 
-        auto new_key = make_key_from_record(new_record_data, managed_index->column_ordinal);
+        auto new_key = make_key_from_record(new_record_data, managed_index->column_ordinal, managed_index->key_type);
         if (!new_key.has_value()) {
             return std::unexpected(std::move(new_key.error()));
         }
@@ -400,6 +427,19 @@ std::expected<void, IndexError> IndexManager::on_update(
 
         if (!binding.key_changed) {
             continue;
+        }
+
+        if (binding.old_key.has_value()) {
+            auto valid_key = validate_key_type(*managed_index, binding.old_key.value());
+            if (!valid_key.has_value()) {
+                return std::unexpected(std::move(valid_key.error()));
+            }
+        }
+        if (binding.new_key.has_value()) {
+            auto valid_key = validate_key_type(*managed_index, binding.new_key.value());
+            if (!valid_key.has_value()) {
+                return std::unexpected(std::move(valid_key.error()));
+            }
         }
 
         if (binding.new_key.has_value()) {
@@ -451,7 +491,7 @@ std::expected<IndexKeyBindings, IndexError> IndexManager::prepare_delete(
 {
     IndexKeyBindings bindings;
     for (const auto * managed_index : list_managed_indexes(collection_id)) {
-        auto key = make_key_from_record(old_record_data, managed_index->column_ordinal);
+        auto key = make_key_from_record(old_record_data, managed_index->column_ordinal, managed_index->key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -479,6 +519,10 @@ std::expected<void, IndexError> IndexManager::on_delete(
         auto * managed_index = find_managed_index(binding.index_id);
         if (managed_index == nullptr) {
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
+        }
+        auto valid_key = validate_key_type(*managed_index, binding.key);
+        if (!valid_key.has_value()) {
+            return std::unexpected(std::move(valid_key.error()));
         }
 
         auto erased = managed_index->index->erase(binding.key, record_id);
@@ -525,6 +569,53 @@ std::vector<ManagedIndexView> IndexManager::find_indexes_for_column(
         }
     }
     return views;
+}
+
+std::expected<std::vector<common::RecordId>, IndexError> IndexManager::find_equal(
+    common::IndexId index_id,
+    const ScalarIndexKey & key
+) const
+{
+    const auto * managed_index = find_managed_index(index_id);
+    if (managed_index == nullptr) {
+        return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
+    }
+    auto valid_key = validate_key_type(*managed_index, key);
+    if (!valid_key.has_value()) {
+        return std::unexpected(std::move(valid_key.error()));
+    }
+    return managed_index->index->find_equal(key);
+}
+
+std::expected<std::vector<common::RecordId>, IndexError> IndexManager::scan_range(
+    common::IndexId index_id,
+    const IndexRange & range
+) const
+{
+    const auto * managed_index = find_managed_index(index_id);
+    if (managed_index == nullptr) {
+        return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
+    }
+    const auto * ordered_index = dynamic_cast<const OrderedScalarIndex *>(managed_index->index.get());
+    if (ordered_index == nullptr) {
+        return std::unexpected(make_error(
+            IndexErrorCode::UnsupportedRangeScan,
+            "Index does not support range scans"
+        ));
+    }
+    if (range.lower().has_value()) {
+        auto valid_key = validate_key_type(*managed_index, range.lower()->key);
+        if (!valid_key.has_value()) {
+            return std::unexpected(std::move(valid_key.error()));
+        }
+    }
+    if (range.upper().has_value()) {
+        auto valid_key = validate_key_type(*managed_index, range.upper()->key);
+        if (!valid_key.has_value()) {
+            return std::unexpected(std::move(valid_key.error()));
+        }
+    }
+    return ordered_index->scan_range(range);
 }
 
 void IndexManager::clear() noexcept

@@ -17,13 +17,15 @@
 
 ## 2. 当前索引模块
 
-`internal/src/core/index` 提供纯内存标量索引模块，不依赖 SQL、catalog、planner 或 storage 自动维护。
+`internal/src/core/index` 提供标量索引键、索引能力接口和当前的纯内存索引实现。数据库级生命周期与自动维护目前仍由 `IndexManager` 负责。
 
 核心结构：
 
 ```text
 ScalarIndex
-  └─ BTreeIndex
+  ├─ HashIndex
+  └─ OrderedScalarIndex
+       └─ BTreeIndex
 
 ScalarIndexKey
   ├─ ScalarIndexEqual
@@ -40,6 +42,10 @@ ScalarIndexKey -> [RecordId, RecordId, ...]
 ```
 
 第一版是非唯一索引，因此同一个 key 可以对应多条记录。
+
+`ScalarIndexKey` 保存精确物理类型，不执行跨数值类型归一化。例如 `INT(1)`、`BIGINT(1)` 和 `DOUBLE(1.0)` 是不同的键。索引只对应一个固定类型的列，上游必须先根据列类型完成转换。这样可以避免通过 `long double` 比较导致的平台精度差异，并为后续稳定的磁盘编码保留明确类型标签。
+
+NULL 不进入标量索引，NaN 在键构造阶段被拒绝；正零和负零比较相等。不同类型之间仅保留确定性排序以满足容器比较器要求，不表示 SQL 层允许混合类型索引。
 
 `erase` 必须接收 `record_id`：
 
@@ -66,15 +72,17 @@ erase(old_key, record_id)
 insert(new_key, record_id)
 ```
 
-## 3. BTreeIndex 语义
+同一个 key 可以对应不同的 `RecordId`，但完全相同的 `(key, RecordId)` 只能存在一次；重复插入返回 `DuplicateEntry`。
 
-### 3.1 HASH 暂不支持
+## 3. 内存索引实现
 
-当前 SQL 语法不暴露 `USING HASH`，标量索引暂时只支持 `BTREE`。如果后续重新引入 HashIndex，也应作为独立版本能力重新补充语法、catalog 元数据和查询规划规则。
+### 3.1 HashIndex
+
+`HashIndex` 使用 `std::unordered_map` 提供等值查询，不属于 `OrderedScalarIndex`，因此它在类型层面不暴露 `scan_range`。当前 SQL 语法仍不暴露 `USING HASH`；catalog 和内部运行时可以保存 Hash 索引定义。
 
 ### 3.2 BTreeIndex
 
-当前 `BTreeIndex` 不是手写 B 树，也不是手写 B+ 树。它是有序索引语义接口，第一版后端使用：
+当前 `BTreeIndex` 不是手写 B 树，也不是手写 B+ 树。它是 `OrderedScalarIndex` 的纯内存实现，第一版后端使用：
 
 ```cpp
 std::map<ScalarIndexKey, std::vector<RecordId>, ScalarIndexLess>
@@ -90,6 +98,8 @@ scan_range
 ```
 
 它提供未来 B+Tree 需要的外部能力：有序 key、等值查询、范围查询。
+
+`IndexManager` 记录每个索引列的 `LogicalType`，写入、更新、删除和查询入口都会校验键的精确物理类型，不匹配时返回 `KeyTypeMismatch`。它对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不再通过索引视图暴露内部 `ScalarIndex` 引用。Hash 索引收到范围查询时返回 `UnsupportedRangeScan`。这个边界将作为后续拆分 `IndexEngine + IndexStore` 的迁移基础。
 
 后续如果实现数据库级索引，推荐最终实现成 B+Tree，而不是传统 B 树：
 
@@ -163,11 +173,11 @@ std::expected<schema::Record, StorageError> get(common::RecordId record_id) cons
 
 Storage v2 由 `StorageEngine` 统一提供 `get/scan/insert/update/erase`，索引层不再接触 collection-level Store。
 
-### 4.3 增加 IndexManager
+### 4.3 当前 IndexManager 边界
 
 不要把索引维护逻辑塞进 `BTreeIndex`，也不要让 executor 手动维护每个索引。
 
-建议新增 `IndexManager`：
+当前 `IndexManager`：
 
 ```text
 IndexManager
@@ -185,7 +195,7 @@ on_delete(record_id, old_record_data)
 find_indexes(collection_id)
 ```
 
-`create_index` 应从已有 records 全量构建索引：
+`create_index` 会从已有 records 全量构建索引：
 
 ```text
 scan collection
@@ -344,29 +354,23 @@ B+Tree 删除是复杂点。可以分阶段：
 ## 6. 推荐版本路线
 
 ```text
-v0.2 当前:
-  core/index 内存索引模块
-  BTreeIndex 使用 map
-
-v0.2 下一步:
-  catalog 增加 IndexEntry
-  StorageEngine 提供 get(collection_id, record_id)
-  IndexManager 管理内存索引生命周期
-  insert/update/delete 自动维护内存索引
-
-v0.2 后续:
-  parser/binder/planner 支持 CREATE/DROP/SHOW INDEX
-  executor 支持简单 IndexScan
-  fallback 到 SeqScan + Filter
-
-v0.3:
+当前:
   catalog 持久化索引定义
   启动时从持久化 records rebuild 内存索引
-  可选实现 InMemoryBPlusTreeIndex
+  insert/update/delete 自动维护索引
+  optimizer -> PhysicalIndexScan -> executor 查询索引
+  HashIndex 提供等值查询
+  BTreeIndex 使用 map 提供等值和范围查询
 
-v0.4+:
-  page-based B+Tree index
-  WAL 或恢复协议
+下一步:
+  IndexManager 拆分为 IndexEngine + IndexStore
+  明确一个 IndexStore 对应一个索引实例
+  内存 Hash/Ordered 实现成为具体 Store 后端
+  增加稳定的 ScalarIndexKey 编解码契约
+
+后续:
+  page-based B+Tree IndexStore
+  posting-list cursor 与溢出页
   更完整的优化器和统计信息
 ```
 

@@ -2,9 +2,7 @@
 
 #include <cmath>
 #include <functional>
-#include <limits>
 #include <string>
-#include <type_traits>
 #include <utility>
 
 namespace litedb::core::index
@@ -16,14 +14,22 @@ namespace
 /**
  * @brief 键类型
  */
-enum class KeyClass
+enum class KeyType
 {
-    Null,                 ///< 空
-    Boolean,              ///< 布尔
-    Numeric,              ///< 数值
-    String,               ///< 字符串
+    Boolean,        ///< 布尔值
+    Integer,        ///< 整数
+    BigInt,         ///< 大整数
+    Float,          ///< 浮点数
+    Double,         ///< 双精度浮点数
+    Varchar,        ///< 字符串
 };
 
+/**
+ * @brief 创建索引错误
+ * @param code 错误码
+ * @param message 错误消息
+ * @return 索引错误
+ */
 [[nodiscard]]
 IndexError make_index_error(IndexErrorCode code, std::string message)
 {
@@ -31,28 +37,31 @@ IndexError make_index_error(IndexErrorCode code, std::string message)
 }
 
 /**
- * @brief 是否是支持的标量索引键
+ * @brief 是否是向量值
  * @param value 值
- * @return 是否支持
+ * @return 是否是向量值
  */
 [[nodiscard]]
-bool is_supported_scalar(const schema::Value & value) noexcept
+bool is_vector(const schema::Value & value) noexcept
 {
-    return !std::holds_alternative<schema::VectorValue>(value.data());
+    return std::holds_alternative<schema::VectorValue>(value.data());
 }
 
 /**
- * @brief 是否是数值
+ * @brief 是否是无效浮点键值
  * @param value 值
- * @return 是否是数值
+ * @return 是否是 NaN
  */
 [[nodiscard]]
-bool is_numeric_value(const schema::Value & value) noexcept
+bool is_nan(const schema::Value & value) noexcept
 {
-    return std::holds_alternative<std::int32_t>(value.data())
-        || std::holds_alternative<std::int64_t>(value.data())
-        || std::holds_alternative<float>(value.data())
-        || std::holds_alternative<double>(value.data());
+    if (const auto * number = std::get_if<float>(&value.data())) {
+        return std::isnan(*number);
+    }
+    if (const auto * number = std::get_if<double>(&value.data())) {
+        return std::isnan(*number);
+    }
+    return false;
 }
 
 /**
@@ -61,42 +70,24 @@ bool is_numeric_value(const schema::Value & value) noexcept
  * @return 键类型
  */
 [[nodiscard]]
-KeyClass key_class(const schema::Value & value) noexcept
+KeyType key_type(const schema::Value & value) noexcept
 {
-    if (value.is_null()) {
-        return KeyClass::Null;
-    }
     if (std::holds_alternative<bool>(value.data())) {
-        return KeyClass::Boolean;
+        return KeyType::Boolean;
     }
-    if (is_numeric_value(value)) {
-        return KeyClass::Numeric;
+    if (std::holds_alternative<std::int32_t>(value.data())) {
+        return KeyType::Integer;
     }
-    return KeyClass::String;
-}
-
-/**
- * @brief 获取数值
- * @param value 值
- * @return 数值
- */
-[[nodiscard]]
-long double numeric_value(const schema::Value & value) noexcept
-{
-    return std::visit(
-        [](const auto & data) -> long double {
-            using T = std::decay_t<decltype(data)>;
-            if constexpr (std::is_same_v<T, std::int32_t>
-                || std::is_same_v<T, std::int64_t>
-                || std::is_same_v<T, float>
-                || std::is_same_v<T, double>) {
-                return static_cast<long double>(data);
-            } else {
-                return 0.0L;
-            }
-        },
-        value.data()
-    );
+    if (std::holds_alternative<std::int64_t>(value.data())) {
+        return KeyType::BigInt;
+    }
+    if (std::holds_alternative<float>(value.data())) {
+        return KeyType::Float;
+    }
+    if (std::holds_alternative<double>(value.data())) {
+        return KeyType::Double;
+    }
+    return KeyType::Varchar;
 }
 
 /**
@@ -120,11 +111,22 @@ ScalarIndexKey::ScalarIndexKey(schema::Value value)
 
 std::expected<ScalarIndexKey, IndexError> ScalarIndexKey::from_value(schema::Value value)
 {
-    // 不支持使用向量值构造索引
-    if (!is_supported_scalar(value)) [[unlikely]] {
+    if (is_vector(value)) [[unlikely]] {
         return std::unexpected(make_index_error(
             IndexErrorCode::UnsupportedKeyType,
             "Vector values cannot be used as scalar index keys"
+        ));
+    }
+    if (value.is_null()) [[unlikely]] {
+        return std::unexpected(make_index_error(
+            IndexErrorCode::InvalidKeyValue,
+            "Null values are not stored in scalar indexes"
+        ));
+    }
+    if (is_nan(value)) [[unlikely]] {
+        return std::unexpected(make_index_error(
+            IndexErrorCode::InvalidKeyValue,
+            "NaN values cannot be used as scalar index keys"
         ));
     }
     return ScalarIndexKey {std::move(value)};
@@ -140,21 +142,16 @@ std::strong_ordering compare_scalar_index_keys(
     const ScalarIndexKey & right
 ) noexcept
 {
-    const auto left_class = key_class(left.value());
-    const auto right_class = key_class(right.value());
-
-    // 如果键类型不同，则直接比较键类型
-    if (left_class != right_class) {
-        return static_cast<std::uint8_t>(left_class) < static_cast<std::uint8_t>(right_class)
+    const auto left_type = key_type(left.value());
+    const auto right_type = key_type(right.value());
+    if (left_type != right_type) {
+        return static_cast<std::uint8_t>(left_type) < static_cast<std::uint8_t>(right_type)
             ? std::strong_ordering::less
             : std::strong_ordering::greater;
     }
 
-    // 键类型相同，则比较值
-    switch (left_class) {
-    case KeyClass::Null:
-        return std::strong_ordering::equal;
-    case KeyClass::Boolean: {
+    switch (left_type) {
+    case KeyType::Boolean: {
         const auto left_bool = std::get<bool>(left.value().data());
         const auto right_bool = std::get<bool>(right.value().data());
 
@@ -162,23 +159,19 @@ std::strong_ordering compare_scalar_index_keys(
             ? std::strong_ordering::equal
             : (left_bool ? std::strong_ordering::greater : std::strong_ordering::less);
     }
-    case KeyClass::Numeric: {
-        const auto left_number = numeric_value(left.value());
-        const auto right_number = numeric_value(right.value());
-        const auto left_nan = std::isnan(left_number);
-        const auto right_nan = std::isnan(right_number);
-
-        if (left_nan || right_nan) {
-            if (left_nan && right_nan) {
-                // NaN == NaN
-                return std::strong_ordering::equal;
-            }
-
-            // Nan > 非 Nan
-            return left_nan ? std::strong_ordering::greater : std::strong_ordering::less;
-        }
-
-        // 比较数值
+    case KeyType::Integer: {
+        const auto left_number = std::get<std::int32_t>(left.value().data());
+        const auto right_number = std::get<std::int32_t>(right.value().data());
+        return left_number <=> right_number;
+    }
+    case KeyType::BigInt: {
+        const auto left_number = std::get<std::int64_t>(left.value().data());
+        const auto right_number = std::get<std::int64_t>(right.value().data());
+        return left_number <=> right_number;
+    }
+    case KeyType::Float: {
+        const auto left_number = std::get<float>(left.value().data());
+        const auto right_number = std::get<float>(right.value().data());
         if (left_number < right_number) {
             return std::strong_ordering::less;
         }
@@ -187,7 +180,18 @@ std::strong_ordering compare_scalar_index_keys(
         }
         return std::strong_ordering::equal;
     }
-    case KeyClass::String: {
+    case KeyType::Double: {
+        const auto left_number = std::get<double>(left.value().data());
+        const auto right_number = std::get<double>(right.value().data());
+        if (left_number < right_number) {
+            return std::strong_ordering::less;
+        }
+        if (right_number < left_number) {
+            return std::strong_ordering::greater;
+        }
+        return std::strong_ordering::equal;
+    }
+    case KeyType::Varchar: {
         const auto & left_string = std::get<std::string>(left.value().data());
         const auto & right_string = std::get<std::string>(right.value().data());
 
@@ -212,22 +216,21 @@ bool ScalarIndexEqual::operator()(const ScalarIndexKey & left, const ScalarIndex
 
 std::size_t ScalarIndexHash::operator()(const ScalarIndexKey & key) const noexcept
 {
-    const auto key_kind = key_class(key.value());
-    auto seed = std::hash<std::uint8_t> {}(static_cast<std::uint8_t>(key_kind));
+    const auto type = key_type(key.value());
+    auto seed = std::hash<std::uint8_t> {}(static_cast<std::uint8_t>(type));
 
-    switch (key_kind) {
-    case KeyClass::Null:
-        return seed;
-    case KeyClass::Boolean:
+    switch (type) {
+    case KeyType::Boolean:
         return hash_combine(seed, std::hash<bool> {}(std::get<bool>(key.value().data())));
-    case KeyClass::Numeric: {
-        const auto number = numeric_value(key.value());
-        if (std::isnan(number)) {
-            return hash_combine(seed, std::numeric_limits<std::size_t>::max());
-        }
-        return hash_combine(seed, std::hash<long double> {}(number));
-    }
-    case KeyClass::String:
+    case KeyType::Integer:
+        return hash_combine(seed, std::hash<std::int32_t> {}(std::get<std::int32_t>(key.value().data())));
+    case KeyType::BigInt:
+        return hash_combine(seed, std::hash<std::int64_t> {}(std::get<std::int64_t>(key.value().data())));
+    case KeyType::Float:
+        return hash_combine(seed, std::hash<float> {}(std::get<float>(key.value().data())));
+    case KeyType::Double:
+        return hash_combine(seed, std::hash<double> {}(std::get<double>(key.value().data())));
+    case KeyType::Varchar:
         return hash_combine(seed, std::hash<std::string> {}(std::get<std::string>(key.value().data())));
     }
 

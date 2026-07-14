@@ -158,10 +158,23 @@ void test_build_skips_nulls_and_views_index()
     require(view.has_value(), "managed index missing");
     require(view->collection_id == fixture.users_id, "managed index collection mismatch");
     require(view->column_id == fixture.age_column_id, "managed index column mismatch");
+    require(view->key_type.id == LogicalTypeId::Integer, "managed index key type mismatch");
     require(view->kind == litedb::core::index::IndexKind::BTree, "managed index kind mismatch");
     require(!view->unique, "managed index unique mismatch");
-    require(view->index.size() == 2, "NULL value should not be indexed");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {18}}))) == std::vector<RecordId> {1}, "index lookup mismatch");
+    require(view->entry_count == 2, "NULL value should not be indexed");
+    require(ids(manager.find_equal(index_entry.id(), key(Value {std::int32_t {18}}))) == std::vector<RecordId> {1}, "index lookup mismatch");
+
+    require(
+        ids(manager.scan_range(
+            index_entry.id(),
+            IndexRange::closed(key(Value {std::int32_t {18}}), key(Value {std::int32_t {20}}))
+        )) == std::vector<RecordId>({1, 3}),
+        "managed range scan mismatch"
+    );
+
+    auto wrong_type = manager.find_equal(index_entry.id(), key(Value {std::int64_t {18}}));
+    require(!wrong_type.has_value(), "lookup with mismatched physical key type should fail");
+    require(wrong_type.error().code == IndexErrorCode::KeyTypeMismatch, "lookup key type error mismatch");
 }
 
 void test_insert_update_delete_maintenance()
@@ -174,6 +187,10 @@ void test_insert_update_delete_maintenance()
     auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
+    auto hash_range = manager.scan_range(index_entry.id(), IndexRange::all());
+    require(!hash_range.has_value(), "hash range scan should fail");
+    require(hash_range.error().code == IndexErrorCode::UnsupportedRangeScan, "hash range error mismatch");
+
     RecordData null_age {.values = {Value {std::int64_t {2}}, Value::null()}};
     auto null_insert = manager.prepare_insert(fixture.users_id, null_age);
     require(null_insert.has_value(), "NULL insert prepare should succeed");
@@ -185,21 +202,26 @@ void test_insert_update_delete_maintenance()
     require(insert->size() == 1, "insert binding count mismatch");
     require(manager.on_insert(2, insert.value()).has_value(), "on_insert failed");
 
+    RecordData wrong_age_type {.values = {Value {std::int64_t {3}}, Value {std::int64_t {20}}}};
+    auto wrong_insert = manager.prepare_insert(fixture.users_id, wrong_age_type);
+    require(!wrong_insert.has_value(), "mismatched indexed value type should fail during prepare");
+    require(wrong_insert.error().code == IndexErrorCode::KeyTypeMismatch, "prepare key type error mismatch");
+
     auto view = manager.find_index(index_entry.id());
     require(view.has_value(), "managed index missing");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {20}}))) == std::vector<RecordId> {2}, "inserted index key mismatch");
+    require(ids(manager.find_equal(index_entry.id(), key(Value {std::int32_t {20}}))) == std::vector<RecordId> {2}, "inserted index key mismatch");
 
     RecordData age_21 {.values = {Value {std::int64_t {2}}, Value {std::int32_t {21}}}};
     auto update = manager.prepare_update(fixture.users_id, age_20, age_21);
     require(update.has_value(), "update prepare failed");
     require(manager.on_update(2, update.value()).has_value(), "on_update failed");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {20}}))).empty(), "old update key should be erased");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {21}}))) == std::vector<RecordId> {2}, "new update key mismatch");
+    require(ids(manager.find_equal(index_entry.id(), key(Value {std::int32_t {20}}))).empty(), "old update key should be erased");
+    require(ids(manager.find_equal(index_entry.id(), key(Value {std::int32_t {21}}))) == std::vector<RecordId> {2}, "new update key mismatch");
 
     auto del = manager.prepare_delete(fixture.users_id, age_21);
     require(del.has_value(), "delete prepare failed");
     require(manager.on_delete(2, del.value()).has_value(), "on_delete failed");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {21}}))).empty(), "deleted index key should be erased");
+    require(ids(manager.find_equal(index_entry.id(), key(Value {std::int32_t {21}}))).empty(), "deleted index key should be erased");
 }
 
 void test_unique_index_rejects_duplicates()

@@ -123,13 +123,6 @@ public:
     virtual IndexKind kind() const noexcept = 0;
 
     /**
-     * @brief 是否支持范围扫描
-     * @return 是否支持范围扫描
-     */
-    [[nodiscard]]
-    virtual bool supports_range_scan() const noexcept = 0;
-
-    /**
      * @brief 插入键值对
      * @param key 键
      * @param record_id 记录 ID
@@ -162,16 +155,6 @@ public:
     ) const = 0;
 
     /**
-     * @brief 扫描 range 范围内的记录 ID
-     * @param range 范围
-     * @return 记录 ID 列表
-     */
-    [[nodiscard]]
-    virtual std::expected<std::vector<common::RecordId>, IndexError> scan_range(
-        const IndexRange & range
-    ) const = 0;
-
-    /**
      * @brief 清空索引
      */
     virtual void clear() noexcept = 0;
@@ -182,6 +165,26 @@ public:
      */
     [[nodiscard]]
     virtual std::size_t size() const noexcept = 0;
+};
+
+/**
+ * @brief 支持有序范围扫描的标量索引
+ */
+class OrderedScalarIndex : public ScalarIndex
+{
+public:
+    ~OrderedScalarIndex() noexcept override = default;
+
+public:
+    /**
+     * @brief 扫描 range 范围内的记录 ID
+     * @param range 范围
+     * @return 记录 ID 列表
+     */
+    [[nodiscard]]
+    virtual std::expected<std::vector<common::RecordId>, IndexError> scan_range(
+        const IndexRange & range
+    ) const = 0;
 };
 
 } // namespace litedb::core::index

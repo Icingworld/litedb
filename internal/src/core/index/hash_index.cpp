@@ -29,18 +29,19 @@ IndexKind HashIndex::kind() const noexcept
     return IndexKind::Hash;
 }
 
-bool HashIndex::supports_range_scan() const noexcept
-{
-    return false;
-}
-
 std::expected<void, IndexError> HashIndex::insert(
     const ScalarIndexKey & key,
     common::RecordId record_id
 )
 {
-    // 插入键值对
-    buckets_[key].push_back(record_id);
+    auto & records = buckets_[key];
+    if (std::find(records.begin(), records.end(), record_id) != records.end()) [[unlikely]] {
+        return std::unexpected(make_index_error(
+            IndexErrorCode::DuplicateEntry,
+            "Index entry already exists"
+        ));
+    }
+    records.push_back(record_id);
     // 更新键值对数量
     ++entry_count_;
     return {};
@@ -84,17 +85,6 @@ std::expected<std::vector<common::RecordId>, IndexError> HashIndex::find_equal(
         return std::vector<common::RecordId> {};
     }
     return bucket->second;
-}
-
-std::expected<std::vector<common::RecordId>, IndexError> HashIndex::scan_range(
-    const IndexRange &
-) const
-{
-    // 哈希索引不支持范围扫描
-    return std::unexpected(make_index_error(
-        IndexErrorCode::UnsupportedRangeScan,
-        "Hash index does not support range scans"
-    ));
 }
 
 void HashIndex::clear() noexcept
