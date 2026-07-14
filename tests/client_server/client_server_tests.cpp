@@ -11,12 +11,13 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace
 {
 
 using namespace litedb::client;
-using namespace litedb::core::engine;
+using namespace litedb::core::database;
 using namespace litedb::core::executor;
 using namespace litedb::core::schema;
 using namespace litedb::server;
@@ -32,6 +33,15 @@ template <typename T>
 const T & get_value(const Value & value)
 {
     return std::get<T>(value.data());
+}
+
+std::shared_ptr<DatabaseEngine> open_database(const std::filesystem::path & data_dir)
+{
+    auto opened = DatabaseEngine::open(DatabaseConfig {.data_dir = data_dir});
+    if (!opened.has_value()) {
+        throw std::runtime_error(opened.error().message);
+    }
+    return std::shared_ptr<DatabaseEngine> {std::move(opened.value())};
 }
 
 asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::string & failure)
@@ -134,11 +144,11 @@ void test_client_server_execute_sql()
 {
     asio::io_context io;
     litedb::tests::TemporaryDirectory data_directory {"litedb-client-server-tests"};
-    auto instance = std::make_shared<DatabaseInstance>(DatabaseConfig {.data_dir = data_directory.path()});
+    auto engine = open_database(data_directory.path());
     Server server {
         io,
         ServerConfig {.host = "127.0.0.1", .port = 0},
-        instance,
+        engine,
     };
 
     bool passed = false;
@@ -160,11 +170,11 @@ void test_client_server_persistent_reopen()
 
     {
         asio::io_context io;
-        auto instance = std::make_shared<DatabaseInstance>(DatabaseConfig {.data_dir = data_dir});
+        auto engine = open_database(data_dir);
         Server server {
             io,
             ServerConfig {.host = "127.0.0.1", .port = 0},
-            instance,
+            engine,
         };
 
         bool passed = false;
@@ -180,11 +190,11 @@ void test_client_server_persistent_reopen()
 
     {
         asio::io_context io;
-        auto instance = std::make_shared<DatabaseInstance>(DatabaseConfig {.data_dir = data_dir});
+        auto engine = open_database(data_dir);
         Server server {
             io,
             ServerConfig {.host = "127.0.0.1", .port = 0},
-            instance,
+            engine,
         };
 
         bool passed = false;

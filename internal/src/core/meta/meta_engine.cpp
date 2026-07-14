@@ -69,6 +69,21 @@ std::expected<void, MetaEngineError> MetaEngine::load()
     return restore(*loaded);
 }
 
+std::expected<void, MetaEngineError> MetaEngine::commit(const MetaSnapshot & source)
+{
+    const auto before = snapshot();
+    auto restored = restore(source);
+    if (!restored.has_value()) {
+        return std::unexpected(std::move(restored.error()));
+    }
+    auto saved = persist();
+    if (!saved.has_value()) {
+        (void) restore(before);
+        return std::unexpected(std::move(saved.error()));
+    }
+    return {};
+}
+
 const entry::DatabaseEntry * MetaEngine::find_database(std::string_view name) const
 {
     const auto key = database_keys_.find(normalize_identifier(name));

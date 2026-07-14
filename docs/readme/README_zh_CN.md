@@ -231,12 +231,11 @@ internal/src/core/schema       逻辑类型、值、记录与集合
 internal/src/core/function     标量函数注册表与内置函数
 internal/src/core/index        内存标量索引与 IndexManager
 internal/src/core/storage      持久化集合存储引擎与游标
-internal/src/core/persistence  manifest 与持久化生命周期协调
+internal/src/core/database     数据库运行时、会话、manifest 与生命周期协调
 internal/src/core/binder       名称解析与语义绑定
 internal/src/core/logical_plan      逻辑计划构建
 internal/src/core/evaluator    表达式求值
 internal/src/core/executor     语句与查询执行
-internal/src/core/engine       数据库实例与会话门面
 internal/src/protocol          客户端/服务端消息模型
 internal/src/net               帧式网络 I/O
 internal/src/server            TCP 服务端

@@ -11,13 +11,6 @@
 #include "core/storage/storage_error.hpp"
 #include "core/storage/storage_store.hpp"
 
-namespace litedb::core::engine
-{
-
-class DatabaseInstance;
-
-} // namespace litedb::core::engine
-
 namespace litedb::core::storage
 {
 
@@ -39,9 +32,6 @@ public:
     StorageEngine & operator=(StorageEngine &&) noexcept;
 
     ~StorageEngine();
-
-private:
-    StorageEngine() = default;
 
 public:
     /**
@@ -167,8 +157,6 @@ private:
     std::filesystem::path data_directory_;                                      ///< 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};                             ///< 文件系统
     std::unordered_map<common::CollectionId, CollectionState> collections_;     ///< 已加载集合
-
-    friend class litedb::core::engine::DatabaseInstance;
 };
 
 } // namespace litedb::core::storage

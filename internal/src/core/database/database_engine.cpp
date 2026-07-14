@@ -1,4 +1,4 @@
-#include "core/persistence/persistence_controller.hpp"
+#include "core/database/database_engine.hpp"
 
 #include <memory>
 #include <optional>
@@ -7,25 +7,73 @@
 #include <vector>
 
 #include "core/filesystem/platform_filesystem.hpp"
+#include "core/executor/executor.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
 #include "core/schema/schema_loader.hpp"
 
-namespace litedb::core::persistence
+namespace litedb::core::database
 {
 
 namespace
 {
 
-storage::StorageError from_meta_store_error(meta::MetaStoreError error)
+/**
+ * @brief 从 manifest 错误创建数据库错误
+ * @param error manifest 错误
+ * @return 数据库错误
+ */
+DatabaseError to_database_error(ManifestError error)
 {
-    return storage::StorageError {
-        .code = storage::StorageErrorCode::StoreError,
+    return DatabaseError {
+        .code = DatabaseErrorCode::ManifestError,
         .message = std::move(error.message),
-        .storage_store_code = error.code == meta::MetaStoreErrorCode::FileSystemError
-            ? storage::StorageStoreErrorCode::FileSystemError : storage::StorageStoreErrorCode::InvalidFormat,
     };
 }
 
+/**
+ * @brief 从 meta 引擎错误创建数据库错误
+ * @param error meta 引擎错误
+ * @return 数据库错误
+ */
+DatabaseError to_database_error(meta::MetaEngineError error)
+{
+    return DatabaseError {
+        .code = DatabaseErrorCode::MetaError,
+        .message = std::move(error.message),
+    };
+}
+
+/**
+ * @brief 从存储引擎错误创建数据库错误
+ * @param error 存储引擎错误
+ * @return 数据库错误
+ */
+DatabaseError to_database_error(storage::StorageError error)
+{
+    return DatabaseError {
+        .code = DatabaseErrorCode::StorageError,
+        .message = std::move(error.message),
+    };
+}
+
+/**
+ * @brief 从索引管理器错误创建数据库错误
+ * @param error 索引管理器错误
+ * @return 数据库错误
+ */
+DatabaseError to_database_error(index::IndexError error)
+{
+    return DatabaseError {
+        .code = DatabaseErrorCode::IndexError,
+        .message = std::move(error.message),
+    };
+}
+
+/**
+ * @brief 创建命令执行结果
+ * @param affected_rows 受影响的行数
+ * @return 命令执行结果
+ */
 executor::ExecutionResult command_result(std::size_t affected_rows)
 {
     executor::ExecutionResult result;
@@ -36,76 +84,102 @@ executor::ExecutionResult command_result(std::size_t affected_rows)
 
 } // namespace
 
-PersistenceController::PersistenceController(
-    std::filesystem::path data_dir,
-    meta::MetaEngine & catalog,
-    storage::StorageEngine & storage,
-    index::IndexManager & index_manager
-)
+DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     : filesystem_(filesystem::create_platform_filesystem())
-    , manifest_(data_dir, filesystem_)
+    , manifest_(config.data_dir, filesystem_)
     , meta_store_(manifest_.meta_path(), filesystem_)
-    , catalog_(&catalog)
-    , storage_(&storage)
-    , index_manager_(&index_manager)
+    , meta_(meta_store_)
+    , storage_(std::move(config.data_dir), filesystem_)
 {
-    storage = storage::StorageEngine {std::move(data_dir), filesystem_};
 }
 
-std::expected<void, storage::StorageError> PersistenceController::initialize()
+std::expected<std::unique_ptr<DatabaseEngine>, DatabaseError> DatabaseEngine::open(DatabaseConfig config)
 {
-    auto initialized = manifest_.ensure_initialized();
+    auto engine = std::unique_ptr<DatabaseEngine> {new DatabaseEngine(std::move(config))};
+    auto initialized = engine->initialize();
     if (!initialized.has_value()) {
         return std::unexpected(std::move(initialized.error()));
     }
+    return engine;
+}
 
-    auto snapshot = meta_store_.load();
-    if (!snapshot.has_value()) {
-        return std::unexpected(from_meta_store_error(std::move(snapshot.error())));
+const meta::MetaEngine & DatabaseEngine::meta() const noexcept
+{
+    return meta_;
+}
+
+const index::IndexManager & DatabaseEngine::index_manager() const noexcept
+{
+    return index_manager_;
+}
+
+std::expected<void, DatabaseError> DatabaseEngine::initialize()
+{
+    auto initialized = manifest_.ensure_initialized();
+    if (!initialized.has_value()) {
+        return std::unexpected(to_database_error(std::move(initialized.error())));
     }
 
-    auto restored = catalog_->restore(snapshot.value());
-    if (!restored.has_value()) {
-        return std::unexpected(storage::StorageError {
-            .code = storage::StorageErrorCode::StoreError,
-            .message = std::move(restored.error().message),
-            .storage_store_code = storage::StorageStoreErrorCode::InvalidFormat,
-        });
+    auto loaded = meta_.load();
+    if (!loaded.has_value()) {
+        return std::unexpected(to_database_error(std::move(loaded.error())));
     }
 
-    auto saved = meta_store_.save(catalog_->snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_meta_store_error(std::move(saved.error())));
+    auto initialized_meta = meta_.commit(meta_.snapshot());
+    if (!initialized_meta.has_value()) {
+        return std::unexpected(to_database_error(std::move(initialized_meta.error())));
     }
 
     auto storage_restored = restore_storage_from_meta();
     if (!storage_restored.has_value()) {
-        return std::unexpected(std::move(storage_restored.error()));
+        return std::unexpected(to_database_error(std::move(storage_restored.error())));
     }
 
-    auto indexes_rebuilt = index_manager_->rebuild_all(*catalog_, *storage_);
+    auto indexes_rebuilt = index_manager_.rebuild_all(meta_, storage_);
     if (!indexes_rebuilt.has_value()) {
-        return std::unexpected(storage::StorageError {
-            .code = storage::StorageErrorCode::StoreError,
-            .message = std::move(indexes_rebuilt.error().message),
-            .storage_store_code = storage::StorageStoreErrorCode::InvalidStoreState,
-        });
+        return std::unexpected(to_database_error(std::move(indexes_rebuilt.error())));
     }
 
     return {};
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_database(
-    const physical_plan::PhysicalCreateDatabasePlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute(
+    const physical_plan::PhysicalStatementPlan & plan
 )
 {
-    const auto existed = catalog_->find_database(plan.database_name()) != nullptr;
+    using physical_plan::PhysicalStatementPlanKind;
+
+    switch (plan.kind()) {
+    case PhysicalStatementPlanKind::CreateDatabase:
+        return execute_create_database(static_cast<const physical_plan::PhysicalCreateDatabasePlan &>(plan));
+    case PhysicalStatementPlanKind::CreateCollection:
+        return execute_create_collection(static_cast<const physical_plan::PhysicalCreateCollectionPlan &>(plan));
+    case PhysicalStatementPlanKind::CreateIndex:
+        return execute_create_index(static_cast<const physical_plan::PhysicalCreateIndexPlan &>(plan));
+    case PhysicalStatementPlanKind::CreateVectorIndex:
+        return execute_create_vector_index(static_cast<const physical_plan::PhysicalCreateVectorIndexPlan &>(plan));
+    case PhysicalStatementPlanKind::DropDatabase:
+        return execute_drop_database(static_cast<const physical_plan::PhysicalDropDatabasePlan &>(plan));
+    case PhysicalStatementPlanKind::DropCollection:
+        return execute_drop_collection(static_cast<const physical_plan::PhysicalDropCollectionPlan &>(plan));
+    case PhysicalStatementPlanKind::DropIndex:
+        return execute_drop_index(static_cast<const physical_plan::PhysicalDropIndexPlan &>(plan));
+    case PhysicalStatementPlanKind::DropVectorIndex:
+        return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
+    default:
+        executor::Executor executor {meta_, storage_, index_manager_};
+        return executor.execute(plan);
+    }
+}
+
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_database(
+    const physical_plan::PhysicalCreateDatabasePlan & plan
+)
+{
+    const auto existed = meta_.find_database(plan.database_name()) != nullptr;
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -118,12 +192,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
@@ -131,17 +200,14 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(existed ? 0 : 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_collection(
-    const physical_plan::PhysicalCreateCollectionPlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_collection(
+    const physical_plan::PhysicalCreateCollectionPlan & plan
 )
 {
-    const auto * existing = catalog_->find_collection(plan.database_id(), plan.collection_name());
+    const auto * existing = meta_.find_collection(plan.database_id(), plan.collection_name());
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -167,17 +233,12 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
-    auto storage_created = storage_->create_collection(std::move(collection_schema.value()));
+    auto storage_created = storage_.create_collection(std::move(collection_schema.value()));
     if (!storage_created.has_value()) {
         return std::unexpected(from_storage_error(std::move(storage_created.error()), plan.location()));
     }
@@ -185,17 +246,14 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_index(
-    const physical_plan::PhysicalCreateIndexPlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_index(
+    const physical_plan::PhysicalCreateIndexPlan & plan
 )
 {
-    const auto * existing = catalog_->find_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta_.find_index(plan.collection_id(), plan.index_name());
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -230,7 +288,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
     }
 
-    if (!storage_->contains_collection(plan.collection_id())) {
+    if (!storage_.contains_collection(plan.collection_id())) {
         return std::unexpected(executor::ExecutionError {
             .code = executor::ExecutionErrorCode::CollectionNotFound,
             .location = plan.location(),
@@ -239,37 +297,29 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     index::IndexManager rebuilt_indexes;
-    auto rebuilt = rebuilt_indexes.rebuild_all(staged, *storage_);
+    auto rebuilt = rebuilt_indexes.rebuild_all(staged, storage_);
     if (!rebuilt.has_value()) {
         return std::unexpected(from_index_error(std::move(rebuilt.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
-    *index_manager_ = std::move(rebuilt_indexes);
+    index_manager_ = std::move(rebuilt_indexes);
 
     return command_result(1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_create_vector_index(
-    const physical_plan::PhysicalCreateVectorIndexPlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_vector_index(
+    const physical_plan::PhysicalCreateVectorIndexPlan & plan
 )
 {
-    const auto * existing = catalog_->find_vector_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta_.find_vector_index(plan.collection_id(), plan.index_name());
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -296,12 +346,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return command_result(0);
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
@@ -309,18 +354,15 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_database(
-    const physical_plan::PhysicalDropDatabasePlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_database(
+    const physical_plan::PhysicalDropDatabasePlan & plan
 )
 {
     if (!plan.database_id().has_value()) {
         return command_result(0);
     }
 
-    const auto collections = catalog_->list_collections(plan.database_id().value());
+    const auto collections = meta_.list_collections(plan.database_id().value());
     std::vector<common::CollectionId> collection_ids;
     collection_ids.reserve(collections.size());
     for (const auto * collection : collections) {
@@ -330,7 +372,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -343,34 +385,23 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    for (const auto collection_id : collection_ids) {
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
     for (const auto collection_id : collection_ids) {
-        if (storage_->contains_collection(collection_id)) {
-            (void) storage_->drop_collection(collection_id);
+        if (storage_.contains_collection(collection_id)) {
+            (void) storage_.drop_collection(collection_id);
         }
-        index_manager_->drop_collection_indexes(collection_id);
+        index_manager_.drop_collection_indexes(collection_id);
     }
 
     return command_result(1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_collection(
-    const physical_plan::PhysicalDropCollectionPlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_collection(
+    const physical_plan::PhysicalDropCollectionPlan & plan
 )
 {
     if (!plan.collection_id().has_value()) {
@@ -378,7 +409,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     }
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -392,40 +423,32 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
     const auto collection_id = plan.collection_id().value();
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
-    if (storage_->contains_collection(collection_id)) {
-        (void) storage_->drop_collection(collection_id);
+    if (storage_.contains_collection(collection_id)) {
+        (void) storage_.drop_collection(collection_id);
     }
-    index_manager_->drop_collection_indexes(collection_id);
+    index_manager_.drop_collection_indexes(collection_id);
 
     return command_result(1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_index(
-    const physical_plan::PhysicalDropIndexPlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_index(
+    const physical_plan::PhysicalDropIndexPlan & plan
 )
 {
-    const auto * existing = catalog_->find_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta_.find_index(plan.collection_id(), plan.index_name());
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
     const auto index_id = existing != nullptr ? std::optional<common::IndexId> {existing->id()} : std::nullopt;
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -439,18 +462,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
     if (index_id.has_value()) {
-        auto dropped_index = index_manager_->drop_index(index_id.value());
+        auto dropped_index = index_manager_.drop_index(index_id.value());
         if (!dropped_index.has_value() && dropped_index.error().code != index::IndexErrorCode::IndexNotFound) {
             return std::unexpected(from_index_error(std::move(dropped_index.error()), plan.location()));
         }
@@ -459,20 +477,17 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(existing == nullptr ? 0 : 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceController::execute_drop_vector_index(
-    const physical_plan::PhysicalDropVectorIndexPlan & plan,
-    meta::MetaEngine &,
-    storage::StorageEngine &,
-    index::IndexManager &
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_vector_index(
+    const physical_plan::PhysicalDropVectorIndexPlan & plan
 )
 {
-    const auto * existing = catalog_->find_vector_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta_.find_vector_index(plan.collection_id(), plan.index_name());
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
 
     meta::MetaEngine staged;
-    auto restored = staged.restore(catalog_->snapshot());
+    auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
         return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
     }
@@ -486,12 +501,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto saved = meta_store_.save(staged.snapshot());
-    if (!saved.has_value()) {
-        return std::unexpected(from_storage_error(from_meta_store_error(std::move(saved.error())), plan.location()));
-    }
-
-    auto committed = catalog_->restore(staged.snapshot());
+    auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
@@ -499,19 +509,19 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> PersistenceCo
     return command_result(existing == nullptr ? 0 : 1);
 }
 
-std::expected<void, storage::StorageError> PersistenceController::restore_storage_from_meta()
+std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_meta()
 {
-    storage_->clear();
-    for (const auto * database : catalog_->list_databases()) {
+    storage_.clear();
+    for (const auto * database : meta_.list_databases()) {
         if (database == nullptr) {
             continue;
         }
-        for (const auto * collection : catalog_->list_collections(database->id())) {
+        for (const auto * collection : meta_.list_collections(database->id())) {
             if (collection == nullptr) {
                 continue;
             }
 
-            auto collection_schema = schema::load_collection_schema(*catalog_, collection->id());
+            auto collection_schema = schema::load_collection_schema(meta_, collection->id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(storage::StorageError {
                     .code = storage::StorageErrorCode::StoreError,
@@ -520,7 +530,7 @@ std::expected<void, storage::StorageError> PersistenceController::restore_storag
                 });
             }
 
-            auto opened = storage_->open_collection(std::move(collection_schema.value()));
+            auto opened = storage_.open_collection(std::move(collection_schema.value()));
             if (!opened.has_value()) {
                 return std::unexpected(std::move(opened.error()));
             }
@@ -529,10 +539,10 @@ std::expected<void, storage::StorageError> PersistenceController::restore_storag
     return {};
 }
 
-executor::ExecutionError PersistenceController::from_meta_error(
+executor::ExecutionError DatabaseEngine::from_meta_error(
     meta::MetaEngineError error,
     parser::ast::AstNodeLocation location
-) const
+)
 {
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::MetaError,
@@ -541,10 +551,10 @@ executor::ExecutionError PersistenceController::from_meta_error(
     };
 }
 
-executor::ExecutionError PersistenceController::from_schema_error(
+executor::ExecutionError DatabaseEngine::from_schema_error(
     schema::SchemaError error,
     parser::ast::AstNodeLocation location
-) const
+)
 {
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::SchemaError,
@@ -553,10 +563,10 @@ executor::ExecutionError PersistenceController::from_schema_error(
     };
 }
 
-executor::ExecutionError PersistenceController::from_storage_error(
+executor::ExecutionError DatabaseEngine::from_storage_error(
     storage::StorageError error,
     parser::ast::AstNodeLocation location
-) const
+)
 {
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::StorageError,
@@ -565,10 +575,10 @@ executor::ExecutionError PersistenceController::from_storage_error(
     };
 }
 
-executor::ExecutionError PersistenceController::from_index_error(
+executor::ExecutionError DatabaseEngine::from_index_error(
     index::IndexError error,
     parser::ast::AstNodeLocation location
-) const
+)
 {
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::IndexError,
@@ -577,4 +587,4 @@ executor::ExecutionError PersistenceController::from_index_error(
     };
 }
 
-} // namespace litedb::core::persistence
+} // namespace litedb::core::database

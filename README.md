@@ -267,12 +267,11 @@ internal/src/core/schema       Logical types, values, records, collections
 internal/src/core/function     Scalar function registry and built-in functions
 internal/src/core/index        In-memory scalar indexes and IndexManager
 internal/src/core/storage      Persistent collection storage engine and cursor
-internal/src/core/persistence  Manifest and persistent lifecycle coordination
+internal/src/core/database     Database runtime, sessions, manifest, and lifecycle coordination
 internal/src/core/binder       Name resolution and semantic binding
 internal/src/core/planner      Logical plan construction
 internal/src/core/evaluator    Expression evaluation
 internal/src/core/executor     Statement and query execution
-internal/src/core/engine       Database instance and session facade
 internal/src/protocol          Client/server message model
 internal/src/net               Framed network I/O
 internal/src/server            TCP server
