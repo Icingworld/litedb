@@ -6,11 +6,11 @@
 
 #include "core/binder/session_context.hpp"
 #include "core/common/ids.hpp"
-#include "core/engine/database_instance.hpp"
-#include "core/engine/engine_error.hpp"
+#include "core/database/database_engine.hpp"
+#include "core/database/session_error.hpp"
 #include "core/executor/execution_result.hpp"
 
-namespace litedb::core::engine
+namespace litedb::core::database
 {
 
 /**
@@ -19,7 +19,7 @@ namespace litedb::core::engine
 class Session
 {
 public:
-    explicit Session(DatabaseInstance & instance) noexcept;
+    explicit Session(DatabaseEngine & engine) noexcept;
 
 public:
     /**
@@ -28,7 +28,7 @@ public:
      * @return 执行结果
      */
     [[nodiscard]]
-    std::expected<executor::ExecutionResult, EngineError> execute_sql(std::string_view sql);
+    std::expected<executor::ExecutionResult, SessionError> execute_sql(std::string_view sql);
 
 public:
     /**
@@ -39,8 +39,8 @@ public:
     std::optional<common::DatabaseId> current_database_id() const noexcept;
 
 private:
-    DatabaseInstance * instance_;           ///< 数据库实例
+    DatabaseEngine * engine_;               ///< 数据库引擎
     binder::SessionContext session_;        ///< 会话上下文
 };
 
-} // namespace litedb::core::engine
+} // namespace litedb::core::database

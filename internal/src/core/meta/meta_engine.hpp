@@ -49,6 +49,15 @@ public:
     std::expected<void, MetaEngineError> load();
 
     /**
+     * @brief 提交元数据快照
+     * @param snapshot 元数据快照
+     * @return 结果
+     * @details 校验并替换当前状态，持久化失败时恢复提交前状态
+     */
+    [[nodiscard]]
+    std::expected<void, MetaEngineError> commit(const MetaSnapshot & snapshot);
+
+    /**
      * @brief 获取元数据快照
      * @return 元数据快照
      * @details 导出当前内存中的完整元数据状态

@@ -1,4 +1,4 @@
-#include "core/engine/database_instance.hpp"
+#include "core/database/database_engine.hpp"
 #include "server/server.hpp"
 
 #include <asio.hpp>
@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace
 {
@@ -72,16 +73,21 @@ int main(int argc, char ** argv)
         const auto options = parse_options(argc, argv);
 
         asio::io_context io;
-        auto instance = std::make_shared<litedb::core::engine::DatabaseInstance>(
-            litedb::core::engine::DatabaseConfig {.data_dir = options.data_dir}
+        auto opened = litedb::core::database::DatabaseEngine::open(
+            litedb::core::database::DatabaseConfig {.data_dir = options.data_dir}
         );
+        if (!opened.has_value()) {
+            std::cerr << "error: " << opened.error().message << '\n';
+            return 1;
+        }
+        std::shared_ptr<litedb::core::database::DatabaseEngine> engine {std::move(opened.value())};
         litedb::server::Server server {
             io,
             litedb::server::ServerConfig {
                 .host = options.host,
                 .port = options.port,
             },
-            instance,
+            engine,
         };
 
         asio::signal_set signals {io, SIGINT, SIGTERM};

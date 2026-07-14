@@ -3,8 +3,8 @@
 #include <system_error>
 #include <utility>
 
-#include "core/engine/engine_error.hpp"
-#include "core/engine/session.hpp"
+#include "core/database/session.hpp"
+#include "core/database/session_error.hpp"
 #include "protocol/message.hpp"
 
 namespace litedb::server
@@ -14,17 +14,17 @@ namespace
 {
 
 [[nodiscard]]
-std::uint16_t to_error_code(core::engine::EngineErrorCode code) noexcept
+std::uint16_t to_error_code(core::database::SessionErrorCode code) noexcept
 {
     return static_cast<std::uint16_t>(code) + 1U;
 }
 
 } // namespace
 
-Server::Server(asio::io_context & io, ServerConfig config, std::shared_ptr<core::engine::DatabaseInstance> instance)
+Server::Server(asio::io_context & io, ServerConfig config, std::shared_ptr<core::database::DatabaseEngine> engine)
     : acceptor_(io)
     , config_(std::move(config))
-    , instance_(std::move(instance))
+    , engine_(std::move(engine))
 {
     const auto address = asio::ip::make_address(config_.host);
     asio::ip::tcp::endpoint endpoint {address, config_.port};
@@ -69,7 +69,7 @@ asio::awaitable<void> Server::listen()
 
 asio::awaitable<void> Server::handle_connection(net::TcpSocket socket)
 {
-    core::engine::Session session {*instance_};
+    core::database::Session session {*engine_};
 
     for (;;) {
         auto frame = co_await net::async_read_frame(socket, config_.max_frame_size);

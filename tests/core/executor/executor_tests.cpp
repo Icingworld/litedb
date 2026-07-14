@@ -150,34 +150,50 @@ struct Fixture
 
     Fixture()
     {
-        auto create_database = execute_ok(catalog, storage, index_manager, "CREATE DATABASE demo;");
-        require(create_database.kind == ExecutionResultKind::Command, "CREATE DATABASE result kind mismatch");
-        require(create_database.affected_rows == 1, "CREATE DATABASE affected rows mismatch");
+        auto created_database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
+        require(created_database.has_value(), "fixture database creation failed");
+        database_id = created_database.value();
 
-        const auto * database = catalog.find_database("demo");
-        require(database != nullptr, "created database missing");
-        database_id = database->id();
-
-        auto create_collection = execute_ok(
-            catalog,
-            storage,
-            index_manager,
-            "CREATE COLLECTION users ("
-            "id BIGINT, "
-            "name VARCHAR(64) DEFAULT 'unknown', "
-            "age INTEGER, "
-            "embedding VECTOR(3)"
-            ");",
-            database_id
-        );
-        require(create_collection.affected_rows == 1, "CREATE COLLECTION affected rows mismatch");
+        auto created_collection = catalog.create_collection(CreateCollectionRequest {
+            .database_id = database_id,
+            .name = "users",
+            .columns = {
+                ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt)},
+                ColumnDefinition {.name = "name", .type = type(LogicalTypeId::Varchar, 64)},
+                ColumnDefinition {.name = "age", .type = type(LogicalTypeId::Integer)},
+                ColumnDefinition {.name = "embedding", .type = type(LogicalTypeId::Vector, 3)},
+            },
+        });
+        require(created_collection.has_value(), "fixture collection creation failed");
+        users_id = created_collection.value();
 
         const auto * collection = catalog.find_collection(database_id, "users");
         require(collection != nullptr, "created collection missing");
-        users_id = collection->id();
+        auto collection_schema = load_collection_schema(catalog, users_id);
+        require(collection_schema.has_value(), "fixture schema load failed");
+        require(storage.create_collection(std::move(collection_schema.value())).has_value(), "fixture storage creation failed");
         require(storage.contains_collection(users_id), "created collection storage missing");
     }
 };
+
+IndexId create_index(
+    Fixture & fixture,
+    std::string name,
+    litedb::core::meta::entry::IndexKind kind = litedb::core::meta::entry::IndexKind::BTree
+)
+{
+    const auto * column = fixture.catalog.find_column(fixture.users_id, "age");
+    require(column != nullptr, "age column missing");
+    auto created = fixture.catalog.create_index(CreateIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_ids = {column->id()},
+        .name = std::move(name),
+        .kind = kind,
+    });
+    require(created.has_value(), "fixture index creation failed");
+    require(fixture.index_manager.rebuild_all(fixture.catalog, fixture.storage).has_value(), "fixture index rebuild failed");
+    return created.value();
+}
 
 void insert_user(Fixture & fixture, std::int64_t id, std::string_view name, std::int32_t age)
 {
@@ -210,7 +226,7 @@ std::vector<RecordId> find_index_equal(Fixture & fixture, IndexId index_id, Valu
     return std::move(found.value());
 }
 
-void test_ddl_use_show_and_describe()
+void test_use_show_and_describe()
 {
     Fixture fixture;
 
@@ -231,8 +247,7 @@ void test_ddl_use_show_and_describe()
     require(collections.rows.size() == 1, "SHOW COLLECTIONS row count mismatch");
     require(get_value<std::string>(collections.rows[0].values[0]) == "users", "SHOW COLLECTIONS value mismatch");
 
-    auto create_index = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "CREATE INDEX idx_age ON users (age) USING BTREE;", fixture.database_id);
-    require(create_index.affected_rows == 1, "CREATE INDEX for SHOW affected rows mismatch");
+    (void) create_index(fixture, "idx_age");
 
     auto indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "SHOW INDEXES FROM users;", fixture.database_id);
     require(indexes.kind == ExecutionResultKind::RowSet, "SHOW INDEXES result kind mismatch");
@@ -243,15 +258,22 @@ void test_ddl_use_show_and_describe()
     require(get_value<std::string>(indexes.rows[0].values[2]) == "BTREE", "SHOW INDEXES type mismatch");
     require(!get_value<bool>(indexes.rows[0].values[3]), "SHOW INDEXES unique mismatch");
 
-    auto create_vector_index = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "CREATE VINDEX vidx_embedding ON users (embedding) USING HNSW "
-        "WITH (metric = COSINE, max_neighbors = 24, ef_construction = 240, ef_search = 80, random_seed = 7);",
-        fixture.database_id
-    );
-    require(create_vector_index.affected_rows == 1, "CREATE VINDEX for SHOW affected rows mismatch");
+    const auto * embedding = fixture.catalog.find_column(fixture.users_id, "embedding");
+    require(embedding != nullptr, "embedding column missing");
+    auto created_vector_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = embedding->id(),
+        .name = "vidx_embedding",
+        .kind = VectorIndexKind::Hnsw,
+        .metric = VectorDistanceMetric::Cosine,
+        .hnsw_options = {
+            .max_neighbors = 24,
+            .ef_construction = 240,
+            .ef_search_default = 80,
+            .random_seed = 7,
+        },
+    });
+    require(created_vector_index.has_value(), "fixture vector index creation failed");
 
     auto vector_indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "SHOW VINDEXES FROM users;", fixture.database_id);
     require(vector_indexes.kind == ExecutionResultKind::RowSet, "SHOW VINDEXES result kind mismatch");
@@ -386,91 +408,10 @@ void test_order_by_keeps_null_last()
     require(get_value<std::string>(selected.rows[2].values[0]) == "null-age", "NULL should sort last");
 }
 
-void test_drop_collection_removes_storage()
-{
-    Fixture fixture;
-
-    auto dropped = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DROP COLLECTION users;", fixture.database_id);
-    require(dropped.affected_rows == 1, "DROP COLLECTION affected rows mismatch");
-    require(fixture.catalog.find_collection(fixture.users_id) == nullptr, "dropped collection should leave catalog");
-    require(!fixture.storage.contains_collection(fixture.users_id), "dropped collection should leave storage");
-}
-
-void test_index_ddl_updates_catalog()
-{
-    Fixture fixture;
-
-    auto created = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "CREATE INDEX idx_age ON users (age);", fixture.database_id);
-    require(created.kind == ExecutionResultKind::Command, "CREATE INDEX result kind mismatch");
-    require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
-
-    const auto * index = fixture.catalog.find_index(fixture.users_id, "idx_age");
-    require(index != nullptr, "created index missing");
-    const auto index_id = index->id();
-    require(index->kind() == litedb::core::meta::entry::IndexKind::BTree, "created index kind mismatch");
-    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
-    require(age_column != nullptr, "age column lookup failed");
-    require(index->column_id() == age_column->id(), "created index column mismatch");
-    auto managed_index = fixture.index_manager.find_index(index_id);
-    require(managed_index.has_value(), "managed index should be created");
-    require(managed_index->index.size() == 0, "empty managed index size mismatch");
-
-    insert_user(fixture, 1, "alice", 18);
-    insert_user(fixture, 2, "bob", 20);
-    require(find_index_equal(fixture, index_id, Value {std::int32_t {18}}).size() == 1, "INSERT should add index key");
-    require(find_index_equal(fixture, index_id, Value {std::int32_t {20}}).size() == 1, "INSERT should add second index key");
-
-    auto updated = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "UPDATE users SET age = 21 WHERE id = 1;",
-        fixture.database_id
-    );
-    require(updated.affected_rows == 1, "indexed UPDATE affected rows mismatch");
-    require(find_index_equal(fixture, index_id, Value {std::int32_t {18}}).empty(), "UPDATE should remove old index key");
-    require(find_index_equal(fixture, index_id, Value {std::int32_t {21}}).size() == 1, "UPDATE should add new index key");
-
-    auto deleted = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "DELETE FROM users WHERE id = 2;",
-        fixture.database_id
-    );
-    require(deleted.affected_rows == 1, "indexed DELETE affected rows mismatch");
-    require(find_index_equal(fixture, index_id, Value {std::int32_t {20}}).empty(), "DELETE should remove index key");
-
-    auto duplicate_if_not_exists = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "CREATE INDEX IF NOT EXISTS idx_age ON users (age) USING BTREE;",
-        fixture.database_id
-    );
-    require(duplicate_if_not_exists.affected_rows == 0, "CREATE INDEX IF NOT EXISTS affected rows mismatch");
-    require(fixture.catalog.find_index(fixture.users_id, "idx_age")->kind() == litedb::core::meta::entry::IndexKind::BTree, "existing index should not be replaced");
-
-    auto dropped = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DROP INDEX idx_age ON users;", fixture.database_id);
-    require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
-    require(fixture.catalog.find_index(fixture.users_id, "idx_age") == nullptr, "dropped index should leave catalog");
-    require(!fixture.index_manager.find_index(index_id).has_value(), "dropped index should leave manager");
-
-    auto drop_missing = execute_ok(fixture.catalog, fixture.storage, fixture.index_manager, "DROP INDEX IF EXISTS idx_age ON users;", fixture.database_id);
-    require(drop_missing.affected_rows == 0, "DROP INDEX IF EXISTS affected rows mismatch");
-}
-
 void test_index_scan_execution_paths()
 {
     Fixture fixture;
-    auto explicit_btree_index = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "CREATE INDEX idx_age_explicit ON users (age) USING BTREE;",
-        fixture.database_id
-    );
-    require(explicit_btree_index.affected_rows == 1, "explicit btree index create affected rows mismatch");
+    (void) create_index(fixture, "idx_age_explicit");
 
     insert_user(fixture, 1, "alice", 18);
     insert_user(fixture, 2, "bob", 20);
@@ -497,14 +438,7 @@ void test_index_scan_execution_paths()
     );
     require(btree_range_filter.rows.size() == 3, "btree range SELECT row count mismatch");
 
-    auto btree_index = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "CREATE INDEX idx_age_btree ON users (age) USING BTREE;",
-        fixture.database_id
-    );
-    require(btree_index.affected_rows == 1, "btree index create affected rows mismatch");
+    const auto btree_index_id = create_index(fixture, "idx_age_btree");
 
     auto btree_range = execute_ok(
         fixture.catalog,
@@ -542,14 +476,11 @@ void test_index_scan_execution_paths()
     );
     require(deleted.affected_rows == 1, "indexed range DELETE affected rows mismatch");
 
-    auto dropped = execute_ok(
-        fixture.catalog,
-        fixture.storage,
-        fixture.index_manager,
-        "DROP INDEX idx_age_btree ON users;",
-        fixture.database_id
-    );
-    require(dropped.affected_rows == 1, "btree index drop affected rows mismatch");
+    require(fixture.catalog.drop_index(DropIndexRequest {
+        .collection_id = fixture.users_id,
+        .name = "idx_age_btree",
+    }).has_value(), "fixture index metadata drop failed");
+    require(fixture.index_manager.drop_index(btree_index_id).has_value(), "fixture runtime index drop failed");
 
     auto range_after_drop = execute_ok(
         fixture.catalog,
@@ -593,18 +524,32 @@ void test_error_mapping()
     require(invalid_literal.error().code == ExecutionErrorCode::EvaluationError, "evaluation error mapping mismatch");
 }
 
+void test_ddl_requires_database_engine()
+{
+    Fixture fixture;
+    auto plan = plan_ok(
+        fixture.catalog,
+        fixture.index_manager,
+        "CREATE INDEX idx_age ON users (age);",
+        fixture.database_id
+    );
+    Executor executor {fixture.catalog, fixture.storage, fixture.index_manager};
+    auto result = executor.execute(*plan);
+    require(!result.has_value(), "Executor should reject standalone DDL");
+    require(result.error().code == ExecutionErrorCode::UnsupportedStatement, "standalone DDL error mismatch");
+}
+
 } // namespace
 
 int main()
 {
     try {
-        test_ddl_use_show_and_describe();
+        test_use_show_and_describe();
         test_insert_select_update_and_delete();
         test_order_by_keeps_null_last();
-        test_drop_collection_removes_storage();
-        test_index_ddl_updates_catalog();
         test_index_scan_execution_paths();
         test_error_mapping();
+        test_ddl_requires_database_engine();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

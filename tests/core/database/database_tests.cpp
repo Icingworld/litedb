@@ -1,5 +1,5 @@
-#include "core/engine/engine.hpp"
-#include "core/engine/session.hpp"
+#include "core/database/database_engine.hpp"
+#include "core/database/session.hpp"
 #include "core/index/scalar_index_key.hpp"
 #include "../storage/temporary_directory.hpp"
 
@@ -14,7 +14,7 @@
 namespace
 {
 
-using namespace litedb::core::engine;
+using namespace litedb::core::database;
 using namespace litedb::core::executor;
 using namespace litedb::core::index;
 using namespace litedb::core::schema;
@@ -32,7 +32,35 @@ const T & get_value(const Value & value)
     return std::get<T>(value.data());
 }
 
-std::vector<litedb::core::common::RecordId> find_index_equal(Engine & engine, litedb::core::common::IndexId index_id, Value value)
+std::unique_ptr<DatabaseEngine> open_database(DatabaseConfig config)
+{
+    auto opened = DatabaseEngine::open(std::move(config));
+    if (!opened.has_value()) {
+        throw std::runtime_error(opened.error().message);
+    }
+    return std::move(opened.value());
+}
+
+class TestDatabase
+{
+public:
+    explicit TestDatabase(DatabaseConfig config)
+        : engine_(open_database(std::move(config)))
+        , session_(*engine_)
+    {
+    }
+
+    auto execute_sql(std::string_view sql) { return session_.execute_sql(sql); }
+    auto current_database_id() const noexcept { return session_.current_database_id(); }
+    const auto & meta() const noexcept { return engine_->meta(); }
+    const auto & index_manager() const noexcept { return engine_->index_manager(); }
+
+private:
+    std::unique_ptr<DatabaseEngine> engine_;
+    Session session_;
+};
+
+std::vector<litedb::core::common::RecordId> find_index_equal(TestDatabase & engine, litedb::core::common::IndexId index_id, Value value)
 {
     auto key = ScalarIndexKey::from_value(std::move(value));
     require(key.has_value(), "index key creation failed");
@@ -45,7 +73,7 @@ std::vector<litedb::core::common::RecordId> find_index_equal(Engine & engine, li
     return std::move(found.value());
 }
 
-ExecutionResult execute_ok(Engine & engine, std::string_view sql)
+ExecutionResult execute_ok(TestDatabase & engine, std::string_view sql)
 {
     auto result = engine.execute_sql(sql);
     if (!result.has_value()) {
@@ -54,7 +82,7 @@ ExecutionResult execute_ok(Engine & engine, std::string_view sql)
     return std::move(result.value());
 }
 
-EngineError execute_error(Engine & engine, std::string_view sql)
+SessionError execute_error(TestDatabase & engine, std::string_view sql)
 {
     auto result = engine.execute_sql(sql);
     require(!result.has_value(), "SQL should fail");
@@ -64,7 +92,7 @@ EngineError execute_error(Engine & engine, std::string_view sql)
 void test_execute_sql_end_to_end()
 {
     litedb::tests::TemporaryDirectory data_directory {"litedb-engine-end-to-end"};
-    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
+    TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
 
     auto create_database = execute_ok(engine, "CREATE DATABASE demo;");
     require(create_database.kind == ExecutionResultKind::Command, "CREATE DATABASE result kind mismatch");
@@ -72,7 +100,7 @@ void test_execute_sql_end_to_end()
 
     auto use_database = execute_ok(engine, "USE demo;");
     require(use_database.kind == ExecutionResultKind::UseDatabase, "USE result kind mismatch");
-    require(engine.current_database_id().has_value(), "Engine session should select database");
+    require(engine.current_database_id().has_value(), "Database session should select database");
     require(use_database.selected_database_id == engine.current_database_id(), "USE selected database mismatch");
 
     auto create_collection = execute_ok(
@@ -127,7 +155,7 @@ void test_execute_sql_end_to_end()
 void test_vector_distance_query()
 {
     litedb::tests::TemporaryDirectory data_directory {"litedb-engine-vector-query"};
-    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
+    TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
     execute_ok(engine, "CREATE DATABASE vectors;");
     execute_ok(engine, "USE vectors;");
     execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, embedding VECTOR(3));");
@@ -148,7 +176,7 @@ void test_vector_distance_query()
 void test_vector_index_ddl()
 {
     litedb::tests::TemporaryDirectory data_directory {"litedb-engine-vector-index"};
-    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
+    TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
     execute_ok(engine, "CREATE DATABASE vectors;");
     execute_ok(engine, "USE vectors;");
     execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, embedding VECTOR(3));");
@@ -186,21 +214,21 @@ void test_vector_index_ddl()
 void test_engine_error_mapping()
 {
     litedb::tests::TemporaryDirectory data_directory {"litedb-engine-errors"};
-    Engine engine {DatabaseConfig {.data_dir = data_directory.path()}};
+    TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
 
     auto parse_error = execute_error(engine, "SELECT FROM;");
-    require(parse_error.code == EngineErrorCode::ParserError, "parser error code mismatch");
+    require(parse_error.code == SessionErrorCode::ParserError, "parser error code mismatch");
 
     auto binder_error = execute_error(engine, "SHOW COLLECTIONS;");
-    require(binder_error.code == EngineErrorCode::BinderError, "binder error code mismatch");
+    require(binder_error.code == SessionErrorCode::BinderError, "binder error code mismatch");
 }
 
 void test_sessions_share_instance_but_keep_context()
 {
     litedb::tests::TemporaryDirectory data_directory {"litedb-engine-sessions"};
-    DatabaseInstance instance {DatabaseConfig {.data_dir = data_directory.path()}};
-    Session first {instance};
-    Session second {instance};
+    auto engine = open_database(DatabaseConfig {.data_dir = data_directory.path()});
+    Session first {*engine};
+    Session second {*engine};
 
     auto create_database = first.execute_sql("CREATE DATABASE shared;");
     require(create_database.has_value(), "CREATE DATABASE should succeed");

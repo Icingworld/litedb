@@ -4,13 +4,13 @@
 
 #include "core/parser/ast/ast_node.hpp"
 
-namespace litedb::core::engine
+namespace litedb::core::database
 {
 
 /**
- * @brief Engine 错误码
+ * @brief Session 错误码
  */
-enum class EngineErrorCode
+enum class SessionErrorCode
 {
     ParserError,        ///< 解析错误
     BinderError,        ///< 绑定错误
@@ -20,13 +20,13 @@ enum class EngineErrorCode
 };
 
 /**
- * @brief Engine 错误
+ * @brief Session 错误
  */
-struct EngineError
+struct SessionError
 {
-    EngineErrorCode code;                       ///< 错误码
+    SessionErrorCode code;                      ///< 错误码
     parser::ast::AstNodeLocation location;      ///< 错误位置
     std::string message;                        ///< 错误消息
 };
 
-} // namespace litedb::core::engine
+} // namespace litedb::core::database

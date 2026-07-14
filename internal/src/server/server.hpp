@@ -7,7 +7,7 @@
 
 #include <asio.hpp>
 
-#include "core/engine/database_instance.hpp"
+#include "core/database/database_engine.hpp"
 #include "net/frame_io.hpp"
 
 namespace litedb::server
@@ -23,7 +23,7 @@ struct ServerConfig
 class Server
 {
 public:
-    Server(asio::io_context & io, ServerConfig config, std::shared_ptr<core::engine::DatabaseInstance> instance);
+    Server(asio::io_context & io, ServerConfig config, std::shared_ptr<core::database::DatabaseEngine> engine);
 
     Server(const Server &) = delete;
     Server & operator=(const Server &) = delete;
@@ -45,7 +45,7 @@ private:
 
     asio::ip::tcp::acceptor acceptor_;
     ServerConfig config_;
-    std::shared_ptr<core::engine::DatabaseInstance> instance_;
+    std::shared_ptr<core::database::DatabaseEngine> engine_;
 };
 
 } // namespace litedb::server

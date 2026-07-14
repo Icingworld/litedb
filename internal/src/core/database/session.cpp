@@ -1,4 +1,4 @@
-#include "core/engine/session.hpp"
+#include "core/database/session.hpp"
 
 #include <memory>
 #include <mutex>
@@ -13,7 +13,7 @@
 #include "core/physical_plan/physical_planner.hpp"
 #include "core/logical_plan/logical_planner.hpp"
 
-namespace litedb::core::engine
+namespace litedb::core::database
 {
 
 namespace
@@ -29,50 +29,50 @@ parser::ast::AstNodeLocation location_from_token(parser::TokenLocation location)
 }
 
 [[nodiscard]]
-EngineError from_parser_error(parser::ParserError error)
+SessionError from_parser_error(parser::ParserError error)
 {
-    return EngineError {
-        .code = EngineErrorCode::ParserError,
+    return SessionError {
+        .code = SessionErrorCode::ParserError,
         .location = location_from_token(error.location),
         .message = std::move(error.message),
     };
 }
 
 [[nodiscard]]
-EngineError from_binder_error(binder::BinderError error)
+SessionError from_binder_error(binder::BinderError error)
 {
-    return EngineError {
-        .code = EngineErrorCode::BinderError,
+    return SessionError {
+        .code = SessionErrorCode::BinderError,
         .location = error.location,
         .message = std::move(error.message),
     };
 }
 
 [[nodiscard]]
-EngineError from_planner_error(planner::PlannerError error)
+SessionError from_planner_error(planner::PlannerError error)
 {
-    return EngineError {
-        .code = EngineErrorCode::PlannerError,
+    return SessionError {
+        .code = SessionErrorCode::PlannerError,
         .location = error.location,
         .message = std::move(error.message),
     };
 }
 
 [[nodiscard]]
-EngineError from_optimizer_error(optimizer::OptimizerError error)
+SessionError from_optimizer_error(optimizer::OptimizerError error)
 {
-    return EngineError {
-        .code = EngineErrorCode::OptimizerError,
+    return SessionError {
+        .code = SessionErrorCode::OptimizerError,
         .location = error.location,
         .message = std::move(error.message),
     };
 }
 
 [[nodiscard]]
-EngineError from_execution_error(executor::ExecutionError error)
+SessionError from_execution_error(executor::ExecutionError error)
 {
-    return EngineError {
-        .code = EngineErrorCode::ExecutionError,
+    return SessionError {
+        .code = SessionErrorCode::ExecutionError,
         .location = error.location,
         .message = std::move(error.message),
     };
@@ -80,14 +80,14 @@ EngineError from_execution_error(executor::ExecutionError error)
 
 } // namespace
 
-Session::Session(DatabaseInstance & instance) noexcept
-    : instance_(&instance)
+Session::Session(DatabaseEngine & engine) noexcept
+    : engine_(&engine)
 {
 }
 
-std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::string_view sql)
+std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std::string_view sql)
 {
-    std::scoped_lock lock {instance_->mutex()};
+    std::scoped_lock lock {engine_->mutex_};
 
     parser::Parser parser {std::string(sql)};
     auto parsed = parser.parse();
@@ -95,7 +95,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_parser_error(std::move(parsed.error())));
     }
 
-    binder::BinderContext context {instance_->meta(), session_};
+    binder::BinderContext context {engine_->meta_, session_};
     binder::Binder binder {context};
     auto bound = binder.bind(*parsed.value());
     if (!bound.has_value()) {
@@ -108,7 +108,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
         return std::unexpected(from_planner_error(std::move(planned.error())));
     }
 
-    optimizer::Optimizer optimizer {{}, &instance_->meta()};
+    optimizer::Optimizer optimizer {{}, &engine_->meta_};
     auto optimized = optimizer.optimize(std::move(planned.value()));
     if (!optimized.has_value()) {
         return std::unexpected(from_optimizer_error(std::move(optimized.error())));
@@ -117,13 +117,7 @@ std::expected<executor::ExecutionResult, EngineError> Session::execute_sql(std::
     physical_plan::PhysicalPlanner physical_planner;
     auto physical = physical_planner.plan(*optimized.value());
 
-    executor::Executor executor {
-        instance_->meta(),
-        instance_->storage(),
-        instance_->index_manager(),
-        instance_->ddl_handler(),
-    };
-    auto executed = executor.execute(*physical);
+    auto executed = engine_->execute(*physical);
     if (!executed.has_value()) {
         return std::unexpected(from_execution_error(std::move(executed.error())));
     }
@@ -140,4 +134,4 @@ std::optional<common::DatabaseId> Session::current_database_id() const noexcept
     return session_.current_database_id;
 }
 
-} // namespace litedb::core::engine
+} // namespace litedb::core::database
