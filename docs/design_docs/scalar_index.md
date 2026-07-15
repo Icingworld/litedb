@@ -331,14 +331,19 @@ B+Tree index file
 
 这时需要设计：
 
-- page layout
-- key serialization
-- duplicate key posting list
-- overflow page
+- 逻辑 leaf / internal page
+- 固定 4096 字节 page layout 与 key serialization
+- 单索引文件头、PageId 分配和节点页随机读写
 - split / merge
+- 空闲页回收
 - crash consistency
 - rebuild / repair
 - 与 row log 或 WAL 的一致性
+
+当前已经完成前三项基础设施：`BTreePage` 使用 `(ScalarIndexKey, RecordId)` 复合键处理重复标量键，
+`BTreePageCodec` 负责单节点页与 4096 字节物理页之间的编解码，`BTreePageStore` 负责单索引文件头、
+连续 PageId 分配、root/entry count 元数据以及节点页随机读写。当前 `BTreeIndex` 尚未切换到这些页面，
+运行时仍使用 `std::map` 并在启动时重建。
 
 ### 5.3 B+Tree 删除策略
 
@@ -376,13 +381,18 @@ B+Tree 删除是复杂点。可以分阶段：
   IndexManager 拆分为 IndexEngine + IndexStore
   一个 IndexStore 对应一个索引实例
   IndexStore 封装内存 Hash/Ordered 后端及单索引约束
+  B+Tree leaf/internal 逻辑页与复合排序键
+  BTreePageCodec 固定 4096 字节页格式
+  BTreePageStore 文件头、PageId 分配和节点页持久化
 
 下一步:
-  增加稳定的 ScalarIndexKey 编解码契约
+  基于 BTreePageStore 实现 root-to-leaf 查找路径
+  实现叶子页插入、按字节容量分裂和向上分裂传播
+  将 BTreeIndex 从 std::map 切换到真实 B+Tree
 
 后续:
-  page-based B+Tree IndexStore
-  posting-list cursor 与溢出页
+  删除后的 borrow / merge / root shrink
+  空闲页回收与崩溃一致性
   更完整的优化器和统计信息
 ```
 
