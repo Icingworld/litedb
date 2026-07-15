@@ -13,3 +13,11 @@ add_executable(index_engine_tests
 target_link_libraries(index_engine_tests PRIVATE litedb_index)
 
 add_test(NAME index_engine_tests COMMAND index_engine_tests)
+
+add_executable(btree_page_tests
+    btree_page_tests.cpp
+)
+
+target_link_libraries(btree_page_tests PRIVATE litedb_index)
+
+add_test(NAME btree_page_tests COMMAND btree_page_tests)
