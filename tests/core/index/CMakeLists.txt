@@ -21,3 +21,11 @@ add_executable(btree_page_tests
 target_link_libraries(btree_page_tests PRIVATE litedb_index)
 
 add_test(NAME btree_page_tests COMMAND btree_page_tests)
+
+add_executable(btree_page_codec_tests
+    btree_page_codec_tests.cpp
+)
+
+target_link_libraries(btree_page_codec_tests PRIVATE litedb_index)
+
+add_test(NAME btree_page_codec_tests COMMAND btree_page_codec_tests)

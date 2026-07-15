@@ -52,11 +52,6 @@ BTreeLeafPage::BTreeLeafPage(
 {
 }
 
-constexpr BTreePageType BTreeLeafPage::type() noexcept
-{
-    return BTreePageType::Leaf;
-}
-
 BTreePageId BTreeLeafPage::page_id() const noexcept
 {
     return page_id_;
@@ -159,11 +154,6 @@ BTreeInternalPage::BTreeInternalPage(BTreePageId page_id, BTreePageId first_chil
     : page_id_(page_id)
     , first_child_id_(first_child_id)
 {
-}
-
-constexpr BTreePageType BTreeInternalPage::type() noexcept
-{
-    return BTreePageType::Internal;
 }
 
 BTreePageId BTreeInternalPage::page_id() const noexcept

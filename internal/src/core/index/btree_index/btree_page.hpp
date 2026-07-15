@@ -82,7 +82,7 @@ public:
      * @brief 获取页类型
      */
     [[nodiscard]]
-    static constexpr BTreePageType type() noexcept;
+    static constexpr BTreePageType type() noexcept { return BTreePageType::Leaf; }
 
     /**
      * @brief 获取页 ID
@@ -197,7 +197,7 @@ public:
      * @brief 获取页类型
      */
     [[nodiscard]]
-    static constexpr BTreePageType type() noexcept;
+    static constexpr BTreePageType type() noexcept { return BTreePageType::Internal; }
 
     /**
      * @brief 获取页 ID
