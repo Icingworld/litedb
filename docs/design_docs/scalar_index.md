@@ -25,7 +25,9 @@
 ScalarIndex
   ├─ HashIndex
   └─ OrderedScalarIndex
-       └─ BTreeIndex
+       └─ MapIndex（BTREE 的过渡后端）
+
+BTreeIndex -> BTreePageStore（页式 B+Tree，正在实现）
 
 ScalarIndexKey
   ├─ ScalarIndexEqual
@@ -83,9 +85,9 @@ insert(new_key, record_id)
 
 `HashIndex` 使用 `std::unordered_map` 提供等值查询，不属于 `OrderedScalarIndex`，因此它在类型层面不暴露 `scan_range`。当前 SQL 语法仍不暴露 `USING HASH`；catalog 和内部运行时可以保存 Hash 索引定义。
 
-### 3.2 BTreeIndex
+### 3.2 MapIndex
 
-当前 `BTreeIndex` 不是手写 B 树，也不是手写 B+ 树。它是 `OrderedScalarIndex` 的纯内存实现，第一版后端使用：
+`MapIndex` 是 `OrderedScalarIndex` 的纯内存过渡实现，后端使用：
 
 ```cpp
 std::map<ScalarIndexKey, std::vector<RecordId>, ScalarIndexLess>
@@ -100,7 +102,7 @@ find_equal
 scan_range
 ```
 
-它提供未来 B+Tree 需要的外部能力：有序 key、等值查询、范围查询。
+它保持现有 BTREE 的有序 key、等值查询和范围查询行为，待页式 `BTreeIndex` 接入 `IndexEngine` 后废弃。
 
 `IndexStore` 记录索引列的 `LogicalType`，写入、删除和查询入口都会校验键的精确物理类型，并在单个索引边界内维护唯一性约束。`IndexEngine` 对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不暴露内部 `ScalarIndex` 引用。Hash 索引收到范围查询时返回 `UnsupportedRangeScan`。
 
@@ -342,8 +344,8 @@ B+Tree index file
 
 当前已经完成前三项基础设施：`BTreePage` 使用 `(ScalarIndexKey, RecordId)` 复合键处理重复标量键，
 `BTreePageCodec` 负责单节点页与 4096 字节物理页之间的编解码，`BTreePageStore` 负责单索引文件头、
-连续 PageId 分配、root/entry count 元数据以及节点页随机读写。当前 `BTreeIndex` 尚未切换到这些页面，
-运行时仍使用 `std::map` 并在启动时重建。
+连续 PageId 分配、root/entry count 元数据以及节点页随机读写。页式 `BTreeIndex` 已负责创建、打开和持有
+`BTreePageStore`；树遍历和修改算法尚未实现。运行时暂时仍使用 `MapIndex` 并在启动时重建。
 
 ### 5.3 B+Tree 删除策略
 
@@ -375,7 +377,7 @@ B+Tree 删除是复杂点。可以分阶段：
   insert/update/delete 自动维护索引
   optimizer -> PhysicalIndexScan -> executor 查询索引
   HashIndex 提供等值查询
-  BTreeIndex 使用 map 提供等值和范围查询
+  MapIndex 作为 BTREE 兼容后端提供等值和范围查询
 
 已完成:
   IndexManager 拆分为 IndexEngine + IndexStore
@@ -384,11 +386,13 @@ B+Tree 删除是复杂点。可以分阶段：
   B+Tree leaf/internal 逻辑页与复合排序键
   BTreePageCodec 固定 4096 字节页格式
   BTreePageStore 文件头、PageId 分配和节点页持久化
+  BTreeIndex 创建、打开和持有 BTreePageStore
+  原 std::map 实现迁移为待废弃的 MapIndex
 
 下一步:
   基于 BTreePageStore 实现 root-to-leaf 查找路径
   实现叶子页插入、按字节容量分裂和向上分裂传播
-  将 BTreeIndex 从 std::map 切换到真实 B+Tree
+  让 BTreeIndex 实现 OrderedScalarIndex 并替换 IndexEngine 中的 MapIndex
 
 后续:
   删除后的 borrow / merge / root shrink

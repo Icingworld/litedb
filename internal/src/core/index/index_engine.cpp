@@ -4,8 +4,8 @@
 #include <utility>
 
 #include "core/meta/meta_engine.hpp"
-#include "core/index/btree_index/btree_index.hpp"
 #include "core/index/hash_index/hash_index.hpp"
+#include "core/index/map_index/map_index.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
@@ -31,7 +31,8 @@ std::unique_ptr<ScalarIndex> IndexEngine::make_backend(meta::entry::IndexKind in
     case meta::entry::IndexKind::Hash:
         return std::make_unique<HashIndex>();
     case meta::entry::IndexKind::BTree:
-        return std::make_unique<BTreeIndex>();
+        // 页式 BTreeIndex 完成 OrderedScalarIndex 接口前，保留兼容后端。
+        return std::make_unique<MapIndex>();
     }
     return nullptr;
 }

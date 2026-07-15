@@ -1,4 +1,4 @@
-#include "core/index/btree_index/btree_index.hpp"
+#include "core/index/map_index/map_index.hpp"
 #include "core/index/hash_index/hash_index.hpp"
 #include "core/index/index_store.hpp"
 
@@ -128,9 +128,9 @@ void test_hash_index_equal_lookup_and_erase()
     require(index.size() == 1, "hash size after erase mismatch");
 }
 
-void test_btree_index_equal_lookup_and_ranges()
+void test_map_index_equal_lookup_and_ranges()
 {
-    BTreeIndex index;
+    MapIndex index;
     require(index.kind() == IndexKind::BTree, "btree index kind mismatch");
 
     require(index.insert(key(Value {std::int32_t {1}}), 10).has_value(), "btree insert 1 failed");
@@ -185,9 +185,9 @@ void test_btree_index_equal_lookup_and_ranges()
     require(duplicate.error().code == IndexErrorCode::DuplicateEntry, "duplicate btree entry error mismatch");
 }
 
-void test_btree_index_erase_errors_and_cleanup()
+void test_map_index_erase_errors_and_cleanup()
 {
-    BTreeIndex index;
+    MapIndex index;
     const auto one = key(Value {std::int32_t {1}});
 
     require(index.insert(one, 10).has_value(), "btree insert failed");
@@ -244,8 +244,8 @@ int main()
         test_scalar_key_exact_type_semantics();
         test_scalar_key_ordering_is_stable();
         test_hash_index_equal_lookup_and_erase();
-        test_btree_index_equal_lookup_and_ranges();
-        test_btree_index_erase_errors_and_cleanup();
+        test_map_index_equal_lookup_and_ranges();
+        test_map_index_erase_errors_and_cleanup();
         test_index_store_enforces_descriptor_constraints();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

@@ -1,89 +1,68 @@
 #pragma once
 
-#include <map>
-#include <vector>
+#include <cstdint>
+#include <expected>
+#include <filesystem>
 
-#include "core/index/scalar_index.hpp"
+#include "core/index/btree_index/btree_page_store.hpp"
 
 namespace litedb::core::index
 {
 
 /**
- * @brief B+ 树索引
- * @todo 实现 B+ 树索引，暂时使用 std::map 模拟 B+ 树
+ * @brief 基于持久化页面的 B+Tree 索引
  */
-class BTreeIndex final : public OrderedScalarIndex
+class BTreeIndex final
 {
 public:
-    BTreeIndex();
+    BTreeIndex(const BTreeIndex &) = delete;
+
+    BTreeIndex & operator=(const BTreeIndex &) = delete;
+
+    BTreeIndex(BTreeIndex &&) noexcept = default;
+
+    BTreeIndex & operator=(BTreeIndex &&) noexcept = default;
 
 public:
-    /**
-     * @brief 获取索引类型
-     * @return 索引类型
-     */
     [[nodiscard]]
-    IndexKind kind() const noexcept override;
+    static std::expected<BTreeIndex, btree_index::BTreePageStoreError> create(
+        std::filesystem::path path,
+        common::IndexId index_id,
+        common::LogicalType key_type,
+        filesystem::FileSystem & filesystem
+    );
 
-    /**
-     * @brief 插入键值对
-     * @param key 键
-     * @param record_id 记录 ID
-     * @return 是否成功
-     */
-    std::expected<void, IndexError> insert(
-        const ScalarIndexKey & key,
-        common::RecordId record_id
-    ) override;
-
-    /**
-     * @brief 删除键值对
-     * @param key 键
-     * @param record_id 记录 ID
-     * @return 是否成功
-     */
-    std::expected<void, IndexError> erase(
-        const ScalarIndexKey & key,
-        common::RecordId record_id
-    ) override;
-
-    /**
-     * @brief 查找等于键的记录 ID
-     * @param key 键
-     * @return 记录 ID 列表
-     */
     [[nodiscard]]
-    std::expected<std::vector<common::RecordId>, IndexError> find_equal(
-        const ScalarIndexKey & key
-    ) const override;
+    static std::expected<BTreeIndex, btree_index::BTreePageStoreError> open(
+        std::filesystem::path path,
+        common::IndexId expected_index_id,
+        common::LogicalType expected_key_type,
+        filesystem::FileSystem & filesystem
+    );
 
-    /**
-     * @brief 扫描 range 范围内的记录 ID
-     * @param range 范围
-     * @return 记录 ID 列表
-     */
     [[nodiscard]]
-    std::expected<std::vector<common::RecordId>, IndexError> scan_range(
-        const IndexRange & range
-    ) const override;
+    const std::filesystem::path & path() const noexcept;
 
-    /**
-     * @brief 清空索引
-     */
-    void clear() noexcept override;
-
-    /**
-     * @brief 获取索引大小
-     * @return 索引大小
-     */
     [[nodiscard]]
-    std::size_t size() const noexcept override;
+    common::IndexId index_id() const noexcept;
+
+    [[nodiscard]]
+    const common::LogicalType & key_type() const noexcept;
+
+    [[nodiscard]]
+    btree_index::BTreePageId root_page_id() const noexcept;
+
+    [[nodiscard]]
+    std::uint64_t page_count() const noexcept;
+
+    [[nodiscard]]
+    std::uint64_t entry_count() const noexcept;
 
 private:
-    std::map<
-        ScalarIndexKey, std::vector<common::RecordId>, ScalarIndexLess
-    > buckets_;                             ///< 桶
-    std::size_t entry_count_;               ///< 键值对数量
+    explicit BTreeIndex(btree_index::BTreePageStore store) noexcept;
+
+private:
+    btree_index::BTreePageStore store_;
 };
 
 } // namespace litedb::core::index
