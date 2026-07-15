@@ -345,7 +345,9 @@ B+Tree index file
 当前已经完成前三项基础设施：`BTreePage` 使用 `(ScalarIndexKey, RecordId)` 复合键处理重复标量键，
 `BTreePageCodec` 负责单节点页与 4096 字节物理页之间的编解码，`BTreePageStore` 负责单索引文件头、
 连续 PageId 分配、root/entry count 元数据以及节点页随机读写。页式 `BTreeIndex` 已负责创建、打开和持有
-`BTreePageStore`；树遍历和修改算法尚未实现。运行时暂时仍使用 `MapIndex` 并在启动时重建。
+`BTreePageStore`，并已预留与 `OrderedScalarIndex` 一致的 `find_equal`、`scan_range`、`insert`、`erase`
+接口。尚未实现的操作会明确返回 `NotImplemented`，且该类暂不继承 `OrderedScalarIndex`、不进入运行时工厂。
+运行时暂时仍使用 `MapIndex` 并在启动时重建。
 
 ### 5.3 B+Tree 删除策略
 
@@ -387,6 +389,7 @@ B+Tree 删除是复杂点。可以分阶段：
   BTreePageCodec 固定 4096 字节页格式
   BTreePageStore 文件头、PageId 分配和节点页持久化
   BTreeIndex 创建、打开和持有 BTreePageStore
+  BTreeIndex 核心操作接口框架与明确的 NotImplemented 契约
   原 std::map 实现迁移为待废弃的 MapIndex
 
 下一步:

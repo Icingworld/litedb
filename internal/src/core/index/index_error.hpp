@@ -22,6 +22,7 @@ enum class IndexErrorCode
     IndexNotFound,          ///< 索引不存在
     InvalidIndexColumn,     ///< 索引列无效或不可索引
     StorageError,           ///< 存储扫描失败
+    NotImplemented,         ///< 索引操作尚未实现
 };
 
 /**
