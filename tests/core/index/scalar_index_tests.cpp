@@ -1,5 +1,5 @@
-#include "core/index/btree_index.hpp"
-#include "core/index/hash_index.hpp"
+#include "core/index/btree_index/btree_index.hpp"
+#include "core/index/hash_index/hash_index.hpp"
 #include "core/index/index_store.hpp"
 
 #include <algorithm>

@@ -1,4 +1,4 @@
-#include "core/index/btree_index.hpp"
+#include "core/index/btree_index/btree_index.hpp"
 
 #include <algorithm>
 #include <string>

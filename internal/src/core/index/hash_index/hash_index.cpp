@@ -1,4 +1,4 @@
-#include "core/index/hash_index.hpp"
+#include "core/index/hash_index/hash_index.hpp"
 
 #include <algorithm>
 #include <string>
