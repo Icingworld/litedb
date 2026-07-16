@@ -69,6 +69,49 @@ DatabaseError to_database_error(index::IndexError error)
     };
 }
 
+DatabaseError to_database_error(vindex::VectorIndexError error)
+{
+    return DatabaseError {
+        .code = DatabaseErrorCode::IndexError,
+        .message = std::move(error.message),
+    };
+}
+
+vindex::VectorDistanceMetric runtime_metric(meta::entry::VectorDistanceMetric metric)
+{
+    switch (metric) {
+    case meta::entry::VectorDistanceMetric::L2: return vindex::VectorDistanceMetric::L2;
+    case meta::entry::VectorDistanceMetric::InnerProduct: return vindex::VectorDistanceMetric::InnerProduct;
+    case meta::entry::VectorDistanceMetric::Cosine: return vindex::VectorDistanceMetric::Cosine;
+    }
+    return vindex::VectorDistanceMetric::L2;
+}
+
+std::expected<vindex::VectorIndexDefinition, std::string> vector_definition(
+    const meta::entry::VectorIndexEntry & entry,
+    const schema::CollectionSchema & collection_schema
+)
+{
+    const auto * column = collection_schema.find_column(entry.column_id());
+    if (column == nullptr || column->type().id != common::LogicalTypeId::Vector ||
+        !column->type().parameter || *column->type().parameter != entry.dimension()) {
+        return std::unexpected("Vector index column metadata is invalid");
+    }
+    return vindex::VectorIndexDefinition {
+        .index_id = entry.id(),
+        .collection_id = entry.collection_id(),
+        .column_id = entry.column_id(),
+        .column_ordinal = column->ordinal(),
+        .dimension = entry.dimension(),
+        .kind = vindex::VectorIndexKind::Hnsw,
+        .metric = runtime_metric(entry.metric()),
+        .max_neighbors = entry.max_neighbors(),
+        .ef_construction = entry.ef_construction(),
+        .ef_search_default = entry.ef_search_default(),
+        .random_seed = entry.random_seed(),
+    };
+}
+
 /**
  * @brief 创建命令执行结果
  * @param affected_rows 受影响的行数
@@ -90,7 +133,8 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , meta_store_(manifest_.meta_path(), filesystem_)
     , meta_(meta_store_)
     , storage_(config.data_dir, filesystem_)
-    , index_engine_(std::move(config.data_dir), filesystem_)
+    , index_engine_(config.data_dir, filesystem_)
+    , vector_index_manager_(config.data_dir / "vindexes", filesystem_, storage_)
 {
 }
 
@@ -112,6 +156,11 @@ const meta::MetaEngine & DatabaseEngine::meta() const noexcept
 const index::IndexEngine & DatabaseEngine::index_engine() const noexcept
 {
     return index_engine_;
+}
+
+const vindex::VectorIndexManager & DatabaseEngine::vector_index_manager() const noexcept
+{
+    return vector_index_manager_;
 }
 
 std::expected<void, DatabaseError> DatabaseEngine::initialize()
@@ -141,6 +190,11 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(indexes_restored.error())));
     }
 
+    auto vector_indexes_restored = restore_vector_indexes_from_meta();
+    if (!vector_indexes_restored.has_value()) {
+        return std::unexpected(to_database_error(std::move(vector_indexes_restored.error())));
+    }
+
     return {};
 }
 
@@ -168,7 +222,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     case PhysicalStatementPlanKind::DropVectorIndex:
         return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
     default:
-        executor::Executor executor {meta_, storage_, index_engine_};
+        executor::Executor executor {meta_, storage_, index_engine_, vector_index_manager_};
         return executor.execute(plan);
     }
 }
@@ -345,8 +399,34 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
+    const auto * vector_entry = staged.find_vector_index(created.value());
+    if (vector_entry == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            .code = executor::ExecutionErrorCode::MetaError,
+            .location = plan.location(),
+            .message = "Created vector index metadata not found",
+        });
+    }
+    auto collection_schema = schema::load_collection_schema(staged, plan.collection_id());
+    if (!collection_schema) {
+        return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
+    }
+    auto definition = vector_definition(*vector_entry, *collection_schema);
+    if (!definition) {
+        return std::unexpected(executor::ExecutionError {
+            .code = executor::ExecutionErrorCode::SchemaError,
+            .location = plan.location(),
+            .message = std::move(definition.error()),
+        });
+    }
+    auto runtime_created = vector_index_manager_.create_index(*definition);
+    if (!runtime_created) {
+        return std::unexpected(from_vector_index_error(std::move(runtime_created.error()), plan.location()));
+    }
+
     auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
+        (void) vector_index_manager_.drop_index(vector_entry->id());
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
@@ -397,6 +477,10 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         if (!indexes_dropped.has_value()) {
             return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
         }
+        auto vector_indexes_dropped = vector_index_manager_.drop_collection_indexes(collection_id);
+        if (!vector_indexes_dropped) {
+            return std::unexpected(from_vector_index_error(std::move(vector_indexes_dropped.error()), plan.location()));
+        }
     }
 
     return command_result(1);
@@ -437,6 +521,10 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     auto indexes_dropped = index_engine_.drop_collection_indexes(collection_id);
     if (!indexes_dropped.has_value()) {
         return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
+    }
+    auto vector_indexes_dropped = vector_index_manager_.drop_collection_indexes(collection_id);
+    if (!vector_indexes_dropped) {
+        return std::unexpected(from_vector_index_error(std::move(vector_indexes_dropped.error()), plan.location()));
     }
 
     return command_result(1);
@@ -491,6 +579,8 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
+    const auto index_id = existing != nullptr ? std::optional<common::VIndexId> {existing->id()} : std::nullopt;
+
     meta::MetaEngine staged;
     auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
@@ -509,6 +599,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
+    }
+
+    if (index_id) {
+        auto runtime_dropped = vector_index_manager_.drop_index(*index_id);
+        if (!runtime_dropped && runtime_dropped.error().code != vindex::VectorIndexErrorCode::IndexNotFound) {
+            return std::unexpected(from_vector_index_error(std::move(runtime_dropped.error()), plan.location()));
+        }
     }
 
     return command_result(existing == nullptr ? 0 : 1);
@@ -538,6 +635,48 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
             auto opened = storage_.open_collection(std::move(collection_schema.value()));
             if (!opened.has_value()) {
                 return std::unexpected(std::move(opened.error()));
+            }
+        }
+    }
+    return {};
+}
+
+std::expected<void, vindex::VectorIndexError> DatabaseEngine::restore_vector_indexes_from_meta()
+{
+    vector_index_manager_.clear();
+    for (const auto * database : meta_.list_databases()) {
+        if (database == nullptr) {
+            continue;
+        }
+        for (const auto * collection : meta_.list_collections(database->id())) {
+            if (collection == nullptr || !storage_.contains_collection(collection->id())) {
+                continue;
+            }
+            auto collection_schema = schema::load_collection_schema(meta_, collection->id());
+            if (!collection_schema) {
+                return std::unexpected(vindex::VectorIndexError {
+                    .code = vindex::VectorIndexErrorCode::StorageFailure,
+                    .message = std::move(collection_schema.error().message),
+                });
+            }
+            for (const auto * entry : meta_.list_vector_indexes(collection->id())) {
+                if (entry == nullptr) {
+                    continue;
+                }
+                auto definition = vector_definition(*entry, *collection_schema);
+                if (!definition) {
+                    return std::unexpected(vindex::VectorIndexError {
+                        .code = vindex::VectorIndexErrorCode::StorageFailure,
+                        .message = std::move(definition.error()),
+                    });
+                }
+                auto restored = vector_index_manager_.restore_index(*definition);
+                if (!restored) {
+                    auto rebuilt = vector_index_manager_.rebuild_index(*definition);
+                    if (!rebuilt) {
+                        return std::unexpected(std::move(rebuilt.error()));
+                    }
+                }
             }
         }
     }
@@ -582,6 +721,18 @@ executor::ExecutionError DatabaseEngine::from_storage_error(
 
 executor::ExecutionError DatabaseEngine::from_index_error(
     index::IndexError error,
+    parser::ast::AstNodeLocation location
+)
+{
+    return executor::ExecutionError {
+        .code = executor::ExecutionErrorCode::IndexError,
+        .location = location,
+        .message = std::move(error.message),
+    };
+}
+
+executor::ExecutionError DatabaseEngine::from_vector_index_error(
+    vindex::VectorIndexError error,
     parser::ast::AstNodeLocation location
 )
 {

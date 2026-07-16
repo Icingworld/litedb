@@ -120,6 +120,12 @@ ExecutionError from_index_error(index::IndexError error, AstNodeLocation locatio
 }
 
 [[nodiscard]]
+ExecutionError from_vector_index_error(vindex::VectorIndexError error, AstNodeLocation location)
+{
+    return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
+}
+
+[[nodiscard]]
 ExecutionError from_evaluation_error(evaluator::EvaluationError error)
 {
     return make_error(ExecutionErrorCode::EvaluationError, error.location, std::move(error.message));
@@ -754,7 +760,8 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const PhysicalUsePlan
 std::expected<ExecutionResult, ExecutionError> execute_insert(
     const PhysicalInsertPlan & plan,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexManager & vector_index_manager
 )
 {
     auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
@@ -779,6 +786,11 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
     }
 
+    auto vector_bindings = vector_index_manager.prepare_insert(plan.collection_id(), record_data);
+    if (!vector_bindings) {
+        return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+    }
+
     auto inserted = storage.insert(plan.collection_id(), std::move(record_data));
     if (!inserted.has_value()) {
         return std::unexpected(from_storage_error(std::move(inserted.error()), plan.location()));
@@ -790,6 +802,13 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
     }
 
+    auto vector_indexed = vector_index_manager.on_insert(inserted.value(), *vector_bindings);
+    if (!vector_indexed) {
+        (void) index_engine.on_delete(inserted.value(), *index_bindings);
+        (void) storage.erase(plan.collection_id(), inserted.value());
+        return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
+    }
+
     return command_result(1);
 }
 
@@ -798,7 +817,8 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
     const PhysicalDeletePlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexManager & vector_index_manager
 )
 {
     auto rows = execute_physical(plan.input(), catalog, storage, index_engine);
@@ -818,14 +838,27 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
 
-        auto erased = storage.erase(plan.collection_id(), row.source_record.record_id);
-        if (!erased.has_value()) {
-            return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
+        auto vector_bindings = vector_index_manager.prepare_delete(plan.collection_id(), row.source_record.data);
+        if (!vector_bindings) {
+            return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+        }
+
+        auto vector_indexed = vector_index_manager.on_delete(row.source_record.record_id, *vector_bindings);
+        if (!vector_indexed) {
+            return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
         }
 
         auto indexed = index_engine.on_delete(row.source_record.record_id, index_bindings.value());
         if (!indexed.has_value()) {
+            (void) vector_index_manager.on_insert(row.source_record.record_id, *vector_bindings);
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
+        }
+
+        auto erased = storage.erase(plan.collection_id(), row.source_record.record_id);
+        if (!erased.has_value()) {
+            (void) index_engine.on_insert(row.source_record.record_id, *index_bindings);
+            (void) vector_index_manager.on_insert(row.source_record.record_id, *vector_bindings);
+            return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
         }
         ++affected_rows;
     }
@@ -851,7 +884,8 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
     const PhysicalUpdatePlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexManager & vector_index_manager
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -896,6 +930,13 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
 
+        auto vector_bindings = vector_index_manager.prepare_update(
+            plan.collection_id(), row.source_record.data, record_data
+        );
+        if (!vector_bindings) {
+            return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+        }
+
         auto updated = storage.update(plan.collection_id(), row.source_record.record_id, std::move(record_data));
         if (!updated.has_value()) {
             return std::unexpected(from_storage_error(std::move(updated.error()), plan.location()));
@@ -905,6 +946,16 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         if (!indexed.has_value()) {
             (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
+        }
+        auto vector_indexed = vector_index_manager.on_update(row.source_record.record_id, *vector_bindings);
+        if (!vector_indexed) {
+            auto scalar_rollback = *index_bindings;
+            for (auto & binding : scalar_rollback) {
+                std::swap(binding.old_key, binding.new_key);
+            }
+            (void) index_engine.on_update(row.source_record.record_id, scalar_rollback);
+            (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
+            return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
         }
         ++affected_rows;
     }
@@ -1074,6 +1125,21 @@ Executor::Executor(
     : catalog_(catalog)
     , storage_(storage)
     , index_engine_(index_engine)
+    , owned_vector_index_manager_(std::in_place, storage)
+    , vector_index_manager_(&*owned_vector_index_manager_)
+{
+}
+
+Executor::Executor(
+    meta::MetaEngine & catalog,
+    storage::StorageEngine & storage,
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexManager & vector_index_manager
+) noexcept
+    : catalog_(catalog)
+    , storage_(storage)
+    , index_engine_(index_engine)
+    , vector_index_manager_(&vector_index_manager)
 {
 }
 
@@ -1102,11 +1168,17 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const PhysicalS
     case PhysicalStatementPlanKind::DescribeCollection:
         return execute_describe_collection(static_cast<const PhysicalDescribeCollectionPlan &>(plan), catalog_);
     case PhysicalStatementPlanKind::Insert:
-        return execute_insert(static_cast<const PhysicalInsertPlan &>(plan), storage_, index_engine_);
+        return execute_insert(
+            static_cast<const PhysicalInsertPlan &>(plan), storage_, index_engine_, *vector_index_manager_
+        );
     case PhysicalStatementPlanKind::Update:
-        return execute_update(static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_);
+        return execute_update(
+            static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_manager_
+        );
     case PhysicalStatementPlanKind::Delete:
-        return execute_delete(static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_);
+        return execute_delete(
+            static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_manager_
+        );
     case PhysicalStatementPlanKind::Query:
         return execute_query(static_cast<const PhysicalQueryPlan &>(plan), catalog_, storage_, index_engine_);
     }

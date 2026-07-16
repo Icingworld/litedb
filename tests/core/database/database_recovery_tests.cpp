@@ -4,6 +4,7 @@
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/index/scalar_index_key.hpp"
 #include "core/storage/storage_error.hpp"
+#include "core/vindex/vector_index_key.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -272,6 +273,8 @@ void test_vector_index_ddl_reopen()
         execute_ok(session, "CREATE DATABASE demo;");
         execute_ok(session, "USE demo;");
         execute_ok(session, "CREATE COLLECTION docs (id BIGINT NOT NULL, embedding VECTOR(3));");
+        execute_ok(session, "INSERT INTO docs VALUES (1, [1.0, 0.0, 0.0]);");
+        execute_ok(session, "INSERT INTO docs VALUES (2, [0.0, 1.0, 0.0]);");
 
         auto created = execute_ok(
             session,
@@ -290,6 +293,22 @@ void test_vector_index_ddl_reopen()
         require(index != nullptr, "created vector index lookup failed");
         require(index->metric() == meta::entry::VectorDistanceMetric::InnerProduct, "created vector index metric mismatch");
         require(index->dimension() == 3, "created vector index dimension mismatch");
+
+        auto query = vindex::VectorIndexKey::from_vector({1.0, 0.0, 0.0});
+        require(query.has_value(), "vector query key creation failed");
+        auto initial = engine->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        require(initial.has_value() && initial->size() == 2, "created HNSW should contain existing records");
+        const auto first_record_id = initial->front().record_id;
+
+        execute_ok(session, "UPDATE docs SET embedding = [-1.0, 0.0, 0.0] WHERE id = 1;");
+        auto updated = engine->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        require(updated.has_value() && updated->size() == 2, "updated HNSW search failed");
+        require(updated->front().record_id != first_record_id, "HNSW update should replace the old vector");
+
+        execute_ok(session, "DELETE FROM docs WHERE id = 2;");
+        auto deleted = engine->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        require(deleted.has_value() && deleted->size() == 1, "HNSW delete should hide the erased record");
+        require(deleted->front().record_id == first_record_id, "HNSW retained the wrong record after delete");
     }
 
     {
@@ -309,6 +328,10 @@ void test_vector_index_ddl_reopen()
         require(index->ef_construction() == 240, "reopened vector index ef_construction mismatch");
         require(index->ef_search_default() == 80, "reopened vector index ef_search mismatch");
         require(index->random_seed() == 7, "reopened vector index random_seed mismatch");
+        auto query = vindex::VectorIndexKey::from_vector({-1.0, 0.0, 0.0});
+        require(query.has_value(), "reopened vector query key creation failed");
+        auto persisted = reopened->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        require(persisted.has_value() && persisted->size() == 1, "reopened HNSW write state mismatch");
 
         database::Session session {*reopened};
         execute_ok(session, "USE demo;");

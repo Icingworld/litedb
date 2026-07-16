@@ -16,6 +16,7 @@
 #include "core/meta/meta_store.hpp"
 #include "core/schema/schema_error.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/vindex/vector_index_manager.hpp"
 
 namespace litedb::core::physical_plan
 {
@@ -97,6 +98,9 @@ public:
      */
     [[nodiscard]]
     const index::IndexEngine & index_engine() const noexcept;
+
+    [[nodiscard]]
+    const vindex::VectorIndexManager & vector_index_manager() const noexcept;
 
 private:
     friend class Session;
@@ -207,6 +211,9 @@ private:
     [[nodiscard]]
     std::expected<void, storage::StorageError> restore_storage_from_meta();
 
+    [[nodiscard]]
+    std::expected<void, vindex::VectorIndexError> restore_vector_indexes_from_meta();
+
     /**
      * @brief 从 meta 错误创建执行错误
      * @param error meta 错误
@@ -255,6 +262,12 @@ private:
         parser::ast::AstNodeLocation location
     );
 
+    [[nodiscard]]
+    static executor::ExecutionError from_vector_index_error(
+        vindex::VectorIndexError error,
+        parser::ast::AstNodeLocation location
+    );
+
 private:
     filesystem::FileSystem filesystem_;    ///< 文件系统
     DatabaseManifest manifest_;            ///< 数据库 manifest
@@ -262,6 +275,7 @@ private:
     meta::MetaEngine meta_;                ///< meta 引擎
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
+    vindex::VectorIndexManager vector_index_manager_; ///< 向量索引引擎
     std::mutex mutex_;                     ///< 互斥锁
 };
 

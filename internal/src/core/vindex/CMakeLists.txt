@@ -3,6 +3,7 @@ add_subdirectory(hnsw_index)
 
 set(VINDEX_SOURCES
     ${FLAT_INDEX_SOURCES}
+    ${HNSW_INDEX_SOURCES}
     vector_distance.cpp
     vector_index_key.cpp
     vector_index_manager.cpp
