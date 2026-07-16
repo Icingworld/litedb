@@ -122,9 +122,4 @@ std::size_t IndexStore::size() const noexcept
     return backend_->size();
 }
 
-void IndexStore::clear() noexcept
-{
-    backend_->clear();
-}
-
 } // namespace litedb::core::index

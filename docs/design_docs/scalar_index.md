@@ -342,33 +342,35 @@ B+Tree index file
 - rebuild / repair
 - 与 row log 或 WAL 的一致性
 
-当前已经完成前三项基础设施：`BTreePage` 使用 `(ScalarIndexKey, RecordId)` 复合键处理重复标量键，
+当前已经完成前三项基础设施以及首版树操作：`BTreePage` 使用 `(ScalarIndexKey, RecordId)` 复合键处理重复标量键，
 `BTreePageCodec` 负责单节点页与 4096 字节物理页之间的编解码，`BTreePageStore` 负责单索引文件头、
 连续 PageId 分配、root/entry count 元数据以及节点页随机读写。页式 `BTreeIndex` 已负责创建、打开和持有
-`BTreePageStore`，并已预留与 `OrderedScalarIndex` 一致的 `find_equal`、`scan_range`、`insert`、`erase`
-接口。尚未实现的操作会明确返回 `NotImplemented`，且该类暂不继承 `OrderedScalarIndex`、不进入运行时工厂。
+`BTreePageStore`，并已实现 `find_equal`、`scan_range`、`insert`、`erase`：插入按实际编码字节分裂叶子页和
+内部页，删除会更新祖先 separator、摘除空叶子、裁剪空子树并执行 root shrink。该类现已继承
+`OrderedScalarIndex`，可以由 `IndexStore` 通过 `ScalarIndex` 多态持有，但尚未进入运行时工厂。
 运行时暂时仍使用 `MapIndex` 并在启动时重建。
+
+`ScalarIndex` 不再暴露通用 `clear()`：对 Hash/Map 来说它只是清空内存容器，对持久化 B+Tree 来说却意味着
+重写或删除索引文件，二者不是同一层生命周期操作。索引文件的 drop/rebuild/replace 应由 `IndexEngine` 和
+持久化目录管理层编排，而不是由后端读写接口隐藏执行。
 
 ### 5.3 B+Tree 删除策略
 
-B+Tree 删除是复杂点。可以分阶段：
+B+Tree 删除采用“先保证结构正确，再优化空间利用率”的分阶段策略：
 
 ```text
-阶段 1:
-  支持 insert + search + range scan
-  delete 使用 lazy delete 或 tombstone
+已完成:
+  精确删除 (key, record_id)
+  parent separator 更新
+  空 leaf 摘链与空子树裁剪
+  root shrink 与空树恢复
 
-阶段 2:
-  支持 leaf compact
-  支持空 leaf 回收
-
-阶段 3:
-  支持 borrow / merge
-  支持 parent separator key 更新
-  支持 root shrink
+后续:
+  非空低利用率页面的 borrow / merge
+  空闲 PageId 回收与复用
 ```
 
-不要在第一次 B+Tree 实现里一次性完成所有删除平衡逻辑。
+当前删除不会遗留可达的空页面，但被摘除页面占用的 PageId 暂不回收；非空页面低于目标填充率时也暂不借位或合并。
 
 ## 6. 推荐版本路线
 
@@ -389,16 +391,17 @@ B+Tree 删除是复杂点。可以分阶段：
   BTreePageCodec 固定 4096 字节页格式
   BTreePageStore 文件头、PageId 分配和节点页持久化
   BTreeIndex 创建、打开和持有 BTreePageStore
-  BTreeIndex 核心操作接口框架与明确的 NotImplemented 契约
+  BTreeIndex root-to-leaf 等值查找与叶子链范围扫描
+  BTreeIndex 插入、按字节容量分裂和向上分裂传播
+  BTreeIndex 精确删除、separator 更新、空子树裁剪与 root shrink
   原 std::map 实现迁移为待废弃的 MapIndex
 
 下一步:
-  基于 BTreePageStore 实现 root-to-leaf 查找路径
-  实现叶子页插入、按字节容量分裂和向上分裂传播
-  让 BTreeIndex 实现 OrderedScalarIndex 并替换 IndexEngine 中的 MapIndex
+  为 IndexEngine 补充索引目录、FileSystem 与 create/open 生命周期上下文
+  在运行时工厂中用 BTreeIndex 替换 MapIndex
 
 后续:
-  删除后的 borrow / merge / root shrink
+  删除后的 borrow / merge
   空闲页回收与崩溃一致性
   更完整的优化器和统计信息
 ```

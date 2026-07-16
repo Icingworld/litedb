@@ -57,11 +57,6 @@ public:
     ) const override;
 
     /**
-     * @brief 清空索引
-     */
-    void clear() noexcept override;
-
-    /**
      * @brief 获取索引大小
      * @return 索引大小
      */

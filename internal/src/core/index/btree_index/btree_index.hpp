@@ -14,9 +14,11 @@ namespace litedb::core::index
 /**
  * @brief 基于持久化页面的 B+Tree 索引
  */
-class BTreeIndex final
+class BTreeIndex final : public OrderedScalarIndex
 {
 public:
+    ~BTreeIndex() noexcept override = default;
+
     BTreeIndex(const BTreeIndex &) = delete;
 
     BTreeIndex & operator=(const BTreeIndex &) = delete;
@@ -47,53 +49,55 @@ public:
 
     /**
      * @brief 获取逻辑索引类型
-     * @note 签名与 ScalarIndex 保持一致，待实现完成后添加 override。
      */
     [[nodiscard]]
-    IndexKind kind() const noexcept;
+    IndexKind kind() const noexcept override;
 
     /**
      * @brief 插入完整的索引条目
-     * @note 当前仅建立接口框架，树插入与分裂尚未实现。
+     * @param key 索引键
+     * @param record_id 记录 ID
      */
     std::expected<void, IndexError> insert(
         const ScalarIndexKey & key,
         common::RecordId record_id
-    );
+    ) override;
 
     /**
      * @brief 删除完整的索引条目
-     * @note 当前仅建立接口框架，树删除与合并尚未实现。
+     * @param key 索引键
+     * @param record_id 记录 ID
      */
     std::expected<void, IndexError> erase(
         const ScalarIndexKey & key,
         common::RecordId record_id
-    );
+    ) override;
 
     /**
      * @brief 查找等于给定标量键的全部记录 ID
-     * @note 当前仅建立接口框架，root-to-leaf 查找尚未实现。
+     * @param key 索引键
+     * @return 等于给定标量键的全部记录 ID
      */
     [[nodiscard]]
     std::expected<std::vector<common::RecordId>, IndexError> find_equal(
         const ScalarIndexKey & key
-    ) const;
+    ) const override;
 
     /**
      * @brief 扫描给定范围内的全部记录 ID
-     * @note 当前仅建立接口框架，叶子链扫描尚未实现。
+     * @param range 范围
+     * @return 扫描给定范围内的全部记录 ID
      */
     [[nodiscard]]
     std::expected<std::vector<common::RecordId>, IndexError> scan_range(
         const IndexRange & range
-    ) const;
+    ) const override;
 
     /**
      * @brief 获取索引条目数量
-     * @note 签名与 ScalarIndex 保持一致，待实现完成后添加 override。
      */
     [[nodiscard]]
-    std::size_t size() const noexcept;
+    std::size_t size() const noexcept override;
 
     /**
      * @brief 获取索引文件路径

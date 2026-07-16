@@ -42,8 +42,6 @@ public:
         const IndexRange & range
     ) const override;
 
-    void clear() noexcept override;
-
     [[nodiscard]]
     std::size_t size() const noexcept override;
 

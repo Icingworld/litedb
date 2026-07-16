@@ -87,14 +87,6 @@ std::expected<std::vector<common::RecordId>, IndexError> HashIndex::find_equal(
     return bucket->second;
 }
 
-void HashIndex::clear() noexcept
-{
-    // 清空桶
-    buckets_.clear();
-    // 更新键值对数量
-    entry_count_ = 0;
-}
-
 std::size_t HashIndex::size() const noexcept
 {
     return entry_count_;

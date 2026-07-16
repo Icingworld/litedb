@@ -155,11 +155,6 @@ public:
     ) const = 0;
 
     /**
-     * @brief 清空索引
-     */
-    virtual void clear() noexcept = 0;
-
-    /**
      * @brief 获取索引大小
      * @return 索引大小
      */

@@ -88,11 +88,6 @@ public:
     [[nodiscard]]
     std::size_t size() const noexcept;
 
-    /**
-     * @brief 清空索引
-     */
-    void clear() noexcept;
-
 private:
     /**
      * @brief 校验键是否合法

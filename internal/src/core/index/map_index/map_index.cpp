@@ -117,12 +117,6 @@ std::expected<std::vector<common::RecordId>, IndexError> MapIndex::scan_range(
     return records;
 }
 
-void MapIndex::clear() noexcept
-{
-    buckets_.clear();
-    entry_count_ = 0;
-}
-
 std::size_t MapIndex::size() const noexcept
 {
     return entry_count_;
