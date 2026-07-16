@@ -17,8 +17,7 @@ namespace litedb::core::index
  */
 enum class IndexKind
 {
-    Hash,                 ///< 哈希索引
-    BTree,                ///< B树索引
+    BTree = 0,            ///< B+ 树索引
 };
 
 /**
@@ -107,7 +106,9 @@ private:
 };
 
 /**
- * @brief 标量索引
+ * @brief 标量索引的最小能力接口
+ * @details 只要求精确键查询，不假设键有序。当前正式后端只有 B+Tree；保留该层是为了以后接入
+ * 位图索引、倒排索引或其他仅支持等值/集合检索、不适合范围扫描的标量索引实现。
  */
 class ScalarIndex
 {
@@ -121,13 +122,6 @@ public:
      */
     [[nodiscard]]
     virtual IndexKind kind() const noexcept = 0;
-
-    /**
-     * @brief 是否支持范围扫描
-     * @return 是否支持范围扫描
-     */
-    [[nodiscard]]
-    virtual bool supports_range_scan() const noexcept = 0;
 
     /**
      * @brief 插入键值对
@@ -162,6 +156,24 @@ public:
     ) const = 0;
 
     /**
+     * @brief 获取索引大小
+     * @return 索引大小
+     */
+    [[nodiscard]]
+    virtual std::size_t size() const noexcept = 0;
+};
+
+/**
+ * @brief 支持有序范围扫描的标量索引
+ * @details 有序后端通过该派生接口显式声明范围能力，调用方无需在基础接口中假定所有索引都可排序。
+ */
+class OrderedScalarIndex : public ScalarIndex
+{
+public:
+    ~OrderedScalarIndex() noexcept override = default;
+
+public:
+    /**
      * @brief 扫描 range 范围内的记录 ID
      * @param range 范围
      * @return 记录 ID 列表
@@ -170,18 +182,6 @@ public:
     virtual std::expected<std::vector<common::RecordId>, IndexError> scan_range(
         const IndexRange & range
     ) const = 0;
-
-    /**
-     * @brief 清空索引
-     */
-    virtual void clear() noexcept = 0;
-
-    /**
-     * @brief 获取索引大小
-     * @return 索引大小
-     */
-    [[nodiscard]]
-    virtual std::size_t size() const noexcept = 0;
 };
 
 } // namespace litedb::core::index

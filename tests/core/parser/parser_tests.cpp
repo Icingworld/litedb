@@ -445,9 +445,9 @@ void test_parse_failures()
     require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
     require(unsupported_b_tree.message == "Expected BTREE after USING", "CREATE INDEX B_TREE error mismatch");
 
-    auto unsupported_hash = parse_error("CREATE INDEX idx_age ON users(age) USING HASH;");
-    require(unsupported_hash.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX HASH error code mismatch");
-    require(unsupported_hash.message == "Expected BTREE after USING", "CREATE INDEX HASH error mismatch");
+    auto unsupported_method = parse_error("CREATE INDEX idx_age ON users(age) USING UNKNOWN;");
+    require(unsupported_method.code == ParserErrorCode::UnsupportedSyntax, "unsupported index method error code mismatch");
+    require(unsupported_method.message == "Expected BTREE after USING", "unsupported index method error mismatch");
 
     auto show_indexes_missing_from = parse_error("SHOW INDEXES;");
     require(show_indexes_missing_from.code == ParserErrorCode::ExpectedToken, "SHOW INDEXES missing FROM error code mismatch");

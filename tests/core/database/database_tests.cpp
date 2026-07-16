@@ -53,7 +53,7 @@ public:
     auto execute_sql(std::string_view sql) { return session_.execute_sql(sql); }
     auto current_database_id() const noexcept { return session_.current_database_id(); }
     const auto & meta() const noexcept { return engine_->meta(); }
-    const auto & index_manager() const noexcept { return engine_->index_manager(); }
+    const auto & index_engine() const noexcept { return engine_->index_engine(); }
 
 private:
     std::unique_ptr<DatabaseEngine> engine_;
@@ -65,10 +65,10 @@ std::vector<litedb::core::common::RecordId> find_index_equal(TestDatabase & engi
     auto key = ScalarIndexKey::from_value(std::move(value));
     require(key.has_value(), "index key creation failed");
 
-    auto index_view = engine.index_manager().find_index(index_id);
+    auto index_view = engine.index_engine().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = index_view->index.find_equal(key.value());
+    auto found = engine.index_engine().find_equal(index_id, key.value());
     require(found.has_value(), "index lookup failed");
     return std::move(found.value());
 }
@@ -149,7 +149,7 @@ void test_execute_sql_end_to_end()
     auto drop_index = execute_ok(engine, "DROP INDEX idx_age ON users;");
     require(drop_index.affected_rows == 1, "DROP INDEX affected rows mismatch");
     require(engine.meta().find_index(collection->id(), "idx_age") == nullptr, "dropped index should leave catalog");
-    require(!engine.index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
+    require(!engine.index_engine().find_index(index_id).has_value(), "dropped index should leave engine");
 }
 
 void test_vector_distance_query()

@@ -46,10 +46,10 @@ std::vector<common::RecordId> find_index_equal(
     auto key = index::ScalarIndexKey::from_value(std::move(value));
     require(key.has_value(), "index key creation failed");
 
-    auto index_view = engine.index_manager().find_index(index_id);
+    auto index_view = engine.index_engine().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = index_view->index.find_equal(key.value());
+    auto found = engine.index_engine().find_equal(index_id, key.value());
     require(found.has_value(), "index lookup failed");
     return std::move(found.value());
 }
@@ -192,6 +192,7 @@ void test_database_engine_reopens_persistent_data()
 void test_index_ddl_reopen()
 {
     const auto dir = make_temp_dir("litedb_index_ddl_reopen_test");
+    common::IndexId persisted_index_id {0};
 
     {
         auto engine = open_database(dir);
@@ -209,8 +210,13 @@ void test_index_ddl_reopen()
         require(collection != nullptr, "created collection lookup failed");
         const auto * index = engine->meta().find_index(collection->id(), "idx_age");
         require(index != nullptr, "created index lookup failed");
+        persisted_index_id = index->id();
         require(index->kind() == meta::entry::IndexKind::BTree, "created index kind mismatch");
         require(find_index_equal(*engine, index->id(), schema::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
+        require(
+            std::filesystem::exists(dir / "indexes" / (std::to_string(persisted_index_id) + ".bti")),
+            "created BTREE index file missing"
+        );
     }
 
     common::CollectionId users_id {0};
@@ -225,7 +231,7 @@ void test_index_ddl_reopen()
         require(index != nullptr, "reopened index missing");
         require(index->kind() == meta::entry::IndexKind::BTree, "reopened index kind mismatch");
         const auto index_id = index->id();
-        require(find_index_equal(*reopened, index_id, schema::Value {std::int32_t {18}}).size() == 1, "reopened index should be rebuilt");
+        require(find_index_equal(*reopened, index_id, schema::Value {std::int32_t {18}}).size() == 1, "reopened persistent index lookup mismatch");
 
         database::Session session {*reopened};
         execute_ok(session, "USE demo;");
@@ -237,7 +243,11 @@ void test_index_ddl_reopen()
         auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
         require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
         require(reopened->meta().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
-        require(!reopened->index_manager().find_index(index_id).has_value(), "dropped index should leave manager");
+        require(!reopened->index_engine().find_index(index_id).has_value(), "dropped index should leave engine");
+        require(
+            !std::filesystem::exists(dir / "indexes" / (std::to_string(index_id) + ".bti")),
+            "dropped BTREE index file should be removed"
+        );
     }
 
     {

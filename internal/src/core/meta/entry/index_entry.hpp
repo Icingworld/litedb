@@ -15,8 +15,7 @@ namespace litedb::core::meta::entry
  */
 enum class IndexKind
 {
-    Hash,                 ///< 哈希索引
-    BTree,                ///< B+ 树索引
+    BTree = 0,            ///< B+ 树索引
 };
 
 /**

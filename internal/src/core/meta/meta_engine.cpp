@@ -684,7 +684,7 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
             for (const auto & value : collection_snapshot.indexes) {
                 if (value.id == 0 || blank(value.name) || value.column_ids.empty() || rebuilt.indexes_.contains(value.id)
                     || collection_ptr->contains_index(normalize_identifier(value.name))
-                    || static_cast<std::uint8_t>(value.index_kind) > static_cast<std::uint8_t>(entry::IndexKind::BTree)) {
+                    || value.index_kind != entry::IndexKind::BTree) {
                     return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate index in meta snapshot"));
                 }
                 std::unordered_set<common::ColumnId> index_columns;

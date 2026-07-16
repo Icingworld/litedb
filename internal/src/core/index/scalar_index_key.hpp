@@ -16,9 +16,6 @@ namespace litedb::core::index
 class ScalarIndexKey
 {
 public:
-    ScalarIndexKey() = default;
-
-public:
     /**
      * @brief 从值创建标量索引键
      * @param value 值
@@ -86,7 +83,7 @@ struct ScalarIndexLess
 };
 
 /**
- * @brief 比较两个标量索引键
+ * @brief 按精确物理类型比较两个标量索引键
  * @param left 左边的标量索引键
  * @param right 右边的标量索引键
  * @return 比较结果

@@ -17,13 +17,14 @@
 
 ## 2. 当前索引模块
 
-`internal/src/core/index` 提供纯内存标量索引模块，不依赖 SQL、catalog、planner 或 storage 自动维护。
+`internal/src/core/index` 提供标量索引键、持久化 B+Tree、单索引 `IndexStore` 和数据库级 `IndexEngine`。一个 `IndexStore` 对应一个索引实例，`IndexEngine` 负责索引生命周期与自动维护。
 
 核心结构：
 
 ```text
 ScalarIndex
-  └─ BTreeIndex
+  └─ OrderedScalarIndex
+       └─ BTreeIndex -> BTreePageStore
 
 ScalarIndexKey
   ├─ ScalarIndexEqual
@@ -31,6 +32,9 @@ ScalarIndexKey
 
 IndexRange
 IndexError
+
+IndexStore -> ScalarIndex backend
+IndexEngine -> [IndexStore, IndexStore, ...]
 ```
 
 索引内部存储结构：
@@ -40,6 +44,10 @@ ScalarIndexKey -> [RecordId, RecordId, ...]
 ```
 
 第一版是非唯一索引，因此同一个 key 可以对应多条记录。
+
+`ScalarIndexKey` 保存精确物理类型，不执行跨数值类型归一化。例如 `INT(1)`、`BIGINT(1)` 和 `DOUBLE(1.0)` 是不同的键。索引只对应一个固定类型的列，上游必须先根据列类型完成转换。这样可以避免通过 `long double` 比较导致的平台精度差异，并为后续稳定的磁盘编码保留明确类型标签。
+
+NULL 不进入标量索引，NaN 在键构造阶段被拒绝；正零和负零比较相等。不同类型之间仅保留确定性排序以满足容器比较器要求，不表示 SQL 层允许混合类型索引。
 
 `erase` 必须接收 `record_id`：
 
@@ -66,30 +74,17 @@ erase(old_key, record_id)
 insert(new_key, record_id)
 ```
 
-## 3. BTreeIndex 语义
+同一个 key 可以对应不同的 `RecordId`，但完全相同的 `(key, RecordId)` 只能存在一次；重复插入返回 `DuplicateEntry`。
 
-### 3.1 HASH 暂不支持
+## 3. 索引后端
 
-当前 SQL 语法不暴露 `USING HASH`，标量索引暂时只支持 `BTREE`。如果后续重新引入 HashIndex，也应作为独立版本能力重新补充语法、catalog 元数据和查询规划规则。
+### 3.1 BTreeIndex
 
-### 3.2 BTreeIndex
+`BTreeIndex` 是 `OrderedScalarIndex` 的持久化 B+Tree 实现，每个索引对应 `indexes/<index_id>.bti` 文件，支持 `insert`、`erase`、`find_equal` 和 `scan_range`。`IndexEngine` 创建索引时新建并从已有记录构建该文件，数据库启动时直接打开文件，不再从 records 重建 BTREE。
 
-当前 `BTreeIndex` 不是手写 B 树，也不是手写 B+ 树。它是有序索引语义接口，第一版后端使用：
+`IndexStore` 记录索引列的 `LogicalType`，写入、删除和查询入口都会校验键的精确物理类型，并在单个索引边界内维护唯一性约束。`IndexEngine` 对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不暴露内部 `ScalarIndex` 引用。
 
-```cpp
-std::map<ScalarIndexKey, std::vector<RecordId>, ScalarIndexLess>
-```
-
-支持：
-
-```text
-insert
-erase
-find_equal
-scan_range
-```
-
-它提供未来 B+Tree 需要的外部能力：有序 key、等值查询、范围查询。
+当前只实现 `BTreeIndex`，但仍保留 `ScalarIndex -> OrderedScalarIndex` 的能力分层。基础接口只承诺精确键查询；未来若引入位图索引、倒排索引或其他不具备全序范围扫描语义的后端，可以直接实现 `ScalarIndex`。只有有序后端才实现 `OrderedScalarIndex`，`IndexStore` 会对其他后端的范围查询返回 `UnsupportedRangeScan`。
 
 后续如果实现数据库级索引，推荐最终实现成 B+Tree，而不是传统 B 树：
 
@@ -163,29 +158,37 @@ std::expected<schema::Record, StorageError> get(common::RecordId record_id) cons
 
 Storage v2 由 `StorageEngine` 统一提供 `get/scan/insert/update/erase`，索引层不再接触 collection-level Store。
 
-### 4.3 增加 IndexManager
+### 4.3 当前 IndexEngine 与 IndexStore 边界
 
 不要把索引维护逻辑塞进 `BTreeIndex`，也不要让 executor 手动维护每个索引。
 
-建议新增 `IndexManager`：
+当前结构：
 
 ```text
-IndexManager
-  collection_id -> [index instances]
+IndexEngine
+  collection_id -> [index ids]
+  index_id -> IndexStore
+
+IndexStore
+  IndexDescriptor
+  ScalarIndex backend
 ```
 
-职责：
+`IndexEngine` 职责：
 
 ```cpp
 create_index(collection_schema, existing_records)
 drop_index(index_id)
+restore_all(catalog, storage)
 on_insert(record_id, record_data)
 on_update(record_id, old_record_data, new_record_data)
 on_delete(record_id, old_record_data)
 find_indexes(collection_id)
 ```
 
-`create_index` 应从已有 records 全量构建索引：
+`IndexStore` 只负责一个索引实例的键类型校验、唯一性约束、增删、等值查询和范围扫描，不依赖 `MetaEngine` 或 `StorageEngine`。
+
+`create_index` 会从已有 records 全量构建新索引：
 
 ```text
 scan collection
@@ -311,62 +314,73 @@ B+Tree index file
 
 这时需要设计：
 
-- page layout
-- key serialization
-- duplicate key posting list
-- overflow page
+- 逻辑 leaf / internal page
+- 固定 4096 字节 page layout 与 key serialization
+- 单索引文件头、PageId 分配和节点页随机读写
 - split / merge
+- 空闲页回收
 - crash consistency
 - rebuild / repair
 - 与 row log 或 WAL 的一致性
 
+当前已经完成前三项基础设施以及首版树操作：`BTreePage` 使用 `(ScalarIndexKey, RecordId)` 复合键处理重复标量键，
+`BTreePageCodec` 负责单节点页与 4096 字节物理页之间的编解码，`BTreePageStore` 负责单索引文件头、
+连续 PageId 分配、root/entry count 元数据以及节点页随机读写。页式 `BTreeIndex` 已负责创建、打开和持有
+`BTreePageStore`，并已实现 `find_equal`、`scan_range`、`insert`、`erase`：插入按实际编码字节分裂叶子页和
+内部页，删除会更新祖先 separator、摘除空叶子、裁剪空子树并执行 root shrink。该类现已继承
+`OrderedScalarIndex`，由 `IndexStore` 通过 `ScalarIndex` 多态持有，并已成为 BTREE 的正式运行时后端。
+`IndexEngine` 持有数据库目录和非拥有型 `FileSystem` 上下文，负责创建、打开和删除 `indexes/<index_id>.bti`；启动恢复时直接打开 BTREE。
+
+`ScalarIndex` 不再暴露通用 `clear()`：对 Hash/Map 来说它只是清空内存容器，对持久化 B+Tree 来说却意味着
+重写或删除索引文件，二者不是同一层生命周期操作。索引文件的 drop/rebuild/replace 应由 `IndexEngine` 和
+持久化目录管理层编排，而不是由后端读写接口隐藏执行。
+
 ### 5.3 B+Tree 删除策略
 
-B+Tree 删除是复杂点。可以分阶段：
+B+Tree 删除采用“先保证结构正确，再优化空间利用率”的分阶段策略：
 
 ```text
-阶段 1:
-  支持 insert + search + range scan
-  delete 使用 lazy delete 或 tombstone
+已完成:
+  精确删除 (key, record_id)
+  parent separator 更新
+  空 leaf 摘链与空子树裁剪
+  root shrink 与空树恢复
 
-阶段 2:
-  支持 leaf compact
-  支持空 leaf 回收
-
-阶段 3:
-  支持 borrow / merge
-  支持 parent separator key 更新
-  支持 root shrink
+后续:
+  非空低利用率页面的 borrow / merge
+  空闲 PageId 回收与复用
 ```
 
-不要在第一次 B+Tree 实现里一次性完成所有删除平衡逻辑。
+当前删除不会遗留可达的空页面，但被摘除页面占用的 PageId 暂不回收；非空页面低于目标填充率时也暂不借位或合并。
 
 ## 6. 推荐版本路线
 
 ```text
-v0.2 当前:
-  core/index 内存索引模块
-  BTreeIndex 使用 map
-
-v0.2 下一步:
-  catalog 增加 IndexEntry
-  StorageEngine 提供 get(collection_id, record_id)
-  IndexManager 管理内存索引生命周期
-  insert/update/delete 自动维护内存索引
-
-v0.2 后续:
-  parser/binder/planner 支持 CREATE/DROP/SHOW INDEX
-  executor 支持简单 IndexScan
-  fallback 到 SeqScan + Filter
-
-v0.3:
+当前:
   catalog 持久化索引定义
-  启动时从持久化 records rebuild 内存索引
-  可选实现 InMemoryBPlusTreeIndex
+  启动时打开持久化 BTreeIndex
+  insert/update/delete 自动维护索引
+  optimizer -> PhysicalIndexScan -> executor 查询索引
+  BTreeIndex 作为 BTREE 正式后端提供等值和范围查询
 
-v0.4+:
-  page-based B+Tree index
-  WAL 或恢复协议
+已完成:
+  IndexManager 拆分为 IndexEngine + IndexStore
+  一个 IndexStore 对应一个索引实例
+  IndexStore 封装内存 Hash/Ordered 后端及单索引约束
+  B+Tree leaf/internal 逻辑页与复合排序键
+  BTreePageCodec 固定 4096 字节页格式
+  BTreePageStore 文件头、PageId 分配和节点页持久化
+  BTreeIndex 创建、打开和持有 BTreePageStore
+  BTreeIndex root-to-leaf 等值查找与叶子链范围扫描
+  BTreeIndex 插入、按字节容量分裂和向上分裂传播
+  BTreeIndex 精确删除、separator 更新、空子树裁剪与 root shrink
+  为 IndexEngine 补充索引目录、FileSystem 与 create/open 生命周期上下文
+  在运行时工厂中使用 BTreeIndex
+  删除旧的 std::map 过渡实现
+
+后续:
+  删除后的 borrow / merge
+  空闲页回收与崩溃一致性
   更完整的优化器和统计信息
 ```
 

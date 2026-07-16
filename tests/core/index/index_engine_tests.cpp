@@ -1,5 +1,5 @@
 #include "core/meta/meta_engine.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
@@ -53,7 +53,7 @@ std::vector<RecordId> ids(std::expected<std::vector<RecordId>, IndexError> resul
 
 struct Fixture
 {
-    litedb::tests::TemporaryDirectory storage_directory {"litedb-index-manager-tests"};
+    litedb::tests::TemporaryDirectory storage_directory {"litedb-index-engine-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
@@ -150,56 +150,74 @@ void test_build_skips_nulls_and_views_index()
     fixture.insert_user(3, 20);
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
-    IndexManager manager;
-    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
+    auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
-    auto view = manager.find_index(index_entry.id());
+    auto view = engine.find_index(index_entry.id());
     require(view.has_value(), "managed index missing");
     require(view->collection_id == fixture.users_id, "managed index collection mismatch");
     require(view->column_id == fixture.age_column_id, "managed index column mismatch");
+    require(view->key_type.id == LogicalTypeId::Integer, "managed index key type mismatch");
     require(view->kind == litedb::core::index::IndexKind::BTree, "managed index kind mismatch");
     require(!view->unique, "managed index unique mismatch");
-    require(view->index.size() == 2, "NULL value should not be indexed");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {18}}))) == std::vector<RecordId> {1}, "index lookup mismatch");
+    require(view->entry_count == 2, "NULL value should not be indexed");
+    require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {18}}))) == std::vector<RecordId> {1}, "index lookup mismatch");
+
+    require(
+        ids(engine.scan_range(
+            index_entry.id(),
+            IndexRange::closed(key(Value {std::int32_t {18}}), key(Value {std::int32_t {20}}))
+        )) == std::vector<RecordId>({1, 3}),
+        "managed range scan mismatch"
+    );
+
+    auto wrong_type = engine.find_equal(index_entry.id(), key(Value {std::int64_t {18}}));
+    require(!wrong_type.has_value(), "lookup with mismatched physical key type should fail");
+    require(wrong_type.error().code == IndexErrorCode::KeyTypeMismatch, "lookup key type error mismatch");
 }
 
 void test_insert_update_delete_maintenance()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::Hash);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
-    IndexManager manager;
-    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
+    auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
     RecordData null_age {.values = {Value {std::int64_t {2}}, Value::null()}};
-    auto null_insert = manager.prepare_insert(fixture.users_id, null_age);
+    auto null_insert = engine.prepare_insert(fixture.users_id, null_age);
     require(null_insert.has_value(), "NULL insert prepare should succeed");
     require(null_insert->empty(), "NULL insert should not create index binding");
 
     RecordData age_20 {.values = {Value {std::int64_t {2}}, Value {std::int32_t {20}}}};
-    auto insert = manager.prepare_insert(fixture.users_id, age_20);
+    auto insert = engine.prepare_insert(fixture.users_id, age_20);
     require(insert.has_value(), "insert prepare failed");
     require(insert->size() == 1, "insert binding count mismatch");
-    require(manager.on_insert(2, insert.value()).has_value(), "on_insert failed");
+    require(engine.on_insert(2, insert.value()).has_value(), "on_insert failed");
 
-    auto view = manager.find_index(index_entry.id());
+    RecordData wrong_age_type {.values = {Value {std::int64_t {3}}, Value {std::int64_t {20}}}};
+    auto wrong_insert = engine.prepare_insert(fixture.users_id, wrong_age_type);
+    require(!wrong_insert.has_value(), "mismatched indexed value type should fail during prepare");
+    require(wrong_insert.error().code == IndexErrorCode::KeyTypeMismatch, "prepare key type error mismatch");
+
+    auto view = engine.find_index(index_entry.id());
     require(view.has_value(), "managed index missing");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {20}}))) == std::vector<RecordId> {2}, "inserted index key mismatch");
+    require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {20}}))) == std::vector<RecordId> {2}, "inserted index key mismatch");
 
     RecordData age_21 {.values = {Value {std::int64_t {2}}, Value {std::int32_t {21}}}};
-    auto update = manager.prepare_update(fixture.users_id, age_20, age_21);
+    auto update = engine.prepare_update(fixture.users_id, age_20, age_21);
     require(update.has_value(), "update prepare failed");
-    require(manager.on_update(2, update.value()).has_value(), "on_update failed");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {20}}))).empty(), "old update key should be erased");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {21}}))) == std::vector<RecordId> {2}, "new update key mismatch");
+    require(engine.on_update(2, update.value()).has_value(), "on_update failed");
+    require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {20}}))).empty(), "old update key should be erased");
+    require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {21}}))) == std::vector<RecordId> {2}, "new update key mismatch");
 
-    auto del = manager.prepare_delete(fixture.users_id, age_21);
+    auto del = engine.prepare_delete(fixture.users_id, age_21);
     require(del.has_value(), "delete prepare failed");
-    require(manager.on_delete(2, del.value()).has_value(), "on_delete failed");
-    require(ids(view->index.find_equal(key(Value {std::int32_t {21}}))).empty(), "deleted index key should be erased");
+    require(engine.on_delete(2, del.value()).has_value(), "on_delete failed");
+    require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {21}}))).empty(), "deleted index key should be erased");
 }
 
 void test_unique_index_rejects_duplicates()
@@ -209,41 +227,41 @@ void test_unique_index_rejects_duplicates()
     fixture.insert_user(2, 18);
     const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
 
-    IndexManager manager;
-    auto duplicate_build = manager.create_index(duplicate_index, fixture.users_schema(), fixture.storage);
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
+    auto duplicate_build = engine.create_index(duplicate_index, fixture.users_schema(), fixture.storage);
     require(!duplicate_build.has_value(), "unique index build should reject duplicates");
     require(duplicate_build.error().code == IndexErrorCode::DuplicateKey, "unique duplicate build error mismatch");
 
     Fixture clean_fixture;
     clean_fixture.insert_user(1, 18);
     const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
-    auto created = manager.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.storage);
+    IndexEngine clean_engine {clean_fixture.storage_directory.path(), clean_fixture.filesystem};
+    auto created = clean_engine.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.storage);
     require(created.has_value(), "unique index create failed");
 
     RecordData duplicate {.values = {Value {std::int64_t {2}}, Value {std::int32_t {18}}}};
-    auto duplicate_insert = manager.prepare_insert(clean_fixture.users_id, duplicate);
+    auto duplicate_insert = clean_engine.prepare_insert(clean_fixture.users_id, duplicate);
     require(!duplicate_insert.has_value(), "unique index prepare insert should reject duplicate");
     require(duplicate_insert.error().code == IndexErrorCode::DuplicateKey, "unique duplicate insert error mismatch");
 }
 
-void test_rebuild_all_is_atomic_on_failure()
+void test_restore_all_is_atomic_on_failure()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
-    IndexManager manager;
-    auto created = manager.create_index(index_entry, fixture.users_schema(), fixture.storage);
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
+    auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "initial create index failed");
-    require(manager.find_index(index_entry.id()).has_value(), "initial index missing");
+    require(engine.find_index(index_entry.id()).has_value(), "initial index missing");
 
-    fixture.insert_user(2, 18);
-    const auto & unique_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::Hash, true);
-    auto rebuilt = manager.rebuild_all(fixture.catalog, fixture.storage);
-    require(!rebuilt.has_value(), "rebuild should fail on duplicate unique key");
-    require(rebuilt.error().code == IndexErrorCode::DuplicateKey, "rebuild duplicate error mismatch");
-    require(manager.find_index(index_entry.id()).has_value(), "failed rebuild should keep existing indexes");
-    require(!manager.find_index(unique_index.id()).has_value(), "failed rebuild should not publish partial indexes");
+    const auto & missing_index = fixture.create_catalog_index("idx_age_missing", litedb::core::meta::entry::IndexKind::BTree);
+    auto restored = engine.restore_all(fixture.catalog, fixture.storage);
+    require(!restored.has_value(), "restore should fail when a persistent index file is missing");
+    require(restored.error().code == IndexErrorCode::StorageError, "restore storage error mismatch");
+    require(engine.find_index(index_entry.id()).has_value(), "failed restore should keep existing indexes");
+    require(!engine.find_index(missing_index.id()).has_value(), "failed restore should not publish partial indexes");
 }
 
 } // namespace
@@ -254,7 +272,7 @@ int main()
         test_build_skips_nulls_and_views_index();
         test_insert_update_delete_maintenance();
         test_unique_index_rejects_duplicates();
-        test_rebuild_all_is_atomic_on_failure();
+        test_restore_all_is_atomic_on_failure();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

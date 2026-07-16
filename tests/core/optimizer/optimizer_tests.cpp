@@ -2,7 +2,7 @@
 #include "core/binder/bound/debug_printer.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
-#include "core/index/index_manager.hpp"
+#include "core/index/index_engine.hpp"
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
@@ -63,7 +63,7 @@ struct Fixture
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
-    litedb::core::index::IndexManager index_manager;
+    litedb::core::index::IndexEngine index_engine {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -155,7 +155,7 @@ std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::E
     const LogicalStatementPlan & plan
 )
 {
-    litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_manager};
+    litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_engine};
     litedb::core::physical_plan::PhysicalPlanner physical_planner;
     auto physical = physical_planner.plan(plan);
     return executor.execute(*physical);
@@ -343,17 +343,6 @@ void test_btree_range_adds_scan_index_hint()
     require(scan.index_hint()->lookup.lower->inclusive, "range lower bound should be inclusive");
 }
 
-void test_hash_range_does_not_add_scan_index_hint()
-{
-    Fixture fixture;
-    create_catalog_index(fixture, "idx_age_hash", "age", IndexKind::Hash);
-
-    auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;"));
-    const auto & child = filter_child_for_query(*optimized);
-    require(child.kind() == LogicalPlanNodeKind::Scan, "HASH range should keep LogicalScan");
-    require(!static_cast<const LogicalScan &>(child).index_hint().has_value(), "HASH range should not add scan index hint");
-}
-
 } // namespace
 
 int main()
@@ -369,7 +358,6 @@ int main()
         test_enabled_and_disabled_select_results_match();
         test_btree_equality_adds_scan_index_hint();
         test_btree_range_adds_scan_index_hint();
-        test_hash_range_does_not_add_scan_index_hint();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

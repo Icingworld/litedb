@@ -58,7 +58,6 @@ enum class TokenType
     Default,            ///< DEFAULT
     Comment,            ///< COMMENT
     Using,              ///< USING
-    Hash,               ///< HASH
     BTree,              ///< BTREE
     With,               ///< WITH
     From,               ///< FROM
@@ -204,7 +203,6 @@ inline constexpr auto TOKEN_KEYWORDS_TABLE = std::to_array<std::pair<std::string
     {"DEFAULT", TokenType::Default},
     {"COMMENT", TokenType::Comment},
     {"USING", TokenType::Using},
-    {"HASH", TokenType::Hash},
     {"BTREE", TokenType::BTree},
     {"WITH", TokenType::With},
     {"FROM", TokenType::From},

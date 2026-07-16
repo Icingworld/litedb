@@ -1,7 +1,9 @@
+add_subdirectory(btree_index)
+
 set(INDEX_SOURCES
-    btree_index.cpp
-    hash_index.cpp
-    index_manager.cpp
+    ${BTREE_INDEX_SOURCES}
+    index_engine.cpp
+    index_store.cpp
     scalar_index.cpp
     scalar_index_key.cpp
 )

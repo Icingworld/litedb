@@ -91,7 +91,6 @@ const char * token_type_name(TokenType type) noexcept
         case TokenType::Default: return "Default";
         case TokenType::Comment: return "Comment";
         case TokenType::Using: return "Using";
-        case TokenType::Hash: return "Hash";
         case TokenType::BTree: return "BTree";
         case TokenType::With: return "With";
         case TokenType::From: return "From";
