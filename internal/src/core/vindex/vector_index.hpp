@@ -16,6 +16,7 @@ namespace litedb::core::vindex
  */
 enum class VectorIndexKind
 {
+    Flat,   ///< 精确向量索引
     Hnsw,   ///< HNSW 近似最近邻索引
 };
 
@@ -32,10 +33,9 @@ enum class VectorDistanceMetric
 /**
  * @brief 向量搜索参数
  */
-struct VectorSearchParameters
+struct VectorSearchRequest
 {
-    std::size_t limit {10};     ///< 返回数量
-    std::size_t ef_search {64}; ///< HNSW 搜索候选数量
+    std::size_t top_k {10}; ///< 返回数量
 };
 
 /**
@@ -96,32 +96,16 @@ public:
     virtual std::expected<void, VectorIndexError> erase(common::RecordId record_id) = 0;
 
     /**
-     * @brief 更新向量
-     * @param key 新向量索引键
-     * @param record_id 记录 ID
-     * @return 结果
-     */
-    virtual std::expected<void, VectorIndexError> update(
-        const VectorIndexKey & key,
-        common::RecordId record_id
-    ) = 0;
-
-    /**
      * @brief 搜索最近邻
      * @param query 查询向量
-     * @param parameters 搜索参数
+     * @param request 搜索请求
      * @return 搜索结果
      */
     [[nodiscard]]
     virtual std::expected<std::vector<VectorSearchResult>, VectorIndexError> search(
         const VectorIndexKey & query,
-        VectorSearchParameters parameters
+        VectorSearchRequest request
     ) const = 0;
-
-    /**
-     * @brief 清空索引
-     */
-    virtual void clear() noexcept = 0;
 
     /**
      * @brief 获取索引大小

@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+#include "core/vindex/flat_index/flat_index.hpp"
+
 namespace litedb::core::vindex
 {
 
@@ -18,18 +20,26 @@ VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 
 } // namespace
 
+VectorIndexManager::VectorIndexManager(const storage::StorageEngine & storage) noexcept
+    : storage_(&storage)
+{
+}
+
 std::expected<void, VectorIndexError> VectorIndexManager::create_index(const VectorIndexDefinition & definition)
 {
     if (indexes_by_id_.contains(definition.index_id)) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexAlreadyExists, "Vector index already exists"));
     }
-    if (definition.hnsw_options.dimension == 0) {
+    if (definition.kind != VectorIndexKind::Flat) {
+        return std::unexpected(make_error(VectorIndexErrorCode::UnsupportedIndexKind, "Unsupported vector index kind"));
+    }
+    if (definition.dimension == 0) {
         return std::unexpected(make_error(VectorIndexErrorCode::InvalidDimension, "Vector index dimension must be greater than 0"));
     }
 
     auto index = make_index(definition);
     if (!index) {
-        return std::unexpected(make_error(VectorIndexErrorCode::UnsupportedMetric, "Unsupported vector index kind"));
+        return std::unexpected(make_error(VectorIndexErrorCode::UnsupportedIndexKind, "Unsupported vector index kind"));
     }
 
     indexes_by_id_.emplace(definition.index_id, ManagedVectorIndex {
@@ -98,30 +108,17 @@ std::expected<void, VectorIndexError> VectorIndexManager::erase(common::VIndexId
     return index->index->erase(record_id);
 }
 
-std::expected<void, VectorIndexError> VectorIndexManager::update(
-    common::VIndexId index_id,
-    const VectorIndexKey & key,
-    common::RecordId record_id
-)
-{
-    auto * index = find_managed_index(index_id);
-    if (index == nullptr) {
-        return std::unexpected(make_error(VectorIndexErrorCode::IndexNotFound, "Vector index not found"));
-    }
-    return index->index->update(key, record_id);
-}
-
 std::expected<std::vector<VectorSearchResult>, VectorIndexError> VectorIndexManager::search(
     common::VIndexId index_id,
     const VectorIndexKey & query,
-    VectorSearchParameters parameters
+    VectorSearchRequest request
 ) const
 {
     const auto * index = find_managed_index(index_id);
     if (index == nullptr) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexNotFound, "Vector index not found"));
     }
-    return index->index->search(query, parameters);
+    return index->index->search(query, request);
 }
 
 std::optional<ManagedVectorIndexView> VectorIndexManager::find_index(common::VIndexId index_id) const noexcept
@@ -157,11 +154,18 @@ void VectorIndexManager::clear() noexcept
     indexes_by_collection_.clear();
 }
 
-std::unique_ptr<VectorIndex> VectorIndexManager::make_index(const VectorIndexDefinition & definition)
+std::unique_ptr<VectorIndex> VectorIndexManager::make_index(const VectorIndexDefinition & definition) const
 {
     switch (definition.kind) {
+    case VectorIndexKind::Flat:
+        return std::make_unique<FlatIndex>(FlatIndexOptions {
+            .collection_id = definition.collection_id,
+            .column_ordinal = definition.column_ordinal,
+            .dimension = definition.dimension,
+            .metric = definition.metric,
+        }, *storage_);
     case VectorIndexKind::Hnsw:
-        return std::make_unique<HnswIndex>(definition.hnsw_options);
+        return nullptr;
     }
 
     return nullptr;

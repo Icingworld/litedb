@@ -11,12 +11,14 @@ namespace litedb::core::vindex
 enum class VectorIndexErrorCode
 {
     UnsupportedMetric,      ///< 不支持的距离度量
+    UnsupportedIndexKind,   ///< 不支持的向量索引类型
     InvalidDimension,       ///< 向量维度无效
     EmptyQuery,             ///< 查询向量为空
     RecordAlreadyExists,    ///< 记录已存在
     RecordNotFound,         ///< 记录不存在
     IndexAlreadyExists,     ///< 索引已存在
     IndexNotFound,          ///< 索引不存在
+    StorageFailure,         ///< 存储扫描失败
 };
 
 /**

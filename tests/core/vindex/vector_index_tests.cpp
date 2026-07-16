@@ -1,17 +1,26 @@
-#include "core/vindex/hnsw_index.hpp"
+#include "core/vindex/flat_index/flat_index.hpp"
 #include "core/vindex/vector_index_key.hpp"
 #include "core/vindex/vector_index_manager.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
+
+#include "core/common/logical_type.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
+#include "core/schema/collection.hpp"
+#include "core/storage/storage_engine.hpp"
 
 namespace
 {
 
+using namespace litedb::core;
 using namespace litedb::core::common;
 using namespace litedb::core::schema;
 using namespace litedb::core::vindex;
@@ -21,6 +30,32 @@ void require(bool condition, const char * message)
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+std::filesystem::path temporary_path()
+{
+    return std::filesystem::temp_directory_path()
+        / ("litedb-flat-index-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()
+        ));
+}
+
+CollectionSchema vectors_schema()
+{
+    return CollectionSchema {
+        1,
+        20,
+        "vectors",
+        {
+            ColumnSchema {30, 20, 0, "name", {LogicalTypeId::Varchar, 64}, false, false, {}, {}},
+            ColumnSchema {31, 20, 1, "embedding", {LogicalTypeId::Vector, 2}, true, false, {}, {}},
+        },
+    };
+}
+
+RecordData vector_record(std::string name, Value embedding)
+{
+    return RecordData {{Value {std::move(name)}, std::move(embedding)}};
 }
 
 void require_records(
@@ -56,84 +91,124 @@ VectorIndexKey vector_key(VectorValue vector)
     return std::move(result.value());
 }
 
-void test_hnsw_index_searches_nearest_vectors()
+void test_flat_index_scans_storage()
 {
-    HnswIndex index(HnswIndexOptions {
-        .dimension = 2,
-        .metric = VectorDistanceMetric::L2,
-    });
+    auto filesystem = filesystem::create_platform_filesystem();
+    const auto path = temporary_path();
+    {
+        storage::StorageEngine storage {path, filesystem};
+        require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
+        require(storage.insert(20, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first vector failed");
+        require(storage.insert(20, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second vector failed");
+        require(storage.insert(20, vector_record("third", Value {VectorValue {5.0, 0.0}})).has_value(), "insert third vector failed");
+        require(storage.insert(20, vector_record("null", Value::null())).has_value(), "insert null vector failed");
 
-    require(index.kind() == VectorIndexKind::Hnsw, "hnsw kind mismatch");
-    require(index.dimension() == 2, "hnsw dimension mismatch");
-    require(index.insert(vector_key({0.0, 0.0}), 1).has_value(), "insert first vector failed");
-    require(index.insert(vector_key({1.0, 0.0}), 2).has_value(), "insert second vector failed");
-    require(index.insert(vector_key({5.0, 0.0}), 3).has_value(), "insert third vector failed");
-    require(index.size() == 3, "hnsw size mismatch");
+        FlatIndex index(FlatIndexOptions {
+            .collection_id = 20,
+            .column_ordinal = 1,
+            .dimension = 2,
+            .metric = VectorDistanceMetric::L2,
+        }, storage);
 
-    auto found = results(index.search(vector_key({0.2, 0.0}), VectorSearchParameters {.limit = 2}));
-    require_records(found, {1, 2}, "nearest vector order mismatch");
-    require(std::abs(found[0].distance - 0.2) < 0.000001, "nearest distance mismatch");
+        require(index.kind() == VectorIndexKind::Flat, "flat kind mismatch");
+        require(index.dimension() == 2, "flat dimension mismatch");
+        require(index.metric() == VectorDistanceMetric::L2, "flat metric mismatch");
+        require(index.size() == 0, "flat should not contain materialized entries");
 
-    require(index.update(vector_key({10.0, 0.0}), 1).has_value(), "update vector failed");
-    require_records(
-        results(index.search(vector_key({0.2, 0.0}), VectorSearchParameters {.limit = 2})),
-        {2, 3},
-        "updated nearest vector order mismatch"
-    );
+        auto found = results(index.search(vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2}));
+        require_records(found, {1, 2}, "flat nearest vector order mismatch");
+        require(std::abs(found[0].distance - 0.2) < 0.000001, "flat nearest distance mismatch");
 
-    require(index.erase(2).has_value(), "erase vector failed");
-    require(index.size() == 2, "hnsw size after erase mismatch");
+        require(storage.update(20, 1, vector_record("first", Value {VectorValue {10.0, 0.0}})).has_value(), "update stored vector failed");
+        require_records(
+            results(index.search(vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
+            {2, 3},
+            "flat search should observe storage updates"
+        );
+
+        require(storage.erase(20, 2).has_value(), "erase stored vector failed");
+        require_records(
+            results(index.search(vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 10})),
+            {3, 1},
+            "flat search should observe storage deletes and skip nulls"
+        );
+        require(results(index.search(vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 0})).empty(), "zero top_k should return no results");
+    }
+    std::filesystem::remove_all(path);
 }
 
-void test_hnsw_index_validates_dimensions_and_duplicates()
+void test_flat_index_validates_dimensions_and_storage()
 {
-    HnswIndex index(HnswIndexOptions {
-        .dimension = 3,
-        .metric = VectorDistanceMetric::Cosine,
-    });
+    auto filesystem = filesystem::create_platform_filesystem();
+    const auto path = temporary_path();
+    {
+        storage::StorageEngine storage {path, filesystem};
+        FlatIndex index(FlatIndexOptions {
+            .collection_id = 20,
+            .column_ordinal = 1,
+            .dimension = 2,
+            .metric = VectorDistanceMetric::Cosine,
+        }, storage);
 
-    auto invalid_insert = index.insert(vector_key({1.0, 2.0}), 1);
-    require(!invalid_insert.has_value(), "dimension mismatch should fail");
-    require(invalid_insert.error().code == VectorIndexErrorCode::InvalidDimension, "dimension error code mismatch");
+        auto invalid = index.search(vector_key({1.0}), VectorSearchRequest {});
+        require(!invalid.has_value(), "dimension mismatch should fail");
+        require(invalid.error().code == VectorIndexErrorCode::InvalidDimension, "dimension error code mismatch");
 
-    require(index.insert(vector_key({1.0, 0.0, 0.0}), 1).has_value(), "insert vector failed");
-    auto duplicate = index.insert(vector_key({0.0, 1.0, 0.0}), 1);
-    require(!duplicate.has_value(), "duplicate record should fail");
-    require(duplicate.error().code == VectorIndexErrorCode::RecordAlreadyExists, "duplicate error code mismatch");
+        auto missing_storage = index.search(vector_key({1.0, 0.0}), VectorSearchRequest {});
+        require(!missing_storage.has_value(), "missing collection should fail");
+        require(missing_storage.error().code == VectorIndexErrorCode::StorageFailure, "storage error code mismatch");
 
-    auto missing = index.erase(2);
-    require(!missing.has_value(), "missing record erase should fail");
-    require(missing.error().code == VectorIndexErrorCode::RecordNotFound, "missing record error code mismatch");
+        require(index.insert(vector_key({1.0, 0.0}), 1).has_value(), "flat insert hook should be a no-op");
+        require(index.erase(1).has_value(), "flat erase hook should be a no-op");
+    }
+    std::filesystem::remove_all(path);
 }
 
 void test_vector_index_manager_lifecycle()
 {
-    VectorIndexManager manager;
-    VectorIndexDefinition definition {
-        .index_id = 10,
-        .collection_id = 20,
-        .column_id = 30,
-        .kind = VectorIndexKind::Hnsw,
-        .hnsw_options = HnswIndexOptions {
+    auto filesystem = filesystem::create_platform_filesystem();
+    const auto path = temporary_path();
+    {
+        storage::StorageEngine storage {path, filesystem};
+        require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
+        require(storage.insert(20, vector_record("first", Value {VectorValue {1.0, 0.0}})).has_value(), "insert first vector failed");
+        require(storage.insert(20, vector_record("second", Value {VectorValue {0.0, 2.0}})).has_value(), "insert second vector failed");
+
+        VectorIndexManager manager {storage};
+        VectorIndexDefinition definition {
+            .index_id = 10,
+            .collection_id = 20,
+            .column_id = 31,
+            .column_ordinal = 1,
             .dimension = 2,
+            .kind = VectorIndexKind::Flat,
             .metric = VectorDistanceMetric::InnerProduct,
-        },
-    };
+        };
 
-    require(manager.create_index(definition).has_value(), "create vector index failed");
-    require(manager.find_index(10).has_value(), "find vector index failed");
-    require(manager.list_indexes(20).size() == 1, "list vector indexes mismatch");
+        require(manager.create_index(definition).has_value(), "create flat index failed");
+        require(manager.find_index(10).has_value(), "find flat index failed");
+        require(manager.list_indexes(20).size() == 1, "list flat indexes mismatch");
+        require_records(
+            results(manager.search(10, vector_key({0.0, 1.0}), VectorSearchRequest {.top_k = 1})),
+            {2},
+            "manager inner product search mismatch"
+        );
 
-    require(manager.insert(10, vector_key({1.0, 0.0}), 100).has_value(), "manager insert first vector failed");
-    require(manager.insert(10, vector_key({0.0, 2.0}), 200).has_value(), "manager insert second vector failed");
-    require_records(
-        results(manager.search(10, vector_key({0.0, 1.0}), VectorSearchParameters {.limit = 1})),
-        {200},
-        "manager inner product search mismatch"
-    );
+        require(manager.drop_index(10).has_value(), "drop flat index failed");
+        require(!manager.find_index(10).has_value(), "dropped flat index should be absent");
 
-    require(manager.drop_index(10).has_value(), "drop vector index failed");
-    require(!manager.find_index(10).has_value(), "dropped vector index should be absent");
+        auto hnsw = manager.create_index(VectorIndexDefinition {
+            .index_id = 11,
+            .collection_id = 20,
+            .column_id = 31,
+            .column_ordinal = 1,
+            .dimension = 2,
+            .kind = VectorIndexKind::Hnsw,
+        });
+        require(!hnsw.has_value(), "placeholder hnsw index should not be connected");
+        require(hnsw.error().code == VectorIndexErrorCode::UnsupportedIndexKind, "hnsw placeholder error code mismatch");
+    }
+    std::filesystem::remove_all(path);
 }
 
 void test_vector_index_key()
@@ -157,8 +232,8 @@ void test_vector_index_key()
 int main()
 {
     try {
-        test_hnsw_index_searches_nearest_vectors();
-        test_hnsw_index_validates_dimensions_and_duplicates();
+        test_flat_index_scans_storage();
+        test_flat_index_validates_dimensions_and_storage();
         test_vector_index_manager_lifecycle();
         test_vector_index_key();
     } catch (const std::exception & exception) {

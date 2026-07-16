@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <memory>
 #include <optional>
@@ -7,8 +8,14 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/vindex/hnsw_index.hpp"
 #include "core/vindex/vector_index.hpp"
+
+namespace litedb::core::storage
+{
+
+class StorageEngine;
+
+} // namespace litedb::core::storage
 
 namespace litedb::core::vindex
 {
@@ -21,8 +28,10 @@ struct VectorIndexDefinition
     common::VIndexId index_id;              ///< 向量索引 ID
     common::CollectionId collection_id;     ///< 集合 ID
     common::ColumnId column_id;             ///< 列 ID
-    VectorIndexKind kind {VectorIndexKind::Hnsw};  ///< 索引类型
-    HnswIndexOptions hnsw_options;          ///< HNSW 配置
+    std::size_t column_ordinal {0};          ///< 列序号
+    std::size_t dimension {0};               ///< 向量维度
+    VectorIndexKind kind {VectorIndexKind::Flat};  ///< 索引类型
+    VectorDistanceMetric metric {VectorDistanceMetric::L2}; ///< 距离度量
 };
 
 /**
@@ -43,7 +52,7 @@ struct ManagedVectorIndexView
 class VectorIndexManager
 {
 public:
-    VectorIndexManager() = default;
+    explicit VectorIndexManager(const storage::StorageEngine & storage) noexcept;
 
 public:
     [[nodiscard]]
@@ -65,17 +74,10 @@ public:
     std::expected<void, VectorIndexError> erase(common::VIndexId index_id, common::RecordId record_id);
 
     [[nodiscard]]
-    std::expected<void, VectorIndexError> update(
-        common::VIndexId index_id,
-        const VectorIndexKey & key,
-        common::RecordId record_id
-    );
-
-    [[nodiscard]]
     std::expected<std::vector<VectorSearchResult>, VectorIndexError> search(
         common::VIndexId index_id,
         const VectorIndexKey & query,
-        VectorSearchParameters parameters
+        VectorSearchRequest request
     ) const;
 
     [[nodiscard]]
@@ -97,7 +99,7 @@ private:
     };
 
     [[nodiscard]]
-    static std::unique_ptr<VectorIndex> make_index(const VectorIndexDefinition & definition);
+    std::unique_ptr<VectorIndex> make_index(const VectorIndexDefinition & definition) const;
 
     [[nodiscard]]
     ManagedVectorIndexView make_view(const ManagedVectorIndex & managed_index) const noexcept;
@@ -109,6 +111,7 @@ private:
     const ManagedVectorIndex * find_managed_index(common::VIndexId index_id) const noexcept;
 
 private:
+    const storage::StorageEngine * storage_ {nullptr};
     std::unordered_map<common::VIndexId, ManagedVectorIndex> indexes_by_id_;
     std::unordered_map<common::CollectionId, std::vector<common::VIndexId>> indexes_by_collection_;
 };
