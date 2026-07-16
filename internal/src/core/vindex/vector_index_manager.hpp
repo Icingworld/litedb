@@ -57,7 +57,7 @@ public:
     [[nodiscard]]
     std::expected<void, VectorIndexError> insert(
         common::VIndexId index_id,
-        const schema::VectorValue & vector,
+        const VectorIndexKey & key,
         common::RecordId record_id
     );
 
@@ -67,14 +67,14 @@ public:
     [[nodiscard]]
     std::expected<void, VectorIndexError> update(
         common::VIndexId index_id,
-        const schema::VectorValue & vector,
+        const VectorIndexKey & key,
         common::RecordId record_id
     );
 
     [[nodiscard]]
     std::expected<std::vector<VectorSearchResult>, VectorIndexError> search(
         common::VIndexId index_id,
-        const schema::VectorValue & query,
+        const VectorIndexKey & query,
         VectorSearchParameters parameters
     ) const;
 

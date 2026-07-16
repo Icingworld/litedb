@@ -42,11 +42,11 @@ std::size_t HnswIndex::dimension() const noexcept
 }
 
 std::expected<void, VectorIndexError> HnswIndex::insert(
-    const schema::VectorValue & vector,
+    const VectorIndexKey & key,
     common::RecordId record_id
 )
 {
-    auto validation = validate_vector(vector);
+    auto validation = validate_key(key);
     if (!validation.has_value()) {
         return validation;
     }
@@ -54,7 +54,7 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
         return std::unexpected(make_error(VectorIndexErrorCode::RecordAlreadyExists, "Vector record already exists"));
     }
 
-    vectors_.emplace(record_id, vector);
+    vectors_.emplace(record_id, key.value());
     return {};
 }
 
@@ -67,11 +67,11 @@ std::expected<void, VectorIndexError> HnswIndex::erase(common::RecordId record_i
 }
 
 std::expected<void, VectorIndexError> HnswIndex::update(
-    const schema::VectorValue & vector,
+    const VectorIndexKey & key,
     common::RecordId record_id
 )
 {
-    auto validation = validate_vector(vector);
+    auto validation = validate_key(key);
     if (!validation.has_value()) {
         return validation;
     }
@@ -81,16 +81,16 @@ std::expected<void, VectorIndexError> HnswIndex::update(
         return std::unexpected(make_error(VectorIndexErrorCode::RecordNotFound, "Vector record not found"));
     }
 
-    found->second = vector;
+    found->second = key.value();
     return {};
 }
 
 std::expected<std::vector<VectorSearchResult>, VectorIndexError> HnswIndex::search(
-    const schema::VectorValue & query,
+    const VectorIndexKey & query,
     VectorSearchParameters parameters
 ) const
 {
-    auto validation = validate_vector(query);
+    auto validation = validate_key(query);
     if (!validation.has_value()) {
         return std::unexpected(std::move(validation.error()));
     }
@@ -101,7 +101,7 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> HnswIndex::sear
     std::vector<VectorSearchResult> results;
     results.reserve(vectors_.size());
     for (const auto & [record_id, vector] : vectors_) {
-        auto distance = vector_distance(query, vector, options_.metric);
+        auto distance = vector_distance(query.value(), vector, options_.metric);
         if (!distance.has_value()) {
             return std::unexpected(std::move(distance.error()));
         }
@@ -139,12 +139,9 @@ const HnswIndexOptions & HnswIndex::options() const noexcept
     return options_;
 }
 
-std::expected<void, VectorIndexError> HnswIndex::validate_vector(const schema::VectorValue & vector) const
+std::expected<void, VectorIndexError> HnswIndex::validate_key(const VectorIndexKey & key) const
 {
-    if (vector.empty()) {
-        return std::unexpected(make_error(VectorIndexErrorCode::EmptyQuery, "Vector must not be empty"));
-    }
-    if (options_.dimension == 0 || vector.size() != options_.dimension) {
+    if (options_.dimension == 0 || key.dimension() != options_.dimension) {
         return std::unexpected(make_error(VectorIndexErrorCode::InvalidDimension, "Vector dimension does not match index dimension"));
     }
     return {};

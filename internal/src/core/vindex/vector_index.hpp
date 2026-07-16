@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/schema/value.hpp"
 #include "core/vindex/vector_index_error.hpp"
+#include "core/vindex/vector_index_key.hpp"
 
 namespace litedb::core::vindex
 {
@@ -79,12 +79,12 @@ public:
 
     /**
      * @brief 插入向量
-     * @param vector 向量
+     * @param key 向量索引键
      * @param record_id 记录 ID
      * @return 结果
      */
     virtual std::expected<void, VectorIndexError> insert(
-        const schema::VectorValue & vector,
+        const VectorIndexKey & key,
         common::RecordId record_id
     ) = 0;
 
@@ -97,12 +97,12 @@ public:
 
     /**
      * @brief 更新向量
-     * @param vector 新向量
+     * @param key 新向量索引键
      * @param record_id 记录 ID
      * @return 结果
      */
     virtual std::expected<void, VectorIndexError> update(
-        const schema::VectorValue & vector,
+        const VectorIndexKey & key,
         common::RecordId record_id
     ) = 0;
 
@@ -114,7 +114,7 @@ public:
      */
     [[nodiscard]]
     virtual std::expected<std::vector<VectorSearchResult>, VectorIndexError> search(
-        const schema::VectorValue & query,
+        const VectorIndexKey & query,
         VectorSearchParameters parameters
     ) const = 0;
 

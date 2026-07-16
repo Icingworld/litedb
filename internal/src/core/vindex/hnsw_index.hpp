@@ -43,20 +43,20 @@ public:
     std::size_t dimension() const noexcept override;
 
     std::expected<void, VectorIndexError> insert(
-        const schema::VectorValue & vector,
+        const VectorIndexKey & key,
         common::RecordId record_id
     ) override;
 
     std::expected<void, VectorIndexError> erase(common::RecordId record_id) override;
 
     std::expected<void, VectorIndexError> update(
-        const schema::VectorValue & vector,
+        const VectorIndexKey & key,
         common::RecordId record_id
     ) override;
 
     [[nodiscard]]
     std::expected<std::vector<VectorSearchResult>, VectorIndexError> search(
-        const schema::VectorValue & query,
+        const VectorIndexKey & query,
         VectorSearchParameters parameters
     ) const override;
 
@@ -70,7 +70,7 @@ public:
 
 private:
     [[nodiscard]]
-    std::expected<void, VectorIndexError> validate_vector(const schema::VectorValue & vector) const;
+    std::expected<void, VectorIndexError> validate_key(const VectorIndexKey & key) const;
 
 private:
     HnswIndexOptions options_;   ///< HNSW 配置

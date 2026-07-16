@@ -78,7 +78,7 @@ void VectorIndexManager::drop_collection_indexes(common::CollectionId collection
 
 std::expected<void, VectorIndexError> VectorIndexManager::insert(
     common::VIndexId index_id,
-    const schema::VectorValue & vector,
+    const VectorIndexKey & key,
     common::RecordId record_id
 )
 {
@@ -86,7 +86,7 @@ std::expected<void, VectorIndexError> VectorIndexManager::insert(
     if (index == nullptr) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexNotFound, "Vector index not found"));
     }
-    return index->index->insert(vector, record_id);
+    return index->index->insert(key, record_id);
 }
 
 std::expected<void, VectorIndexError> VectorIndexManager::erase(common::VIndexId index_id, common::RecordId record_id)
@@ -100,7 +100,7 @@ std::expected<void, VectorIndexError> VectorIndexManager::erase(common::VIndexId
 
 std::expected<void, VectorIndexError> VectorIndexManager::update(
     common::VIndexId index_id,
-    const schema::VectorValue & vector,
+    const VectorIndexKey & key,
     common::RecordId record_id
 )
 {
@@ -108,12 +108,12 @@ std::expected<void, VectorIndexError> VectorIndexManager::update(
     if (index == nullptr) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexNotFound, "Vector index not found"));
     }
-    return index->index->update(vector, record_id);
+    return index->index->update(key, record_id);
 }
 
 std::expected<std::vector<VectorSearchResult>, VectorIndexError> VectorIndexManager::search(
     common::VIndexId index_id,
-    const schema::VectorValue & query,
+    const VectorIndexKey & query,
     VectorSearchParameters parameters
 ) const
 {
