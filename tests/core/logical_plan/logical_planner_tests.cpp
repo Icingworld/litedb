@@ -86,7 +86,7 @@ struct Fixture
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
-    IndexEngine index_engine;
+    IndexEngine index_engine {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
 

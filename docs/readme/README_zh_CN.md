@@ -13,15 +13,15 @@
 - 单机持久化 meta 与集合存储。
 - 持久化 meta 快照，以及用于 `INSERT`、`UPDATE`、`DELETE` 的分页集合存储文件。
 - 启动时恢复已持久化的 database、collection、schema、索引定义、标量值与 `VECTOR(n)` 值。
-- 内存标量索引：过渡期使用 `MapIndex` 提供 BTREE 的范围与等值查找；页式 `BTreeIndex` 已实现查询、范围扫描、插入分裂和首版删除，并已具备 `OrderedScalarIndex`/`IndexStore` 接口，尚未接入运行时工厂。
-- meta 中的索引元数据，写入 `meta.lmeta` 持久化，并在启动时从已有行数据重建内存索引。
+- 标量索引：`HashIndex` 提供内存等值索引；持久化页式 `BTreeIndex` 提供等值查询、范围扫描、插入分裂和首版删除，并作为 BTREE 正式接入运行时。
+- meta 中的索引元数据写入 `meta.lmeta`；BTREE 文件位于 `indexes/<index_id>.bti` 并在启动时直接打开，HASH 从已有行数据重建。
 - 索引 DDL：
   - `CREATE INDEX ... ON collection(column) [USING BTREE]`
   - `CREATE INDEX IF NOT EXISTS ...`
   - `DROP INDEX ... ON collection`
   - `DROP INDEX IF EXISTS ... ON collection`
   - `SHOW INDEXES FROM collection`
-- 通过 `IndexManager` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
+- 通过 `IndexEngine` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
 - 基础数据库与集合管理：
   - `CREATE DATABASE`、`DROP DATABASE`、`USE`、`SHOW DATABASES`
   - `CREATE COLLECTION ... COMMENT`、列级 `COMMENT`、`DROP COLLECTION`、`SHOW COLLECTIONS FROM database`、`DESCRIBE`

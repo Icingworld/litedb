@@ -4,8 +4,8 @@
 #include <utility>
 
 #include "core/meta/meta_engine.hpp"
+#include "core/index/btree_index/btree_index.hpp"
 #include "core/index/hash_index/hash_index.hpp"
-#include "core/index/map_index/map_index.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
@@ -25,16 +25,56 @@ IndexError make_error(IndexErrorCode code, std::string message)
 
 } // namespace
 
-std::unique_ptr<ScalarIndex> IndexEngine::make_backend(meta::entry::IndexKind index_kind)
+IndexEngine::IndexEngine(
+    std::filesystem::path data_directory,
+    filesystem::FileSystem & filesystem
+) noexcept
+    : data_directory_(std::move(data_directory))
+    , filesystem_(&filesystem)
 {
-    switch (index_kind) {
+}
+
+std::filesystem::path IndexEngine::index_path(common::IndexId index_id) const
+{
+    return data_directory_ / "indexes" / (std::to_string(index_id) + ".bti");
+}
+
+std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_backend(
+    const meta::entry::IndexEntry & index_entry,
+    const common::LogicalType & key_type
+)
+{
+    switch (index_entry.kind()) {
     case meta::entry::IndexKind::Hash:
         return std::make_unique<HashIndex>();
-    case meta::entry::IndexKind::BTree:
-        // 页式 BTreeIndex 完成 OrderedScalarIndex 接口前，保留兼容后端。
-        return std::make_unique<MapIndex>();
+    case meta::entry::IndexKind::BTree: {
+        auto created = BTreeIndex::create(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
+        if (!created.has_value()) {
+            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(created.error().message)));
+        }
+        return std::make_unique<BTreeIndex>(std::move(created.value()));
     }
-    return nullptr;
+    }
+    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
+}
+
+std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_backend(
+    const meta::entry::IndexEntry & index_entry,
+    const common::LogicalType & key_type
+)
+{
+    switch (index_entry.kind()) {
+    case meta::entry::IndexKind::Hash:
+        return std::make_unique<HashIndex>();
+    case meta::entry::IndexKind::BTree: {
+        auto opened = BTreeIndex::open(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
+        if (!opened.has_value()) {
+            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(opened.error().message)));
+        }
+        return std::make_unique<BTreeIndex>(std::move(opened.value()));
+    }
+    }
+    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
 }
 
 std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_from_record(
@@ -168,29 +208,33 @@ std::expected<void, IndexError> IndexEngine::create_index(
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "VECTOR column cannot use scalar index"));
     }
 
-    auto index = make_backend(index_entry.kind());
-    if (index == nullptr) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
+    auto index = create_backend(index_entry, column->type());
+    if (!index.has_value()) {
+        return std::unexpected(std::move(index.error()));
     }
 
-    IndexStore store {IndexDescriptor {
+    auto store = std::make_unique<IndexStore>(IndexDescriptor {
         .index_id = index_entry.id(),
         .collection_id = index_entry.collection_id(),
         .column_id = column_id.value(),
         .column_ordinal = column->ordinal(),
         .key_type = column->type(),
-        .kind = index->kind(),
+        .kind = index.value()->kind(),
         .unique = index_entry.unique(),
-    }, std::move(index)};
+    }, std::move(index.value()));
 
-    auto built = build_index_from_storage(store, storage);
+    auto built = build_index_from_storage(*store, storage);
     if (!built.has_value()) {
+        store.reset();
+        if (index_entry.kind() == meta::entry::IndexKind::BTree) {
+            (void) filesystem_->remove(index_path(index_entry.id()));
+        }
         return std::unexpected(std::move(built.error()));
     }
 
-    const auto index_id = store.descriptor().index_id;
-    const auto collection_id = store.descriptor().collection_id;
-    stores_by_id_.emplace(index_id, std::move(store));
+    const auto index_id = store->descriptor().index_id;
+    const auto collection_id = store->descriptor().collection_id;
+    stores_by_id_.emplace(index_id, std::move(*store));
     indexes_by_collection_[collection_id].push_back(index_id);
     return {};
 }
@@ -202,10 +246,10 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
         return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
     }
 
-    const auto collection_id = it->second.descriptor().collection_id;
+    const auto descriptor = it->second.descriptor();
     stores_by_id_.erase(it);
 
-    const auto collection_it = indexes_by_collection_.find(collection_id);
+    const auto collection_it = indexes_by_collection_.find(descriptor.collection_id);
     if (collection_it != indexes_by_collection_.end()) {
         auto & index_ids = collection_it->second;
         std::erase(index_ids, index_id);
@@ -213,28 +257,39 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
             indexes_by_collection_.erase(collection_it);
         }
     }
+
+    if (descriptor.kind == IndexKind::BTree) {
+        auto removed = filesystem_->remove(index_path(index_id));
+        if (!removed.has_value()) {
+            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(removed.error().message)));
+        }
+    }
     return {};
 }
 
-void IndexEngine::drop_collection_indexes(common::CollectionId collection_id)
+std::expected<void, IndexError> IndexEngine::drop_collection_indexes(common::CollectionId collection_id)
 {
     const auto it = indexes_by_collection_.find(collection_id);
     if (it == indexes_by_collection_.end()) {
-        return;
+        return {};
     }
 
-    for (const auto index_id : it->second) {
-        stores_by_id_.erase(index_id);
+    const auto index_ids = it->second;
+    for (const auto index_id : index_ids) {
+        auto dropped = drop_index(index_id);
+        if (!dropped.has_value()) {
+            return std::unexpected(std::move(dropped.error()));
+        }
     }
-    indexes_by_collection_.erase(it);
+    return {};
 }
 
-std::expected<void, IndexError> IndexEngine::rebuild_all(
+std::expected<void, IndexError> IndexEngine::restore_all(
     const meta::MetaEngine & catalog,
     const storage::StorageEngine & storage
 )
 {
-    IndexEngine rebuilt;
+    IndexEngine restored {data_directory_, *filesystem_};
 
     for (const auto * database : catalog.list_databases()) {
         if (database == nullptr) {
@@ -263,15 +318,44 @@ std::expected<void, IndexError> IndexEngine::rebuild_all(
                     continue;
                 }
 
-                auto created = rebuilt.create_index(*index_entry, collection_schema.value(), storage);
-                if (!created.has_value()) {
-                    return std::unexpected(std::move(created.error()));
+                const auto column_id = index_entry->column_id();
+                if (!column_id.has_value()) {
+                    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
                 }
+                const auto * column = collection_schema->find_column(column_id.value());
+                if (column == nullptr || column->type().id == common::LogicalTypeId::Vector) {
+                    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid"));
+                }
+
+                auto backend = restored.restore_backend(*index_entry, column->type());
+                if (!backend.has_value()) {
+                    return std::unexpected(std::move(backend.error()));
+                }
+
+                IndexStore store {IndexDescriptor {
+                    .index_id = index_entry->id(),
+                    .collection_id = index_entry->collection_id(),
+                    .column_id = column_id.value(),
+                    .column_ordinal = column->ordinal(),
+                    .key_type = column->type(),
+                    .kind = backend.value()->kind(),
+                    .unique = index_entry->unique(),
+                }, std::move(backend.value())};
+
+                if (index_entry->kind() == meta::entry::IndexKind::Hash) {
+                    auto built = restored.build_index_from_storage(store, storage);
+                    if (!built.has_value()) {
+                        return std::unexpected(std::move(built.error()));
+                    }
+                }
+
+                restored.stores_by_id_.emplace(index_entry->id(), std::move(store));
+                restored.indexes_by_collection_[index_entry->collection_id()].push_back(index_entry->id());
             }
         }
     }
 
-    *this = std::move(rebuilt);
+    *this = std::move(restored);
     return {};
 }
 

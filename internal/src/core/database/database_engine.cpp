@@ -89,7 +89,8 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , manifest_(config.data_dir, filesystem_)
     , meta_store_(manifest_.meta_path(), filesystem_)
     , meta_(meta_store_)
-    , storage_(std::move(config.data_dir), filesystem_)
+    , storage_(config.data_dir, filesystem_)
+    , index_engine_(std::move(config.data_dir), filesystem_)
 {
 }
 
@@ -135,9 +136,9 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(storage_restored.error())));
     }
 
-    auto indexes_rebuilt = index_engine_.rebuild_all(meta_, storage_);
-    if (!indexes_rebuilt.has_value()) {
-        return std::unexpected(to_database_error(std::move(indexes_rebuilt.error())));
+    auto indexes_restored = index_engine_.restore_all(meta_, storage_);
+    if (!indexes_restored.has_value()) {
+        return std::unexpected(to_database_error(std::move(indexes_restored.error())));
     }
 
     return {};
@@ -296,18 +297,16 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         });
     }
 
-    index::IndexEngine rebuilt_indexes;
-    auto rebuilt = rebuilt_indexes.rebuild_all(staged, storage_);
-    if (!rebuilt.has_value()) {
-        return std::unexpected(from_index_error(std::move(rebuilt.error()), plan.location()));
+    auto runtime_created = index_engine_.create_index(*index_entry, collection_schema.value(), storage_);
+    if (!runtime_created.has_value()) {
+        return std::unexpected(from_index_error(std::move(runtime_created.error()), plan.location()));
     }
 
     auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
+        (void) index_engine_.drop_index(index_entry->id());
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
-
-    index_engine_ = std::move(rebuilt_indexes);
 
     return command_result(1);
 }
@@ -394,7 +393,10 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         if (storage_.contains_collection(collection_id)) {
             (void) storage_.drop_collection(collection_id);
         }
-        index_engine_.drop_collection_indexes(collection_id);
+        auto indexes_dropped = index_engine_.drop_collection_indexes(collection_id);
+        if (!indexes_dropped.has_value()) {
+            return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
+        }
     }
 
     return command_result(1);
@@ -432,7 +434,10 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     if (storage_.contains_collection(collection_id)) {
         (void) storage_.drop_collection(collection_id);
     }
-    index_engine_.drop_collection_indexes(collection_id);
+    auto indexes_dropped = index_engine_.drop_collection_indexes(collection_id);
+    if (!indexes_dropped.has_value()) {
+        return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
+    }
 
     return command_result(1);
 }

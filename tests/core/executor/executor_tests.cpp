@@ -144,7 +144,7 @@ struct Fixture
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
-    IndexEngine index_engine;
+    IndexEngine index_engine {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -191,7 +191,14 @@ IndexId create_index(
         .kind = kind,
     });
     require(created.has_value(), "fixture index creation failed");
-    require(fixture.index_engine.rebuild_all(fixture.catalog, fixture.storage).has_value(), "fixture index rebuild failed");
+    const auto * entry = fixture.catalog.find_index(created.value());
+    require(entry != nullptr, "fixture index metadata missing");
+    auto schema = load_collection_schema(fixture.catalog, fixture.users_id);
+    require(schema.has_value(), "fixture index schema load failed");
+    require(
+        fixture.index_engine.create_index(*entry, schema.value(), fixture.storage).has_value(),
+        "fixture index create failed"
+    );
     return created.value();
 }
 

@@ -150,7 +150,7 @@ void test_build_skips_nulls_and_views_index()
     fixture.insert_user(3, 20);
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
-    IndexEngine engine;
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
@@ -183,7 +183,7 @@ void test_insert_update_delete_maintenance()
     fixture.insert_user(1, 18);
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::Hash);
 
-    IndexEngine engine;
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
 
@@ -231,7 +231,7 @@ void test_unique_index_rejects_duplicates()
     fixture.insert_user(2, 18);
     const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
 
-    IndexEngine engine;
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto duplicate_build = engine.create_index(duplicate_index, fixture.users_schema(), fixture.storage);
     require(!duplicate_build.has_value(), "unique index build should reject duplicates");
     require(duplicate_build.error().code == IndexErrorCode::DuplicateKey, "unique duplicate build error mismatch");
@@ -239,33 +239,34 @@ void test_unique_index_rejects_duplicates()
     Fixture clean_fixture;
     clean_fixture.insert_user(1, 18);
     const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
-    auto created = engine.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.storage);
+    IndexEngine clean_engine {clean_fixture.storage_directory.path(), clean_fixture.filesystem};
+    auto created = clean_engine.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.storage);
     require(created.has_value(), "unique index create failed");
 
     RecordData duplicate {.values = {Value {std::int64_t {2}}, Value {std::int32_t {18}}}};
-    auto duplicate_insert = engine.prepare_insert(clean_fixture.users_id, duplicate);
+    auto duplicate_insert = clean_engine.prepare_insert(clean_fixture.users_id, duplicate);
     require(!duplicate_insert.has_value(), "unique index prepare insert should reject duplicate");
     require(duplicate_insert.error().code == IndexErrorCode::DuplicateKey, "unique duplicate insert error mismatch");
 }
 
-void test_rebuild_all_is_atomic_on_failure()
+void test_restore_all_is_atomic_on_failure()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
     const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
-    IndexEngine engine;
+    IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "initial create index failed");
     require(engine.find_index(index_entry.id()).has_value(), "initial index missing");
 
     fixture.insert_user(2, 18);
     const auto & unique_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::Hash, true);
-    auto rebuilt = engine.rebuild_all(fixture.catalog, fixture.storage);
-    require(!rebuilt.has_value(), "rebuild should fail on duplicate unique key");
-    require(rebuilt.error().code == IndexErrorCode::DuplicateKey, "rebuild duplicate error mismatch");
-    require(engine.find_index(index_entry.id()).has_value(), "failed rebuild should keep existing indexes");
-    require(!engine.find_index(unique_index.id()).has_value(), "failed rebuild should not publish partial indexes");
+    auto restored = engine.restore_all(fixture.catalog, fixture.storage);
+    require(!restored.has_value(), "restore should fail on duplicate unique key");
+    require(restored.error().code == IndexErrorCode::DuplicateKey, "restore duplicate error mismatch");
+    require(engine.find_index(index_entry.id()).has_value(), "failed restore should keep existing indexes");
+    require(!engine.find_index(unique_index.id()).has_value(), "failed restore should not publish partial indexes");
 }
 
 } // namespace
@@ -276,7 +277,7 @@ int main()
         test_build_skips_nulls_and_views_index();
         test_insert_update_delete_maintenance();
         test_unique_index_rejects_duplicates();
-        test_rebuild_all_is_atomic_on_failure();
+        test_restore_all_is_atomic_on_failure();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

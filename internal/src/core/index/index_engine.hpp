@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -9,6 +10,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
+#include "core/filesystem/filesystem.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/index_store.hpp"
 #include "core/meta/meta.hpp"
@@ -70,7 +72,7 @@ struct ManagedIndexView
 class IndexEngine
 {
 public:
-    IndexEngine() = default;
+    IndexEngine(std::filesystem::path data_directory, filesystem::FileSystem & filesystem) noexcept;
 
 public:
     /**
@@ -92,13 +94,15 @@ public:
     /**
      * @brief 删除集合所有索引
      */
-    void drop_collection_indexes(common::CollectionId collection_id);
+    [[nodiscard]]
+    std::expected<void, IndexError> drop_collection_indexes(common::CollectionId collection_id);
 
     /**
-     * @brief 重建所有索引
+     * @brief 从目录和记录存储恢复所有索引
+     * @details 持久化 BTREE 直接打开索引文件，内存 HASH 从记录存储重建。
      */
     [[nodiscard]]
-    std::expected<void, IndexError> rebuild_all(
+    std::expected<void, IndexError> restore_all(
         const meta::MetaEngine & catalog,
         const storage::StorageEngine & storage
     );
@@ -198,10 +202,28 @@ public:
 
 private:
     /**
-     * @brief 创建底层索引实现
+     * @brief 创建新的底层索引实现
      */
     [[nodiscard]]
-    static std::unique_ptr<ScalarIndex> make_backend(meta::entry::IndexKind index_kind);
+    std::expected<std::unique_ptr<ScalarIndex>, IndexError> create_backend(
+        const meta::entry::IndexEntry & index_entry,
+        const common::LogicalType & key_type
+    );
+
+    /**
+     * @brief 打开或重建已有的底层索引实现
+     */
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ScalarIndex>, IndexError> restore_backend(
+        const meta::entry::IndexEntry & index_entry,
+        const common::LogicalType & key_type
+    );
+
+    /**
+     * @brief 获取索引文件路径
+     */
+    [[nodiscard]]
+    std::filesystem::path index_path(common::IndexId index_id) const;
 
     /**
      * @brief 从记录数据创建索引键
@@ -247,6 +269,8 @@ private:
     std::vector<const IndexStore *> list_stores(common::CollectionId collection_id) const;
 
 private:
+    std::filesystem::path data_directory_;                             ///< 数据库数据目录
+    filesystem::FileSystem * filesystem_ {nullptr};                    ///< 非拥有型文件系统
     std::unordered_map<common::IndexId, IndexStore> stores_by_id_;   ///< 索引存储按 ID 索引
     std::unordered_map<
         common::CollectionId, std::vector<common::IndexId>

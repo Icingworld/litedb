@@ -1,4 +1,3 @@
-#include "core/index/map_index/map_index.hpp"
 #include "core/index/hash_index/hash_index.hpp"
 #include "core/index/index_store.hpp"
 
@@ -128,82 +127,6 @@ void test_hash_index_equal_lookup_and_erase()
     require(index.size() == 1, "hash size after erase mismatch");
 }
 
-void test_map_index_equal_lookup_and_ranges()
-{
-    MapIndex index;
-    require(index.kind() == IndexKind::BTree, "btree index kind mismatch");
-
-    require(index.insert(key(Value {std::int32_t {1}}), 10).has_value(), "btree insert 1 failed");
-    require(index.insert(key(Value {std::int32_t {2}}), 20).has_value(), "btree insert 2 failed");
-    require(index.insert(key(Value {std::int32_t {3}}), 30).has_value(), "btree insert 3 failed");
-    require(index.insert(key(Value {std::int32_t {1}}), 11).has_value(), "btree insert duplicate key failed");
-    require(index.size() == 4, "btree size mismatch");
-
-    require_ids(ids(index.find_equal(key(Value {std::int32_t {1}}))), {10, 11}, "btree equal lookup mismatch");
-    require_ids(
-        ids(index.scan_range(IndexRange::closed(key(Value {std::int32_t {1}}), key(Value {std::int32_t {3}})))),
-        {10, 11, 20, 30},
-        "btree closed range mismatch"
-    );
-    require_ids(
-        ids(index.scan_range(IndexRange::between(
-            key(Value {std::int32_t {1}}),
-            false,
-            key(Value {std::int32_t {3}}),
-            false
-        ))),
-        {20},
-        "btree open range mismatch"
-    );
-    require_ids(
-        ids(index.scan_range(IndexRange::upper_bound(key(Value {std::int32_t {1}})))),
-        {10, 11},
-        "btree upper-bound range mismatch"
-    );
-    require_ids(
-        ids(index.scan_range(IndexRange::lower_bound(key(Value {std::int32_t {2}}), false))),
-        {30},
-        "btree lower-bound exclusive range mismatch"
-    );
-    require_ids(ids(index.scan_range(IndexRange::all())), {10, 11, 20, 30}, "btree full range mismatch");
-    require(
-        ids(index.scan_range(IndexRange::closed(key(Value {std::int32_t {3}}), key(Value {std::int32_t {1}})))).empty(),
-        "btree reversed range should be empty"
-    );
-    require(
-        ids(index.scan_range(IndexRange::between(
-            key(Value {std::int32_t {1}}),
-            false,
-            key(Value {std::int32_t {1}}),
-            true
-        ))).empty(),
-        "btree equal open range should be empty"
-    );
-
-    auto duplicate = index.insert(key(Value {std::int32_t {1}}), 10);
-    require(!duplicate.has_value(), "duplicate btree index entry should fail");
-    require(duplicate.error().code == IndexErrorCode::DuplicateEntry, "duplicate btree entry error mismatch");
-}
-
-void test_map_index_erase_errors_and_cleanup()
-{
-    MapIndex index;
-    const auto one = key(Value {std::int32_t {1}});
-
-    require(index.insert(one, 10).has_value(), "btree insert failed");
-    auto missing_record = index.erase(one, 11);
-    require(!missing_record.has_value(), "btree missing record erase should fail");
-    require(missing_record.error().code == IndexErrorCode::RecordNotFound, "btree missing record error mismatch");
-
-    require(index.erase(one, 10).has_value(), "btree erase failed");
-    require(index.size() == 0, "btree size should be zero after erase");
-    require(ids(index.find_equal(one)).empty(), "btree empty bucket should be removed");
-
-    auto missing_key = index.erase(one, 10);
-    require(!missing_key.has_value(), "btree missing key erase should fail");
-    require(missing_key.error().code == IndexErrorCode::KeyNotFound, "btree missing key error mismatch");
-}
-
 void test_index_store_enforces_descriptor_constraints()
 {
     IndexStore store {IndexDescriptor {
@@ -244,8 +167,6 @@ int main()
         test_scalar_key_exact_type_semantics();
         test_scalar_key_ordering_is_stable();
         test_hash_index_equal_lookup_and_erase();
-        test_map_index_equal_lookup_and_ranges();
-        test_map_index_erase_errors_and_cleanup();
         test_index_store_enforces_descriptor_constraints();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

@@ -1,11 +1,9 @@
 add_subdirectory(btree_index)
 add_subdirectory(hash_index)
-add_subdirectory(map_index)
 
 set(INDEX_SOURCES
     ${BTREE_INDEX_SOURCES}
     ${HASH_INDEX_SOURCES}
-    ${MAP_INDEX_SOURCES}
     index_engine.cpp
     index_store.cpp
     scalar_index.cpp
