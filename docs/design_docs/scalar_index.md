@@ -17,13 +17,12 @@
 
 ## 2. 当前索引模块
 
-`internal/src/core/index` 提供标量索引键、内存 HASH、持久化 B+Tree、单索引 `IndexStore` 和数据库级 `IndexEngine`。一个 `IndexStore` 对应一个索引实例，`IndexEngine` 负责索引生命周期与自动维护。
+`internal/src/core/index` 提供标量索引键、持久化 B+Tree、单索引 `IndexStore` 和数据库级 `IndexEngine`。一个 `IndexStore` 对应一个索引实例，`IndexEngine` 负责索引生命周期与自动维护。
 
 核心结构：
 
 ```text
 ScalarIndex
-  ├─ HashIndex
   └─ OrderedScalarIndex
        └─ BTreeIndex -> BTreePageStore
 
@@ -79,15 +78,13 @@ insert(new_key, record_id)
 
 ## 3. 索引后端
 
-### 3.1 HashIndex
-
-`HashIndex` 使用 `std::unordered_map` 提供等值查询，不属于 `OrderedScalarIndex`，因此它在类型层面不暴露 `scan_range`。当前 SQL 语法仍不暴露 `USING HASH`；catalog 和内部运行时可以保存 Hash 索引定义。
-
-### 3.2 BTreeIndex
+### 3.1 BTreeIndex
 
 `BTreeIndex` 是 `OrderedScalarIndex` 的持久化 B+Tree 实现，每个索引对应 `indexes/<index_id>.bti` 文件，支持 `insert`、`erase`、`find_equal` 和 `scan_range`。`IndexEngine` 创建索引时新建并从已有记录构建该文件，数据库启动时直接打开文件，不再从 records 重建 BTREE。
 
-`IndexStore` 记录索引列的 `LogicalType`，写入、删除和查询入口都会校验键的精确物理类型，并在单个索引边界内维护唯一性约束。`IndexEngine` 对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不暴露内部 `ScalarIndex` 引用。Hash 索引收到范围查询时返回 `UnsupportedRangeScan`。
+`IndexStore` 记录索引列的 `LogicalType`，写入、删除和查询入口都会校验键的精确物理类型，并在单个索引边界内维护唯一性约束。`IndexEngine` 对外提供按 `IndexId` 的 `find_equal` 和 `scan_range`，不暴露内部 `ScalarIndex` 引用。
+
+当前只实现 `BTreeIndex`，但仍保留 `ScalarIndex -> OrderedScalarIndex` 的能力分层。基础接口只承诺精确键查询；未来若引入位图索引、倒排索引或其他不具备全序范围扫描语义的后端，可以直接实现 `ScalarIndex`。只有有序后端才实现 `OrderedScalarIndex`，`IndexStore` 会对其他后端的范围查询返回 `UnsupportedRangeScan`。
 
 后续如果实现数据库级索引，推荐最终实现成 B+Tree，而不是传统 B 树：
 
@@ -332,7 +329,7 @@ B+Tree index file
 `BTreePageStore`，并已实现 `find_equal`、`scan_range`、`insert`、`erase`：插入按实际编码字节分裂叶子页和
 内部页，删除会更新祖先 separator、摘除空叶子、裁剪空子树并执行 root shrink。该类现已继承
 `OrderedScalarIndex`，由 `IndexStore` 通过 `ScalarIndex` 多态持有，并已成为 BTREE 的正式运行时后端。
-`IndexEngine` 持有数据库目录和非拥有型 `FileSystem` 上下文，负责创建、打开和删除 `indexes/<index_id>.bti`；启动恢复时直接打开 BTREE，HASH 仍从 records 重建。
+`IndexEngine` 持有数据库目录和非拥有型 `FileSystem` 上下文，负责创建、打开和删除 `indexes/<index_id>.bti`；启动恢复时直接打开 BTREE。
 
 `ScalarIndex` 不再暴露通用 `clear()`：对 Hash/Map 来说它只是清空内存容器，对持久化 B+Tree 来说却意味着
 重写或删除索引文件，二者不是同一层生命周期操作。索引文件的 drop/rebuild/replace 应由 `IndexEngine` 和
@@ -361,10 +358,9 @@ B+Tree 删除采用“先保证结构正确，再优化空间利用率”的分�
 ```text
 当前:
   catalog 持久化索引定义
-  启动时打开持久化 BTreeIndex，HASH 从 records 重建
+  启动时打开持久化 BTreeIndex
   insert/update/delete 自动维护索引
   optimizer -> PhysicalIndexScan -> executor 查询索引
-  HashIndex 提供等值查询
   BTreeIndex 作为 BTREE 正式后端提供等值和范围查询
 
 已完成:

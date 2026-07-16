@@ -590,7 +590,7 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
                 }
                 index.name = reader.read_string();
                 const auto index_kind = reader.read_u8();
-                if (index_kind > static_cast<std::uint8_t>(entry::IndexKind::BTree)) {
+                if (index_kind != static_cast<std::uint8_t>(entry::IndexKind::BTree)) {
                     reader.fail("invalid index kind");
                 }
                 index.index_kind = static_cast<entry::IndexKind>(index_kind);

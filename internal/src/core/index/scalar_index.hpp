@@ -17,8 +17,7 @@ namespace litedb::core::index
  */
 enum class IndexKind
 {
-    Hash,                 ///< 哈希索引
-    BTree,                ///< B树索引
+    BTree = 0,            ///< B+ 树索引
 };
 
 /**
@@ -107,7 +106,9 @@ private:
 };
 
 /**
- * @brief 标量索引
+ * @brief 标量索引的最小能力接口
+ * @details 只要求精确键查询，不假设键有序。当前正式后端只有 B+Tree；保留该层是为了以后接入
+ * 位图索引、倒排索引或其他仅支持等值/集合检索、不适合范围扫描的标量索引实现。
  */
 class ScalarIndex
 {
@@ -164,6 +165,7 @@ public:
 
 /**
  * @brief 支持有序范围扫描的标量索引
+ * @details 有序后端通过该派生接口显式声明范围能力，调用方无需在基础接口中假定所有索引都可排序。
  */
 class OrderedScalarIndex : public ScalarIndex
 {

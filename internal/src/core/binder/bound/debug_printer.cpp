@@ -90,7 +90,6 @@ const char * token_type_name(parser::TokenType type) noexcept
 const char * meta_index_kind_name(meta::entry::IndexKind kind) noexcept
 {
     switch (kind) {
-    case meta::entry::IndexKind::Hash: return "Hash";
     case meta::entry::IndexKind::BTree: return "BTree";
     }
 

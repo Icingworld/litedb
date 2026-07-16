@@ -303,7 +303,6 @@ void test_indexes_do_not_change_logical_scan()
 {
     Fixture fixture;
     (void) create_managed_index(fixture, "idx_age_btree", "age", litedb::core::meta::entry::IndexKind::BTree);
-    (void) create_managed_index(fixture, "idx_age_hash", "age", litedb::core::meta::entry::IndexKind::Hash);
 
     auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;", &fixture.index_engine);
     const auto & equal_projection = static_cast<const LogicalProjection &>(query_root(*equal));

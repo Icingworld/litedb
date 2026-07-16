@@ -343,17 +343,6 @@ void test_btree_range_adds_scan_index_hint()
     require(scan.index_hint()->lookup.lower->inclusive, "range lower bound should be inclusive");
 }
 
-void test_hash_range_does_not_add_scan_index_hint()
-{
-    Fixture fixture;
-    create_catalog_index(fixture, "idx_age_hash", "age", IndexKind::Hash);
-
-    auto optimized = optimize_ok(fixture, plan_ok(fixture, "SELECT id FROM users WHERE age >= 18;"));
-    const auto & child = filter_child_for_query(*optimized);
-    require(child.kind() == LogicalPlanNodeKind::Scan, "HASH range should keep LogicalScan");
-    require(!static_cast<const LogicalScan &>(child).index_hint().has_value(), "HASH range should not add scan index hint");
-}
-
 } // namespace
 
 int main()
@@ -369,7 +358,6 @@ int main()
         test_enabled_and_disabled_select_results_match();
         test_btree_equality_adds_scan_index_hint();
         test_btree_range_adds_scan_index_hint();
-        test_hash_range_does_not_add_scan_index_hint();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

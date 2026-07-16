@@ -1,4 +1,3 @@
-#include "core/index/hash_index/hash_index.hpp"
 #include "core/index/index_store.hpp"
 
 #include <algorithm>
@@ -18,6 +17,51 @@ namespace
 using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::schema;
+
+class EqualityOnlyTestIndex final : public ScalarIndex
+{
+public:
+    IndexKind kind() const noexcept override { return IndexKind::BTree; }
+
+    std::expected<void, IndexError> insert(const ScalarIndexKey & key, RecordId record_id) override
+    {
+        for (const auto & [stored_key, stored_record_id] : entries_) {
+            if (ScalarIndexEqual {}(stored_key, key) && stored_record_id == record_id) {
+                return std::unexpected(IndexError {IndexErrorCode::DuplicateEntry, "Duplicate test entry"});
+            }
+        }
+        entries_.emplace_back(key, record_id);
+        return {};
+    }
+
+    std::expected<void, IndexError> erase(const ScalarIndexKey & key, RecordId record_id) override
+    {
+        const auto it = std::ranges::find_if(entries_, [&](const auto & entry) {
+            return ScalarIndexEqual {}(entry.first, key) && entry.second == record_id;
+        });
+        if (it == entries_.end()) {
+            return std::unexpected(IndexError {IndexErrorCode::RecordNotFound, "Test entry not found"});
+        }
+        entries_.erase(it);
+        return {};
+    }
+
+    std::expected<std::vector<RecordId>, IndexError> find_equal(const ScalarIndexKey & key) const override
+    {
+        std::vector<RecordId> result;
+        for (const auto & [stored_key, record_id] : entries_) {
+            if (ScalarIndexEqual {}(stored_key, key)) {
+                result.push_back(record_id);
+            }
+        }
+        return result;
+    }
+
+    std::size_t size() const noexcept override { return entries_.size(); }
+
+private:
+    std::vector<std::pair<ScalarIndexKey, RecordId>> entries_;
+};
 
 void require(bool condition, const char * message)
 {
@@ -103,30 +147,6 @@ void test_scalar_key_ordering_is_stable()
     require(less(key(Value {std::string {"a"}}), key(Value {std::string {"b"}})), "string ordering mismatch");
 }
 
-void test_hash_index_equal_lookup_and_erase()
-{
-    HashIndex index;
-    const auto one = key(Value {std::int32_t {1}});
-
-    require(index.kind() == IndexKind::Hash, "hash index kind mismatch");
-    require(index.insert(one, 10).has_value(), "hash insert failed");
-    require(index.insert(one, 20).has_value(), "hash insert duplicate key failed");
-    require(index.insert(key(Value {std::int32_t {2}}), 30).has_value(), "hash insert second key failed");
-    require(index.size() == 3, "hash size mismatch");
-
-    require_ids(ids(index.find_equal(one)), {10, 20}, "hash equal lookup mismatch");
-
-    auto duplicate = index.insert(one, 10);
-    require(!duplicate.has_value(), "duplicate hash index entry should fail");
-    require(duplicate.error().code == IndexErrorCode::DuplicateEntry, "duplicate hash entry error mismatch");
-
-    require(index.erase(one, 10).has_value(), "hash erase one record failed");
-    require_ids(ids(index.find_equal(one)), {20}, "hash erase should keep remaining duplicate key");
-    require(index.erase(one, 20).has_value(), "hash erase final record failed");
-    require(ids(index.find_equal(one)).empty(), "hash empty bucket should be removed");
-    require(index.size() == 1, "hash size after erase mismatch");
-}
-
 void test_index_store_enforces_descriptor_constraints()
 {
     IndexStore store {IndexDescriptor {
@@ -135,9 +155,9 @@ void test_index_store_enforces_descriptor_constraints()
         .column_id = 3,
         .column_ordinal = 0,
         .key_type = LogicalType {LogicalTypeId::Integer, std::nullopt},
-        .kind = IndexKind::Hash,
+        .kind = IndexKind::BTree,
         .unique = true,
-    }, std::make_unique<HashIndex>()};
+    }, std::make_unique<EqualityOnlyTestIndex>()};
 
     const auto one = key(Value {std::int32_t {1}});
     require(store.insert(one, 10).has_value(), "store insert failed");
@@ -151,10 +171,10 @@ void test_index_store_enforces_descriptor_constraints()
     require(wrong_type.error().code == IndexErrorCode::KeyTypeMismatch, "store key type error mismatch");
 
     auto unsupported_range = store.scan_range(IndexRange::all());
-    require(!unsupported_range.has_value(), "hash store should reject range scans");
+    require(!unsupported_range.has_value(), "equality-only store should reject range scans");
     require(
         unsupported_range.error().code == IndexErrorCode::UnsupportedRangeScan,
-        "hash store range error mismatch"
+        "equality-only store range error mismatch"
     );
 }
 
@@ -166,7 +186,6 @@ int main()
         test_scalar_key_validation();
         test_scalar_key_exact_type_semantics();
         test_scalar_key_ordering_is_stable();
-        test_hash_index_equal_lookup_and_erase();
         test_index_store_enforces_descriptor_constraints();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

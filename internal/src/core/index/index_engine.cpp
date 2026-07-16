@@ -5,7 +5,6 @@
 
 #include "core/meta/meta_engine.hpp"
 #include "core/index/btree_index/btree_index.hpp"
-#include "core/index/hash_index/hash_index.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
@@ -44,18 +43,14 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_back
     const common::LogicalType & key_type
 )
 {
-    switch (index_entry.kind()) {
-    case meta::entry::IndexKind::Hash:
-        return std::make_unique<HashIndex>();
-    case meta::entry::IndexKind::BTree: {
-        auto created = BTreeIndex::create(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
-        if (!created.has_value()) {
-            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(created.error().message)));
-        }
-        return std::make_unique<BTreeIndex>(std::move(created.value()));
+    if (index_entry.kind() != meta::entry::IndexKind::BTree) {
+        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
     }
+    auto created = BTreeIndex::create(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
+    if (!created.has_value()) {
+        return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(created.error().message)));
     }
-    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
+    return std::make_unique<BTreeIndex>(std::move(created.value()));
 }
 
 std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_backend(
@@ -63,18 +58,14 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_bac
     const common::LogicalType & key_type
 )
 {
-    switch (index_entry.kind()) {
-    case meta::entry::IndexKind::Hash:
-        return std::make_unique<HashIndex>();
-    case meta::entry::IndexKind::BTree: {
-        auto opened = BTreeIndex::open(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
-        if (!opened.has_value()) {
-            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(opened.error().message)));
-        }
-        return std::make_unique<BTreeIndex>(std::move(opened.value()));
+    if (index_entry.kind() != meta::entry::IndexKind::BTree) {
+        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
     }
+    auto opened = BTreeIndex::open(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
+    if (!opened.has_value()) {
+        return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(opened.error().message)));
     }
-    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
+    return std::make_unique<BTreeIndex>(std::move(opened.value()));
 }
 
 std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_from_record(
@@ -341,13 +332,6 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                     .kind = backend.value()->kind(),
                     .unique = index_entry->unique(),
                 }, std::move(backend.value())};
-
-                if (index_entry->kind() == meta::entry::IndexKind::Hash) {
-                    auto built = restored.build_index_from_storage(store, storage);
-                    if (!built.has_value()) {
-                        return std::unexpected(std::move(built.error()));
-                    }
-                }
 
                 restored.stores_by_id_.emplace(index_entry->id(), std::move(store));
                 restored.indexes_by_collection_[index_entry->collection_id()].push_back(index_entry->id());

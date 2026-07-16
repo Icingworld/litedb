@@ -185,8 +185,6 @@ std::string logical_type_name(const LogicalType & value)
 std::string index_kind_name(meta::entry::IndexKind kind)
 {
     switch (kind) {
-    case meta::entry::IndexKind::Hash:
-        return "HASH";
     case meta::entry::IndexKind::BTree:
         return "BTREE";
     }

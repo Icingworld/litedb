@@ -98,8 +98,8 @@ public:
     std::expected<void, IndexError> drop_collection_indexes(common::CollectionId collection_id);
 
     /**
-     * @brief 从目录和记录存储恢复所有索引
-     * @details 持久化 BTREE 直接打开索引文件，内存 HASH 从记录存储重建。
+     * @brief 从索引目录恢复所有索引
+     * @details 持久化 BTREE 直接打开索引文件。
      */
     [[nodiscard]]
     std::expected<void, IndexError> restore_all(
@@ -211,7 +211,7 @@ private:
     );
 
     /**
-     * @brief 打开或重建已有的底层索引实现
+     * @brief 打开已有的底层索引实现
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<ScalarIndex>, IndexError> restore_backend(

@@ -181,15 +181,11 @@ void test_insert_update_delete_maintenance()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::Hash);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
 
     IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "create index failed");
-
-    auto hash_range = engine.scan_range(index_entry.id(), IndexRange::all());
-    require(!hash_range.has_value(), "hash range scan should fail");
-    require(hash_range.error().code == IndexErrorCode::UnsupportedRangeScan, "hash range error mismatch");
 
     RecordData null_age {.values = {Value {std::int64_t {2}}, Value::null()}};
     auto null_insert = engine.prepare_insert(fixture.users_id, null_age);
@@ -260,13 +256,12 @@ void test_restore_all_is_atomic_on_failure()
     require(created.has_value(), "initial create index failed");
     require(engine.find_index(index_entry.id()).has_value(), "initial index missing");
 
-    fixture.insert_user(2, 18);
-    const auto & unique_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::Hash, true);
+    const auto & missing_index = fixture.create_catalog_index("idx_age_missing", litedb::core::meta::entry::IndexKind::BTree);
     auto restored = engine.restore_all(fixture.catalog, fixture.storage);
-    require(!restored.has_value(), "restore should fail on duplicate unique key");
-    require(restored.error().code == IndexErrorCode::DuplicateKey, "restore duplicate error mismatch");
+    require(!restored.has_value(), "restore should fail when a persistent index file is missing");
+    require(restored.error().code == IndexErrorCode::StorageError, "restore storage error mismatch");
     require(engine.find_index(index_entry.id()).has_value(), "failed restore should keep existing indexes");
-    require(!engine.find_index(unique_index.id()).has_value(), "failed restore should not publish partial indexes");
+    require(!engine.find_index(missing_index.id()).has_value(), "failed restore should not publish partial indexes");
 }
 
 } // namespace
