@@ -38,6 +38,7 @@ public:
 
 public:
     void visit(const LogicalScan & node) override;
+    void visit(const LogicalVectorSearch & node) override;
     void visit(const LogicalFilter & node) override;
     void visit(const LogicalProjection & node) override;
     void visit(const LogicalOrderBy & node) override;

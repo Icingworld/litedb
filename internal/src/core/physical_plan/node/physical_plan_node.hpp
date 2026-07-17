@@ -11,6 +11,7 @@ enum class PhysicalPlanNodeKind
 {
     SeqScan,
     IndexScan,
+    VectorSearch,
     Filter,
     Projection,
     Sort,

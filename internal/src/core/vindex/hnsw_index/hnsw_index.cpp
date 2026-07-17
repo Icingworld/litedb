@@ -60,7 +60,21 @@ VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 [[nodiscard]]
 VectorIndexError store_error(hnsw_index::HnswStoreError value)
 {
-    return make_error(VectorIndexErrorCode::StorageFailure, "HNSW store error: " + std::move(value.message));
+    using hnsw_index::HnswStoreErrorCode;
+    auto code = VectorIndexErrorCode::StorageFailure;
+    switch (value.code) {
+    case HnswStoreErrorCode::FileSystemError:
+        code = VectorIndexErrorCode::FileSystemFailure;
+        break;
+    case HnswStoreErrorCode::InvalidFormat:
+    case HnswStoreErrorCode::UnsupportedVersion:
+    case HnswStoreErrorCode::CorruptedGraph:
+        code = VectorIndexErrorCode::CorruptedIndex;
+        break;
+    case HnswStoreErrorCode::InvalidMutation:
+        break;
+    }
+    return make_error(code, "HNSW store error: " + std::move(value.message));
 }
 
 [[nodiscard]]

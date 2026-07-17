@@ -1,0 +1,193 @@
+#pragma once
+
+#include <expected>
+#include <filesystem>
+#include <optional>
+#include <unordered_map>
+#include <vector>
+
+#include "core/common/ids.hpp"
+#include "core/meta/entry/vector_index_entry.hpp"
+#include "core/schema/collection.hpp"
+#include "core/schema/record.hpp"
+#include "core/vindex/vector_index_store.hpp"
+
+namespace litedb::core::filesystem
+{
+class FileSystem;
+}
+
+namespace litedb::core::meta
+{
+class MetaEngine;
+}
+
+namespace litedb::core::storage
+{
+class StorageEngine;
+}
+
+namespace litedb::core::vindex
+{
+
+class HnswIndex;
+
+/**
+ * @brief 托管向量索引的只读运行时视图
+ */
+struct ManagedVectorIndexView
+{
+    common::VIndexId index_id;
+    common::CollectionId collection_id;
+    common::ColumnId column_id;
+    std::size_t column_ordinal;
+    VectorIndexKind kind;
+    VectorDistanceMetric metric;
+    std::size_t dimension;
+    std::size_t entry_count;
+};
+
+struct VectorIndexKeyBinding
+{
+    common::VIndexId index_id;
+    VectorIndexKey key;
+};
+
+struct VectorIndexUpdateBinding
+{
+    common::VIndexId index_id;
+    std::optional<VectorIndexKey> old_key;
+    std::optional<VectorIndexKey> new_key;
+    bool key_changed {false};
+};
+
+using VectorIndexKeyBindings = std::vector<VectorIndexKeyBinding>;
+using VectorIndexUpdateBindings = std::vector<VectorIndexUpdateBinding>;
+
+/**
+ * @brief 向量索引子系统入口
+ * @details 负责多个运行时索引的生命周期、元数据解释、恢复策略、DML 维护与查询路由。
+ */
+class VectorIndexEngine
+{
+public:
+    VectorIndexEngine(std::filesystem::path data_directory, filesystem::FileSystem & filesystem) noexcept;
+
+    VectorIndexEngine(const VectorIndexEngine &) = delete;
+    VectorIndexEngine & operator=(const VectorIndexEngine &) = delete;
+    VectorIndexEngine(VectorIndexEngine &&) noexcept = default;
+    VectorIndexEngine & operator=(VectorIndexEngine &&) noexcept = default;
+
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> create_index(
+        const meta::entry::VectorIndexEntry & index_entry,
+        const schema::CollectionSchema & collection_schema,
+        const storage::StorageEngine & storage
+    );
+
+    /**
+     * @brief 从权威元数据原子恢复全部向量索引
+     * @note 任一索引失败时不发布部分状态，调用前的运行时状态保持不变。
+     */
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> restore_all(
+        const meta::MetaEngine & catalog,
+        const storage::StorageEngine & storage
+    );
+
+    [[nodiscard]] std::expected<void, VectorIndexError> drop_index(common::VIndexId index_id);
+    [[nodiscard]] std::expected<void, VectorIndexError> drop_collection_indexes(common::CollectionId collection_id);
+
+    [[nodiscard]] std::expected<VectorIndexKeyBindings, VectorIndexError> prepare_insert(
+        common::CollectionId collection_id,
+        const schema::RecordData & record_data
+    ) const;
+    [[nodiscard]] std::expected<void, VectorIndexError> on_insert(
+        common::RecordId record_id,
+        const VectorIndexKeyBindings & bindings
+    );
+    [[nodiscard]] std::expected<VectorIndexUpdateBindings, VectorIndexError> prepare_update(
+        common::CollectionId collection_id,
+        const schema::RecordData & old_record_data,
+        const schema::RecordData & new_record_data
+    ) const;
+    [[nodiscard]] std::expected<void, VectorIndexError> on_update(
+        common::RecordId record_id,
+        const VectorIndexUpdateBindings & bindings
+    );
+    [[nodiscard]] std::expected<VectorIndexKeyBindings, VectorIndexError> prepare_delete(
+        common::CollectionId collection_id,
+        const schema::RecordData & old_record_data
+    ) const;
+    [[nodiscard]] std::expected<void, VectorIndexError> on_delete(
+        common::RecordId record_id,
+        const VectorIndexKeyBindings & bindings
+    );
+
+    [[nodiscard]] std::expected<std::vector<VectorSearchResult>, VectorIndexError> search(
+        common::VIndexId index_id,
+        const VectorIndexKey & query,
+        VectorSearchRequest request
+    ) const;
+
+    [[nodiscard]] std::optional<ManagedVectorIndexView> find_index(common::VIndexId index_id) const noexcept;
+    [[nodiscard]] std::vector<ManagedVectorIndexView> list_indexes(common::CollectionId collection_id) const;
+
+    void clear() noexcept;
+
+private:
+    [[nodiscard]] std::expected<void, VectorIndexError> insert(
+        common::VIndexId index_id,
+        const VectorIndexKey & key,
+        common::RecordId record_id
+    );
+    [[nodiscard]] std::expected<void, VectorIndexError> erase(
+        common::VIndexId index_id,
+        common::RecordId record_id
+    );
+    [[nodiscard]] static std::expected<VectorIndexDescriptor, VectorIndexError> make_descriptor(
+        const meta::entry::VectorIndexEntry & index_entry,
+        const schema::CollectionSchema & collection_schema
+    );
+    [[nodiscard]] std::expected<VectorIndexStore, VectorIndexError> create_store(
+        const VectorIndexDescriptor & descriptor,
+        const storage::StorageEngine & storage
+    ) const;
+    [[nodiscard]] std::expected<VectorIndexStore, VectorIndexError> restore_store(
+        const VectorIndexDescriptor & descriptor,
+        const storage::StorageEngine & storage
+    ) const;
+    [[nodiscard]] std::expected<VectorIndexStore, VectorIndexError> rebuild_store(
+        const VectorIndexDescriptor & descriptor,
+        const storage::StorageEngine & storage
+    ) const;
+    [[nodiscard]] std::expected<std::unique_ptr<VectorIndex>, VectorIndexError> make_backend(
+        const VectorIndexDescriptor & descriptor,
+        const storage::StorageEngine & storage,
+        bool restore
+    ) const;
+    [[nodiscard]] static std::expected<void, VectorIndexError> build_from_storage(
+        VectorIndex & index,
+        const VectorIndexDescriptor & descriptor,
+        const storage::StorageEngine & storage
+    );
+    [[nodiscard]] static std::expected<void, VectorIndexError> verify_against_storage(
+        const HnswIndex & index,
+        const VectorIndexDescriptor & descriptor,
+        const storage::StorageEngine & storage
+    );
+
+    [[nodiscard]] std::filesystem::path index_path(common::VIndexId index_id) const;
+    [[nodiscard]] static ManagedVectorIndexView make_view(const VectorIndexStore & store) noexcept;
+    [[nodiscard]] VectorIndexStore * find_store(common::VIndexId index_id) noexcept;
+    [[nodiscard]] const VectorIndexStore * find_store(common::VIndexId index_id) const noexcept;
+    void publish(VectorIndexStore store);
+
+private:
+    std::filesystem::path data_directory_;
+    filesystem::FileSystem * filesystem_ {nullptr};
+    std::unordered_map<common::VIndexId, VectorIndexStore> indexes_by_id_;
+    std::unordered_map<common::CollectionId, std::vector<common::VIndexId>> indexes_by_collection_;
+};
+
+} // namespace litedb::core::vindex

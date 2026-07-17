@@ -8,6 +8,7 @@ set(PHYSICAL_PLAN_SOURCES
     node/physical_seq_scan.cpp
     node/physical_sort.cpp
     node/physical_unary_node.cpp
+    node/physical_vector_search.cpp
     statement/physical_query_plan.cpp
     statement/physical_row_mutation_plan.cpp
     statement/physical_statement_plan.cpp

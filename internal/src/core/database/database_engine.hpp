@@ -16,7 +16,7 @@
 #include "core/meta/meta_store.hpp"
 #include "core/schema/schema_error.hpp"
 #include "core/storage/storage_engine.hpp"
-#include "core/vindex/vector_index_manager.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 
 namespace litedb::core::physical_plan
 {
@@ -52,7 +52,7 @@ enum class DatabaseErrorCode
     ManifestError,    ///< 数据库 manifest 错误
     MetaError,        ///< meta 引擎错误
     StorageError,     ///< 存储引擎错误
-    IndexError,       ///< 索引管理器错误
+    IndexError,       ///< 索引引擎错误
 };
 
 /**
@@ -93,14 +93,14 @@ public:
     const meta::MetaEngine & meta() const noexcept;
 
     /**
-     * @brief 获取索引管理器
-     * @return 索引管理器
+     * @brief 获取标量索引引擎
+     * @return 标量索引引擎
      */
     [[nodiscard]]
     const index::IndexEngine & index_engine() const noexcept;
 
     [[nodiscard]]
-    const vindex::VectorIndexManager & vector_index_manager() const noexcept;
+    const vindex::VectorIndexEngine & vector_index_engine() const noexcept;
 
 private:
     friend class Session;
@@ -211,9 +211,6 @@ private:
     [[nodiscard]]
     std::expected<void, storage::StorageError> restore_storage_from_meta();
 
-    [[nodiscard]]
-    std::expected<void, vindex::VectorIndexError> restore_vector_indexes_from_meta();
-
     /**
      * @brief 从 meta 错误创建执行错误
      * @param error meta 错误
@@ -275,7 +272,7 @@ private:
     meta::MetaEngine meta_;                ///< meta 引擎
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
-    vindex::VectorIndexManager vector_index_manager_; ///< 向量索引引擎
+    vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎
     std::mutex mutex_;                     ///< 互斥锁
 };
 

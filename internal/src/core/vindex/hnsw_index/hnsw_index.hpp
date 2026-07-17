@@ -25,7 +25,7 @@ struct HnswIndexOptions
 
 class HnswIndex final : public VectorIndex
 {
-    friend class VectorIndexManager;
+    friend class VectorIndexEngine;
 
 private:
     explicit HnswIndex(hnsw_index::HnswStore store) noexcept;

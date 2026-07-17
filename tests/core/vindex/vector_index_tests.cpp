@@ -1,7 +1,7 @@
 #include "core/vindex/flat_index/flat_index.hpp"
 #include "core/vindex/hnsw_index/hnsw_index.hpp"
 #include "core/vindex/vector_index_key.hpp"
-#include "core/vindex/vector_index_manager.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 
 #include <chrono>
 #include <array>
@@ -17,7 +17,9 @@
 
 #include "core/common/logical_type.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/schema/collection.hpp"
+#include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
 namespace
@@ -200,7 +202,7 @@ void test_hnsw_store_rejects_corrupted_commit()
     }
     auto opened = HnswIndex::open(index_path, 12, 20, 31, hnsw_options(), filesystem);
     require(!opened.has_value(), "corrupted hnsw commit should be rejected");
-    require(opened.error().code == VectorIndexErrorCode::StorageFailure, "corrupted hnsw error code mismatch");
+    require(opened.error().code == VectorIndexErrorCode::CorruptedIndex, "corrupted hnsw error code mismatch");
     std::filesystem::remove_all(directory);
 }
 
@@ -218,7 +220,7 @@ void test_hnsw_rejects_descriptor_mismatch()
     mismatched.metric = VectorDistanceMetric::Cosine;
     auto opened = HnswIndex::open(index_path, 13, 20, 31, mismatched, filesystem);
     require(!opened.has_value(), "HNSW descriptor mismatch should be rejected");
-    require(opened.error().code == VectorIndexErrorCode::StorageFailure, "descriptor mismatch error code mismatch");
+    require(opened.error().code == VectorIndexErrorCode::CorruptedIndex, "descriptor mismatch error code mismatch");
     std::filesystem::remove_all(directory);
 }
 
@@ -341,108 +343,137 @@ void test_flat_index_validates_dimensions_and_storage()
     std::filesystem::remove_all(path);
 }
 
-void test_vector_index_manager_lifecycle()
+void test_vector_index_engine_lifecycle()
 {
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path, filesystem};
+        storage::StorageEngine storage {path / "storage", filesystem};
         require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
         require(storage.insert(20, vector_record("first", Value {VectorValue {1.0, 0.0}})).has_value(), "insert first vector failed");
         require(storage.insert(20, vector_record("second", Value {VectorValue {0.0, 2.0}})).has_value(), "insert second vector failed");
 
-        VectorIndexManager manager {storage};
-        VectorIndexDefinition definition {
-            .index_id = 10,
-            .collection_id = 20,
-            .column_id = 31,
-            .column_ordinal = 1,
-            .dimension = 2,
-            .kind = VectorIndexKind::Flat,
-            .metric = VectorDistanceMetric::InnerProduct,
+        meta::entry::VectorIndexEntry entry {
+            10, 20, 31, "vectors_embedding",
+            meta::entry::VectorIndexKind::Hnsw,
+            meta::entry::VectorDistanceMetric::InnerProduct,
+            2,
+            meta::entry::HnswOptions {
+                .max_neighbors = 4,
+                .ef_construction = 32,
+                .ef_search_default = 32,
+                .random_seed = 7,
+            },
         };
+        VectorIndexEngine engine {path / "indexes", filesystem};
 
-        require(manager.create_index(definition).has_value(), "create flat index failed");
-        require(manager.find_index(10).has_value(), "find flat index failed");
-        require(manager.list_indexes(20).size() == 1, "list flat indexes mismatch");
+        require(engine.create_index(entry, vectors_schema(), storage).has_value(), "create vector index failed");
+        auto view = engine.find_index(10);
+        require(view.has_value(), "find vector index failed");
+        require(view->column_ordinal == 1 && view->dimension == 2, "vector index descriptor view mismatch");
+        require(view->metric == VectorDistanceMetric::InnerProduct, "vector index metric view mismatch");
+        require(view->entry_count == 2, "vector index entry count mismatch");
+        require(engine.list_indexes(20).size() == 1, "list vector indexes mismatch");
         require_records(
-            results(manager.search(10, vector_key({0.0, 1.0}), VectorSearchRequest {.top_k = 1})),
+            results(engine.search(10, vector_key({0.0, 1.0}), VectorSearchRequest {.top_k = 1})),
             {2},
-            "manager inner product search mismatch"
+            "engine inner product search mismatch"
         );
 
-        require(manager.drop_index(10).has_value(), "drop flat index failed");
-        require(!manager.find_index(10).has_value(), "dropped flat index should be absent");
+        meta::entry::VectorIndexEntry invalid {
+            11, 20, 31, "invalid", meta::entry::VectorIndexKind::Hnsw,
+            meta::entry::VectorDistanceMetric::L2, 3
+        };
+        auto invalid_created = engine.create_index(invalid, vectors_schema(), storage);
+        require(!invalid_created.has_value(), "invalid vector metadata should be rejected");
+        require(invalid_created.error().code == VectorIndexErrorCode::InvalidMetadata, "invalid metadata error code mismatch");
 
-        auto hnsw = manager.create_index(VectorIndexDefinition {
-            .index_id = 11,
-            .collection_id = 20,
-            .column_id = 31,
-            .column_ordinal = 1,
-            .dimension = 2,
-            .kind = VectorIndexKind::Hnsw,
-        });
-        require(!hnsw.has_value(), "non-persistent manager should reject HNSW creation");
-        require(hnsw.error().code == VectorIndexErrorCode::StorageFailure, "non-persistent manager hnsw error code mismatch");
+        require(engine.drop_index(10).has_value(), "drop vector index failed");
+        require(!engine.find_index(10).has_value(), "dropped vector index should be absent");
     }
     std::filesystem::remove_all(path);
 }
 
-void test_vector_index_manager_creates_and_restores_hnsw()
+void test_vector_index_engine_restores_and_rebuilds_all()
 {
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     const auto index_directory = path / "indexes";
     {
-        storage::StorageEngine storage {path / "storage", filesystem};
-        require(storage.create_collection(vectors_schema()).has_value(), "create hnsw manager collection failed");
-        require(storage.insert(20, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first manager vector failed");
-        require(storage.insert(20, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second manager vector failed");
-        require(storage.insert(20, vector_record("third", Value {VectorValue {5.0, 0.0}})).has_value(), "insert third manager vector failed");
+        meta::MetaEngine catalog;
+        auto database_id = catalog.create_database(meta::CreateDatabaseRequest {.name = "demo"});
+        require(database_id.has_value(), "create vector catalog database failed");
+        auto collection_id = catalog.create_collection(meta::CreateCollectionRequest {
+            .database_id = *database_id,
+            .name = "vectors",
+            .columns = {
+                meta::ColumnDefinition {.name = "name", .type = {LogicalTypeId::Varchar, 64}},
+                meta::ColumnDefinition {.name = "embedding", .type = {LogicalTypeId::Vector, 2}},
+            },
+        });
+        require(collection_id.has_value(), "create vector catalog collection failed");
+        const auto * column = catalog.find_column(*collection_id, "embedding");
+        require(column != nullptr, "vector catalog column missing");
+        auto index_id = catalog.create_vector_index(meta::CreateVectorIndexRequest {
+            .collection_id = *collection_id,
+            .column_id = column->id(),
+            .name = "vectors_embedding",
+            .kind = meta::entry::VectorIndexKind::Hnsw,
+            .metric = meta::entry::VectorDistanceMetric::L2,
+            .hnsw_options = {.max_neighbors = 4, .ef_construction = 32, .ef_search_default = 32, .random_seed = 7},
+        });
+        require(index_id.has_value(), "create vector catalog index failed");
+        auto collection_schema = schema::load_collection_schema(catalog, *collection_id);
+        require(collection_schema.has_value(), "load vector catalog schema failed");
+        const auto * index_entry = catalog.find_vector_index(*index_id);
+        require(index_entry != nullptr, "vector catalog index entry missing");
 
-        VectorIndexDefinition definition {
-            .index_id = 40,
-            .collection_id = 20,
-            .column_id = 31,
-            .column_ordinal = 1,
-            .dimension = 2,
-            .kind = VectorIndexKind::Hnsw,
-            .metric = VectorDistanceMetric::L2,
-            .max_neighbors = 4,
-            .ef_construction = 32,
-            .ef_search_default = 32,
-            .random_seed = 7,
-        };
+        storage::StorageEngine storage {path / "storage", filesystem};
+        require(storage.create_collection(*collection_schema).has_value(), "create hnsw engine collection failed");
+        require(storage.insert(*collection_id, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first engine vector failed");
+        require(storage.insert(*collection_id, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second engine vector failed");
+        require(storage.insert(*collection_id, vector_record("third", Value {VectorValue {5.0, 0.0}})).has_value(), "insert third engine vector failed");
+
         {
-            VectorIndexManager manager {index_directory, filesystem, storage};
-            require(manager.create_index(definition).has_value(), "manager create hnsw index failed");
-            require(manager.find_index(40)->index.size() == 3, "manager did not build hnsw from storage");
+            VectorIndexEngine engine {index_directory, filesystem};
+            require(engine.create_index(*index_entry, *collection_schema, storage).has_value(), "engine create hnsw index failed");
+            require(engine.find_index(*index_id)->entry_count == 3, "engine did not build hnsw from storage");
             require_records(
-                results(manager.search(40, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
+                results(engine.search(*index_id, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
                 {1, 2},
-                "manager-created hnsw search mismatch"
+                "engine-created hnsw search mismatch"
             );
         }
-        require(std::filesystem::exists(index_directory / "vindex_40.lhnsw"), "manager hnsw file is missing");
+        const auto index_path = index_directory / ("vindex_" + std::to_string(*index_id) + ".lhnsw");
+        require(std::filesystem::exists(index_path), "engine hnsw file is missing");
         {
-            VectorIndexManager restored {index_directory, filesystem, storage};
-            require(restored.restore_index(definition).has_value(), "manager restore hnsw index failed");
+            VectorIndexEngine restored {index_directory, filesystem};
+            require(restored.restore_all(catalog, storage).has_value(), "engine restore_all failed");
             require_records(
-                results(restored.search(40, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
+                results(restored.search(*index_id, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
                 {1, 2},
-                "manager-restored hnsw search mismatch"
+                "engine-restored hnsw search mismatch"
             );
+
+            storage::StorageEngine missing_storage {path / "missing-storage", filesystem};
+            auto failed = restored.restore_all(catalog, missing_storage);
+            require(!failed.has_value(), "restore_all should reject missing collection storage");
+            require(restored.find_index(*index_id).has_value(), "failed restore_all should preserve prior engine state");
         }
-        require(storage.insert(20, vector_record("fourth", Value {VectorValue {0.1, 0.0}})).has_value(), "insert stale storage vector failed");
+        require(filesystem.remove(index_path).has_value(), "remove HNSW file for missing-file recovery failed");
         {
-            VectorIndexManager stale {index_directory, filesystem, storage};
-            auto restored = stale.restore_index(definition);
-            require(!restored.has_value(), "manager should detect an HNSW index stale against storage");
-            require(stale.rebuild_index(definition).has_value(), "manager rebuild of stale HNSW index failed");
-            require(stale.find_index(40)->index.size() == 4, "rebuilt HNSW index size mismatch");
-            require(stale.drop_index(40).has_value(), "manager drop hnsw index failed");
+            VectorIndexEngine missing {index_directory, filesystem};
+            require(missing.restore_all(catalog, storage).has_value(), "engine should rebuild a missing HNSW file");
+            require(missing.find_index(*index_id)->entry_count == 3, "missing-file rebuild size mismatch");
         }
-        require(!std::filesystem::exists(index_directory / "vindex_40.lhnsw"), "manager did not remove hnsw file");
+        require(storage.insert(*collection_id, vector_record("fourth", Value {VectorValue {0.1, 0.0}})).has_value(), "insert stale storage vector failed");
+        {
+            VectorIndexEngine stale {index_directory, filesystem};
+            require(stale.restore_all(catalog, storage).has_value(), "engine should rebuild stale HNSW index");
+            require(stale.find_index(*index_id)->entry_count == 4, "rebuilt HNSW index size mismatch");
+            require(stale.drop_index(*index_id).has_value(), "engine drop hnsw index failed");
+        }
+        require(!std::filesystem::exists(index_path), "engine did not remove hnsw file");
     }
     std::filesystem::remove_all(path);
 }
@@ -475,8 +506,8 @@ int main()
         test_hnsw_matches_brute_force_top_one();
         test_flat_index_scans_storage();
         test_flat_index_validates_dimensions_and_storage();
-        test_vector_index_manager_lifecycle();
-        test_vector_index_manager_creates_and_restores_hnsw();
+        test_vector_index_engine_lifecycle();
+        test_vector_index_engine_restores_and_rebuilds_all();
         test_vector_index_key();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

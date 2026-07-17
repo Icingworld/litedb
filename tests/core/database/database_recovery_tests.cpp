@@ -296,17 +296,17 @@ void test_vector_index_ddl_reopen()
 
         auto query = vindex::VectorIndexKey::from_vector({1.0, 0.0, 0.0});
         require(query.has_value(), "vector query key creation failed");
-        auto initial = engine->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        auto initial = engine->vector_index_engine().search(index->id(), *query, {.top_k = 2});
         require(initial.has_value() && initial->size() == 2, "created HNSW should contain existing records");
         const auto first_record_id = initial->front().record_id;
 
         execute_ok(session, "UPDATE docs SET embedding = [-1.0, 0.0, 0.0] WHERE id = 1;");
-        auto updated = engine->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        auto updated = engine->vector_index_engine().search(index->id(), *query, {.top_k = 2});
         require(updated.has_value() && updated->size() == 2, "updated HNSW search failed");
         require(updated->front().record_id != first_record_id, "HNSW update should replace the old vector");
 
         execute_ok(session, "DELETE FROM docs WHERE id = 2;");
-        auto deleted = engine->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        auto deleted = engine->vector_index_engine().search(index->id(), *query, {.top_k = 2});
         require(deleted.has_value() && deleted->size() == 1, "HNSW delete should hide the erased record");
         require(deleted->front().record_id == first_record_id, "HNSW retained the wrong record after delete");
     }
@@ -330,7 +330,7 @@ void test_vector_index_ddl_reopen()
         require(index->random_seed() == 7, "reopened vector index random_seed mismatch");
         auto query = vindex::VectorIndexKey::from_vector({-1.0, 0.0, 0.0});
         require(query.has_value(), "reopened vector query key creation failed");
-        auto persisted = reopened->vector_index_manager().search(index->id(), *query, {.top_k = 2});
+        auto persisted = reopened->vector_index_engine().search(index->id(), *query, {.top_k = 2});
         require(persisted.has_value() && persisted->size() == 1, "reopened HNSW write state mismatch");
 
         database::Session session {*reopened};

@@ -11,6 +11,7 @@
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/node/logical_vector_search.hpp"
 
 namespace litedb::core::planner::logical
 {
@@ -162,6 +163,38 @@ void LogicalDebugPrinter::visit(const LogicalScan & node)
         write_field("column_id", static_cast<std::size_t>(hint.column_id));
         write_field("column_name", hint.column_name);
         write_field("lookup", hint.lookup.kind == LogicalIndexLookupKind::Equal ? "equal" : "range");
+    }
+}
+
+const char * vector_metric_name(meta::entry::VectorDistanceMetric metric) noexcept
+{
+    switch (metric) {
+    case meta::entry::VectorDistanceMetric::L2:
+        return "L2";
+    case meta::entry::VectorDistanceMetric::InnerProduct:
+        return "InnerProduct";
+    case meta::entry::VectorDistanceMetric::Cosine:
+        return "Cosine";
+    }
+    return "Unknown";
+}
+
+void LogicalDebugPrinter::visit(const LogicalVectorSearch & node)
+{
+    write_node_header("LogicalVectorSearch", node.location());
+    IndentScope scope {*this};
+    write_field("database_id", static_cast<std::size_t>(node.database_id()));
+    write_field("collection_id", static_cast<std::size_t>(node.collection_id()));
+    write_field("collection_name", node.collection_name());
+    write_field("index_id", static_cast<std::size_t>(node.index_id()));
+    write_field("index_name", node.index_name());
+    write_field("column_id", static_cast<std::size_t>(node.column_id()));
+    write_field("column_name", node.column_name());
+    write_field("metric", vector_metric_name(node.metric()));
+    write_field("required_count", node.required_count());
+    write_bound_expression_field("query_vector", node.query_vector());
+    if (node.predicate() != nullptr) {
+        write_bound_expression_field("predicate", *node.predicate());
     }
 }
 
