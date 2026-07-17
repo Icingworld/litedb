@@ -211,6 +211,89 @@ void test_vector_index_ddl()
     require(missing.affected_rows == 0, "DROP VINDEX IF EXISTS affected rows mismatch");
 }
 
+void test_vector_index_query_pipeline()
+{
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-vector-pipeline"};
+    TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
+    execute_ok(engine, "CREATE DATABASE vectors;");
+    execute_ok(engine, "USE vectors;");
+    execute_ok(engine, "CREATE COLLECTION docs (id BIGINT, category INTEGER, embedding VECTOR(3));");
+    execute_ok(engine, "INSERT INTO docs VALUES (1, 1, [0.0, 0.0, 0.0]);");
+    execute_ok(engine, "INSERT INTO docs VALUES (2, 2, [1.0, 0.0, 0.0]);");
+    execute_ok(engine, "INSERT INTO docs VALUES (3, 1, [0.2, 0.0, 0.0]);");
+    execute_ok(engine, "INSERT INTO docs VALUES (4, 2, [2.0, 0.0, 0.0]);");
+    execute_ok(engine, "INSERT INTO docs VALUES (5, 9, NULL);");
+    execute_ok(engine, "CREATE VINDEX vidx_l2 ON docs (embedding) USING HNSW WITH (metric = L2);");
+
+    auto offset = execute_ok(
+        engine,
+        "SELECT id, l2_distance(embedding, [0.1, 0.0, 0.0]) AS distance "
+        "FROM docs ORDER BY distance ASC LIMIT 2 OFFSET 1;"
+    );
+    require(offset.rows.size() == 2, "vector OFFSET row count mismatch");
+    require(get_value<std::int64_t>(offset.rows[0].values[0]) == 3, "vector OFFSET first row mismatch");
+    require(get_value<std::int64_t>(offset.rows[1].values[0]) == 2, "vector OFFSET second row mismatch");
+
+    auto filtered = execute_ok(
+        engine,
+        "SELECT id FROM docs WHERE category = 1 "
+        "ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 2;"
+    );
+    require(filtered.rows.size() == 2, "filtered vector TopK row count mismatch");
+    require(get_value<std::int64_t>(filtered.rows[0].values[0]) == 1, "filtered vector first row mismatch");
+    require(get_value<std::int64_t>(filtered.rows[1].values[0]) == 3, "filtered vector second row mismatch");
+
+    auto nullable_fallback = execute_ok(
+        engine,
+        "SELECT id FROM docs WHERE category = 9 "
+        "ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 1;"
+    );
+    require(nullable_fallback.rows.size() == 1, "nullable fallback should preserve result row");
+    require(get_value<std::int64_t>(nullable_fallback.rows[0].values[0]) == 5, "nullable fallback row mismatch");
+
+    execute_ok(engine, "INSERT INTO docs VALUES (6, 1, [0.1, 0.0, 0.0]);");
+    auto after_insert = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 1;"
+    );
+    require(get_value<std::int64_t>(after_insert.rows[0].values[0]) == 6, "vector index INSERT sync mismatch");
+
+    execute_ok(engine, "UPDATE docs SET embedding = [4.0, 0.0, 0.0] WHERE id = 6;");
+    auto after_update = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 1;"
+    );
+    require(get_value<std::int64_t>(after_update.rows[0].values[0]) == 1, "vector index UPDATE sync mismatch");
+
+    execute_ok(engine, "DELETE FROM docs WHERE id = 1;");
+    auto after_delete = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 1;"
+    );
+    require(get_value<std::int64_t>(after_delete.rows[0].values[0]) == 3, "vector index DELETE sync mismatch");
+
+    execute_ok(engine, "DROP VINDEX vidx_l2 ON docs;");
+    auto after_drop = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 1;"
+    );
+    require(get_value<std::int64_t>(after_drop.rows[0].values[0]) == 3, "SeqScan result after DROP VINDEX mismatch");
+
+    execute_ok(engine, "CREATE VINDEX vidx_cos ON docs (embedding) USING HNSW WITH (metric = COSINE);");
+    auto cosine = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY cosine_distance(embedding, [1.0, 0.0, 0.0]) ASC LIMIT 1;"
+    );
+    require(cosine.rows.size() == 1, "cosine vector pipeline should return one row");
+
+    execute_ok(engine, "CREATE VINDEX vidx_ip ON docs (embedding) USING HNSW WITH (metric = INNER_PRODUCT);");
+    auto inner_product = execute_ok(
+        engine,
+        "SELECT id FROM docs ORDER BY inner_product(embedding, [1.0, 0.0, 0.0]) DESC LIMIT 1;"
+    );
+    require(get_value<std::int64_t>(inner_product.rows[0].values[0]) == 6, "inner product DESC pipeline mismatch");
+}
+
 void test_engine_error_mapping()
 {
     litedb::tests::TemporaryDirectory data_directory {"litedb-engine-errors"};
@@ -251,6 +334,7 @@ int main()
         test_execute_sql_end_to_end();
         test_vector_distance_query();
         test_vector_index_ddl();
+        test_vector_index_query_pipeline();
         test_engine_error_mapping();
         test_sessions_share_instance_but_keep_context();
     } catch (const std::exception & exception) {

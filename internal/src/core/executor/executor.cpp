@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <expected>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -21,6 +22,7 @@
 #include "core/physical_plan/node/physical_projection.hpp"
 #include "core/physical_plan/node/physical_seq_scan.hpp"
 #include "core/physical_plan/node/physical_sort.hpp"
+#include "core/physical_plan/node/physical_vector_search.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
 #include "core/physical_plan/statement/physical_insert_plan.hpp"
 #include "core/physical_plan/statement/physical_query_plan.hpp"
@@ -67,6 +69,7 @@ using physical_plan::PhysicalStatementPlan;
 using physical_plan::PhysicalStatementPlanKind;
 using physical_plan::PhysicalUpdatePlan;
 using physical_plan::PhysicalUsePlan;
+using physical_plan::PhysicalVectorSearch;
 
 constexpr AstNodeLocation internal_location {0, 0};
 
@@ -115,6 +118,12 @@ ExecutionError from_storage_error(storage::StorageError error, AstNodeLocation l
 
 [[nodiscard]]
 ExecutionError from_index_error(index::IndexError error, AstNodeLocation location)
+{
+    return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
+}
+
+[[nodiscard]]
+ExecutionError from_vector_index_error(vindex::VectorIndexError error, AstNodeLocation location)
 {
     return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
 }
@@ -287,7 +296,8 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 );
 
 void append_pipeline_row(
@@ -443,14 +453,190 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 }
 
 [[nodiscard]]
+std::expected<void, ExecutionError> apply_predicate(
+    PipelineResult & input,
+    const BoundExpression * predicate
+)
+{
+    if (predicate == nullptr) {
+        return {};
+    }
+
+    evaluator::ExpressionEvaluator evaluator;
+    std::vector<PipelineRow> rows;
+    rows.reserve(input.rows.size());
+    for (auto & row : input.rows) {
+        auto matched = evaluator.evaluate_predicate(*predicate, row.evaluation_record);
+        if (!matched.has_value()) {
+            return std::unexpected(from_evaluation_error(std::move(matched.error())));
+        }
+        if (matched.value()) {
+            rows.push_back(std::move(row));
+        }
+    }
+    input.rows = std::move(rows);
+    return {};
+}
+
+[[nodiscard]]
+std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
+    const PhysicalVectorSearch & search,
+    meta::MetaEngine & catalog,
+    storage::StorageEngine & storage
+)
+{
+    auto collection_schema = load_schema(catalog, search.collection_id(), search.location());
+    if (!collection_schema.has_value()) {
+        return std::unexpected(std::move(collection_schema.error()));
+    }
+    auto collection_storage = find_storage(storage, search.collection_id(), search.location());
+    if (!collection_storage.has_value()) {
+        return std::unexpected(std::move(collection_storage.error()));
+    }
+
+    PipelineResult result;
+    append_scan_columns(result, collection_schema.value());
+    auto cursor = storage.scan(search.collection_id());
+    if (!cursor.has_value()) {
+        return std::unexpected(from_storage_error(std::move(cursor.error()), search.location()));
+    }
+    while (true) {
+        auto next = cursor->next();
+        if (!next.has_value()) {
+            return std::unexpected(from_storage_error(std::move(next.error()), search.location()));
+        }
+        if (!next.value().has_value()) {
+            break;
+        }
+        append_pipeline_row(result, collection_schema.value(), std::move(next.value().value()));
+    }
+    auto filtered = apply_predicate(result, search.predicate());
+    if (!filtered.has_value()) {
+        return std::unexpected(std::move(filtered.error()));
+    }
+    return result;
+}
+
+[[nodiscard]]
+vindex::VectorDistanceMetric runtime_metric(meta::entry::VectorDistanceMetric metric)
+{
+    switch (metric) {
+    case meta::entry::VectorDistanceMetric::L2:
+        return vindex::VectorDistanceMetric::L2;
+    case meta::entry::VectorDistanceMetric::InnerProduct:
+        return vindex::VectorDistanceMetric::InnerProduct;
+    case meta::entry::VectorDistanceMetric::Cosine:
+        return vindex::VectorDistanceMetric::Cosine;
+    }
+    return vindex::VectorDistanceMetric::L2;
+}
+
+[[nodiscard]]
+std::size_t saturating_multiply(std::size_t value, std::size_t factor)
+{
+    if (value > std::numeric_limits<std::size_t>::max() / factor) {
+        return std::numeric_limits<std::size_t>::max();
+    }
+    return value * factor;
+}
+
+[[nodiscard]]
+std::expected<PipelineResult, ExecutionError> execute_vector_search(
+    const PhysicalVectorSearch & search,
+    meta::MetaEngine & catalog,
+    storage::StorageEngine & storage,
+    vindex::VectorIndexEngine & vector_index_engine
+)
+{
+    auto collection_schema = load_schema(catalog, search.collection_id(), search.location());
+    if (!collection_schema.has_value()) {
+        return std::unexpected(std::move(collection_schema.error()));
+    }
+    auto collection_storage = find_storage(storage, search.collection_id(), search.location());
+    if (!collection_storage.has_value()) {
+        return std::unexpected(std::move(collection_storage.error()));
+    }
+
+    evaluator::ExpressionEvaluator evaluator;
+    const auto empty_record = make_empty_record();
+    auto query_value = evaluator.evaluate(search.query_vector(), empty_record);
+    if (!query_value.has_value()) {
+        return std::unexpected(from_evaluation_error(std::move(query_value.error())));
+    }
+    auto query_key = vindex::VectorIndexKey::from_value(query_value.value());
+    if (!query_key.has_value()) {
+        return std::unexpected(from_vector_index_error(std::move(query_key.error()), search.location()));
+    }
+
+    const auto view = vector_index_engine.find_index(search.index_id());
+    if (!view.has_value()) {
+        return std::unexpected(make_error(
+            ExecutionErrorCode::IndexError, search.location(),
+            "Physical vector search target index was not found at runtime"
+        ));
+    }
+    if (view->collection_id != search.collection_id() || view->column_id != search.column_id() ||
+        view->kind != vindex::VectorIndexKind::Hnsw || view->metric != runtime_metric(search.metric()) ||
+        view->dimension != query_key->dimension()) {
+        return std::unexpected(make_error(
+            ExecutionErrorCode::InvalidPlan, search.location(),
+            "Physical vector search does not match the runtime vector index descriptor"
+        ));
+    }
+
+    const auto full_scan = [&]() {
+        return execute_vector_fallback_scan(search, catalog, storage);
+    };
+    if (search.required_count() == 0 || view->entry_count < search.required_count()) {
+        return full_scan();
+    }
+
+    auto candidate_count = search.predicate() == nullptr
+        ? search.required_count()
+        : std::min(view->entry_count, std::max(search.required_count(), saturating_multiply(search.required_count(), 4)));
+
+    while (true) {
+        auto matches = vector_index_engine.search(
+            search.index_id(), query_key.value(), vindex::VectorSearchRequest {.top_k = candidate_count}
+        );
+        if (!matches.has_value()) {
+            return std::unexpected(from_vector_index_error(std::move(matches.error()), search.location()));
+        }
+
+        PipelineResult result;
+        append_scan_columns(result, collection_schema.value());
+        result.rows.reserve(matches->size());
+        for (const auto & match : matches.value()) {
+            auto record = storage.get(search.collection_id(), match.record_id);
+            if (!record.has_value()) {
+                return std::unexpected(from_storage_error(std::move(record.error()), search.location()));
+            }
+            append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
+        }
+        auto filtered = apply_predicate(result, search.predicate());
+        if (!filtered.has_value()) {
+            return std::unexpected(std::move(filtered.error()));
+        }
+        if (result.rows.size() >= search.required_count()) {
+            return result;
+        }
+        if (search.predicate() == nullptr || candidate_count >= view->entry_count) {
+            return full_scan();
+        }
+        candidate_count = std::min(view->entry_count, saturating_multiply(candidate_count, 2));
+    }
+}
+
+[[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_filter(
     const PhysicalFilter & filter,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(filter.child(), catalog, storage, index_engine);
+    auto input = execute_physical(filter.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -496,10 +682,11 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
     const PhysicalProjection & projection,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(projection.child(), catalog, storage, index_engine);
+    auto input = execute_physical(projection.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -595,10 +782,11 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
     const PhysicalSort & order_by,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(order_by.child(), catalog, storage, index_engine);
+    auto input = execute_physical(order_by.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -666,10 +854,11 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
     const PhysicalLimit & limit,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(limit.child(), catalog, storage, index_engine);
+    auto input = execute_physical(limit.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -697,7 +886,8 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
     switch (node.kind()) {
@@ -705,14 +895,18 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
         return execute_scan(static_cast<const PhysicalSeqScan &>(node), catalog, storage);
     case PhysicalPlanNodeKind::IndexScan:
         return execute_index_scan(static_cast<const PhysicalIndexScan &>(node), catalog, storage, index_engine);
+    case PhysicalPlanNodeKind::VectorSearch:
+        return execute_vector_search(
+            static_cast<const PhysicalVectorSearch &>(node), catalog, storage, vector_index_engine
+        );
     case PhysicalPlanNodeKind::Filter:
-        return execute_filter(static_cast<const PhysicalFilter &>(node), catalog, storage, index_engine);
+        return execute_filter(static_cast<const PhysicalFilter &>(node), catalog, storage, index_engine, vector_index_engine);
     case PhysicalPlanNodeKind::Projection:
-        return execute_projection(static_cast<const PhysicalProjection &>(node), catalog, storage, index_engine);
+        return execute_projection(static_cast<const PhysicalProjection &>(node), catalog, storage, index_engine, vector_index_engine);
     case PhysicalPlanNodeKind::Sort:
-        return execute_order_by(static_cast<const PhysicalSort &>(node), catalog, storage, index_engine);
+        return execute_order_by(static_cast<const PhysicalSort &>(node), catalog, storage, index_engine, vector_index_engine);
     case PhysicalPlanNodeKind::Limit:
-        return execute_limit(static_cast<const PhysicalLimit &>(node), catalog, storage, index_engine);
+        return execute_limit(static_cast<const PhysicalLimit &>(node), catalog, storage, index_engine, vector_index_engine);
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::InvalidPlan, node.location(), "Unknown physical plan node"));
@@ -723,10 +917,11 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
     const PhysicalQueryPlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto pipeline = execute_physical(plan.root(), catalog, storage, index_engine);
+    auto pipeline = execute_physical(plan.root(), catalog, storage, index_engine, vector_index_engine);
     if (!pipeline.has_value()) {
         return std::unexpected(std::move(pipeline.error()));
     }
@@ -754,7 +949,8 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const PhysicalUsePlan
 std::expected<ExecutionResult, ExecutionError> execute_insert(
     const PhysicalInsertPlan & plan,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
     auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
@@ -779,6 +975,11 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
     }
 
+    auto vector_bindings = vector_index_engine.prepare_insert(plan.collection_id(), record_data);
+    if (!vector_bindings) {
+        return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+    }
+
     auto inserted = storage.insert(plan.collection_id(), std::move(record_data));
     if (!inserted.has_value()) {
         return std::unexpected(from_storage_error(std::move(inserted.error()), plan.location()));
@@ -790,6 +991,13 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
     }
 
+    auto vector_indexed = vector_index_engine.on_insert(inserted.value(), *vector_bindings);
+    if (!vector_indexed) {
+        (void) index_engine.on_delete(inserted.value(), *index_bindings);
+        (void) storage.erase(plan.collection_id(), inserted.value());
+        return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
+    }
+
     return command_result(1);
 }
 
@@ -798,10 +1006,11 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
     const PhysicalDeletePlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto rows = execute_physical(plan.input(), catalog, storage, index_engine);
+    auto rows = execute_physical(plan.input(), catalog, storage, index_engine, vector_index_engine);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -818,14 +1027,27 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
 
-        auto erased = storage.erase(plan.collection_id(), row.source_record.record_id);
-        if (!erased.has_value()) {
-            return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
+        auto vector_bindings = vector_index_engine.prepare_delete(plan.collection_id(), row.source_record.data);
+        if (!vector_bindings) {
+            return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+        }
+
+        auto vector_indexed = vector_index_engine.on_delete(row.source_record.record_id, *vector_bindings);
+        if (!vector_indexed) {
+            return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
         }
 
         auto indexed = index_engine.on_delete(row.source_record.record_id, index_bindings.value());
         if (!indexed.has_value()) {
+            (void) vector_index_engine.on_insert(row.source_record.record_id, *vector_bindings);
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
+        }
+
+        auto erased = storage.erase(plan.collection_id(), row.source_record.record_id);
+        if (!erased.has_value()) {
+            (void) index_engine.on_insert(row.source_record.record_id, *index_bindings);
+            (void) vector_index_engine.on_insert(row.source_record.record_id, *vector_bindings);
+            return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
         }
         ++affected_rows;
     }
@@ -851,7 +1073,8 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
     const PhysicalUpdatePlan & plan,
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -859,7 +1082,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         return std::unexpected(std::move(collection_schema.error()));
     }
 
-    auto rows = execute_physical(plan.input(), catalog, storage, index_engine);
+    auto rows = execute_physical(plan.input(), catalog, storage, index_engine, vector_index_engine);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -896,6 +1119,13 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
             return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
         }
 
+        auto vector_bindings = vector_index_engine.prepare_update(
+            plan.collection_id(), row.source_record.data, record_data
+        );
+        if (!vector_bindings) {
+            return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+        }
+
         auto updated = storage.update(plan.collection_id(), row.source_record.record_id, std::move(record_data));
         if (!updated.has_value()) {
             return std::unexpected(from_storage_error(std::move(updated.error()), plan.location()));
@@ -905,6 +1135,16 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         if (!indexed.has_value()) {
             (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
             return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
+        }
+        auto vector_indexed = vector_index_engine.on_update(row.source_record.record_id, *vector_bindings);
+        if (!vector_indexed) {
+            auto scalar_rollback = *index_bindings;
+            for (auto & binding : scalar_rollback) {
+                std::swap(binding.old_key, binding.new_key);
+            }
+            (void) index_engine.on_update(row.source_record.record_id, scalar_rollback);
+            (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
+            return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
         }
         ++affected_rows;
     }
@@ -1069,11 +1309,13 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 Executor::Executor(
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine
 ) noexcept
     : catalog_(catalog)
     , storage_(storage)
     , index_engine_(index_engine)
+    , vector_index_engine_(&vector_index_engine)
 {
 }
 
@@ -1102,13 +1344,21 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const PhysicalS
     case PhysicalStatementPlanKind::DescribeCollection:
         return execute_describe_collection(static_cast<const PhysicalDescribeCollectionPlan &>(plan), catalog_);
     case PhysicalStatementPlanKind::Insert:
-        return execute_insert(static_cast<const PhysicalInsertPlan &>(plan), storage_, index_engine_);
+        return execute_insert(
+            static_cast<const PhysicalInsertPlan &>(plan), storage_, index_engine_, *vector_index_engine_
+        );
     case PhysicalStatementPlanKind::Update:
-        return execute_update(static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_);
+        return execute_update(
+            static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_
+        );
     case PhysicalStatementPlanKind::Delete:
-        return execute_delete(static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_);
+        return execute_delete(
+            static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_
+        );
     case PhysicalStatementPlanKind::Query:
-        return execute_query(static_cast<const PhysicalQueryPlan &>(plan), catalog_, storage_, index_engine_);
+        return execute_query(
+            static_cast<const PhysicalQueryPlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_
+        );
     }
 
     return std::unexpected(make_error(ExecutionErrorCode::UnsupportedStatement, internal_location, "Unsupported statement"));

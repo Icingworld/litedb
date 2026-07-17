@@ -9,9 +9,12 @@
 #include "core/physical_plan/physical_planner.hpp"
 #include "core/logical_plan/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
+#include "core/logical_plan/node/logical_limit.hpp"
+#include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_plan_node.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/node/logical_vector_search.hpp"
 #include "core/logical_plan/statement/command/show_databases_plan.hpp"
 #include "core/logical_plan/statement/mutation/delete_plan.hpp"
 #include "core/logical_plan/statement/mutation/insert_plan.hpp"
@@ -20,6 +23,7 @@
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"
 
@@ -64,6 +68,7 @@ struct Fixture
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
     litedb::core::index::IndexEngine index_engine {storage_directory.path(), filesystem};
+    litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -80,6 +85,8 @@ struct Fixture
             ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .nullable = false},
             ColumnDefinition {.name = "name", .type = type(LogicalTypeId::Varchar, 64)},
             ColumnDefinition {.name = "age", .type = type(LogicalTypeId::Integer), .nullable = true},
+            ColumnDefinition {.name = "embedding", .type = type(LogicalTypeId::Vector, 3), .nullable = true},
+            ColumnDefinition {.name = "query_embedding", .type = type(LogicalTypeId::Vector, 3), .nullable = true},
         };
 
         auto collection = catalog.create_collection(users);
@@ -155,7 +162,9 @@ std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::E
     const LogicalStatementPlan & plan
 )
 {
-    litedb::core::executor::Executor executor {fixture.catalog, fixture.storage, fixture.index_engine};
+    litedb::core::executor::Executor executor {
+        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine
+    };
     litedb::core::physical_plan::PhysicalPlanner physical_planner;
     auto physical = physical_planner.plan(plan);
     return executor.execute(*physical);
@@ -343,6 +352,127 @@ void test_btree_range_adds_scan_index_hint()
     require(scan.index_hint()->lookup.lower->inclusive, "range lower bound should be inclusive");
 }
 
+VIndexId create_catalog_vector_index(
+    Fixture & fixture,
+    std::string name,
+    VectorDistanceMetric metric
+)
+{
+    const auto * column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    require(column != nullptr, "fixture vector column missing");
+    auto created = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
+        .collection_id = fixture.users_id,
+        .column_id = column->id(),
+        .name = std::move(name),
+        .kind = VectorIndexKind::Hnsw,
+        .metric = metric,
+    });
+    require(created.has_value(), "fixture vector index create failed");
+    return created.value();
+}
+
+const LogicalVectorSearch * find_vector_search(const LogicalStatementPlan & plan)
+{
+    const auto * node = &query_root(plan);
+    if (node->kind() != LogicalPlanNodeKind::Limit) return nullptr;
+    node = &static_cast<const LogicalLimit *>(node)->child();
+    if (node->kind() != LogicalPlanNodeKind::OrderBy) return nullptr;
+    node = &static_cast<const LogicalOrderBy *>(node)->child();
+    if (node->kind() != LogicalPlanNodeKind::Projection) return nullptr;
+    node = &static_cast<const LogicalProjection *>(node)->child();
+    if (node->kind() != LogicalPlanNodeKind::VectorSearch) return nullptr;
+    return static_cast<const LogicalVectorSearch *>(node);
+}
+
+void test_vector_topk_rewrite_metrics_where_offset_and_stable_index()
+{
+    Fixture fixture;
+    const auto first_l2 = create_catalog_vector_index(fixture, "vidx_l2_first", VectorDistanceMetric::L2);
+    (void) create_catalog_vector_index(fixture, "vidx_l2_second", VectorDistanceMetric::L2);
+    const auto cosine = create_catalog_vector_index(fixture, "vidx_cos", VectorDistanceMetric::Cosine);
+    const auto inner_product = create_catalog_vector_index(fixture, "vidx_ip", VectorDistanceMetric::InnerProduct);
+
+    auto l2 = optimize_ok(
+        fixture,
+        plan_ok(fixture, "SELECT id FROM users WHERE age >= 18 ORDER BY l2_distance([0, 0, 0], embedding) ASC LIMIT 2 OFFSET 3;")
+    );
+    const auto * l2_search = find_vector_search(*l2);
+    require(l2_search != nullptr, "eligible L2 TopK should rewrite to vector search");
+    require(l2_search->index_id() == first_l2, "multiple matching indexes should select the smallest id");
+    require(l2_search->required_count() == 5, "vector search should include OFFSET in required count");
+    require(l2_search->predicate() != nullptr, "WHERE predicate should be absorbed into vector search");
+    auto cloned_search = l2_search->clone();
+    const auto & cloned_vector_search = static_cast<const LogicalVectorSearch &>(*cloned_search);
+    require(cloned_vector_search.index_id() == first_l2, "vector search clone should preserve index id");
+    require(cloned_vector_search.required_count() == 5, "vector search clone should preserve required count");
+    require(cloned_vector_search.predicate() != nullptr, "vector search clone should preserve predicate");
+    const auto printed = debug_print(query_root(*l2));
+    require(printed.find("LogicalVectorSearch") != std::string::npos, "debug printer should include vector search node");
+    require(printed.find("metric: L2") != std::string::npos, "debug printer should include vector metric");
+
+    auto cosine_plan = optimize_ok(
+        fixture,
+        plan_ok(fixture, "SELECT id FROM users ORDER BY cosine_distance(embedding, [1, 0, 0]) ASC LIMIT 1;")
+    );
+    require(find_vector_search(*cosine_plan)->index_id() == cosine, "Cosine ASC should select cosine index");
+
+    auto ip_plan = optimize_ok(
+        fixture,
+        plan_ok(fixture, "SELECT id FROM users ORDER BY inner_product(embedding, [1, 0, 0]) DESC LIMIT 1;")
+    );
+    require(find_vector_search(*ip_plan)->index_id() == inner_product, "InnerProduct DESC should select IP index");
+}
+
+void test_vector_topk_rewrite_rejects_ineligible_queries()
+{
+    Fixture fixture;
+    (void) create_catalog_vector_index(fixture, "vidx_l2", VectorDistanceMetric::L2);
+
+    const auto unchanged = [&](std::string_view sql, const char * message) {
+        auto plan = optimize_ok(fixture, plan_ok(fixture, sql));
+        require(find_vector_search(*plan) == nullptr, message);
+    };
+    unchanged(
+        "SELECT id FROM users ORDER BY l2_distance(embedding, [0, 0, 0]) DESC LIMIT 1;",
+        "wrong L2 direction must not rewrite"
+    );
+    unchanged(
+        "SELECT id FROM users ORDER BY l2_distance(embedding, [0, 0, 0]) ASC, id ASC LIMIT 1;",
+        "multiple sort keys must not rewrite"
+    );
+    unchanged(
+        "SELECT id FROM users ORDER BY l2_distance(embedding, query_embedding) ASC LIMIT 1;",
+        "non-constant query vector must not rewrite"
+    );
+    unchanged(
+        "SELECT id FROM users ORDER BY l2_distance(embedding, [0, 0, 0]) ASC;",
+        "vector ordering without LIMIT must not rewrite"
+    );
+
+    Fixture no_index;
+    auto no_index_plan = optimize_ok(
+        no_index,
+        plan_ok(no_index, "SELECT id FROM users ORDER BY l2_distance(embedding, [0, 0, 0]) ASC LIMIT 1;")
+    );
+    require(find_vector_search(*no_index_plan) == nullptr, "query without matching vector index must not rewrite");
+}
+
+void test_vector_search_reports_missing_runtime_index()
+{
+    Fixture fixture;
+    (void) create_catalog_vector_index(fixture, "vidx_l2", VectorDistanceMetric::L2);
+    auto plan = optimize_ok(
+        fixture,
+        plan_ok(fixture, "SELECT id FROM users ORDER BY l2_distance(embedding, [0, 0, 0]) ASC LIMIT 1;")
+    );
+    auto executed = execute_plan(fixture, *plan);
+    require(!executed.has_value(), "missing runtime vector index should fail execution");
+    require(
+        executed.error().code == litedb::core::executor::ExecutionErrorCode::IndexError,
+        "missing runtime vector index should report IndexError"
+    );
+}
+
 } // namespace
 
 int main()
@@ -358,6 +488,9 @@ int main()
         test_enabled_and_disabled_select_results_match();
         test_btree_equality_adds_scan_index_hint();
         test_btree_range_adds_scan_index_hint();
+        test_vector_topk_rewrite_metrics_where_offset_and_stable_index();
+        test_vector_topk_rewrite_rejects_ineligible_queries();
+        test_vector_search_reports_missing_runtime_index();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

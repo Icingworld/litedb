@@ -9,6 +9,7 @@ set(LOGICAL_PLAN_SOURCES
     node/logical_projection.cpp
     node/logical_scan.cpp
     node/logical_unary_node.cpp
+    node/logical_vector_search.cpp
     statement/command/create_collection_plan.cpp
     statement/command/create_database_plan.cpp
     statement/command/create_index_plan.cpp

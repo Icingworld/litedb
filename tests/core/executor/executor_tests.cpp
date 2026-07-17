@@ -13,6 +13,7 @@
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"
 
@@ -115,7 +116,9 @@ ExecutionResult execute_ok(
 )
 {
     auto plan = plan_ok(catalog, index_engine, sql, database_id);
-    Executor executor {catalog, storage, index_engine};
+    auto filesystem = litedb::core::filesystem::create_platform_filesystem();
+    litedb::core::vindex::VectorIndexEngine vector_index_engine {{}, filesystem};
+    Executor executor {catalog, storage, index_engine, vector_index_engine};
     auto result = executor.execute(*plan);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
@@ -132,7 +135,9 @@ ExecutionError execute_error(
 )
 {
     auto plan = plan_ok(catalog, index_engine, sql, database_id);
-    Executor executor {catalog, storage, index_engine};
+    auto filesystem = litedb::core::filesystem::create_platform_filesystem();
+    litedb::core::vindex::VectorIndexEngine vector_index_engine {{}, filesystem};
+    Executor executor {catalog, storage, index_engine, vector_index_engine};
     auto result = executor.execute(*plan);
     require(!result.has_value(), "statement should fail to execute");
     return std::move(result.error());
@@ -145,6 +150,7 @@ struct Fixture
     MetaEngine catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
     IndexEngine index_engine {storage_directory.path(), filesystem};
+    litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -525,7 +531,7 @@ void test_error_mapping()
         loc,
     };
 
-    Executor executor {fixture.catalog, fixture.storage, fixture.index_engine};
+    Executor executor {fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine};
     auto invalid_literal = executor.execute(bad_insert);
     require(!invalid_literal.has_value(), "invalid literal INSERT should fail");
     require(invalid_literal.error().code == ExecutionErrorCode::EvaluationError, "evaluation error mapping mismatch");
@@ -540,7 +546,7 @@ void test_ddl_requires_database_engine()
         "CREATE INDEX idx_age ON users (age);",
         fixture.database_id
     );
-    Executor executor {fixture.catalog, fixture.storage, fixture.index_engine};
+    Executor executor {fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine};
     auto result = executor.execute(*plan);
     require(!result.has_value(), "Executor should reject standalone DDL");
     require(result.error().code == ExecutionErrorCode::UnsupportedStatement, "standalone DDL error mismatch");

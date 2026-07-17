@@ -57,11 +57,19 @@ DatabaseError to_database_error(storage::StorageError error)
 }
 
 /**
- * @brief 从索引管理器错误创建数据库错误
- * @param error 索引管理器错误
+ * @brief 从索引引擎错误创建数据库错误
+ * @param error 索引引擎错误
  * @return 数据库错误
  */
 DatabaseError to_database_error(index::IndexError error)
+{
+    return DatabaseError {
+        .code = DatabaseErrorCode::IndexError,
+        .message = std::move(error.message),
+    };
+}
+
+DatabaseError to_database_error(vindex::VectorIndexError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::IndexError,
@@ -90,7 +98,8 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , meta_store_(manifest_.meta_path(), filesystem_)
     , meta_(meta_store_)
     , storage_(config.data_dir, filesystem_)
-    , index_engine_(std::move(config.data_dir), filesystem_)
+    , index_engine_(config.data_dir, filesystem_)
+    , vector_index_engine_(config.data_dir / "vindexes", filesystem_)
 {
 }
 
@@ -112,6 +121,11 @@ const meta::MetaEngine & DatabaseEngine::meta() const noexcept
 const index::IndexEngine & DatabaseEngine::index_engine() const noexcept
 {
     return index_engine_;
+}
+
+const vindex::VectorIndexEngine & DatabaseEngine::vector_index_engine() const noexcept
+{
+    return vector_index_engine_;
 }
 
 std::expected<void, DatabaseError> DatabaseEngine::initialize()
@@ -141,6 +155,11 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(indexes_restored.error())));
     }
 
+    auto vector_indexes_restored = vector_index_engine_.restore_all(meta_, storage_);
+    if (!vector_indexes_restored.has_value()) {
+        return std::unexpected(to_database_error(std::move(vector_indexes_restored.error())));
+    }
+
     return {};
 }
 
@@ -168,7 +187,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     case PhysicalStatementPlanKind::DropVectorIndex:
         return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
     default:
-        executor::Executor executor {meta_, storage_, index_engine_};
+        executor::Executor executor {meta_, storage_, index_engine_, vector_index_engine_};
         return executor.execute(plan);
     }
 }
@@ -345,8 +364,26 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
+    const auto * vector_entry = staged.find_vector_index(created.value());
+    if (vector_entry == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            .code = executor::ExecutionErrorCode::MetaError,
+            .location = plan.location(),
+            .message = "Created vector index metadata not found",
+        });
+    }
+    auto collection_schema = schema::load_collection_schema(staged, plan.collection_id());
+    if (!collection_schema) {
+        return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
+    }
+    auto runtime_created = vector_index_engine_.create_index(*vector_entry, *collection_schema, storage_);
+    if (!runtime_created) {
+        return std::unexpected(from_vector_index_error(std::move(runtime_created.error()), plan.location()));
+    }
+
     auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
+        (void) vector_index_engine_.drop_index(vector_entry->id());
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
     }
 
@@ -397,6 +434,10 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         if (!indexes_dropped.has_value()) {
             return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
         }
+        auto vector_indexes_dropped = vector_index_engine_.drop_collection_indexes(collection_id);
+        if (!vector_indexes_dropped) {
+            return std::unexpected(from_vector_index_error(std::move(vector_indexes_dropped.error()), plan.location()));
+        }
     }
 
     return command_result(1);
@@ -437,6 +478,10 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     auto indexes_dropped = index_engine_.drop_collection_indexes(collection_id);
     if (!indexes_dropped.has_value()) {
         return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
+    }
+    auto vector_indexes_dropped = vector_index_engine_.drop_collection_indexes(collection_id);
+    if (!vector_indexes_dropped) {
+        return std::unexpected(from_vector_index_error(std::move(vector_indexes_dropped.error()), plan.location()));
     }
 
     return command_result(1);
@@ -491,6 +536,8 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
+    const auto index_id = existing != nullptr ? std::optional<common::VIndexId> {existing->id()} : std::nullopt;
+
     meta::MetaEngine staged;
     auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
@@ -509,6 +556,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     auto committed = meta_.commit(staged.snapshot());
     if (!committed.has_value()) {
         return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
+    }
+
+    if (index_id) {
+        auto runtime_dropped = vector_index_engine_.drop_index(*index_id);
+        if (!runtime_dropped && runtime_dropped.error().code != vindex::VectorIndexErrorCode::IndexNotFound) {
+            return std::unexpected(from_vector_index_error(std::move(runtime_dropped.error()), plan.location()));
+        }
     }
 
     return command_result(existing == nullptr ? 0 : 1);
@@ -582,6 +636,18 @@ executor::ExecutionError DatabaseEngine::from_storage_error(
 
 executor::ExecutionError DatabaseEngine::from_index_error(
     index::IndexError error,
+    parser::ast::AstNodeLocation location
+)
+{
+    return executor::ExecutionError {
+        .code = executor::ExecutionErrorCode::IndexError,
+        .location = location,
+        .message = std::move(error.message),
+    };
+}
+
+executor::ExecutionError DatabaseEngine::from_vector_index_error(
+    vindex::VectorIndexError error,
     parser::ast::AstNodeLocation location
 )
 {

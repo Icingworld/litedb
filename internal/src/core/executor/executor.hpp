@@ -8,6 +8,7 @@
 #include "core/index/index_engine.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 
 namespace litedb::core::executor
 {
@@ -21,7 +22,8 @@ public:
     Executor(
         meta::MetaEngine & catalog,
         storage::StorageEngine & storage,
-        index::IndexEngine & index_engine
+        index::IndexEngine & index_engine,
+        vindex::VectorIndexEngine & vector_index_engine
     ) noexcept;
 
 public:
@@ -37,6 +39,7 @@ private:
     meta::MetaEngine & catalog_;                        ///< 目录
     storage::StorageEngine & storage_;                  ///< 存储引擎
     index::IndexEngine & index_engine_;                  ///< 索引引擎
+    vindex::VectorIndexEngine * vector_index_engine_ {nullptr};
 };
 
 } // namespace litedb::core::executor

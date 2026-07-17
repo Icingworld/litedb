@@ -16,6 +16,7 @@
 #include "core/meta/meta_store.hpp"
 #include "core/schema/schema_error.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 
 namespace litedb::core::physical_plan
 {
@@ -51,7 +52,7 @@ enum class DatabaseErrorCode
     ManifestError,    ///< 数据库 manifest 错误
     MetaError,        ///< meta 引擎错误
     StorageError,     ///< 存储引擎错误
-    IndexError,       ///< 索引管理器错误
+    IndexError,       ///< 索引引擎错误
 };
 
 /**
@@ -92,11 +93,14 @@ public:
     const meta::MetaEngine & meta() const noexcept;
 
     /**
-     * @brief 获取索引管理器
-     * @return 索引管理器
+     * @brief 获取标量索引引擎
+     * @return 标量索引引擎
      */
     [[nodiscard]]
     const index::IndexEngine & index_engine() const noexcept;
+
+    [[nodiscard]]
+    const vindex::VectorIndexEngine & vector_index_engine() const noexcept;
 
 private:
     friend class Session;
@@ -255,6 +259,12 @@ private:
         parser::ast::AstNodeLocation location
     );
 
+    [[nodiscard]]
+    static executor::ExecutionError from_vector_index_error(
+        vindex::VectorIndexError error,
+        parser::ast::AstNodeLocation location
+    );
+
 private:
     filesystem::FileSystem filesystem_;    ///< 文件系统
     DatabaseManifest manifest_;            ///< 数据库 manifest
@@ -262,6 +272,7 @@ private:
     meta::MetaEngine meta_;                ///< meta 引擎
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
+    vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎
     std::mutex mutex_;                     ///< 互斥锁
 };
 

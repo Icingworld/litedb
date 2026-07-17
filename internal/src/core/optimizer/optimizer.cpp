@@ -27,12 +27,14 @@
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
 #include "core/meta/meta.hpp"
 #include "core/meta/meta_engine.hpp"
+#include "core/function/function_registry.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/node/logical_vector_search.hpp"
 #include "core/logical_plan/statement/mutation/delete_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
@@ -72,6 +74,7 @@ using planner::logical::LogicalPlanNodeKind;
 using planner::logical::LogicalProjection;
 using planner::logical::LogicalScan;
 using planner::logical::LogicalScanIndexHint;
+using planner::logical::LogicalVectorSearch;
 using planner::plan::DeletePlan;
 using planner::plan::QueryPlan;
 using planner::plan::LogicalStatementPlan;
@@ -96,6 +99,17 @@ struct IndexCandidate
     common::CollectionId collection_id;
     common::ColumnId column_id;
     LogicalIndexLookup lookup;
+};
+
+struct VectorTopKPattern
+{
+    const LogicalOrderBy * order_by {nullptr};
+    const LogicalProjection * projection {nullptr};
+    const LogicalScan * scan {nullptr};
+    const BoundExpression * predicate {nullptr};
+    const BoundExpression * query_vector {nullptr};
+    const binder::bound::BoundColumnRefExpression * vector_column {nullptr};
+    meta::entry::VectorDistanceMetric metric {meta::entry::VectorDistanceMetric::L2};
 };
 
 [[nodiscard]]
@@ -671,6 +685,159 @@ std::vector<BoundOrderByItem> rewrite_order_by_items(
 }
 
 [[nodiscard]]
+bool is_constant_vector(const BoundExpression & expression)
+{
+    if (expression.kind() != BoundExpressionKind::Vector) {
+        return false;
+    }
+    const auto & vector = static_cast<const BoundVectorExpression &>(expression);
+    return std::all_of(vector.elements().begin(), vector.elements().end(), [](const auto & element) {
+        return element != nullptr && is_constant_foldable(*element);
+    });
+}
+
+[[nodiscard]]
+std::optional<meta::entry::VectorDistanceMetric> metric_for_order(
+    const BoundFunctionExpression & expression,
+    bool ascending
+)
+{
+    const auto name = function::normalize_function_name(expression.name());
+    if (name == "l2_distance" && ascending) {
+        return meta::entry::VectorDistanceMetric::L2;
+    }
+    if (name == "cosine_distance" && ascending) {
+        return meta::entry::VectorDistanceMetric::Cosine;
+    }
+    if (name == "inner_product" && !ascending) {
+        return meta::entry::VectorDistanceMetric::InnerProduct;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]]
+std::optional<VectorTopKPattern> match_vector_top_k(const LogicalLimit & limit)
+{
+    if (!limit.limit().has_value() || limit.limit().value() == 0) {
+        return std::nullopt;
+    }
+    if (limit.child().kind() != LogicalPlanNodeKind::OrderBy) {
+        return std::nullopt;
+    }
+    const auto & order_by = static_cast<const LogicalOrderBy &>(limit.child());
+    if (order_by.order_by().size() != 1 || order_by.child().kind() != LogicalPlanNodeKind::Projection) {
+        return std::nullopt;
+    }
+    const auto & projection = static_cast<const LogicalProjection &>(order_by.child());
+    const LogicalScan * scan = nullptr;
+    const BoundExpression * predicate = nullptr;
+    if (projection.child().kind() == LogicalPlanNodeKind::Scan) {
+        scan = &static_cast<const LogicalScan &>(projection.child());
+    } else if (projection.child().kind() == LogicalPlanNodeKind::Filter) {
+        const auto & filter = static_cast<const LogicalFilter &>(projection.child());
+        if (filter.child().kind() != LogicalPlanNodeKind::Scan) {
+            return std::nullopt;
+        }
+        scan = &static_cast<const LogicalScan &>(filter.child());
+        predicate = &filter.predicate();
+    } else {
+        return std::nullopt;
+    }
+
+    const auto & item = order_by.order_by().front();
+    if (item.expression == nullptr || item.expression->kind() != BoundExpressionKind::Function) {
+        return std::nullopt;
+    }
+    const auto & distance = static_cast<const BoundFunctionExpression &>(*item.expression);
+    auto metric = metric_for_order(distance, item.ascending);
+    if (!metric.has_value() || distance.arguments().size() != 2) {
+        return std::nullopt;
+    }
+
+    const binder::bound::BoundColumnRefExpression * column = nullptr;
+    const BoundExpression * query = nullptr;
+    const auto try_arguments = [&](const BoundExpression & column_argument, const BoundExpression & query_argument) {
+        if (column_argument.kind() != BoundExpressionKind::ColumnRef || !is_constant_vector(query_argument)) {
+            return false;
+        }
+        column = &static_cast<const binder::bound::BoundColumnRefExpression &>(column_argument);
+        query = &query_argument;
+        return true;
+    };
+    if (!try_arguments(*distance.arguments()[0], *distance.arguments()[1]) &&
+        !try_arguments(*distance.arguments()[1], *distance.arguments()[0])) {
+        return std::nullopt;
+    }
+    if (column->collection_id() != scan->collection_id()) {
+        return std::nullopt;
+    }
+    return VectorTopKPattern {
+        .order_by = &order_by,
+        .projection = &projection,
+        .scan = scan,
+        .predicate = predicate,
+        .query_vector = query,
+        .vector_column = column,
+        .metric = *metric,
+    };
+}
+
+[[nodiscard]]
+std::optional<std::unique_ptr<LogicalPlanNode>> try_rewrite_vector_top_k(
+    const LogicalLimit & limit,
+    const OptimizerOptions & options,
+    const meta::MetaEngine * catalog
+)
+{
+    if (!options.enable_index_selection || catalog == nullptr) {
+        return std::nullopt;
+    }
+    const auto offset = limit.offset().value_or(0);
+    if (!limit.limit().has_value() || offset > std::numeric_limits<std::size_t>::max() - limit.limit().value()) {
+        return std::nullopt;
+    }
+    const auto required_count = limit.limit().value() + offset;
+    auto pattern = match_vector_top_k(limit);
+    if (!pattern.has_value()) {
+        return std::nullopt;
+    }
+
+    const meta::entry::VectorIndexEntry * selected = nullptr;
+    for (const auto * entry : catalog->list_vector_indexes(pattern->scan->collection_id())) {
+        if (entry == nullptr || entry->column_id() != pattern->vector_column->column_id() ||
+            entry->index_kind() != meta::entry::VectorIndexKind::Hnsw || entry->metric() != pattern->metric) {
+            continue;
+        }
+        if (selected == nullptr || entry->id() < selected->id()) {
+            selected = entry;
+        }
+    }
+    if (selected == nullptr) {
+        return std::nullopt;
+    }
+
+    auto search = std::make_unique<LogicalVectorSearch>(
+        pattern->scan->database_id(), pattern->scan->collection_id(), pattern->scan->collection_name(),
+        selected->id(), selected->name(), pattern->vector_column->column_id(), pattern->vector_column->column_name(),
+        pattern->metric, pattern->query_vector->clone(), pattern->predicate ? pattern->predicate->clone() : nullptr,
+        required_count, limit.location()
+    );
+
+    bool ignored = false;
+    auto projection = std::make_unique<LogicalProjection>(
+        std::move(search), rewrite_projection_items(pattern->projection->projections(), options, ignored),
+        pattern->projection->location()
+    );
+    auto order_by = std::make_unique<LogicalOrderBy>(
+        std::move(projection), rewrite_order_by_items(pattern->order_by->order_by(), options, ignored),
+        pattern->order_by->location()
+    );
+    return std::make_unique<LogicalLimit>(
+        std::move(order_by), limit.limit(), limit.offset(), limit.location()
+    );
+}
+
+[[nodiscard]]
 LogicalRewriteResult rewrite_logical_once(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
@@ -679,6 +846,7 @@ LogicalRewriteResult rewrite_logical_once(
 {
     switch (node.kind()) {
     case LogicalPlanNodeKind::Scan:
+    case LogicalPlanNodeKind::VectorSearch:
         return LogicalRewriteResult {node.clone(), false};
     case LogicalPlanNodeKind::Filter: {
         const auto & filter = static_cast<const LogicalFilter &>(node);
@@ -748,6 +916,9 @@ LogicalRewriteResult rewrite_logical_once(
     }
     case LogicalPlanNodeKind::Limit: {
         const auto & limit = static_cast<const LogicalLimit &>(node);
+        if (auto vector_search = try_rewrite_vector_top_k(limit, options, catalog); vector_search.has_value()) {
+            return LogicalRewriteResult {std::move(vector_search.value()), true};
+        }
         auto child = rewrite_logical_once(limit.child(), options, catalog);
         return LogicalRewriteResult {
             std::make_unique<LogicalLimit>(

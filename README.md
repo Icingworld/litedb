@@ -2,19 +2,18 @@
 
 EN | [简体中文](docs/readme/README_zh_CN.md)
 
-`litedb` is a lightweight experimental database written in modern C++. The
-v0.3.0 release adds a scalar function framework and built-in vector distance
-functions, enabling brute-force nearest-neighbor queries through `ORDER BY`.
-Earlier releases established a restartable database loop: parsing SQL, binding
-it against a catalog, planning and executing statements, persisting catalog
-and row data under the configured data directory, and maintaining in-memory scalar
-indexes for faster future query paths.
+`litedb` is a lightweight experimental database written in modern C++. Version
+0.6.0 provides a restartable single-node database pipeline with persistent
+collection storage, persistent B+Tree scalar indexes, persistent HNSW vector
+indexes, and rule-based query planning. Distance TopK queries written as normal
+SQL can automatically use a matching HNSW index while retaining exact candidate
+re-ranking in the regular projection, sort, and limit pipeline.
 
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
 storage engine.
 
-## What works in v0.3.0
+## What works in v0.6.0
 
 - SQL lexer, parser, AST, binder, logical planner, evaluator, executor, and
 engine facade.
@@ -24,17 +23,20 @@ engine facade.
   `UPDATE`, and `DELETE`.
 - Startup recovery for persisted databases, collections, schemas, index
 definitions, scalar values, and `VECTOR(n)` values.
-- In-memory scalar indexes with `BTreeIndex` (range and equality lookup).
-- Index metadata in the catalog, persisted in `catalog.lcat`, and rebuilt from
-existing rows on startup.
+- Persistent paged `BTreeIndex` files with equality lookup and ordered range
+scans.
+- Index metadata persisted in `meta.lmeta`; B+Tree files are stored under
+`indexes/<index_id>.bti` and reopened during startup recovery.
 - Index DDL:
   - `CREATE INDEX ... ON collection(column) [USING BTREE]`
   - `CREATE INDEX IF NOT EXISTS ...`
   - `DROP INDEX ... ON collection`
   - `DROP INDEX IF EXISTS ... ON collection`
   - `SHOW INDEXES FROM collection`
-- Automatic index maintenance on `INSERT`, `UPDATE`, and `DELETE` through
-`IndexManager`.
+- Automatic scalar-index maintenance on `INSERT`, `UPDATE`, and `DELETE`
+through `IndexEngine`.
+- Rule-based scalar access-path selection for supported equality and range
+predicates.
 - Basic database and collection management:
   - `CREATE DATABASE`, `DROP DATABASE`, `USE`, `SHOW DATABASES`
   - `CREATE COLLECTION ... COMMENT`, column `COMMENT`, `DROP COLLECTION`, `SHOW COLLECTIONS FROM database`, `DESCRIBE`
@@ -51,8 +53,24 @@ binding.
   - `inner_product(vector, vector)` — dot product
 - Function calls in `SELECT` projections, `WHERE`, `ORDER BY`, and other
 expression contexts.
-- Brute-force vector similarity queries by sorting with distance functions in
-`ORDER BY` (full table scan; no vector index yet).
+- Vector-index DDL:
+  - `CREATE VINDEX ... ON collection(vector_column) USING HNSW`
+  - HNSW options for metric, neighbor count, construction/search breadth, and
+    random seed
+  - `DROP VINDEX ... ON collection`
+  - `SHOW VINDEXES FROM collection`
+- `VectorIndexEngine` lifecycle management, including index creation from
+existing rows, runtime routing, DML maintenance, recovery, validation, and
+recoverable rebuilds.
+- Persistent HNSW graph files under `vindexes/`, including truncated-tail and
+corruption handling.
+- Automatic HNSW selection for limited TopK queries using `l2_distance ASC`,
+`cosine_distance ASC`, or `inner_product DESC` with a constant query vector.
+- Vector TopK support for `WHERE`, `LIMIT`, and `OFFSET`, with adaptive
+candidate expansion and sequential-scan fallback when candidates are
+insufficient.
+- Exact distance recomputation and sorting of ANN candidates by the regular SQL
+pipeline.
 - Scalar types including `INTEGER`, `BIGINT`, `FLOAT`, `DOUBLE`, `VARCHAR(n)`,
 and `BOOLEAN`.
 - `VECTOR(n)` as a first-class schema/value type with fixed-dimension vector
@@ -65,7 +83,7 @@ results against reference calculations.
 
 ## Current limitations
 
-v0.3.0 intentionally keeps the scope small:
+v0.6.0 is still an experimental single-node release:
 
 - The example server uses `litedb-data` by default; `--data-dir` selects a
   different persistent data directory.
@@ -73,14 +91,14 @@ v0.3.0 intentionally keeps the scope small:
 protocol yet.
 - No transactions, MVCC, or isolation guarantees.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
-- Scalar indexes are in-memory only. Index definitions are persisted, but index
-data is rebuilt from collection stores on startup rather than stored in separate index
-files.
-- Queries still use sequential scan plus filter. `IndexScan` and index-based
-query planning are not implemented yet.
-- No unique indexes, composite indexes, or expression indexes yet.
-- No vector indexes yet. Similarity queries scan every row and compute distance
-at query time.
+- The optimizer is rule-based. It has no statistics, cardinality estimation, or
+cost model for choosing between sequential, scalar-index, and vector-index
+access paths.
+- SQL `EXPLAIN` and an explicit vector-index rebuild command are not available.
+- Scalar indexes are currently single-column, non-unique B+Trees; composite,
+unique, and expression indexes are not implemented.
+- HNSW results are approximate. Query-level hints and per-query `ef_search`
+configuration are not available.
 - `SELECT ... AS alias` is supported for explicit projection aliases, and
 `ORDER BY` can reference those aliases.
 - Only the three built-in vector distance functions are available. User-defined
@@ -119,9 +137,10 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
-The current suite covers parser, catalog, schema, scalar indexes, persistent
-storage, binder, logical planner, evaluator, executor, engine,
-function registry, protocol, memory, and client/server behavior.
+The current suite covers parser, catalog, schema, persistent B+Tree and HNSW
+indexes, storage and recovery, binder, logical and physical planning,
+optimizer, evaluator, executor, database engine, function registry, protocol,
+memory, and client/server behavior.
 
 ## Quick start
 
@@ -150,9 +169,10 @@ On Windows:
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
 ```
 
-The data directory will contain `manifest.ldb`, `catalog.lcat`, and append-only
-collection store files under `collections/`. The v0.3 storage format is experimental and does
-not promise compatibility with future versions.
+The data directory contains `manifest.ldb`, `meta.lmeta`, collection store
+files under `collections/`, B+Tree files under `indexes/`, and HNSW files under
+`vindexes/`. The v0.6 storage and index formats are experimental and do not
+promise compatibility with future versions.
 
 In another terminal, start the client CLI:
 
@@ -195,10 +215,15 @@ LIMIT 10;
 CREATE INDEX idx_age ON users (age) USING BTREE;
 CREATE INDEX idx_name ON users (name) USING BTREE;
 
+CREATE VINDEX idx_embedding ON users (embedding) USING HNSW
+WITH (metric = L2, max_neighbors = 16, ef_construction = 200, ef_search = 64);
+
 SELECT id
 FROM users
 ORDER BY l2_distance(embedding, [0.1, 0.2, 0.3]) ASC
 LIMIT 5;
+
+SHOW VINDEXES FROM users;
 ```
 
 Function results in projections currently appear as auto-generated column names
@@ -253,8 +278,10 @@ SQL text
   -> Parser / AST
   -> Binder
   -> Logical planner
+  -> Rule-based optimizer
+  -> Physical planner
   -> Executor
-  -> Persistent catalog/storage
+  -> Storage / IndexEngine / VectorIndexEngine
   -> Execution result
 ```
 
@@ -262,14 +289,17 @@ Repository layout:
 
 ```text
 internal/src/core/parser       SQL lexer, parser, and AST
-internal/src/core/catalog      Catalog interfaces and in-memory catalog
+internal/src/core/meta         Catalog metadata and persistence
 internal/src/core/schema       Logical types, values, records, collections
 internal/src/core/function     Scalar function registry and built-in functions
-internal/src/core/index        In-memory scalar indexes and IndexManager
+internal/src/core/index        Persistent B+Tree indexes and IndexEngine
+internal/src/core/vindex       Flat/HNSW backends and VectorIndexEngine
 internal/src/core/storage      Persistent collection storage engine and cursor
 internal/src/core/database     Database runtime, sessions, manifest, and lifecycle coordination
 internal/src/core/binder       Name resolution and semantic binding
-internal/src/core/planner      Logical plan construction
+internal/src/core/logical_plan Logical plan construction
+internal/src/core/optimizer    Rule-based logical optimization and access-path selection
+internal/src/core/physical_plan Physical plan lowering
 internal/src/core/evaluator    Expression evaluation
 internal/src/core/executor     Statement and query execution
 internal/src/protocol          Client/server message model
@@ -285,16 +315,17 @@ docs/design_docs/              Design notes, test SQL, and roadmap
 
 ## Roadmap
 
-Near-term work after v0.3.0:
+Near-term work after v0.6.0:
 
-- v0.3.x: vector indexes (likely starting with in-memory HNSW), more built-in
-functions, and distance-query polish.
-- v0.2.x carry-over: `IndexScan` and simple index-based query planning,
-persistence hardening, cleanup/compaction planning, and storage format polish.
-- v0.4: reliability improvements such as WAL, recovery, checksums, compaction,
-and file format versioning.
-- v0.5: early distributed query architecture with shards, coordinator routing,
-and distributed TopK merge.
+- Statistics, cardinality estimation, and cost-based selection among SeqScan,
+B+Tree, and HNSW access paths.
+- `EXPLAIN` support and explicit index maintenance/rebuild commands.
+- Reliability improvements such as WAL, crash-consistent commits, checksums,
+compaction, and file-format version management.
+- Transactions, MVCC/isolation, and broader SQL support such as joins,
+subqueries, aggregates, and `GROUP BY`.
+- HNSW performance tuning, larger recall benchmarks, tombstone cleanup, and
+query-level search controls.
 
 The design documents in `docs/design_docs/` describe the intended SQL grammar,
 execution pipeline, and project roadmap in more detail.

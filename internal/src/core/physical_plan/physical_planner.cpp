@@ -10,6 +10,7 @@
 #include "core/logical_plan/node/logical_order_by.hpp"
 #include "core/logical_plan/node/logical_projection.hpp"
 #include "core/logical_plan/node/logical_scan.hpp"
+#include "core/logical_plan/node/logical_vector_search.hpp"
 #include "core/logical_plan/statement/command/create_collection_plan.hpp"
 #include "core/logical_plan/statement/command/create_database_plan.hpp"
 #include "core/logical_plan/statement/command/create_index_plan.hpp"
@@ -35,6 +36,7 @@
 #include "core/physical_plan/node/physical_projection.hpp"
 #include "core/physical_plan/node/physical_seq_scan.hpp"
 #include "core/physical_plan/node/physical_sort.hpp"
+#include "core/physical_plan/node/physical_vector_search.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
 #include "core/physical_plan/statement/physical_insert_plan.hpp"
 #include "core/physical_plan/statement/physical_query_plan.hpp"
@@ -58,6 +60,7 @@ using planner::logical::LogicalPlanNodeKind;
 using planner::logical::LogicalProjection;
 using planner::logical::LogicalScan;
 using planner::logical::LogicalScanIndexHint;
+using planner::logical::LogicalVectorSearch;
 using planner::plan::CreateCollectionPlan;
 using planner::plan::CreateDatabasePlan;
 using planner::plan::CreateIndexPlan;
@@ -371,6 +374,15 @@ std::unique_ptr<PhysicalPlanNode> PhysicalPlanner::plan(const LogicalPlanNode & 
             scan.collection_id(),
             scan.collection_name(),
             scan.location()
+        );
+    }
+    case LogicalPlanNodeKind::VectorSearch: {
+        const auto & search = static_cast<const LogicalVectorSearch &>(logical_root);
+        return std::make_unique<PhysicalVectorSearch>(
+            search.database_id(), search.collection_id(), search.collection_name(), search.index_id(),
+            search.index_name(), search.column_id(), search.column_name(), search.metric(),
+            search.query_vector().clone(), search.predicate() ? search.predicate()->clone() : nullptr,
+            search.required_count(), search.location()
         );
     }
     case LogicalPlanNodeKind::Filter: {
