@@ -30,9 +30,15 @@ std::filesystem::path temp_dir(std::string name)
     return path;
 }
 
-std::unique_ptr<database::DatabaseEngine> open_database(const std::filesystem::path & path)
+std::unique_ptr<database::DatabaseEngine> open_database(
+    const std::filesystem::path & path,
+    transaction::TransactionOptions options = {}
+)
 {
-    auto opened = database::DatabaseEngine::open({.data_dir = path});
+    auto opened = database::DatabaseEngine::open({
+        .data_dir = path,
+        .transaction_options = std::move(options),
+    });
     if (!opened) throw std::runtime_error(opened.error().message);
     return std::move(*opened);
 }
@@ -175,11 +181,64 @@ void test_committed_wal_redoes_all_participants_and_ignores_loser()
             std::get<std::int64_t>(second_selected.rows[0].values[0].data()) == 7,
             "WAL redo is not idempotent across repeated restart");
 }
+
+void test_failpoint_metrics_and_staging_cleanup()
+{
+    const auto directory = temp_dir("litedb_transaction_observability");
+    {
+        auto engine = open_database(directory);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        execute_ok(session, "CREATE COLLECTION events (id BIGINT);");
+    }
+
+    std::filesystem::create_directories(directory / ".transactions" / "txn_stale");
+    {
+        std::ofstream marker(directory / ".transactions" / "txn_stale" / "marker");
+        marker << "stale";
+    }
+
+    bool injected = false;
+    transaction::TransactionOptions options {
+        .commit_stage_hook = [&injected](transaction::CommitStage stage, transaction::TransactionId) {
+            if (!injected && stage == transaction::CommitStage::AfterPrepare) {
+                injected = true;
+                return true;
+            }
+            return false;
+        },
+    };
+    auto engine = open_database(directory, std::move(options));
+    require(!std::filesystem::exists(directory / ".transactions"), "startup did not clean stale staging");
+    database::Session session {*engine};
+    execute_ok(session, "USE demo;");
+    auto failed = session.execute_sql("INSERT INTO events VALUES (1);");
+    require(!failed, "injected prepare failure did not fail the transaction");
+    execute_ok(session, "INSERT INTO events VALUES (2);");
+
+    const auto observation = engine->observability();
+    require(observation.transaction.started_transactions == 2, "started transaction metric mismatch");
+    require(observation.transaction.committed_transactions == 1, "committed transaction metric mismatch");
+    require(observation.transaction.aborted_transactions == 1, "aborted transaction metric mismatch");
+    require(observation.transaction.failed_commits == 1, "failed commit metric mismatch");
+    require(observation.transaction.wal_size_bytes > wal::WalCodec::FileHeaderSize, "WAL size metric mismatch");
+    require(observation.transaction.maximum_commit_duration_us >= observation.transaction.last_commit_duration_us,
+            "transaction duration metrics mismatch");
+    engine.reset();
+
+    auto recovered = open_database(directory);
+    const auto recovery_observation = recovered->observability();
+    require(recovery_observation.recovered_committed_transactions == 1,
+            "recovered transaction metric mismatch");
+    require(recovery_observation.replayed_writes >= 1, "redo write metric mismatch");
+}
 }
 
 int main()
 {
     test_multi_row_update_is_atomic();
     test_committed_wal_redoes_all_participants_and_ignores_loser();
+    test_failpoint_metrics_and_staging_cleanup();
     return 0;
 }

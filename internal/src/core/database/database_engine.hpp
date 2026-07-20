@@ -44,7 +44,15 @@ namespace litedb::core::database
  */
 struct DatabaseConfig
 {
-    std::filesystem::path data_dir;     ///< 数据目录
+    std::filesystem::path data_dir;                         ///< 数据目录
+    transaction::TransactionOptions transaction_options;   ///< 事务测试与观测配置
+};
+
+struct DatabaseObservability
+{
+    transaction::TransactionMetrics transaction;
+    std::size_t recovered_committed_transactions {0};
+    std::size_t replayed_writes {0};
 };
 
 /**
@@ -57,6 +65,7 @@ enum class DatabaseErrorCode
     StorageError,     ///< 存储引擎错误
     IndexError,       ///< 索引引擎错误
     WalError,         ///< WAL 或恢复错误
+    TransactionError, ///< 事务初始化错误
 };
 
 /**
@@ -106,6 +115,9 @@ public:
     [[nodiscard]]
     const vindex::VectorIndexEngine & vector_index_engine() const noexcept;
 
+    [[nodiscard]]
+    DatabaseObservability observability() const noexcept;
+
 private:
     friend class Session;
 
@@ -117,6 +129,9 @@ private:
      */
     [[nodiscard]]
     std::expected<void, DatabaseError> initialize();
+
+    [[nodiscard]]
+    std::expected<void, DatabaseError> cleanup_transaction_staging();
 
     /**
      * @brief 执行
@@ -280,6 +295,9 @@ private:
     vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎
     std::optional<wal::WalStore> wal_store_;         ///< WAL 存储
     std::unique_ptr<transaction::TransactionManager> transaction_manager_; ///< 事务管理器
+    transaction::TransactionOptions transaction_options_; ///< 事务配置
+    std::size_t recovered_committed_transactions_ {0}; ///< 启动发现的已提交事务数
+    std::size_t replayed_writes_ {0};                ///< 启动 redo 写入数
     std::mutex mutex_;                     ///< 互斥锁
 };
 

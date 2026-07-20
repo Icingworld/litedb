@@ -42,9 +42,14 @@ T read_number(const std::byte * source) noexcept
 
 } // namespace
 
-WalStore::WalStore(std::filesystem::path path, filesystem::FileHandle file) noexcept
+WalStore::WalStore(
+    std::filesystem::path path,
+    filesystem::FileHandle file,
+    std::uint64_t size_bytes
+) noexcept
     : path_(std::move(path))
     , file_(std::move(file))
+    , size_bytes_(size_bytes)
 {
 }
 
@@ -100,7 +105,11 @@ std::expected<WalStore, WalError> WalStore::open(
         }
     }
 
-    return WalStore {std::move(path), std::move(*opened)};
+    auto final_size = opened->size();
+    if (!final_size) {
+        return std::unexpected(fs_error(std::move(final_size.error())));
+    }
+    return WalStore {std::move(path), std::move(*opened), *final_size};
 }
 
 std::expected<transaction::Lsn, WalError> WalStore::append(
@@ -123,6 +132,7 @@ std::expected<transaction::Lsn, WalError> WalStore::append(
     if (!appended) {
         return std::unexpected(fs_error(std::move(appended.error())));
     }
+    size_bytes_ = *size + encoded->size();
     return *size;
 }
 
@@ -244,6 +254,7 @@ std::expected<void, WalError> WalStore::truncate_tail(std::uint64_t valid_size)
     if (!truncated) {
         return std::unexpected(fs_error(std::move(truncated.error())));
     }
+    size_bytes_ = valid_size;
 
     auto synced = file_.sync_data();
     if (!synced) {
@@ -260,6 +271,11 @@ const std::filesystem::path & WalStore::path() const noexcept
 std::optional<transaction::Lsn> WalStore::flushed_lsn() const noexcept
 {
     return flushed_lsn_;
+}
+
+std::uint64_t WalStore::size_bytes() const noexcept
+{
+    return size_bytes_;
 }
 
 } // namespace litedb::core::wal

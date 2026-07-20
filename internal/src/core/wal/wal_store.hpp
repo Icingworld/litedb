@@ -19,7 +19,7 @@ namespace litedb::core::wal
 class WalStore final
 {
 private:
-    WalStore(std::filesystem::path path, filesystem::FileHandle file) noexcept;
+    WalStore(std::filesystem::path path, filesystem::FileHandle file, std::uint64_t size_bytes) noexcept;
 
 public:
     WalStore(const WalStore &) = delete;
@@ -109,6 +109,9 @@ public:
     [[nodiscard]]
     std::optional<transaction::Lsn> flushed_lsn() const noexcept;
 
+    [[nodiscard]]
+    std::uint64_t size_bytes() const noexcept;
+
 private:
     /**
      * @brief 追加 WAL 记录
@@ -128,6 +131,7 @@ private:
     std::filesystem::path path_;                        ///< 文件路径
     filesystem::FileHandle file_;                       ///< 文件句柄
     std::optional<transaction::Lsn> flushed_lsn_;       ///< 已刷盘 LSN
+    std::uint64_t size_bytes_ {0};                      ///< 当前 WAL 大小
 };
 
 } // namespace litedb::core::wal

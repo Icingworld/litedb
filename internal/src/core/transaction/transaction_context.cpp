@@ -89,4 +89,11 @@ void TransactionContext::mark_rollback_only(std::string message)
     failure_ = TransactionFailure {.message = std::move(message)};
 }
 
+void TransactionContext::release_writer_guard() noexcept
+{
+    if (writer_guard_.owns_lock()) {
+        writer_guard_.unlock();
+    }
+}
+
 } // namespace litedb::core::transaction

@@ -1,6 +1,7 @@
 #include "core/transaction/transaction_manager.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <limits>
 #include <set>
@@ -34,6 +35,28 @@ public:
 
 private:
     std::filesystem::path path_;    ///< 暂存路径
+};
+
+class CommitTimer final
+{
+public:
+    explicit CommitTimer(std::function<void(std::uint64_t)> callback)
+        : callback_(std::move(callback))
+        , started_(std::chrono::steady_clock::now())
+    {
+    }
+
+    ~CommitTimer()
+    {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - started_
+        );
+        callback_(static_cast<std::uint64_t>(elapsed.count()));
+    }
+
+private:
+    std::function<void(std::uint64_t)> callback_;
+    std::chrono::steady_clock::time_point started_;
 };
 
 // TODO: 文件操作从 std::fstream 迁移到使用 filesystem 模块提供的 API。
@@ -117,7 +140,8 @@ TransactionManager::TransactionManager(
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
     wal::WalStore & wal,
-    TransactionId maximum_recovered_transaction_id
+    TransactionId maximum_recovered_transaction_id,
+    TransactionOptions options
 ) noexcept
     : data_directory_(std::move(data_directory))
     , filesystem_(&filesystem)
@@ -129,12 +153,39 @@ TransactionManager::TransactionManager(
     , next_transaction_id_(maximum_recovered_transaction_id == std::numeric_limits<TransactionId>::max()
                                ? InvalidTransactionId
                                : maximum_recovered_transaction_id + 1)
+    , options_(std::move(options))
 {
+    wal_size_bytes_.store(wal_->size_bytes(), std::memory_order_relaxed);
 }
 
 bool TransactionManager::recovery_required() const noexcept
 {
-    return recovery_required_;
+    return recovery_required_.load(std::memory_order_acquire);
+}
+
+TransactionMetrics TransactionManager::metrics() const noexcept
+{
+    return TransactionMetrics {
+        .started_transactions = started_transactions_.load(std::memory_order_relaxed),
+        .committed_transactions = committed_transactions_.load(std::memory_order_relaxed),
+        .aborted_transactions = aborted_transactions_.load(std::memory_order_relaxed),
+        .failed_commits = failed_commits_.load(std::memory_order_relaxed),
+        .total_commit_duration_us = total_commit_duration_us_.load(std::memory_order_relaxed),
+        .last_commit_duration_us = last_commit_duration_us_.load(std::memory_order_relaxed),
+        .maximum_commit_duration_us = maximum_commit_duration_us_.load(std::memory_order_relaxed),
+        .wal_size_bytes = wal_size_bytes_.load(std::memory_order_relaxed),
+    };
+}
+
+void TransactionManager::record_commit_duration(std::uint64_t duration_us) noexcept
+{
+    last_commit_duration_us_.store(duration_us, std::memory_order_relaxed);
+    total_commit_duration_us_.fetch_add(duration_us, std::memory_order_relaxed);
+    auto maximum = maximum_commit_duration_us_.load(std::memory_order_relaxed);
+    while (duration_us > maximum &&
+           !maximum_commit_duration_us_.compare_exchange_weak(maximum, duration_us, std::memory_order_relaxed)) {
+    }
+    wal_size_bytes_.store(wal_->size_bytes(), std::memory_order_relaxed);
 }
 
 TransactionError TransactionManager::error(
@@ -148,7 +199,8 @@ TransactionError TransactionManager::error(
 
 std::expected<TransactionContext, TransactionError> TransactionManager::begin_implicit()
 {
-    if (recovery_required_) {
+    std::unique_lock writer_guard {writer_mutex_};
+    if (recovery_required()) {
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, InvalidTransactionId,
                                      "Database requires WAL recovery before accepting transactions"));
     }
@@ -156,7 +208,26 @@ std::expected<TransactionContext, TransactionError> TransactionManager::begin_im
         return std::unexpected(error(TransactionErrorCode::InvalidState, InvalidTransactionId,
                                      "Transaction ID space is exhausted"));
     }
-    return TransactionContext {next_transaction_id_++};
+    TransactionContext transaction {next_transaction_id_++};
+    transaction.writer_guard_ = std::move(writer_guard);
+    transaction.owner_ = this;
+    started_transactions_.fetch_add(1, std::memory_order_relaxed);
+    return transaction;
+}
+
+bool TransactionManager::failpoint(CommitStage stage, TransactionContext & transaction, bool durable)
+{
+    if (!options_.commit_stage_hook || !options_.commit_stage_hook(stage, transaction.id())) {
+        return false;
+    }
+    if (durable) {
+        recovery_required_.store(true, std::memory_order_release);
+        transaction.release_writer_guard();
+    } else {
+        transaction.state_ = TransactionState::Aborting;
+        (void) abort(transaction);
+    }
+    return true;
 }
 
 std::expected<void, TransactionError> TransactionManager::stage_insert(
@@ -165,7 +236,8 @@ std::expected<void, TransactionError> TransactionManager::stage_insert(
     schema::RecordData after
 )
 {
-    if (transaction.state() != TransactionState::Active || transaction.rollback_only()) {
+    if (transaction.owner_ != this || !transaction.writer_guard_.owns_lock() ||
+        transaction.state() != TransactionState::Active || transaction.rollback_only()) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Cannot stage insert"));
     }
     transaction.stage(RowMutation {
@@ -186,7 +258,8 @@ std::expected<void, TransactionError> TransactionManager::stage_update(
     schema::RecordData after
 )
 {
-    if (transaction.state() != TransactionState::Active || transaction.rollback_only()) {
+    if (transaction.owner_ != this || !transaction.writer_guard_.owns_lock() ||
+        transaction.state() != TransactionState::Active || transaction.rollback_only()) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Cannot stage update"));
     }
     transaction.stage(RowMutation {
@@ -206,7 +279,8 @@ std::expected<void, TransactionError> TransactionManager::stage_delete(
     schema::RecordData before
 )
 {
-    if (transaction.state() != TransactionState::Active || transaction.rollback_only()) {
+    if (transaction.owner_ != this || !transaction.writer_guard_.owns_lock() ||
+        transaction.state() != TransactionState::Active || transaction.rollback_only()) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Cannot stage delete"));
     }
     transaction.stage(RowMutation {
@@ -388,7 +462,19 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(Transac
 
 std::expected<void, TransactionError> TransactionManager::commit(TransactionContext & transaction)
 {
-    if (recovery_required_) {
+    bool commit_succeeded = false;
+    CommitTimer timer {[this, &commit_succeeded](std::uint64_t duration_us) {
+        record_commit_duration(duration_us);
+        if (!commit_succeeded) {
+            failed_commits_.fetch_add(1, std::memory_order_relaxed);
+        }
+    }};
+
+    if (transaction.owner_ != this || !transaction.writer_guard_.owns_lock()) {
+        return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(),
+                                     "Transaction was not started by this TransactionManager"));
+    }
+    if (recovery_required()) {
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Database requires recovery"));
     }
     if (transaction.rollback_only()) {
@@ -408,6 +494,9 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         (void) abort(transaction);
         return std::unexpected(std::move(batch.error()));
     }
+    if (failpoint(CommitStage::AfterPrepare, transaction, false)) {
+        return std::unexpected(error(TransactionErrorCode::FaultInjected, transaction.id(), "Injected failure after prepare"));
+    }
     if (!transaction.transition_to(TransactionState::Committing)) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Transaction cannot enter commit"));
     }
@@ -419,6 +508,9 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), std::move(begin.error().message)));
     }
     transaction.note_lsn(*begin);
+    if (failpoint(CommitStage::AfterWalBegin, transaction, false)) {
+        return std::unexpected(error(TransactionErrorCode::FaultInjected, transaction.id(), "Injected failure after WAL begin"));
+    }
     for (const auto & write : batch->writes()) {
         auto appended = wal_->append_write(transaction.id(), write);
         if (!appended) {
@@ -428,40 +520,67 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         }
         transaction.note_lsn(*appended);
     }
+    if (failpoint(CommitStage::AfterWalWrites, transaction, false)) {
+        return std::unexpected(error(TransactionErrorCode::FaultInjected, transaction.id(), "Injected failure after WAL writes"));
+    }
     auto committed = wal_->append_commit(transaction.id());
     if (!committed) {
-        recovery_required_ = true;
+        recovery_required_.store(true, std::memory_order_release);
+        transaction.release_writer_guard();
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(),
                                      "WAL commit append outcome is indeterminate: " + committed.error().message));
     }
     transaction.note_commit_lsn(*committed);
+    if (failpoint(CommitStage::AfterWalCommitAppend, transaction, true)) {
+        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after WAL commit append"));
+    }
     auto flushed = wal_->flush_through(*committed);
     if (!flushed) {
-        recovery_required_ = true;
+        recovery_required_.store(true, std::memory_order_release);
+        transaction.release_writer_guard();
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(),
                                      "WAL commit durability is indeterminate: " + flushed.error().message));
     }
     if (!transaction.transition_to(TransactionState::Committed)) {
-        recovery_required_ = true;
+        recovery_required_.store(true, std::memory_order_release);
+        transaction.release_writer_guard();
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Durable transaction has invalid state"));
+    }
+    if (failpoint(CommitStage::AfterWalCommitFlush, transaction, true)) {
+        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after WAL commit flush"));
     }
 
     auto applied = batch->apply(data_directory_, *filesystem_, false);
     if (!applied) {
-        recovery_required_ = true;
+        recovery_required_.store(true, std::memory_order_release);
+        transaction.release_writer_guard();
         return std::unexpected(error(TransactionErrorCode::CommittedApplyFailed, transaction.id(), std::move(applied.error().message)));
+    }
+    if (failpoint(CommitStage::AfterApply, transaction, true)) {
+        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after participant apply"));
     }
     auto reloaded = reload_runtime(transaction.id());
     if (!reloaded) {
-        recovery_required_ = true;
+        recovery_required_.store(true, std::memory_order_release);
+        transaction.release_writer_guard();
         reloaded.error().code = TransactionErrorCode::CommittedApplyFailed;
         return reloaded;
     }
+    if (failpoint(CommitStage::AfterRuntimeReload, transaction, true)) {
+        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after runtime reload"));
+    }
+    committed_transactions_.fetch_add(1, std::memory_order_relaxed);
+    transaction.release_writer_guard();
+    commit_succeeded = true;
     return {};
 }
 
 std::expected<void, TransactionError> TransactionManager::abort(TransactionContext & transaction)
 {
+    if (transaction.owner_ != this || !transaction.writer_guard_.owns_lock()) {
+        return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(),
+                                     "Transaction was not started by this TransactionManager"));
+    }
     if (transaction.state() == TransactionState::Committed || transaction.state() == TransactionState::Committing) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Committed transaction cannot abort"));
     }
@@ -471,6 +590,8 @@ std::expected<void, TransactionError> TransactionManager::abort(TransactionConte
     if (!transaction.transition_to(TransactionState::Aborted)) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Transaction cannot finish abort"));
     }
+    aborted_transactions_.fetch_add(1, std::memory_order_relaxed);
+    transaction.release_writer_guard();
     return {};
 }
 

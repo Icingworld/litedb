@@ -9,6 +9,12 @@ indexes, and rule-based query planning. Distance TopK queries written as normal
 SQL can automatically use a matching HNSW index while retaining exact candidate
 re-ranking in the regular projection, sort, and limit pipeline.
 
+The current transaction feature branch additionally provides checksum-protected
+redo WAL and crash-consistent implicit statement transactions for DML. Each
+`INSERT`, `UPDATE`, or `DELETE` statement is one `Serializable` transaction;
+storage, persistent B+Tree indexes, and persistent HNSW indexes share the same
+commit record.
+
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
 storage engine.
@@ -35,6 +41,13 @@ scans.
   - `SHOW INDEXES FROM collection`
 - Automatic scalar-index maintenance on `INSERT`, `UPDATE`, and `DELETE`
 through `IndexEngine`.
+- Implicit statement-level transactions for `INSERT`, `UPDATE`, and `DELETE`,
+  with a core-level single-writer guard and atomic multi-row statement commit.
+- Versioned redo WAL records with LSNs and checksums, incomplete-tail
+  truncation, committed-transaction redo, and idempotent startup recovery
+  across collection storage, B+Tree, and HNSW files.
+- Basic `DatabaseEngine::observability()` counters for current WAL size,
+  transaction counts and commit duration, and startup redo activity.
 - Rule-based scalar access-path selection for supported equality and range
 predicates.
 - Basic database and collection management:
@@ -87,9 +100,14 @@ v0.6.0 is still an experimental single-node release:
 
 - The example server uses `litedb-data` by default; `--data-dir` selects a
   different persistent data directory.
-- No WAL, checksums, compaction, checkpointing, or crash-consistent commit
-protocol yet.
-- No transactions, MVCC, or isolation guarantees.
+- Transactions are currently implicit and statement-scoped only. There is no
+  SQL `BEGIN`, `COMMIT`, or `ROLLBACK`, and DDL is not yet part of the WAL
+  transaction boundary.
+- Execution currently uses a global single writer and fixed statement-level
+  `Serializable` isolation. There is no MVCC, concurrent-writer scheduling,
+  lock manager, or additional isolation level.
+- WAL checkpointing, recycling, and compaction are not implemented, so startup
+  recovery scans all retained committed WAL records.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
 - The optimizer is rule-based. It has no statistics, cardinality estimation, or
 cost model for choosing between sequential, scalar-index, and vector-index

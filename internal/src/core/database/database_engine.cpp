@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -110,6 +111,7 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , storage_(data_directory_, filesystem_)
     , index_engine_(data_directory_, filesystem_)
     , vector_index_engine_(data_directory_ / "vindexes", filesystem_)
+    , transaction_options_(std::move(config.transaction_options))
 {
 }
 
@@ -138,8 +140,37 @@ const vindex::VectorIndexEngine & DatabaseEngine::vector_index_engine() const no
     return vector_index_engine_;
 }
 
+DatabaseObservability DatabaseEngine::observability() const noexcept
+{
+    return DatabaseObservability {
+        .transaction = transaction_manager_ != nullptr
+                           ? transaction_manager_->metrics()
+                           : transaction::TransactionMetrics {},
+        .recovered_committed_transactions = recovered_committed_transactions_,
+        .replayed_writes = replayed_writes_,
+    };
+}
+
+std::expected<void, DatabaseError> DatabaseEngine::cleanup_transaction_staging()
+{
+    std::error_code error;
+    std::filesystem::remove_all(data_directory_ / ".transactions", error);
+    if (error) {
+        return std::unexpected(DatabaseError {
+            .code = DatabaseErrorCode::TransactionError,
+            .message = "Failed to clean stale transaction staging: " + error.message(),
+        });
+    }
+    return {};
+}
+
 std::expected<void, DatabaseError> DatabaseEngine::initialize()
 {
+    auto cleaned = cleanup_transaction_staging();
+    if (!cleaned) {
+        return std::unexpected(std::move(cleaned.error()));
+    }
+
     auto initialized = manifest_.ensure_initialized();
     if (!initialized.has_value()) {
         return std::unexpected(to_database_error(std::move(initialized.error())));
@@ -172,6 +203,8 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
     if (!recovered) {
         return std::unexpected(to_database_error(std::move(recovered.error())));
     }
+    recovered_committed_transactions_ = recovered->committed_transactions;
+    replayed_writes_ = recovered->replayed_writes;
 
     auto initialized_meta = meta_.commit(meta_.snapshot());
     if (!initialized_meta.has_value()) {
@@ -195,7 +228,7 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     transaction_manager_ = std::make_unique<transaction::TransactionManager>(
         data_directory_, filesystem_, meta_, storage_, index_engine_, vector_index_engine_, *wal_store_,
-        recovered->maximum_transaction_id
+        recovered->maximum_transaction_id, std::move(transaction_options_)
     );
 
     return {};

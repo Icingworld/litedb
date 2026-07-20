@@ -19,6 +19,7 @@ enum class TransactionErrorCode
     ApplyFailed,               ///< 应用失败
     CommittedApplyFailed,      ///< 提交应用失败
     RecoveryRequired,          ///< 需要恢复
+    FaultInjected,             ///< 测试故障注入
 };
 
 /**

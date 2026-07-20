@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -11,6 +12,8 @@
 
 namespace litedb::core::transaction
 {
+
+class TransactionManager;
 
 /**
  * @brief 隔离级别枚举
@@ -170,6 +173,11 @@ private:
      */
     void mark_rollback_only(std::string message);
 
+    /**
+     * @brief 释放事务持有的单写者锁
+     */
+    void release_writer_guard() noexcept;
+
 private:
     TransactionId id_;                                           ///< 事务 ID
     TransactionState state_ {TransactionState::Active};          ///< 事务状态
@@ -180,6 +188,8 @@ private:
     std::vector<RowMutation> write_set_;                         ///< 写集合
     bool rollback_only_ {false};                                 ///< 是否只能回滚
     std::optional<TransactionFailure> failure_;                  ///< 失败信息
+    std::unique_lock<std::mutex> writer_guard_;                  ///< 单写者生命周期锁
+    TransactionManager * owner_ {nullptr};                       ///< 创建该事务的管理器
 };
 
 } // namespace litedb::core::transaction

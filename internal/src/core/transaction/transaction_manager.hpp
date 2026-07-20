@@ -1,7 +1,11 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <functional>
+#include <mutex>
 #include <string>
 
 #include "core/filesystem/filesystem.hpp"
@@ -16,6 +20,36 @@
 
 namespace litedb::core::transaction
 {
+
+enum class CommitStage
+{
+    AfterPrepare,
+    AfterWalBegin,
+    AfterWalWrites,
+    AfterWalCommitAppend,
+    AfterWalCommitFlush,
+    AfterApply,
+    AfterRuntimeReload,
+};
+
+using CommitStageHook = std::function<bool(CommitStage, TransactionId)>;
+
+struct TransactionOptions
+{
+    CommitStageHook commit_stage_hook;
+};
+
+struct TransactionMetrics
+{
+    std::uint64_t started_transactions {0};
+    std::uint64_t committed_transactions {0};
+    std::uint64_t aborted_transactions {0};
+    std::uint64_t failed_commits {0};
+    std::uint64_t total_commit_duration_us {0};
+    std::uint64_t last_commit_duration_us {0};
+    std::uint64_t maximum_commit_duration_us {0};
+    std::uint64_t wal_size_bytes {0};
+};
 
 /**
  * @brief 事务管理器
@@ -32,7 +66,8 @@ public:
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine,
         wal::WalStore & wal,
-        TransactionId maximum_recovered_transaction_id
+        TransactionId maximum_recovered_transaction_id,
+        TransactionOptions options = {}
     ) noexcept;
 
 public:
@@ -114,6 +149,9 @@ public:
     [[nodiscard]]
     bool recovery_required() const noexcept;
 
+    [[nodiscard]]
+    TransactionMetrics metrics() const noexcept;
+
 private:
     /**
      * @brief 在暂存目录中准备事务写集合
@@ -145,6 +183,11 @@ private:
     [[nodiscard]]
     TransactionError error(TransactionErrorCode code, TransactionId id, std::string message) const;
 
+    [[nodiscard]]
+    bool failpoint(CommitStage stage, TransactionContext & transaction, bool durable);
+
+    void record_commit_duration(std::uint64_t duration_us) noexcept;
+
 private:
     std::filesystem::path data_directory_;                       ///< 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};              ///< 文件系统
@@ -154,7 +197,17 @@ private:
     vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  ///< 向量索引引擎
     wal::WalStore * wal_ {nullptr};                              ///< WAL 存储
     TransactionId next_transaction_id_ {1};                      ///< 下一个事务 ID
-    bool recovery_required_ {false};                             ///< 是否需要恢复
+    TransactionOptions options_;                                ///< 事务可选配置
+    std::mutex writer_mutex_;                                   ///< 核心层单写者锁
+    std::atomic_bool recovery_required_ {false};                 ///< 是否需要恢复
+    std::atomic_uint64_t started_transactions_ {0};
+    std::atomic_uint64_t committed_transactions_ {0};
+    std::atomic_uint64_t aborted_transactions_ {0};
+    std::atomic_uint64_t failed_commits_ {0};
+    std::atomic_uint64_t total_commit_duration_us_ {0};
+    std::atomic_uint64_t last_commit_duration_us_ {0};
+    std::atomic_uint64_t maximum_commit_duration_us_ {0};
+    std::atomic_uint64_t wal_size_bytes_ {0};
 };
 
 } // namespace litedb::core::transaction
