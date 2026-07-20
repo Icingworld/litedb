@@ -5,7 +5,7 @@
 #include <filesystem>
 
 #include "core/filesystem/filesystem.hpp"
-#include "core/wal/wal_store.hpp"
+#include "core/wal/wal_manager.hpp"
 
 namespace litedb::core::wal
 {
@@ -37,7 +37,7 @@ public:
     static std::expected<RecoveryResult, WalError> recover(
         const std::filesystem::path & data_directory,
         filesystem::FileSystem & filesystem,
-        WalStore & wal
+        WalManager & wal
     );
 };
 

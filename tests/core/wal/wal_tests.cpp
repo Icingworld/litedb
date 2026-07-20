@@ -1,6 +1,7 @@
 #include "core/filesystem/backend/filesystem_backend.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/wal/file_write_batch.hpp"
+#include "core/wal/wal_manager.hpp"
 #include "core/wal/wal_store.hpp"
 
 #include <array>
@@ -29,7 +30,7 @@ int main()
 {
     const auto directory = temp_dir();
     auto filesystem = filesystem::create_platform_filesystem();
-    auto store = wal::WalStore::open(directory / "wal" / "litedb.wal", filesystem);
+    auto store = wal::WalStore::open(directory / "wal" / "litedb.wal", filesystem, wal::WalFileHeader {});
     require(store.has_value(), "open WAL failed");
 
     const wal::FileWrite write {
@@ -112,5 +113,57 @@ int main()
     auto corrupted = store->scan(false);
     require(!corrupted && corrupted.error().code == wal::WalErrorCode::CorruptedRecord,
             "complete checksum corruption should be rejected");
+
+    const auto segmented_directory = directory / "segmented";
+    {
+        auto manager = wal::WalManager::open(segmented_directory, filesystem);
+        require(manager.has_value(), "open segmented WAL failed");
+        auto manager_begin = manager->append_begin(11);
+        auto manager_commit = manager->append_commit(11);
+        require(manager_begin && manager_commit && manager->flush_through(*manager_commit),
+                "append segmented WAL transaction failed");
+        require(manager->rotate(11).has_value(), "rotate segmented WAL failed");
+        const auto metrics = manager->metrics();
+        require(metrics.generation == 2 && metrics.checkpoint_transaction_id == 11 &&
+                    metrics.size_bytes == wal::WalCodec::FileHeaderSize,
+                "segmented WAL rotation metadata mismatch");
+    }
+
+    const auto temporary = segmented_directory / "00000000000000000003.wal.tmp";
+    {
+        auto file = filesystem.open(temporary, filesystem::backend::FileOpenOptions {
+            .access = filesystem::backend::FileAccess::ReadWrite,
+            .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+        });
+        require(file.has_value(), "create stale WAL temporary file failed");
+        const std::array garbage {std::byte {1}};
+        require(file->write_at(0, garbage).has_value(), "write stale WAL temporary file failed");
+    }
+    {
+        auto manager = wal::WalManager::open(segmented_directory, filesystem);
+        require(manager.has_value() && !std::filesystem::exists(temporary),
+                "startup did not ignore and clean stale WAL temporary file");
+    }
+
+    const auto lower_path = segmented_directory / "00000000000000000001.wal";
+    {
+        auto lower = wal::WalStore::open(lower_path, filesystem, wal::WalFileHeader {.generation = 1});
+        require(lower.has_value(), "create lower WAL generation failed");
+    }
+    const auto highest_path = segmented_directory / "00000000000000000002.wal";
+    {
+        auto file = filesystem.open(highest_path, filesystem::backend::FileOpenOptions {
+            .access = filesystem::backend::FileAccess::ReadWrite,
+            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        });
+        require(file.has_value(), "open highest WAL generation failed");
+        std::array<std::byte, 1> checksum_byte {};
+        require(file->read_at(24, checksum_byte).value_or(0) == 1, "read WAL header checksum failed");
+        checksum_byte[0] ^= std::byte {1};
+        require(file->write_at(24, checksum_byte).has_value(), "corrupt WAL header failed");
+    }
+    auto refused_fallback = wal::WalManager::open(segmented_directory, filesystem);
+    require(!refused_fallback && refused_fallback.error().code == wal::WalErrorCode::InvalidFormat,
+            "WAL manager fell back from a corrupted highest generation");
     return 0;
 }

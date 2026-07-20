@@ -30,7 +30,7 @@ public:
      * @return 文件头字节
      */
     [[nodiscard]]
-    static FileHeader encode_file_header() noexcept;
+    static FileHeader encode_file_header(const WalFileHeader & header) noexcept;
 
     /**
      * @brief 解码并校验文件头
@@ -38,7 +38,7 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    static std::expected<void, WalError> decode_file_header(std::span<const std::byte> bytes);
+    static std::expected<WalFileHeader, WalError> decode_file_header(std::span<const std::byte> bytes);
 
     /**
      * @brief 编码 WAL 记录

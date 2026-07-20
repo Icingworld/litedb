@@ -39,7 +39,7 @@ int main()
     litedb::core::storage::StorageEngine storage {directory, filesystem};
     litedb::core::index::IndexEngine indexes {directory, filesystem};
     litedb::core::vindex::VectorIndexEngine vectors {directory / "vindexes", filesystem};
-    auto wal = litedb::core::wal::WalStore::open(directory / "wal" / "litedb.wal", filesystem);
+    auto wal = litedb::core::wal::WalManager::open(directory / "wal", filesystem);
     require(wal.has_value(), "single-writer WAL open failed");
     TransactionManager manager {directory, filesystem, catalog, storage, indexes, vectors, *wal, 0};
 

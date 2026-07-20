@@ -45,17 +45,20 @@ T read_number(const std::byte * source) noexcept
 WalStore::WalStore(
     std::filesystem::path path,
     filesystem::FileHandle file,
+    WalFileHeader header,
     std::uint64_t size_bytes
 ) noexcept
     : path_(std::move(path))
     , file_(std::move(file))
+    , header_(header)
     , size_bytes_(size_bytes)
 {
 }
 
 std::expected<WalStore, WalError> WalStore::open(
     std::filesystem::path path,
-    filesystem::FileSystem & filesystem
+    filesystem::FileSystem & filesystem,
+    std::optional<WalFileHeader> create_header
 )
 {
     if (auto created = filesystem.create_dir_all(path.parent_path()); !created) {
@@ -66,7 +69,9 @@ std::expected<WalStore, WalError> WalStore::open(
         path,
         {
             filesystem::backend::FileAccess::ReadWrite,
-            filesystem::backend::FileCreateMode::OpenOrCreate,
+            create_header.has_value()
+                ? filesystem::backend::FileCreateMode::OpenOrCreate
+                : filesystem::backend::FileCreateMode::OpenExisting,
         }
     );
     if (!opened) {
@@ -79,7 +84,10 @@ std::expected<WalStore, WalError> WalStore::open(
     }
 
     if (*size == 0) {
-        const auto header = WalCodec::encode_file_header();
+        if (!create_header) {
+            return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL file header is missing"));
+        }
+        const auto header = WalCodec::encode_file_header(*create_header);
         auto written = opened->write_at(0, header);
         if (!written) {
             return std::unexpected(fs_error(std::move(written.error())));
@@ -103,13 +111,14 @@ std::expected<WalStore, WalError> WalStore::open(
         if (!decoded) {
             return std::unexpected(std::move(decoded.error()));
         }
+        create_header = *decoded;
     }
 
     auto final_size = opened->size();
     if (!final_size) {
         return std::unexpected(fs_error(std::move(final_size.error())));
     }
-    return WalStore {std::move(path), std::move(*opened), *final_size};
+    return WalStore {std::move(path), std::move(*opened), *create_header, *final_size};
 }
 
 std::expected<transaction::Lsn, WalError> WalStore::append(
@@ -279,9 +288,23 @@ std::optional<transaction::Lsn> WalStore::flushed_lsn() const noexcept
     return flushed_lsn_;
 }
 
+std::expected<void, WalError> WalStore::flush_all()
+{
+    auto synced = file_.sync_all();
+    if (!synced) {
+        return std::unexpected(fs_error(std::move(synced.error())));
+    }
+    return {};
+}
+
 std::uint64_t WalStore::size_bytes() const noexcept
 {
     return size_bytes_;
+}
+
+const WalFileHeader & WalStore::header() const noexcept
+{
+    return header_;
 }
 
 } // namespace litedb::core::wal

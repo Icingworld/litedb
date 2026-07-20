@@ -140,7 +140,7 @@ TransactionManager::TransactionManager(
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
-    wal::WalStore & wal,
+    wal::WalManager & wal,
     TransactionId maximum_recovered_transaction_id,
     TransactionOptions options
 ) noexcept
@@ -156,7 +156,37 @@ TransactionManager::TransactionManager(
                                : maximum_recovered_transaction_id + 1)
     , options_(std::move(options))
 {
-    wal_size_bytes_.store(wal_->size_bytes(), std::memory_order_relaxed);
+    wal_size_bytes_.store(wal_->metrics().size_bytes, std::memory_order_relaxed);
+}
+
+std::expected<void, std::string> sync_file(
+    filesystem::FileSystem & filesystem,
+    const std::filesystem::path & path
+)
+{
+    auto opened = filesystem.open(
+        path,
+        {
+            filesystem::backend::FileAccess::ReadWrite,
+            filesystem::backend::FileCreateMode::OpenExisting,
+        }
+    );
+    if (!opened) return std::unexpected(std::move(opened.error().message));
+    auto synced = opened->sync_all();
+    if (!synced) return std::unexpected(std::move(synced.error().message));
+    return {};
+}
+
+std::expected<void, std::string> sync_directory_if_supported(
+    filesystem::FileSystem & filesystem,
+    const std::filesystem::path & path
+)
+{
+    auto synced = filesystem.sync_directory(path);
+    if (!synced && synced.error().code != filesystem::FileSystemErrorCode::Unsupported) {
+        return std::unexpected(std::move(synced.error().message));
+    }
+    return {};
 }
 
 std::expected<std::optional<std::vector<std::byte>>, std::string> read_optional_file(
@@ -207,6 +237,7 @@ bool TransactionManager::recovery_required() const noexcept
 
 TransactionMetrics TransactionManager::metrics() const noexcept
 {
+    const auto wal_metrics = wal_->metrics();
     return TransactionMetrics {
         .started_transactions = started_transactions_.load(std::memory_order_relaxed),
         .committed_transactions = committed_transactions_.load(std::memory_order_relaxed),
@@ -216,6 +247,12 @@ TransactionMetrics TransactionManager::metrics() const noexcept
         .last_commit_duration_us = last_commit_duration_us_.load(std::memory_order_relaxed),
         .maximum_commit_duration_us = maximum_commit_duration_us_.load(std::memory_order_relaxed),
         .wal_size_bytes = wal_size_bytes_.load(std::memory_order_relaxed),
+        .wal_generation = wal_metrics.generation,
+        .checkpoint_transaction_id = wal_metrics.checkpoint_transaction_id,
+        .completed_checkpoints = completed_checkpoints_.load(std::memory_order_relaxed),
+        .failed_checkpoints = failed_checkpoints_.load(std::memory_order_relaxed),
+        .last_checkpoint_duration_us = last_checkpoint_duration_us_.load(std::memory_order_relaxed),
+        .reclaimed_wal_bytes = reclaimed_wal_bytes_.load(std::memory_order_relaxed),
     };
 }
 
@@ -227,7 +264,128 @@ void TransactionManager::record_commit_duration(std::uint64_t duration_us) noexc
     while (duration_us > maximum &&
            !maximum_commit_duration_us_.compare_exchange_weak(maximum, duration_us, std::memory_order_relaxed)) {
     }
-    wal_size_bytes_.store(wal_->size_bytes(), std::memory_order_relaxed);
+    wal_size_bytes_.store(wal_->metrics().size_bytes, std::memory_order_relaxed);
+}
+
+std::expected<void, TransactionError> TransactionManager::sync_checkpoint_participants(
+    TransactionId checkpoint_transaction_id
+)
+{
+    auto synced_meta = sync_file(*filesystem_, data_directory_ / "meta.lmeta");
+    if (!synced_meta) {
+        return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
+                                     "Failed to sync meta participant: " + std::move(synced_meta.error())));
+    }
+
+    for (const auto & target : catalog_physical_targets(*catalog_)) {
+        const auto path = wal::FileWriteBatch::resolve_target(data_directory_, target);
+        auto synced = sync_file(*filesystem_, path);
+        if (!synced) {
+            return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
+                                         "Failed to sync checkpoint participant " + path.string() + ": " +
+                                             std::move(synced.error())));
+        }
+    }
+
+    for (const auto * name : {"collections", "indexes", "vindexes"}) {
+        const auto path = data_directory_ / name;
+        auto created = filesystem_->create_dir_all(path);
+        if (!created) {
+            return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
+                                         "Failed to create checkpoint directory: " + created.error().message));
+        }
+        auto synced = sync_directory_if_supported(*filesystem_, path);
+        if (!synced) {
+            return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
+                                         "Failed to sync checkpoint directory: " + std::move(synced.error())));
+        }
+    }
+    auto root_synced = sync_directory_if_supported(*filesystem_, data_directory_);
+    if (!root_synced) {
+        return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
+                                     "Failed to sync data directory: " + std::move(root_synced.error())));
+    }
+    return {};
+}
+
+std::expected<void, TransactionError> TransactionManager::checkpoint()
+{
+    const auto started = std::chrono::steady_clock::now();
+    std::unique_lock writer_guard {writer_mutex_};
+    const auto checkpoint_transaction_id = next_transaction_id_ == 1
+                                               ? InvalidTransactionId
+                                               : next_transaction_id_ - 1;
+    auto finish = [this, started](bool success) {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - started
+        );
+        last_checkpoint_duration_us_.store(static_cast<std::uint64_t>(elapsed.count()), std::memory_order_relaxed);
+        if (success) completed_checkpoints_.fetch_add(1, std::memory_order_relaxed);
+        else failed_checkpoints_.fetch_add(1, std::memory_order_relaxed);
+    };
+
+    if (recovery_required()) {
+        finish(false);
+        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, checkpoint_transaction_id,
+                                     "Database requires recovery before checkpoint"));
+    }
+
+    const auto before_bytes = wal_->metrics().size_bytes;
+    auto wal_flushed = wal_->flush_all();
+    if (!wal_flushed) {
+        finish(false);
+        return std::unexpected(error(TransactionErrorCode::WalError, checkpoint_transaction_id,
+                                     "Failed to flush WAL before checkpoint: " + wal_flushed.error().message));
+    }
+    if (options_.checkpoint_stage_hook) {
+        options_.checkpoint_stage_hook(CheckpointStage::AfterWalFlush, checkpoint_transaction_id);
+    }
+    auto participants_synced = sync_checkpoint_participants(checkpoint_transaction_id);
+    if (!participants_synced) {
+        finish(false);
+        return participants_synced;
+    }
+    if (options_.checkpoint_stage_hook) {
+        options_.checkpoint_stage_hook(CheckpointStage::AfterParticipantSync, checkpoint_transaction_id);
+    }
+    auto rotated = wal_->rotate(
+        checkpoint_transaction_id,
+        [this, checkpoint_transaction_id](wal::WalRotationStage stage) {
+            if (!options_.checkpoint_stage_hook) return;
+            CheckpointStage checkpoint_stage = CheckpointStage::AfterTemporaryWalSync;
+            switch (stage) {
+            case wal::WalRotationStage::AfterTemporarySync:
+                checkpoint_stage = CheckpointStage::AfterTemporaryWalSync;
+                break;
+            case wal::WalRotationStage::AfterPublish:
+                checkpoint_stage = CheckpointStage::AfterWalPublish;
+                break;
+            case wal::WalRotationStage::AfterDirectorySync:
+                checkpoint_stage = CheckpointStage::AfterWalDirectorySync;
+                break;
+            case wal::WalRotationStage::AfterSwitch:
+                checkpoint_stage = CheckpointStage::AfterWalSwitch;
+                break;
+            case wal::WalRotationStage::AfterOldSegmentRemoval:
+                checkpoint_stage = CheckpointStage::AfterOldWalRemoval;
+                break;
+            }
+            options_.checkpoint_stage_hook(checkpoint_stage, checkpoint_transaction_id);
+        }
+    );
+    if (!rotated) {
+        recovery_required_.store(true, std::memory_order_release);
+        finish(false);
+        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, checkpoint_transaction_id,
+                                     "WAL rotation outcome is indeterminate: " + rotated.error().message));
+    }
+
+    const auto after_bytes = wal_->metrics().size_bytes;
+    reclaimed_wal_bytes_.fetch_add(before_bytes > after_bytes ? before_bytes - after_bytes : 0,
+                                   std::memory_order_relaxed);
+    wal_size_bytes_.store(after_bytes, std::memory_order_relaxed);
+    finish(true);
+    return {};
 }
 
 TransactionError TransactionManager::error(

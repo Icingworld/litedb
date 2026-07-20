@@ -2,6 +2,7 @@ set(WAL_SOURCES
     file_write_batch.cpp
     recovery_manager.cpp
     wal_codec.cpp
+    wal_manager.cpp
     wal_store.cpp
 )
 

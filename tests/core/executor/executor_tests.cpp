@@ -153,7 +153,7 @@ struct Fixture
     StorageEngine storage {storage_directory.path(), filesystem};
     IndexEngine index_engine {storage_directory.path(), filesystem};
     litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
-    std::optional<litedb::core::wal::WalStore> wal_store;
+    std::optional<litedb::core::wal::WalManager> wal_store;
     std::unique_ptr<litedb::core::transaction::TransactionManager> transaction_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -183,7 +183,7 @@ struct Fixture
         require(collection_schema.has_value(), "fixture schema load failed");
         require(storage.create_collection(std::move(collection_schema.value())).has_value(), "fixture storage creation failed");
         require(storage.contains_collection(users_id), "created collection storage missing");
-        auto opened_wal = litedb::core::wal::WalStore::open(storage_directory.path() / "wal" / "litedb.wal", filesystem);
+        auto opened_wal = litedb::core::wal::WalManager::open(storage_directory.path() / "wal", filesystem);
         require(opened_wal.has_value(), "fixture WAL creation failed");
         wal_store = std::move(*opened_wal);
         transaction_manager = std::make_unique<litedb::core::transaction::TransactionManager>(

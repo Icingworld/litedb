@@ -19,7 +19,12 @@ namespace litedb::core::wal
 class WalStore final
 {
 private:
-    WalStore(std::filesystem::path path, filesystem::FileHandle file, std::uint64_t size_bytes) noexcept;
+    WalStore(
+        std::filesystem::path path,
+        filesystem::FileHandle file,
+        WalFileHeader header,
+        std::uint64_t size_bytes
+    ) noexcept;
 
 public:
     WalStore(const WalStore &) = delete;
@@ -40,7 +45,8 @@ public:
     [[nodiscard]]
     static std::expected<WalStore, WalError> open(
         std::filesystem::path path,
-        filesystem::FileSystem & filesystem
+        filesystem::FileSystem & filesystem,
+        std::optional<WalFileHeader> create_header = std::nullopt
     );
 
     /**
@@ -79,6 +85,9 @@ public:
     [[nodiscard]]
     std::expected<void, WalError> flush_through(transaction::Lsn lsn);
 
+    [[nodiscard]]
+    std::expected<void, WalError> flush_all();
+
     /**
      * @brief 扫描 WAL 记录
      * @param truncate_incomplete_tail 是否截断不完整尾部
@@ -112,6 +121,9 @@ public:
     [[nodiscard]]
     std::uint64_t size_bytes() const noexcept;
 
+    [[nodiscard]]
+    const WalFileHeader & header() const noexcept;
+
 private:
     /**
      * @brief 追加 WAL 记录
@@ -130,6 +142,7 @@ private:
 private:
     std::filesystem::path path_;                        ///< 文件路径
     filesystem::FileHandle file_;                       ///< 文件句柄
+    WalFileHeader header_;                              ///< WAL 段文件头
     std::optional<transaction::Lsn> flushed_lsn_;       ///< 已刷盘 LSN
     std::uint64_t size_bytes_ {0};                      ///< 当前 WAL 大小
 };

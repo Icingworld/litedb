@@ -46,7 +46,11 @@ through `IndexEngine`.
   truncation, committed-transaction redo, and idempotent startup recovery
   across collection storage, B+Tree, and HNSW files.
 - Basic `DatabaseEngine::observability()` counters for current WAL size,
-  transaction counts and commit duration, and startup redo activity.
+  WAL generation, checkpoint duration/reclaimed bytes, transaction counts and
+  commit duration, and startup redo activity.
+- Synchronous manual `DatabaseEngine::checkpoint()` with durable participant
+  flushing, generation-based WAL rotation, stale temporary-segment cleanup,
+  and crash recovery at each publication boundary.
 - Transactional DDL publication for database, collection, B+Tree, and HNSW
   lifecycle changes, including Meta snapshot redo and idempotent file replace
   and delete operations.
@@ -108,8 +112,9 @@ v0.6.0 is still an experimental single-node release:
 - Execution currently uses a global single writer and fixed statement-level
   `Serializable` isolation. There is no MVCC, concurrent-writer scheduling,
   lock manager, or additional isolation level.
-- WAL checkpointing, recycling, and compaction are not implemented, so startup
-  recovery scans all retained committed WAL records.
+- Checkpointing is currently explicit and synchronous. Automatic size/commit
+  thresholds, background checkpointing, WAL archiving, and compaction are not
+  implemented.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
 - The optimizer is rule-based. It has no statistics, cardinality estimation, or
 cost model for choosing between sequential, scalar-index, and vector-index

@@ -16,7 +16,7 @@
 #include "core/transaction/transaction_error.hpp"
 #include "core/vindex/vector_index_engine.hpp"
 #include "core/wal/file_write_batch.hpp"
-#include "core/wal/wal_store.hpp"
+#include "core/wal/wal_manager.hpp"
 
 namespace litedb::core::transaction
 {
@@ -32,11 +32,24 @@ enum class CommitStage
     AfterRuntimeReload,
 };
 
+enum class CheckpointStage
+{
+    AfterWalFlush,
+    AfterParticipantSync,
+    AfterTemporaryWalSync,
+    AfterWalPublish,
+    AfterWalDirectorySync,
+    AfterWalSwitch,
+    AfterOldWalRemoval,
+};
+
 using CommitStageHook = std::function<bool(CommitStage, TransactionId)>;
+using CheckpointStageHook = std::function<void(CheckpointStage, TransactionId)>;
 
 struct TransactionOptions
 {
     CommitStageHook commit_stage_hook;
+    CheckpointStageHook checkpoint_stage_hook;
 };
 
 struct TransactionMetrics
@@ -49,6 +62,12 @@ struct TransactionMetrics
     std::uint64_t last_commit_duration_us {0};
     std::uint64_t maximum_commit_duration_us {0};
     std::uint64_t wal_size_bytes {0};
+    std::uint64_t wal_generation {0};
+    TransactionId checkpoint_transaction_id {InvalidTransactionId};
+    std::uint64_t completed_checkpoints {0};
+    std::uint64_t failed_checkpoints {0};
+    std::uint64_t last_checkpoint_duration_us {0};
+    std::uint64_t reclaimed_wal_bytes {0};
 };
 
 /**
@@ -65,7 +84,7 @@ public:
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine,
-        wal::WalStore & wal,
+        wal::WalManager & wal,
         TransactionId maximum_recovered_transaction_id,
         TransactionOptions options = {}
     ) noexcept;
@@ -152,6 +171,12 @@ public:
     std::expected<void, TransactionError> abort(TransactionContext & transaction);
 
     /**
+     * @brief 在单写者边界内持久化参与者并轮换 WAL
+     */
+    [[nodiscard]]
+    std::expected<void, TransactionError> checkpoint();
+
+    /**
      * @brief 判断数据库是否需要先恢复
      * @return 是否需要恢复
      */
@@ -203,6 +228,9 @@ private:
 
     void record_commit_duration(std::uint64_t duration_us) noexcept;
 
+    [[nodiscard]]
+    std::expected<void, TransactionError> sync_checkpoint_participants(TransactionId checkpoint_transaction_id);
+
 private:
     std::filesystem::path data_directory_;                       ///< 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};              ///< 文件系统
@@ -210,7 +238,7 @@ private:
     storage::StorageEngine * storage_ {nullptr};                 ///< 存储引擎
     index::IndexEngine * index_engine_ {nullptr};                ///< 标量索引引擎
     vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  ///< 向量索引引擎
-    wal::WalStore * wal_ {nullptr};                              ///< WAL 存储
+    wal::WalManager * wal_ {nullptr};                            ///< WAL 管理器
     TransactionId next_transaction_id_ {1};                      ///< 下一个事务 ID
     TransactionOptions options_;                                ///< 事务可选配置
     std::mutex writer_mutex_;                                   ///< 核心层单写者锁
@@ -223,6 +251,10 @@ private:
     std::atomic_uint64_t last_commit_duration_us_ {0};
     std::atomic_uint64_t maximum_commit_duration_us_ {0};
     std::atomic_uint64_t wal_size_bytes_ {0};
+    std::atomic_uint64_t completed_checkpoints_ {0};
+    std::atomic_uint64_t failed_checkpoints_ {0};
+    std::atomic_uint64_t last_checkpoint_duration_us_ {0};
+    std::atomic_uint64_t reclaimed_wal_bytes_ {0};
 };
 
 } // namespace litedb::core::transaction

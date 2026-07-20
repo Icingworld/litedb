@@ -9,6 +9,12 @@
 namespace litedb::core::wal
 {
 
+struct WalFileHeader
+{
+    std::uint64_t generation {1};
+    transaction::TransactionId checkpoint_transaction_id {transaction::InvalidTransactionId};
+};
+
 /**
  * @brief 文件目标类型
  */

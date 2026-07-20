@@ -6,7 +6,7 @@ Storage v2 由 `StorageEngine`、内部 `Store` 和 `StorageCursor` 组成。Exe
 
 当前同时支持内存 Store 和文件 Store。文件模式为每个 collection 创建独立的 `collections/<collection_id>.store`。旧 `.rows`/RowLog 格式不再支持，也不提供迁移。
 
-文件 Store 仍不直接实现事务；DML 与 DDL 由上层 `TransactionManager` 以隐式语句级事务协调，使用 redo-only WAL 和 no-steal staging 文件视图覆盖 Meta、Storage、B+Tree 与 HNSW。当前不提供显式 SQL 事务、MVCC、buffer pool、checkpoint、WAL 回收或并发写保证。
+文件 Store 仍不直接实现事务；DML 与 DDL 由上层 `TransactionManager` 以隐式语句级事务协调，使用 redo-only WAL 和 no-steal staging 文件视图覆盖 Meta、Storage、B+Tree 与 HNSW。当前提供同步手动 checkpoint 与 generation WAL 回收；不提供显式 SQL 事务、MVCC、buffer pool、后台 checkpoint 或并发写保证。
 
 ## 标识
 

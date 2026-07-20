@@ -1,5 +1,6 @@
 #include "core/wal/recovery_manager.hpp"
 
+#include <algorithm>
 #include <unordered_map>
 #include <utility>
 
@@ -11,7 +12,7 @@ namespace litedb::core::wal
 std::expected<RecoveryResult, WalError> RecoveryManager::recover(
     const std::filesystem::path & data_directory,
     filesystem::FileSystem & filesystem,
-    WalStore & wal
+    WalManager & wal
 )
 {
     auto scanned = wal.scan(true);
@@ -61,7 +62,12 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
         }
     }
 
-    RecoveryResult result {.maximum_transaction_id = scanned->maximum_transaction_id};
+    RecoveryResult result {
+        .maximum_transaction_id = std::max(
+            scanned->maximum_transaction_id,
+            wal.header().checkpoint_transaction_id
+        ),
+    };
     for (const auto & [_, state] : states) {
         if (state.committed) {
             ++result.committed_transactions;

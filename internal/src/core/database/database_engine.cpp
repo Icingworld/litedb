@@ -163,6 +163,26 @@ DatabaseObservability DatabaseEngine::observability() const noexcept
     };
 }
 
+std::expected<void, DatabaseError> DatabaseEngine::checkpoint()
+{
+    if (transaction_manager_ == nullptr) {
+        return std::unexpected(DatabaseError {
+            .code = DatabaseErrorCode::TransactionError,
+            .message = "Database transaction manager is not initialized",
+        });
+    }
+    auto checkpointed = transaction_manager_->checkpoint();
+    if (!checkpointed) {
+        return std::unexpected(DatabaseError {
+            .code = checkpointed.error().code == transaction::TransactionErrorCode::WalError
+                        ? DatabaseErrorCode::WalError
+                        : DatabaseErrorCode::TransactionError,
+            .message = std::move(checkpointed.error().message),
+        });
+    }
+    return {};
+}
+
 std::expected<void, DatabaseError> DatabaseEngine::cleanup_transaction_staging()
 {
     std::error_code error;
@@ -188,13 +208,13 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(initialized.error())));
     }
 
-    auto opened_wal = wal::WalStore::open(data_directory_ / "wal" / "litedb.wal", filesystem_);
+    auto opened_wal = wal::WalManager::open(data_directory_ / "wal", filesystem_);
     if (!opened_wal) {
         return std::unexpected(to_database_error(std::move(opened_wal.error())));
     }
-    wal_store_ = std::move(*opened_wal);
+    wal_manager_ = std::move(*opened_wal);
 
-    auto recovered = wal::RecoveryManager::recover(data_directory_, filesystem_, *wal_store_);
+    auto recovered = wal::RecoveryManager::recover(data_directory_, filesystem_, *wal_manager_);
     if (!recovered) {
         return std::unexpected(to_database_error(std::move(recovered.error())));
     }
@@ -227,7 +247,7 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
     }
 
     transaction_manager_ = std::make_unique<transaction::TransactionManager>(
-        data_directory_, filesystem_, meta_, storage_, index_engine_, vector_index_engine_, *wal_store_,
+        data_directory_, filesystem_, meta_, storage_, index_engine_, vector_index_engine_, *wal_manager_,
         recovered->maximum_transaction_id, std::move(transaction_options_)
     );
 

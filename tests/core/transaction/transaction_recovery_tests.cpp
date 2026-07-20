@@ -141,7 +141,7 @@ void test_committed_wal_redoes_all_participants_and_ignores_loser()
 
     {
         auto filesystem = filesystem::create_platform_filesystem();
-        auto wal = wal::WalStore::open(directory / "wal" / "litedb.wal", filesystem);
+        auto wal = wal::WalManager::open(directory / "wal", filesystem);
         require(wal.has_value(), "open WAL for loser transaction failed");
         auto begin = wal->append_begin(999);
         require(begin.has_value(), "append loser begin failed");

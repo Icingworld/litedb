@@ -19,7 +19,7 @@
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
-#include "core/wal/wal_store.hpp"
+#include "core/wal/wal_manager.hpp"
 
 namespace litedb::core::physical_plan
 {
@@ -117,6 +117,12 @@ public:
 
     [[nodiscard]]
     DatabaseObservability observability() const noexcept;
+
+    /**
+     * @brief 同步执行一次 checkpoint 并轮换 WAL
+     */
+    [[nodiscard]]
+    std::expected<void, DatabaseError> checkpoint();
 
 private:
     friend class Session;
@@ -300,7 +306,7 @@ private:
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
     vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎
-    std::optional<wal::WalStore> wal_store_;         ///< WAL 存储
+    std::optional<wal::WalManager> wal_manager_;     ///< WAL 分段管理器
     std::unique_ptr<transaction::TransactionManager> transaction_manager_; ///< 事务管理器
     transaction::TransactionOptions transaction_options_; ///< 事务配置
     std::size_t recovered_committed_transactions_ {0}; ///< 启动发现的已提交事务数

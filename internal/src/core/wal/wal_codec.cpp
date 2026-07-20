@@ -13,7 +13,7 @@ namespace
 
 constexpr std::uint32_t FileMagic = 0x4c57444cU;    // LDWL
 constexpr std::uint32_t RecordMagic = 0x3152574cU;  // LWR1
-constexpr std::uint16_t Version = 1;
+constexpr std::uint16_t Version = 2;
 
 /**
  * @brief 写入数字
@@ -76,16 +76,21 @@ bool valid_type(std::uint8_t value) noexcept
 
 } // namespace
 
-WalCodec::FileHeader WalCodec::encode_file_header() noexcept
+WalCodec::FileHeader WalCodec::encode_file_header(const WalFileHeader & value) noexcept
 {
     FileHeader header {};
     write_number(header.data(), FileMagic);
     write_number(header.data() + 4, Version);
     write_number(header.data() + 6, static_cast<std::uint16_t>(FileHeaderSize));
+    write_number(header.data() + 8, value.generation);
+    write_number(header.data() + 16, value.checkpoint_transaction_id);
+    write_number(header.data() + 24, static_cast<std::uint32_t>(0));
+    write_number(header.data() + 28, static_cast<std::uint32_t>(0));
+    write_number(header.data() + 24, crc32(header));
     return header;
 }
 
-std::expected<void, WalError> WalCodec::decode_file_header(std::span<const std::byte> bytes)
+std::expected<WalFileHeader, WalError> WalCodec::decode_file_header(std::span<const std::byte> bytes)
 {
     if (bytes.size() != FileHeaderSize || read_number<std::uint32_t>(bytes.data()) != FileMagic) {
         return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header"));
@@ -94,10 +99,21 @@ std::expected<void, WalError> WalCodec::decode_file_header(std::span<const std::
         return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL version"));
     }
     if (read_number<std::uint16_t>(bytes.data() + 6) != FileHeaderSize ||
-        std::any_of(bytes.begin() + 8, bytes.end(), [](std::byte value) { return value != std::byte {0}; })) {
+        read_number<std::uint64_t>(bytes.data() + 8) == 0 ||
+        read_number<std::uint32_t>(bytes.data() + 28) != 0) {
         return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header fields"));
     }
-    return {};
+    auto checked = FileHeader {};
+    std::copy(bytes.begin(), bytes.end(), checked.begin());
+    const auto stored_checksum = read_number<std::uint32_t>(checked.data() + 24);
+    write_number(checked.data() + 24, static_cast<std::uint32_t>(0));
+    if (stored_checksum != crc32(checked)) {
+        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL file header checksum mismatch"));
+    }
+    return WalFileHeader {
+        .generation = read_number<std::uint64_t>(bytes.data() + 8),
+        .checkpoint_transaction_id = read_number<transaction::TransactionId>(bytes.data() + 16),
+    };
 }
 
 std::expected<std::vector<std::byte>, WalError> WalCodec::encode_record(
