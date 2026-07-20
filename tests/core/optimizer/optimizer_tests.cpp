@@ -23,7 +23,9 @@
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
+#include "core/wal/wal_store.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"
 
@@ -69,6 +71,8 @@ struct Fixture
     StorageEngine storage {storage_directory.path(), filesystem};
     litedb::core::index::IndexEngine index_engine {storage_directory.path(), filesystem};
     litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
+    std::optional<litedb::core::wal::WalStore> wal_store;
+    std::unique_ptr<litedb::core::transaction::TransactionManager> transaction_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -97,6 +101,12 @@ struct Fixture
         require(schema.has_value(), "fixture schema load failed");
         auto storage_created = storage.create_collection(std::move(schema.value()));
         require(storage_created.has_value(), "fixture storage create failed");
+        auto opened_wal = litedb::core::wal::WalStore::open(storage_directory.path() / "wal" / "litedb.wal", filesystem);
+        require(opened_wal.has_value(), "fixture WAL create failed");
+        wal_store = std::move(*opened_wal);
+        transaction_manager = std::make_unique<litedb::core::transaction::TransactionManager>(
+            storage_directory.path(), filesystem, catalog, storage, index_engine, vector_index_engine, *wal_store, 0
+        );
     }
 };
 
@@ -163,7 +173,7 @@ std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::E
 )
 {
     litedb::core::executor::Executor executor {
-        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine
+        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
     };
     litedb::core::physical_plan::PhysicalPlanner physical_planner;
     auto physical = physical_planner.plan(plan);

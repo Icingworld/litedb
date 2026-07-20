@@ -74,6 +74,11 @@ class IndexEngine
 public:
     IndexEngine(std::filesystem::path data_directory, filesystem::FileSystem & filesystem) noexcept;
 
+    IndexEngine(const IndexEngine &) = delete;
+    IndexEngine & operator=(const IndexEngine &) = delete;
+    IndexEngine(IndexEngine &&) noexcept = default;
+    IndexEngine & operator=(IndexEngine &&) noexcept = default;
+
 public:
     /**
      * @brief 创建索引

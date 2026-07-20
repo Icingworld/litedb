@@ -10,6 +10,7 @@
 #include "core/executor/executor.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
 #include "core/schema/schema_loader.hpp"
+#include "core/wal/recovery_manager.hpp"
 
 namespace litedb::core::database
 {
@@ -77,6 +78,14 @@ DatabaseError to_database_error(vindex::VectorIndexError error)
     };
 }
 
+DatabaseError to_database_error(wal::WalError error)
+{
+    return DatabaseError {
+        .code = DatabaseErrorCode::WalError,
+        .message = std::move(error.message),
+    };
+}
+
 /**
  * @brief 创建命令执行结果
  * @param affected_rows 受影响的行数
@@ -93,13 +102,14 @@ executor::ExecutionResult command_result(std::size_t affected_rows)
 } // namespace
 
 DatabaseEngine::DatabaseEngine(DatabaseConfig config)
-    : filesystem_(filesystem::create_platform_filesystem())
-    , manifest_(config.data_dir, filesystem_)
+    : data_directory_(std::move(config.data_dir))
+    , filesystem_(filesystem::create_platform_filesystem())
+    , manifest_(data_directory_, filesystem_)
     , meta_store_(manifest_.meta_path(), filesystem_)
     , meta_(meta_store_)
-    , storage_(config.data_dir, filesystem_)
-    , index_engine_(config.data_dir, filesystem_)
-    , vector_index_engine_(config.data_dir / "vindexes", filesystem_)
+    , storage_(data_directory_, filesystem_)
+    , index_engine_(data_directory_, filesystem_)
+    , vector_index_engine_(data_directory_ / "vindexes", filesystem_)
 {
 }
 
@@ -135,9 +145,32 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(initialized.error())));
     }
 
+    auto opened_wal = wal::WalStore::open(data_directory_ / "wal" / "litedb.wal", filesystem_);
+    if (!opened_wal) {
+        return std::unexpected(to_database_error(std::move(opened_wal.error())));
+    }
+    wal_store_ = std::move(*opened_wal);
+
     auto loaded = meta_.load();
     if (!loaded.has_value()) {
         return std::unexpected(to_database_error(std::move(loaded.error())));
+    }
+
+    auto recovered = wal::RecoveryManager::recover(
+        data_directory_, filesystem_, *wal_store_, [this](const wal::FileTarget & target) {
+            switch (target.kind) {
+            case wal::FileKind::CollectionStore:
+                return meta_.find_collection(target.object_id) != nullptr;
+            case wal::FileKind::ScalarIndex:
+                return meta_.find_index(target.object_id) != nullptr;
+            case wal::FileKind::VectorIndex:
+                return meta_.find_vector_index(target.object_id) != nullptr;
+            }
+            return false;
+        }
+    );
+    if (!recovered) {
+        return std::unexpected(to_database_error(std::move(recovered.error())));
     }
 
     auto initialized_meta = meta_.commit(meta_.snapshot());
@@ -160,6 +193,11 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(vector_indexes_restored.error())));
     }
 
+    transaction_manager_ = std::make_unique<transaction::TransactionManager>(
+        data_directory_, filesystem_, meta_, storage_, index_engine_, vector_index_engine_, *wal_store_,
+        recovered->maximum_transaction_id
+    );
+
     return {};
 }
 
@@ -168,6 +206,14 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
 )
 {
     using physical_plan::PhysicalStatementPlanKind;
+
+    if (transaction_manager_ != nullptr && transaction_manager_->recovery_required()) {
+        return std::unexpected(executor::ExecutionError {
+            .code = executor::ExecutionErrorCode::TransactionError,
+            .location = plan.location(),
+            .message = "Database requires WAL recovery before accepting more requests",
+        });
+    }
 
     switch (plan.kind()) {
     case PhysicalStatementPlanKind::CreateDatabase:
@@ -187,7 +233,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     case PhysicalStatementPlanKind::DropVectorIndex:
         return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
     default:
-        executor::Executor executor {meta_, storage_, index_engine_, vector_index_engine_};
+        executor::Executor executor {meta_, storage_, index_engine_, vector_index_engine_, *transaction_manager_};
         return executor.execute(plan);
     }
 }

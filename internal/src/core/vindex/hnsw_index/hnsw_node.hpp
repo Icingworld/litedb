@@ -30,7 +30,7 @@ struct HnswGraphMetadata
     HnswNodeId entry_point {InvalidHnswNodeId};
     std::size_t max_level {0};
     std::size_t active_count {0};
-    std::uint64_t transaction_id {0};
+    std::uint64_t frame_sequence {0};
 };
 
 } // namespace litedb::core::vindex::hnsw_index

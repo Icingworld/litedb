@@ -6,7 +6,7 @@ Storage v2 由 `StorageEngine`、内部 `Store` 和 `StorageCursor` 组成。Exe
 
 当前同时支持内存 Store 和文件 Store。文件模式为每个 collection 创建独立的 `collections/<collection_id>.store`。旧 `.rows`/RowLog 格式不再支持，也不提供迁移。
 
-本版本不提供事务、WAL、commit/rollback、崩溃恢复、buffer pool、checkpoint 或并发读写保证。
+文件 Store 仍不直接实现事务；DML 由上层 `TransactionManager` 以隐式语句级事务协调，使用 redo-only WAL 和 no-steal staging 文件视图覆盖 Storage、B+Tree 与 HNSW。当前不提供显式 SQL 事务、MVCC、buffer pool、checkpoint、WAL 回收或并发写保证。
 
 ## 标识
 
@@ -57,4 +57,6 @@ Store 层用 `StoreError` 描述文件系统、IO、格式、版本、损坏页�
 
 StorageEngine 统一执行 value count、logical type、NULL、VARCHAR 长度和 VECTOR 维度校验。Store 只接收已经校验的记录。
 
-当前 mutation 不主动 sync，也不保证 IO 失败或进程崩溃时的原子性。未来由 TransactionEngine 负责提交顺序、WAL 和恢复协议。
+Store primitive 本身仍不主动 sync，也不单独提供原子性。正常 SQL DML 必须经过 `TransactionManager`：提交前只修改 staging 副本，物理 after-image 与 Commit Record 写入并同步 WAL 后，才覆盖正式文件并重新发布运行时状态。启动时只重放具有 Commit Record 且仍存在于 catalog 的目标；未提交事务被忽略。
+
+DDL 暂不进入 WAL。当前 meta 仍使用自己的原子快照提交协议，事务恢复会根据已加载 catalog 跳过后来被合法删除的 collection/index 目标。完整协议见 `recovery.md`。

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include "core/database/database_manifest.hpp"
@@ -16,7 +17,9 @@
 #include "core/meta/meta_store.hpp"
 #include "core/schema/schema_error.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
+#include "core/wal/wal_store.hpp"
 
 namespace litedb::core::physical_plan
 {
@@ -53,6 +56,7 @@ enum class DatabaseErrorCode
     MetaError,        ///< meta 引擎错误
     StorageError,     ///< 存储引擎错误
     IndexError,       ///< 索引引擎错误
+    WalError,         ///< WAL 或恢复错误
 };
 
 /**
@@ -266,6 +270,7 @@ private:
     );
 
 private:
+    std::filesystem::path data_directory_; ///< 数据目录
     filesystem::FileSystem filesystem_;    ///< 文件系统
     DatabaseManifest manifest_;            ///< 数据库 manifest
     meta::MetaStore meta_store_;           ///< meta 存储
@@ -273,6 +278,8 @@ private:
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
     vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎
+    std::optional<wal::WalStore> wal_store_;         ///< WAL 存储
+    std::unique_ptr<transaction::TransactionManager> transaction_manager_; ///< 事务管理器
     std::mutex mutex_;                     ///< 互斥锁
 };
 
