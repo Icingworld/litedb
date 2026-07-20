@@ -127,6 +127,15 @@ public:
     );
 
     /**
+     * @brief 暂存一次完整的 DDL catalog 快照
+     */
+    [[nodiscard]]
+    std::expected<void, TransactionError> stage_catalog(
+        TransactionContext & transaction,
+        meta::MetaSnapshot snapshot
+    );
+
+    /**
      * @brief 提交事务
      * @param transaction 事务上下文
      * @return 成功或错误
@@ -161,6 +170,12 @@ private:
      */
     [[nodiscard]]
     std::expected<wal::FileWriteBatch, TransactionError> prepare(
+        const TransactionContext & transaction,
+        const std::filesystem::path & staging_directory
+    );
+
+    [[nodiscard]]
+    std::expected<wal::FileWriteBatch, TransactionError> prepare_catalog(
         const TransactionContext & transaction,
         const std::filesystem::path & staging_directory
     );

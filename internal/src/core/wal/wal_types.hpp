@@ -17,6 +17,14 @@ enum class FileKind : std::uint8_t
     CollectionStore = 1,    ///< 集合存储
     ScalarIndex = 2,        ///< 标量索引
     VectorIndex = 3,        ///< 向量索引
+    MetaStore = 4,          ///< 元数据快照
+};
+
+enum class FileWriteMode : std::uint8_t
+{
+    Overwrite = 0,          ///< 覆盖指定范围
+    Replace = 1,            ///< 以 after-image 完整替换文件
+    Delete = 2,             ///< 删除文件
 };
 
 /**
@@ -38,6 +46,7 @@ struct FileWrite
     FileTarget target;                   ///< 文件目标
     std::uint64_t offset;                ///< 偏移量
     std::vector<std::byte> after_image;  ///< 修改后的数据
+    FileWriteMode mode {FileWriteMode::Overwrite}; ///< 文件操作模式
 };
 
 /**

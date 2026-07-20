@@ -223,6 +223,13 @@ private:
         const physical_plan::PhysicalDropVectorIndexPlan & plan
     );
 
+    [[nodiscard]]
+    std::expected<executor::ExecutionResult, executor::ExecutionError> commit_catalog_transaction(
+        meta::MetaSnapshot snapshot,
+        std::size_t affected_rows,
+        parser::ast::AstNodeLocation location
+    );
+
     /**
      * @brief 从 meta 恢复存储
      * @return 结果

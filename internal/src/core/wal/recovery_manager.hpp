@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <expected>
 #include <filesystem>
-#include <functional>
 
 #include "core/filesystem/filesystem.hpp"
 #include "core/wal/wal_store.hpp"
@@ -32,15 +31,13 @@ public:
      * @param data_directory 数据目录
      * @param filesystem 文件系统
      * @param wal WAL 存储
-     * @param is_live_target 判断目标是否仍有效的回调，可为空
      * @return 恢复结果
      */
     [[nodiscard]]
     static std::expected<RecoveryResult, WalError> recover(
         const std::filesystem::path & data_directory,
         filesystem::FileSystem & filesystem,
-        WalStore & wal,
-        std::function<bool(const FileTarget &)> is_live_target = {}
+        WalStore & wal
     );
 };
 

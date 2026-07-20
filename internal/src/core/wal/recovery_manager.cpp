@@ -11,8 +11,7 @@ namespace litedb::core::wal
 std::expected<RecoveryResult, WalError> RecoveryManager::recover(
     const std::filesystem::path & data_directory,
     filesystem::FileSystem & filesystem,
-    WalStore & wal,
-    std::function<bool(const FileTarget &)> is_live_target
+    WalStore & wal
 )
 {
     auto scanned = wal.scan(true);
@@ -79,10 +78,6 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
         if (!write) {
             return std::unexpected(std::move(write.error()));
         }
-        if (is_live_target && !is_live_target(write->target)) {
-            continue;
-        }
-
         batch.add(std::move(*write));
         ++result.replayed_writes;
     }

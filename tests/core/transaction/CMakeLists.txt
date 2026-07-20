@@ -9,3 +9,7 @@ add_test(NAME transaction_recovery_tests COMMAND transaction_recovery_tests)
 add_executable(transaction_crash_tests transaction_crash_tests.cpp)
 target_link_libraries(transaction_crash_tests PRIVATE litedb_database)
 add_test(NAME transaction_crash_tests COMMAND transaction_crash_tests)
+
+add_executable(ddl_crash_tests ddl_crash_tests.cpp)
+target_link_libraries(ddl_crash_tests PRIVATE litedb_database)
+add_test(NAME ddl_crash_tests COMMAND ddl_crash_tests)

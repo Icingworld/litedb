@@ -10,10 +10,9 @@ SQL can automatically use a matching HNSW index while retaining exact candidate
 re-ranking in the regular projection, sort, and limit pipeline.
 
 The current transaction feature branch additionally provides checksum-protected
-redo WAL and crash-consistent implicit statement transactions for DML. Each
-`INSERT`, `UPDATE`, or `DELETE` statement is one `Serializable` transaction;
-storage, persistent B+Tree indexes, and persistent HNSW indexes share the same
-commit record.
+redo WAL and crash-consistent implicit statement transactions. Each DML or DDL
+statement is one `Serializable` transaction; metadata, storage, persistent
+B+Tree indexes, and persistent HNSW indexes share the same commit record.
 
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
@@ -48,6 +47,9 @@ through `IndexEngine`.
   across collection storage, B+Tree, and HNSW files.
 - Basic `DatabaseEngine::observability()` counters for current WAL size,
   transaction counts and commit duration, and startup redo activity.
+- Transactional DDL publication for database, collection, B+Tree, and HNSW
+  lifecycle changes, including Meta snapshot redo and idempotent file replace
+  and delete operations.
 - Rule-based scalar access-path selection for supported equality and range
 predicates.
 - Basic database and collection management:
@@ -101,8 +103,8 @@ v0.6.0 is still an experimental single-node release:
 - The example server uses `litedb-data` by default; `--data-dir` selects a
   different persistent data directory.
 - Transactions are currently implicit and statement-scoped only. There is no
-  SQL `BEGIN`, `COMMIT`, or `ROLLBACK`, and DDL is not yet part of the WAL
-  transaction boundary.
+  SQL `BEGIN`, `COMMIT`, or `ROLLBACK`; DML and DDL cannot yet be grouped into a
+  caller-controlled multi-statement transaction.
 - Execution currently uses a global single writer and fixed statement-level
   `Serializable` isolation. There is no MVCC, concurrent-writer scheduling,
   lock manager, or additional isolation level.

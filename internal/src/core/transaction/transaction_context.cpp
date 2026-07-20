@@ -89,6 +89,11 @@ void TransactionContext::mark_rollback_only(std::string message)
     failure_ = TransactionFailure {.message = std::move(message)};
 }
 
+const std::optional<meta::MetaSnapshot> & TransactionContext::catalog_snapshot() const noexcept
+{
+    return catalog_snapshot_;
+}
+
 void TransactionContext::release_writer_guard() noexcept
 {
     if (writer_guard_.owns_lock()) {

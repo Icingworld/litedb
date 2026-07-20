@@ -50,6 +50,32 @@ int main()
     require(decoded && decoded->target == write.target && decoded->offset == write.offset,
             "decode file write failed");
     require(decoded->after_image == write.after_image, "file write bytes mismatch");
+    require(decoded->mode == wal::FileWriteMode::Overwrite, "legacy overwrite mode mismatch");
+
+    const wal::FileWrite replacement {
+        .target = {.kind = wal::FileKind::MetaStore, .object_id = 0},
+        .offset = 0,
+        .after_image = {std::byte {7}, std::byte {8}},
+        .mode = wal::FileWriteMode::Replace,
+    };
+    auto replacement_decoded = wal::WalCodec::decode_file_write(wal::WalCodec::encode_file_write(replacement));
+    require(replacement_decoded && replacement_decoded->mode == wal::FileWriteMode::Replace &&
+            replacement_decoded->target == replacement.target && replacement_decoded->after_image == replacement.after_image,
+            "replace operation codec mismatch");
+
+    wal::FileWriteBatch lifecycle;
+    lifecycle.add(replacement);
+    require(lifecycle.apply(directory, filesystem, true).has_value(), "replace operation apply failed");
+    require(std::filesystem::file_size(directory / "meta.lmeta") == 2, "replace operation size mismatch");
+    wal::FileWriteBatch deletion;
+    deletion.add(wal::FileWrite {
+        .target = replacement.target,
+        .offset = 0,
+        .after_image = {},
+        .mode = wal::FileWriteMode::Delete,
+    });
+    require(deletion.apply(directory, filesystem, true).has_value(), "delete operation apply failed");
+    require(!std::filesystem::exists(directory / "meta.lmeta"), "delete operation did not remove target");
 
     wal::FileWriteBatch batch;
     batch.add(write);

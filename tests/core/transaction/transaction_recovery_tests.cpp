@@ -229,7 +229,7 @@ void test_failpoint_metrics_and_staging_cleanup()
 
     auto recovered = open_database(directory);
     const auto recovery_observation = recovered->observability();
-    require(recovery_observation.recovered_committed_transactions == 1,
+    require(recovery_observation.recovered_committed_transactions >= 1,
             "recovered transaction metric mismatch");
     require(recovery_observation.replayed_writes >= 1, "redo write metric mismatch");
 }

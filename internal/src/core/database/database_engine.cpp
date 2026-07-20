@@ -140,6 +140,18 @@ const vindex::VectorIndexEngine & DatabaseEngine::vector_index_engine() const no
     return vector_index_engine_;
 }
 
+executor::ExecutionError from_transaction_error(
+    transaction::TransactionError error,
+    parser::ast::AstNodeLocation location
+)
+{
+    return executor::ExecutionError {
+        .code = executor::ExecutionErrorCode::TransactionError,
+        .location = location,
+        .message = "Transaction " + std::to_string(error.transaction_id) + ": " + std::move(error.message),
+    };
+}
+
 DatabaseObservability DatabaseEngine::observability() const noexcept
 {
     return DatabaseObservability {
@@ -182,29 +194,17 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
     }
     wal_store_ = std::move(*opened_wal);
 
-    auto loaded = meta_.load();
-    if (!loaded.has_value()) {
-        return std::unexpected(to_database_error(std::move(loaded.error())));
-    }
-
-    auto recovered = wal::RecoveryManager::recover(
-        data_directory_, filesystem_, *wal_store_, [this](const wal::FileTarget & target) {
-            switch (target.kind) {
-            case wal::FileKind::CollectionStore:
-                return meta_.find_collection(target.object_id) != nullptr;
-            case wal::FileKind::ScalarIndex:
-                return meta_.find_index(target.object_id) != nullptr;
-            case wal::FileKind::VectorIndex:
-                return meta_.find_vector_index(target.object_id) != nullptr;
-            }
-            return false;
-        }
-    );
+    auto recovered = wal::RecoveryManager::recover(data_directory_, filesystem_, *wal_store_);
     if (!recovered) {
         return std::unexpected(to_database_error(std::move(recovered.error())));
     }
     recovered_committed_transactions_ = recovered->committed_transactions;
     replayed_writes_ = recovered->replayed_writes;
+
+    auto loaded = meta_.load();
+    if (!loaded.has_value()) {
+        return std::unexpected(to_database_error(std::move(loaded.error())));
+    }
 
     auto initialized_meta = meta_.commit(meta_.snapshot());
     if (!initialized_meta.has_value()) {
@@ -271,6 +271,24 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
 }
 
+std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::commit_catalog_transaction(
+    meta::MetaSnapshot snapshot,
+    std::size_t affected_rows,
+    parser::ast::AstNodeLocation location
+)
+{
+    auto transaction = transaction_manager_->begin_implicit();
+    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error()), location));
+    auto staged = transaction_manager_->stage_catalog(*transaction, std::move(snapshot));
+    if (!staged) {
+        (void) transaction_manager_->abort(*transaction);
+        return std::unexpected(from_transaction_error(std::move(staged.error()), location));
+    }
+    auto committed = transaction_manager_->commit(*transaction);
+    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error()), location));
+    return command_result(affected_rows);
+}
+
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_database(
     const physical_plan::PhysicalCreateDatabasePlan & plan
 )
@@ -290,13 +308,8 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     if (!created.has_value()) {
         return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
-
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    return command_result(existed ? 0 : 1);
+    if (existed) return command_result(0);
+    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_collection(
@@ -327,22 +340,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
-    auto collection_schema = schema::load_collection_schema(staged, collection_id);
-    if (!collection_schema.has_value()) {
-        return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
-    }
-
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    auto storage_created = storage_.create_collection(std::move(collection_schema.value()));
-    if (!storage_created.has_value()) {
-        return std::unexpected(from_storage_error(std::move(storage_created.error()), plan.location()));
-    }
-
-    return command_result(1);
+    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_index(
@@ -373,40 +371,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
-    const auto * index_entry = staged.find_index(created.value());
-    if (index_entry == nullptr) {
-        return std::unexpected(executor::ExecutionError {
-            .code = executor::ExecutionErrorCode::MetaError,
-            .location = plan.location(),
-            .message = "Created index metadata not found",
-        });
-    }
-
-    auto collection_schema = schema::load_collection_schema(staged, plan.collection_id());
-    if (!collection_schema.has_value()) {
-        return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
-    }
-
-    if (!storage_.contains_collection(plan.collection_id())) {
-        return std::unexpected(executor::ExecutionError {
-            .code = executor::ExecutionErrorCode::CollectionNotFound,
-            .location = plan.location(),
-            .message = "Collection storage not found",
-        });
-    }
-
-    auto runtime_created = index_engine_.create_index(*index_entry, collection_schema.value(), storage_);
-    if (!runtime_created.has_value()) {
-        return std::unexpected(from_index_error(std::move(runtime_created.error()), plan.location()));
-    }
-
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        (void) index_engine_.drop_index(index_entry->id());
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    return command_result(1);
+    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_vector_index(
@@ -443,30 +408,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
-    const auto * vector_entry = staged.find_vector_index(created.value());
-    if (vector_entry == nullptr) {
-        return std::unexpected(executor::ExecutionError {
-            .code = executor::ExecutionErrorCode::MetaError,
-            .location = plan.location(),
-            .message = "Created vector index metadata not found",
-        });
-    }
-    auto collection_schema = schema::load_collection_schema(staged, plan.collection_id());
-    if (!collection_schema) {
-        return std::unexpected(from_schema_error(std::move(collection_schema.error()), plan.location()));
-    }
-    auto runtime_created = vector_index_engine_.create_index(*vector_entry, *collection_schema, storage_);
-    if (!runtime_created) {
-        return std::unexpected(from_vector_index_error(std::move(runtime_created.error()), plan.location()));
-    }
-
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        (void) vector_index_engine_.drop_index(vector_entry->id());
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    return command_result(1);
+    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_database(
@@ -475,15 +417,6 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
 {
     if (!plan.database_id().has_value()) {
         return command_result(0);
-    }
-
-    const auto collections = meta_.list_collections(plan.database_id().value());
-    std::vector<common::CollectionId> collection_ids;
-    collection_ids.reserve(collections.size());
-    for (const auto * collection : collections) {
-        if (collection != nullptr) {
-            collection_ids.push_back(collection->id());
-        }
     }
 
     meta::MetaEngine staged;
@@ -500,26 +433,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    for (const auto collection_id : collection_ids) {
-        if (storage_.contains_collection(collection_id)) {
-            (void) storage_.drop_collection(collection_id);
-        }
-        auto indexes_dropped = index_engine_.drop_collection_indexes(collection_id);
-        if (!indexes_dropped.has_value()) {
-            return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
-        }
-        auto vector_indexes_dropped = vector_index_engine_.drop_collection_indexes(collection_id);
-        if (!vector_indexes_dropped) {
-            return std::unexpected(from_vector_index_error(std::move(vector_indexes_dropped.error()), plan.location()));
-        }
-    }
-
-    return command_result(1);
+    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_collection(
@@ -545,25 +459,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    const auto collection_id = plan.collection_id().value();
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    if (storage_.contains_collection(collection_id)) {
-        (void) storage_.drop_collection(collection_id);
-    }
-    auto indexes_dropped = index_engine_.drop_collection_indexes(collection_id);
-    if (!indexes_dropped.has_value()) {
-        return std::unexpected(from_index_error(std::move(indexes_dropped.error()), plan.location()));
-    }
-    auto vector_indexes_dropped = vector_index_engine_.drop_collection_indexes(collection_id);
-    if (!vector_indexes_dropped) {
-        return std::unexpected(from_vector_index_error(std::move(vector_indexes_dropped.error()), plan.location()));
-    }
-
-    return command_result(1);
+    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_index(
@@ -574,8 +470,6 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
-    const auto index_id = existing != nullptr ? std::optional<common::IndexId> {existing->id()} : std::nullopt;
-
     meta::MetaEngine staged;
     auto restored = staged.restore(meta_.snapshot());
     if (!restored.has_value()) {
@@ -591,19 +485,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    if (index_id.has_value()) {
-        auto dropped_index = index_engine_.drop_index(index_id.value());
-        if (!dropped_index.has_value() && dropped_index.error().code != index::IndexErrorCode::IndexNotFound) {
-            return std::unexpected(from_index_error(std::move(dropped_index.error()), plan.location()));
-        }
-    }
-
-    return command_result(existing == nullptr ? 0 : 1);
+    return commit_catalog_transaction(staged.snapshot(), existing == nullptr ? 0 : 1, plan.location());
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_vector_index(
@@ -614,8 +496,6 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
-
-    const auto index_id = existing != nullptr ? std::optional<common::VIndexId> {existing->id()} : std::nullopt;
 
     meta::MetaEngine staged;
     auto restored = staged.restore(meta_.snapshot());
@@ -632,19 +512,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
     }
 
-    auto committed = meta_.commit(staged.snapshot());
-    if (!committed.has_value()) {
-        return std::unexpected(from_meta_error(std::move(committed.error()), plan.location()));
-    }
-
-    if (index_id) {
-        auto runtime_dropped = vector_index_engine_.drop_index(*index_id);
-        if (!runtime_dropped && runtime_dropped.error().code != vindex::VectorIndexErrorCode::IndexNotFound) {
-            return std::unexpected(from_vector_index_error(std::move(runtime_dropped.error()), plan.location()));
-        }
-    }
-
-    return command_result(existing == nullptr ? 0 : 1);
+    return commit_catalog_transaction(staged.snapshot(), existing == nullptr ? 0 : 1, plan.location());
 }
 
 std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_meta()

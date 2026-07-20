@@ -146,6 +146,12 @@ std::expected<transaction::Lsn, WalError> WalStore::append_write(
     const FileWrite & write
 )
 {
+    if ((write.target.kind == FileKind::MetaStore && write.target.object_id != 0) ||
+        (write.target.kind != FileKind::MetaStore && write.target.object_id == 0) ||
+        (write.mode == FileWriteMode::Replace && write.offset != 0) ||
+        (write.mode == FileWriteMode::Delete && (write.offset != 0 || !write.after_image.empty()))) {
+        return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Invalid WAL file operation"));
+    }
     auto payload = WalCodec::encode_file_write(write);
     return append(WalRecordType::FileWrite, transaction_id, payload);
 }

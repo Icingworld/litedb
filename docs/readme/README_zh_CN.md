@@ -59,7 +59,7 @@
 v0.6.0 仍然是实验性的单机版本：
 
 - 示例服务端默认使用 `litedb-data`，可通过 `--data-dir` 指定其他持久化数据目录。
-- DML 已使用 checksum WAL 和 crash-consistent 的隐式语句级提交协议；DDL 尚未纳入同一事务边界。
+- DML 与 DDL 均使用 checksum WAL 和 crash-consistent 的隐式语句级提交协议；Meta、Storage、B+Tree 与 HNSW 共享同一 Commit Record。
 - 当前固定为全局单写者、语句级 Serializable；尚无显式事务、MVCC、细粒度锁、checkpoint、WAL 回收或 compaction。
 - 不支持 SQL 连接（join）、子查询、聚合、`GROUP BY` 或完整 SQL 兼容性。
 - 优化器目前基于规则，尚无统计信息、基数估算，也不会通过代价模型比较 SeqScan、B+Tree 和 HNSW 访问路径。
@@ -273,7 +273,7 @@ v0.6.0 之后的近期计划：
 
 - 引入统计信息、基数估算，以及在 SeqScan、B+Tree、HNSW 之间进行选择的代价模型。
 - 增加 `EXPLAIN` 和显式索引维护/重建命令。
-- 将 DDL 纳入 WAL，增加 checkpoint、WAL 回收、更多数据 checksum、compaction 和文件格式版本管理。
+- 增加 checkpoint、WAL 回收、更多数据 checksum、compaction 和文件格式版本管理。
 - 支持显式事务、MVCC/更多隔离级别，以及 join、子查询、聚合和 `GROUP BY` 等更完整的 SQL 能力。
 - 继续优化 HNSW 性能，增加更大规模的召回率基准、tombstone 清理和查询级搜索参数。
 

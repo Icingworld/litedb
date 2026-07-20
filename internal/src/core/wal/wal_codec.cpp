@@ -178,6 +178,7 @@ std::vector<std::byte> WalCodec::encode_file_write(const FileWrite & write)
 {
     std::vector<std::byte> payload(24 + write.after_image.size());
     write_number(payload.data(), static_cast<std::uint8_t>(write.target.kind));
+    write_number(payload.data() + 1, static_cast<std::uint8_t>(write.mode));
     write_number(payload.data() + 8, write.target.object_id);
     write_number(payload.data() + 16, write.offset);
     std::copy(write.after_image.begin(), write.after_image.end(), payload.begin() + 24);
@@ -187,7 +188,7 @@ std::vector<std::byte> WalCodec::encode_file_write(const FileWrite & write)
 std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const std::byte> payload)
 {
     if (payload.size() < 24 ||
-        std::any_of(payload.begin() + 1, payload.begin() + 8, [](std::byte value) {
+        std::any_of(payload.begin() + 2, payload.begin() + 8, [](std::byte value) {
             return value != std::byte {0};
         })) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload"));
@@ -195,17 +196,31 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const s
 
     const auto kind_value = read_number<std::uint8_t>(payload.data());
     if (kind_value < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
-        kind_value > static_cast<std::uint8_t>(FileKind::VectorIndex)) {
+        kind_value > static_cast<std::uint8_t>(FileKind::MetaStore)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
+    }
+    const auto mode_value = read_number<std::uint8_t>(payload.data() + 1);
+    if (mode_value > static_cast<std::uint8_t>(FileWriteMode::Delete)) {
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file-write mode"));
+    }
+    const auto mode = static_cast<FileWriteMode>(mode_value);
+    const auto offset = read_number<std::uint64_t>(payload.data() + 16);
+    const auto object_id = read_number<std::uint64_t>(payload.data() + 8);
+    if ((mode == FileWriteMode::Replace && offset != 0) ||
+        (mode == FileWriteMode::Delete && (offset != 0 || payload.size() != 24)) ||
+        (kind_value == static_cast<std::uint8_t>(FileKind::MetaStore) && object_id != 0) ||
+        (kind_value != static_cast<std::uint8_t>(FileKind::MetaStore) && object_id == 0)) {
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation"));
     }
 
     return FileWrite {
         .target = FileTarget {
             .kind = static_cast<FileKind>(kind_value),
-            .object_id = read_number<std::uint64_t>(payload.data() + 8),
+            .object_id = object_id,
         },
-        .offset = read_number<std::uint64_t>(payload.data() + 16),
+        .offset = offset,
         .after_image = std::vector<std::byte>(payload.begin() + 24, payload.end()),
+        .mode = mode,
     };
 }
 

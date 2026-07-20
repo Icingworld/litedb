@@ -55,6 +55,9 @@ std::expected<std::vector<std::byte>, WalError> FileWriteBatch::read(
         if (write.target != target) {
             continue;
         }
+        if (write.mode == FileWriteMode::Delete) {
+            return std::unexpected(make_error(WalErrorCode::MissingTarget, "WAL overlay target was deleted"));
+        }
 
         const auto write_end = write.offset + write.after_image.size();
         if (write_end < write.offset || write.offset >= end || write_end <= offset) {
@@ -84,6 +87,8 @@ std::filesystem::path FileWriteBatch::resolve_target(
         return data_directory / "indexes" / (std::to_string(target.object_id) + ".bti");
     case FileKind::VectorIndex:
         return data_directory / "vindexes" / ("vindex_" + std::to_string(target.object_id) + ".lhnsw");
+    case FileKind::MetaStore:
+        return data_directory / "meta.lmeta";
     }
     return {};
 }
@@ -100,18 +105,24 @@ std::expected<void, WalError> FileWriteBatch::apply(
         if (!exists) {
             return std::unexpected(fs_error(std::move(exists.error())));
         }
-        if (!*exists) {
-            return std::unexpected(make_error(
-                WalErrorCode::MissingTarget,
-                "Committed WAL target is missing: " + path.string()
-            ));
+        if (write.mode == FileWriteMode::Delete) {
+            if (*exists) {
+                auto removed = filesystem.remove(path);
+                if (!removed) return std::unexpected(fs_error(std::move(removed.error())));
+            }
+            continue;
         }
+
+        auto parent_created = filesystem.create_dir_all(path.parent_path());
+        if (!parent_created) return std::unexpected(fs_error(std::move(parent_created.error())));
 
         auto file = filesystem.open(
             path,
             {
                 filesystem::backend::FileAccess::ReadWrite,
-                filesystem::backend::FileCreateMode::OpenExisting,
+                write.mode == FileWriteMode::Replace
+                    ? filesystem::backend::FileCreateMode::CreateOrTruncate
+                    : filesystem::backend::FileCreateMode::OpenOrCreate,
             }
         );
         if (!file) {
@@ -121,6 +132,10 @@ std::expected<void, WalError> FileWriteBatch::apply(
         auto written = file->write_at(write.offset, write.after_image);
         if (!written) {
             return std::unexpected(fs_error(std::move(written.error())));
+        }
+        if (write.mode == FileWriteMode::Replace) {
+            auto truncated = file->truncate(write.after_image.size());
+            if (!truncated) return std::unexpected(fs_error(std::move(truncated.error())));
         }
         if (sync) {
             auto synced = file->sync_data();
