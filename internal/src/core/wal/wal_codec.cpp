@@ -3,33 +3,52 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <string>
 
 namespace litedb::core::wal
 {
+
 namespace
 {
-constexpr std::uint32_t FileMagic = 0x4c57444cU;   // LDWL
-constexpr std::uint32_t RecordMagic = 0x3152574cU; // LWR1
+
+constexpr std::uint32_t FileMagic = 0x4c57444cU;    // LDWL
+constexpr std::uint32_t RecordMagic = 0x3152574cU;  // LWR1
 constexpr std::uint16_t Version = 1;
 
+/**
+ * @brief 写入数字
+ * @param target 目标数据
+ * @param value 数字
+ */
 template <typename T>
 void write_number(std::byte * target, T value) noexcept
 {
     for (std::size_t index = 0; index < sizeof(T); ++index) {
-        target[index] = static_cast<std::byte>((value >> (index * 8U)) & static_cast<T>(0xff));
+        target[index] = static_cast<std::byte>((value >> (index * 8U)) & static_cast<T>(0xffU));
     }
 }
 
+/**
+ * @brief 读取数字
+ * @param source 源数据
+ * @return 数字
+ */
 template <typename T>
 T read_number(const std::byte * source) noexcept
 {
-    T value {0};
+    T value {};
     for (std::size_t index = 0; index < sizeof(T); ++index) {
         value |= static_cast<T>(std::to_integer<std::uint8_t>(source[index])) << (index * 8U);
     }
     return value;
 }
 
+/**
+ * @brief 计算 CRC32
+ * @param bytes 字节数据
+ * @return 校验和
+ */
+[[nodiscard]]
 std::uint32_t crc32(std::span<const std::byte> bytes) noexcept
 {
     std::uint32_t crc = 0xffffffffU;
@@ -43,16 +62,18 @@ std::uint32_t crc32(std::span<const std::byte> bytes) noexcept
     return ~crc;
 }
 
-WalError error(WalErrorCode code, std::string message)
-{
-    return WalError {.code = code, .message = std::move(message)};
-}
-
+/**
+ * @brief 判断记录类型是否有效
+ * @param value 类型值
+ * @return 是否有效
+ */
+[[nodiscard]]
 bool valid_type(std::uint8_t value) noexcept
 {
     return value >= static_cast<std::uint8_t>(WalRecordType::Begin) &&
            value <= static_cast<std::uint8_t>(WalRecordType::Commit);
 }
+
 } // namespace
 
 WalCodec::FileHeader WalCodec::encode_file_header() noexcept
@@ -67,14 +88,14 @@ WalCodec::FileHeader WalCodec::encode_file_header() noexcept
 std::expected<void, WalError> WalCodec::decode_file_header(std::span<const std::byte> bytes)
 {
     if (bytes.size() != FileHeaderSize || read_number<std::uint32_t>(bytes.data()) != FileMagic) {
-        return std::unexpected(error(WalErrorCode::InvalidFormat, "Invalid WAL file header"));
+        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header"));
     }
     if (read_number<std::uint16_t>(bytes.data() + 4) != Version) {
-        return std::unexpected(error(WalErrorCode::UnsupportedVersion, "Unsupported WAL version"));
+        return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL version"));
     }
     if (read_number<std::uint16_t>(bytes.data() + 6) != FileHeaderSize ||
         std::any_of(bytes.begin() + 8, bytes.end(), [](std::byte value) { return value != std::byte {0}; })) {
-        return std::unexpected(error(WalErrorCode::InvalidFormat, "Invalid WAL file header fields"));
+        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header fields"));
     }
     return {};
 }
@@ -86,10 +107,12 @@ std::expected<std::vector<std::byte>, WalError> WalCodec::encode_record(
     std::span<const std::byte> payload
 )
 {
-    if (!valid_type(static_cast<std::uint8_t>(type)) || transaction_id == transaction::InvalidTransactionId ||
+    if (!valid_type(static_cast<std::uint8_t>(type)) ||
+        transaction_id == transaction::InvalidTransactionId ||
         payload.size() > std::numeric_limits<std::uint32_t>::max()) {
-        return std::unexpected(error(WalErrorCode::InvalidRecord, "Invalid WAL record"));
+        return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Invalid WAL record"));
     }
+
     const auto total_size = RecordHeaderSize + payload.size();
     std::vector<std::byte> encoded(total_size);
     write_number(encoded.data(), RecordMagic);
@@ -113,29 +136,36 @@ std::expected<WalRecord, WalError> WalCodec::decode_record(
 )
 {
     if (bytes.size() < RecordHeaderSize || read_number<std::uint32_t>(bytes.data()) != RecordMagic) {
-        return std::unexpected(error(WalErrorCode::CorruptedRecord, "Invalid WAL record header"));
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record header"));
     }
     if (read_number<std::uint16_t>(bytes.data() + 4) != Version) {
-        return std::unexpected(error(WalErrorCode::UnsupportedVersion, "Unsupported WAL record version"));
+        return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL record version"));
     }
+
     const auto type_value = read_number<std::uint8_t>(bytes.data() + 6);
     const auto total_size = read_number<std::uint64_t>(bytes.data() + 8);
     const auto payload_size = read_number<std::uint64_t>(bytes.data() + 32);
-    if (!valid_type(type_value) || read_number<std::uint8_t>(bytes.data() + 7) != 0 ||
-        read_number<std::uint32_t>(bytes.data() + 44) != 0 || total_size != bytes.size() ||
-        payload_size != bytes.size() - RecordHeaderSize || read_number<transaction::Lsn>(bytes.data() + 16) != expected_lsn) {
-        return std::unexpected(error(WalErrorCode::CorruptedRecord, "Invalid WAL record fields"));
+    if (!valid_type(type_value) ||
+        read_number<std::uint8_t>(bytes.data() + 7) != 0 ||
+        read_number<std::uint32_t>(bytes.data() + 44) != 0 ||
+        total_size != bytes.size() ||
+        payload_size != bytes.size() - RecordHeaderSize ||
+        read_number<transaction::Lsn>(bytes.data() + 16) != expected_lsn) {
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record fields"));
     }
+
     auto checked = std::vector<std::byte>(bytes.begin(), bytes.end());
     const auto stored_checksum = read_number<std::uint32_t>(checked.data() + 40);
     write_number(checked.data() + 40, static_cast<std::uint32_t>(0));
     if (stored_checksum != crc32(checked)) {
-        return std::unexpected(error(WalErrorCode::CorruptedRecord, "WAL record checksum mismatch"));
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record checksum mismatch"));
     }
+
     const auto transaction_id = read_number<transaction::TransactionId>(bytes.data() + 24);
     if (transaction_id == transaction::InvalidTransactionId) {
-        return std::unexpected(error(WalErrorCode::CorruptedRecord, "WAL record has invalid transaction ID"));
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record has invalid transaction ID"));
     }
+
     return WalRecord {
         .type = static_cast<WalRecordType>(type_value),
         .lsn = expected_lsn,
@@ -157,14 +187,18 @@ std::vector<std::byte> WalCodec::encode_file_write(const FileWrite & write)
 std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const std::byte> payload)
 {
     if (payload.size() < 24 ||
-        std::any_of(payload.begin() + 1, payload.begin() + 8, [](std::byte value) { return value != std::byte {0}; })) {
-        return std::unexpected(error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload"));
+        std::any_of(payload.begin() + 1, payload.begin() + 8, [](std::byte value) {
+            return value != std::byte {0};
+        })) {
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload"));
     }
+
     const auto kind_value = read_number<std::uint8_t>(payload.data());
     if (kind_value < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
         kind_value > static_cast<std::uint8_t>(FileKind::VectorIndex)) {
-        return std::unexpected(error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
     }
+
     return FileWrite {
         .target = FileTarget {
             .kind = static_cast<FileKind>(kind_value),

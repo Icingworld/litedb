@@ -9,49 +9,67 @@
 namespace litedb::core::wal
 {
 
+/**
+ * @brief 文件目标类型
+ */
 enum class FileKind : std::uint8_t
 {
-    CollectionStore = 1,
-    ScalarIndex = 2,
-    VectorIndex = 3,
+    CollectionStore = 1,    ///< 集合存储
+    ScalarIndex = 2,        ///< 标量索引
+    VectorIndex = 3,        ///< 向量索引
 };
 
+/**
+ * @brief 文件写入目标
+ */
 struct FileTarget
 {
-    FileKind kind;
-    std::uint64_t object_id;
+    FileKind kind;           ///< 文件类型
+    std::uint64_t object_id; ///< 对象 ID
 
     friend bool operator==(const FileTarget &, const FileTarget &) = default;
 };
 
+/**
+ * @brief 文件写入记录
+ */
 struct FileWrite
 {
-    FileTarget target;
-    std::uint64_t offset;
-    std::vector<std::byte> after_image;
+    FileTarget target;                   ///< 文件目标
+    std::uint64_t offset;                ///< 偏移量
+    std::vector<std::byte> after_image;  ///< 修改后的数据
 };
 
+/**
+ * @brief WAL 记录类型
+ */
 enum class WalRecordType : std::uint8_t
 {
-    Begin = 1,
-    FileWrite = 2,
-    Commit = 3,
+    Begin = 1,        ///< 开始
+    FileWrite = 2,    ///< 文件写入
+    Commit = 3,       ///< 提交
 };
 
+/**
+ * @brief WAL 记录
+ */
 struct WalRecord
 {
-    WalRecordType type;
-    transaction::Lsn lsn;
-    transaction::TransactionId transaction_id;
-    std::vector<std::byte> payload;
+    WalRecordType type;                         ///< 记录类型
+    transaction::Lsn lsn;                       ///< 日志序列号
+    transaction::TransactionId transaction_id;  ///< 事务 ID
+    std::vector<std::byte> payload;             ///< 负载数据
 };
 
+/**
+ * @brief WAL 扫描结果
+ */
 struct WalScanResult
 {
-    std::vector<WalRecord> records;
-    std::uint64_t valid_size;
-    bool truncated_tail {false};
-    transaction::TransactionId maximum_transaction_id {transaction::InvalidTransactionId};
+    std::vector<WalRecord> records;             ///< 记录
+    std::uint64_t valid_size;                   ///< 有效大小
+    bool truncated_tail {false};                ///< 是否截断尾部
+    transaction::TransactionId maximum_transaction_id {transaction::InvalidTransactionId}; ///< 最大事务 ID
 };
 
 } // namespace litedb::core::wal

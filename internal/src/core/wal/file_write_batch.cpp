@@ -1,25 +1,42 @@
 #include "core/wal/file_write_batch.hpp"
 
 #include <algorithm>
-#include <limits>
-#include <unordered_map>
 #include <utility>
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
 
 namespace litedb::core::wal
 {
+
 namespace
 {
-WalError filesystem_error(filesystem::FileSystemError error)
+
+/**
+ * @brief 从文件系统错误创建 WAL 错误
+ * @param value 文件系统错误
+ * @return WAL 错误
+ */
+[[nodiscard]]
+WalError fs_error(filesystem::FileSystemError value)
 {
-    return WalError {.code = WalErrorCode::FileSystemError, .message = std::move(error.message)};
+    return make_error(WalErrorCode::FileSystemError, std::move(value.message));
 }
+
 } // namespace
 
 void FileWriteBatch::add(FileWrite write)
 {
     writes_.push_back(std::move(write));
+}
+
+const std::vector<FileWrite> & FileWriteBatch::writes() const noexcept
+{
+    return writes_;
+}
+
+bool FileWriteBatch::empty() const noexcept
+{
+    return writes_.empty();
 }
 
 std::expected<std::vector<std::byte>, WalError> FileWriteBatch::read(
@@ -31,12 +48,19 @@ std::expected<std::vector<std::byte>, WalError> FileWriteBatch::read(
     std::vector<std::byte> result(base.begin(), base.end());
     const auto end = offset + result.size();
     if (end < offset) {
-        return std::unexpected(WalError {WalErrorCode::InvalidRecord, "FileWriteBatch read range overflows"});
+        return std::unexpected(make_error(WalErrorCode::InvalidRecord, "FileWriteBatch read range overflows"));
     }
+
     for (const auto & write : writes_) {
-        if (write.target != target) continue;
+        if (write.target != target) {
+            continue;
+        }
+
         const auto write_end = write.offset + write.after_image.size();
-        if (write_end < write.offset || write.offset >= end || write_end <= offset) continue;
+        if (write_end < write.offset || write.offset >= end || write_end <= offset) {
+            continue;
+        }
+
         const auto overlap_begin = std::max(offset, write.offset);
         const auto overlap_end = std::min(end, write_end);
         std::copy(
@@ -70,26 +94,40 @@ std::expected<void, WalError> FileWriteBatch::apply(
     bool sync
 ) const
 {
-    std::vector<std::filesystem::path> touched;
     for (const auto & write : writes_) {
         const auto path = resolve_target(data_directory, write.target);
         auto exists = filesystem.exists(path);
-        if (!exists) return std::unexpected(filesystem_error(std::move(exists.error())));
-        if (!*exists) {
-            return std::unexpected(WalError {WalErrorCode::MissingTarget, "Committed WAL target is missing: " + path.string()});
+        if (!exists) {
+            return std::unexpected(fs_error(std::move(exists.error())));
         }
-        auto file = filesystem.open(path, filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
-        });
-        if (!file) return std::unexpected(filesystem_error(std::move(file.error())));
+        if (!*exists) {
+            return std::unexpected(make_error(
+                WalErrorCode::MissingTarget,
+                "Committed WAL target is missing: " + path.string()
+            ));
+        }
+
+        auto file = filesystem.open(
+            path,
+            {
+                filesystem::backend::FileAccess::ReadWrite,
+                filesystem::backend::FileCreateMode::OpenExisting,
+            }
+        );
+        if (!file) {
+            return std::unexpected(fs_error(std::move(file.error())));
+        }
+
         auto written = file->write_at(write.offset, write.after_image);
-        if (!written) return std::unexpected(filesystem_error(std::move(written.error())));
+        if (!written) {
+            return std::unexpected(fs_error(std::move(written.error())));
+        }
         if (sync) {
             auto synced = file->sync_data();
-            if (!synced) return std::unexpected(filesystem_error(std::move(synced.error())));
+            if (!synced) {
+                return std::unexpected(fs_error(std::move(synced.error())));
+            }
         }
-        touched.push_back(path);
     }
     return {};
 }
