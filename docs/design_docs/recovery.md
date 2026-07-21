@@ -8,7 +8,7 @@
 
 `TransactionContext` 保存 TransactionId、状态、LSN、逻辑 row write set，以及可选的提交后 MetaSnapshot。Executor 必须先计算整条 DML 的所有目标行；DatabaseEngine 则先在无持久化的 MetaEngine 中生成 DDL 提交后快照，再交给 `TransactionManager`。
 
-第一版使用 `.transactions/txn_<id>/` staging 数据目录作为事务文件视图：复制现有 collection/index 文件，在隔离目录中复用当前 Storage、B+Tree 和 HNSW 算法，随后比较正式文件与 staging 文件，生成稳定 offset 的物理 after-image。提交前不会修改正式参与者文件。staging 是正确性优先的 MVP 后端，未来可以替换为内存 page overlay，而不改变 WAL 和恢复协议。
+第一版使用 `.transactions/txn_<id>/` staging 数据目录作为事务文件视图。DML 只复制 write set 涉及的 collection 文件及该 collection 的 B+Tree、持久化 HNSW 文件，在隔离目录中按 collection 打开参与者并复用当前算法；未受影响 collection 的文件不会进入 staging。随后比较正式文件与 staging 文件，生成稳定 offset 的物理 after-image。提交前不会修改正式参与者文件。staging 是正确性优先的 MVP 后端，未来可以替换为内存 page overlay，而不改变 WAL 和恢复协议。
 
 DDL 在 staging 中持久化新的 MetaSnapshot，并按提交后 catalog 创建或验证 collection、B+Tree 与 HNSW 文件。catalog 中消失的对象生成幂等 Delete 操作；新增或变化的对象生成完整 Replace after-image。
 
@@ -42,7 +42,7 @@ LSN 是 record 在当前 WAL 段中的字节偏移；第一版不允许事务跨
 4. 将 WAL 同步到 Commit LSN；
 5. 将事务标记为 Committed；
 6. 覆盖正式参与者文件；
-7. 发布 Meta，并重新打开 Storage、B+Tree 和 HNSW 运行时状态。
+7. DML 只重新打开受影响 collection 的 Storage、B+Tree 和 HNSW 运行时状态；DDL 发布 Meta 后仍执行全量运行时恢复。
 
 Commit WAL 同步前失败时丢弃 staging。Commit durable 后不允许 rollback；正式文件应用或运行时重新加载失败时，数据库进入 `RecoveryRequired` 并拒绝后续请求。
 

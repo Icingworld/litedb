@@ -233,6 +233,77 @@ void test_failpoint_metrics_and_staging_cleanup()
             "recovered transaction metric mismatch");
     require(recovery_observation.replayed_writes >= 1, "redo write metric mismatch");
 }
+
+void test_dml_staging_is_scoped_to_affected_collection()
+{
+    const auto directory = temp_dir("litedb_transaction_scoped_staging");
+    common::CollectionId users_id {0};
+    common::CollectionId audit_id {0};
+    common::IndexId users_index_id {0};
+    common::IndexId audit_index_id {0};
+    common::VIndexId users_vector_id {0};
+    common::VIndexId audit_vector_id {0};
+    {
+        auto engine = open_database(directory);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        execute_ok(session, "CREATE COLLECTION users (id BIGINT, embedding VECTOR(2));");
+        execute_ok(session, "CREATE COLLECTION audit (id BIGINT, embedding VECTOR(2));");
+        execute_ok(session, "CREATE INDEX idx_users_id ON users (id) USING BTREE;");
+        execute_ok(session, "CREATE INDEX idx_audit_id ON audit (id) USING BTREE;");
+        execute_ok(session, "CREATE VINDEX vidx_users ON users (embedding) USING HNSW;");
+        execute_ok(session, "CREATE VINDEX vidx_audit ON audit (embedding) USING HNSW;");
+        execute_ok(session, "INSERT INTO users VALUES (1, [1.0, 0.0]);");
+        execute_ok(session, "INSERT INTO audit VALUES (2, [0.0, 1.0]);");
+
+        const auto * database_entry = engine->meta().find_database("demo");
+        require(database_entry != nullptr, "scoped staging database missing");
+        const auto * users = engine->meta().find_collection(database_entry->id(), "users");
+        const auto * audit = engine->meta().find_collection(database_entry->id(), "audit");
+        require(users != nullptr && audit != nullptr, "scoped staging collections missing");
+        users_id = users->id();
+        audit_id = audit->id();
+        users_index_id = engine->meta().find_index(users_id, "idx_users_id")->id();
+        audit_index_id = engine->meta().find_index(audit_id, "idx_audit_id")->id();
+        users_vector_id = engine->meta().find_vector_index(users_id, "vidx_users")->id();
+        audit_vector_id = engine->meta().find_vector_index(audit_id, "vidx_audit")->id();
+    }
+
+    bool inspected = false;
+    transaction::TransactionOptions options {
+        .commit_stage_hook = [&](transaction::CommitStage stage, transaction::TransactionId transaction_id) {
+            if (stage != transaction::CommitStage::AfterPrepare) return false;
+            inspected = true;
+            const auto staging = directory / ".transactions" / ("txn_" + std::to_string(transaction_id));
+            require(std::filesystem::exists(staging / "collections" / (std::to_string(users_id) + ".store")),
+                    "affected collection was not staged");
+            require(std::filesystem::exists(staging / "indexes" / (std::to_string(users_index_id) + ".bti")),
+                    "affected scalar index was not staged");
+            require(std::filesystem::exists(staging / "vindexes" / ("vindex_" + std::to_string(users_vector_id) + ".lhnsw")),
+                    "affected vector index was not staged");
+            require(!std::filesystem::exists(staging / "collections" / (std::to_string(audit_id) + ".store")),
+                    "unrelated collection was staged");
+            require(!std::filesystem::exists(staging / "indexes" / (std::to_string(audit_index_id) + ".bti")),
+                    "unrelated scalar index was staged");
+            require(!std::filesystem::exists(staging / "vindexes" / ("vindex_" + std::to_string(audit_vector_id) + ".lhnsw")),
+                    "unrelated vector index was staged");
+            return false;
+        },
+    };
+    auto engine = open_database(directory, std::move(options));
+    database::Session session {*engine};
+    execute_ok(session, "USE demo;");
+    execute_ok(session, "UPDATE users SET id = 3 WHERE id = 1;");
+    require(inspected, "scoped staging hook was not reached");
+
+    auto users = execute_ok(session, "SELECT id FROM users;");
+    auto audit = execute_ok(session, "SELECT id FROM audit;");
+    require(users.rows.size() == 1 && std::get<std::int64_t>(users.rows[0].values[0].data()) == 3,
+            "affected collection runtime was not refreshed");
+    require(audit.rows.size() == 1 && std::get<std::int64_t>(audit.rows[0].values[0].data()) == 2,
+            "unrelated collection runtime changed");
+}
 }
 
 int main()
@@ -240,5 +311,6 @@ int main()
     test_multi_row_update_is_atomic();
     test_committed_wal_redoes_all_participants_and_ignores_loser();
     test_failpoint_metrics_and_staging_cleanup();
+    test_dml_staging_is_scoped_to_affected_collection();
     return 0;
 }

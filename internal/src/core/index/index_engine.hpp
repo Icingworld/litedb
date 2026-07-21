@@ -113,6 +113,16 @@ public:
     );
 
     /**
+     * @brief 从正式索引文件原子刷新一个集合的全部标量索引
+     */
+    [[nodiscard]]
+    std::expected<void, IndexError> reload_collection(
+        const meta::MetaEngine & catalog,
+        const storage::StorageEngine & storage,
+        common::CollectionId collection_id
+    );
+
+    /**
      * @brief 准备插入
      */
     [[nodiscard]]

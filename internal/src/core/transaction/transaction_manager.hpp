@@ -211,7 +211,7 @@ private:
      * @return 成功或错误
      */
     [[nodiscard]]
-    std::expected<void, TransactionError> reload_runtime(TransactionId transaction_id);
+    std::expected<void, TransactionError> reload_runtime(const TransactionContext & transaction);
 
     /**
      * @brief 构造事务错误

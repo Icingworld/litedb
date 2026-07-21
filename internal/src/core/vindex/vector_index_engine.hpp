@@ -95,6 +95,16 @@ public:
         const storage::StorageEngine & storage
     );
 
+    /**
+     * @brief 从正式索引文件原子刷新一个集合的全部向量索引
+     */
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> reload_collection(
+        const meta::MetaEngine & catalog,
+        const storage::StorageEngine & storage,
+        common::CollectionId collection_id
+    );
+
     [[nodiscard]] std::expected<void, VectorIndexError> drop_index(common::VIndexId index_id);
     [[nodiscard]] std::expected<void, VectorIndexError> drop_collection_indexes(common::CollectionId collection_id);
 

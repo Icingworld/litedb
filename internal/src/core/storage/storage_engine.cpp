@@ -110,6 +110,24 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
     return {};
 }
 
+std::expected<void, StorageError> StorageEngine::reload_collection(schema::CollectionSchema schema)
+{
+    const auto id = schema.collection_id();
+    if (filesystem_ == nullptr) {
+        return std::unexpected(StorageError {
+            StorageErrorCode::StoreError,
+            "Storage engine is not configured",
+            StorageStoreErrorCode::InvalidStoreState,
+        });
+    }
+    auto opened = StorageStore::open(store_path(id), id, *filesystem_);
+    if (!opened) {
+        return std::unexpected(from_storage_store_error(std::move(opened.error())));
+    }
+    collections_.insert_or_assign(id, CollectionState {std::move(schema), std::move(*opened)});
+    return {};
+}
+
 std::expected<void, StorageError> StorageEngine::drop_collection(common::CollectionId id)
 {
     if (!collections_.contains(id)) {

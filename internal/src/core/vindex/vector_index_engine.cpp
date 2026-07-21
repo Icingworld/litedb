@@ -131,6 +131,65 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
     return {};
 }
 
+std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
+    const meta::MetaEngine & catalog,
+    const storage::StorageEngine & storage,
+    common::CollectionId collection_id
+)
+{
+    if (!storage.contains_collection(collection_id)) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::InvalidMetadata,
+            "Vector index collection is absent from storage"
+        ));
+    }
+    auto collection_schema = schema::load_collection_schema(catalog, collection_id);
+    if (!collection_schema) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::InvalidMetadata,
+            std::move(collection_schema.error().message)
+        ));
+    }
+
+    VectorIndexEngine restored {data_directory_, *filesystem_};
+    for (const auto * entry : catalog.list_vector_indexes(collection_id)) {
+        if (entry == nullptr) continue;
+        auto descriptor = make_descriptor(*entry, *collection_schema);
+        if (!descriptor) return std::unexpected(std::move(descriptor.error()));
+
+        auto load_store = [&]() -> std::expected<VectorIndexStore, VectorIndexError> {
+            if (descriptor->kind == VectorIndexKind::Hnsw) {
+                return restored.restore_store(*descriptor, storage);
+            }
+            auto backend = restored.make_backend(*descriptor, storage, true);
+            if (!backend) return std::unexpected(std::move(backend.error()));
+            return VectorIndexStore {*descriptor, std::move(*backend)};
+        };
+        auto store = load_store();
+        if (!store && descriptor->kind == VectorIndexKind::Hnsw &&
+            (store.error().code == VectorIndexErrorCode::IndexFileMissing ||
+             store.error().code == VectorIndexErrorCode::CorruptedIndex ||
+             store.error().code == VectorIndexErrorCode::StaleIndex)) {
+            store = restored.rebuild_store(*descriptor, storage);
+        }
+        if (!store) return std::unexpected(std::move(store.error()));
+        restored.publish(std::move(*store));
+    }
+
+    if (const auto current = indexes_by_collection_.find(collection_id); current != indexes_by_collection_.end()) {
+        for (const auto index_id : current->second) indexes_by_id_.erase(index_id);
+        indexes_by_collection_.erase(current);
+    }
+    for (auto & [index_id, store] : restored.indexes_by_id_) {
+        indexes_by_id_.emplace(index_id, std::move(store));
+    }
+    if (const auto ids = restored.indexes_by_collection_.find(collection_id);
+        ids != restored.indexes_by_collection_.end()) {
+        indexes_by_collection_.emplace(collection_id, std::move(ids->second));
+    }
+    return {};
+}
+
 std::expected<void, VectorIndexError> VectorIndexEngine::drop_index(common::VIndexId index_id)
 {
     auto found = indexes_by_id_.find(index_id);
