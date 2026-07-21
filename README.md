@@ -3,17 +3,22 @@
 EN | [简体中文](docs/readme/README_zh_CN.md)
 
 `litedb` is a lightweight experimental database written in modern C++. Version
-0.6.0 provides a restartable single-node database pipeline with persistent
+0.7.0 provides a restartable single-node database pipeline with persistent
 collection storage, persistent B+Tree scalar indexes, persistent HNSW vector
-indexes, and rule-based query planning. Distance TopK queries written as normal
-SQL can automatically use a matching HNSW index while retaining exact candidate
-re-ranking in the regular projection, sort, and limit pipeline.
+indexes, rule-based query planning, checksum-protected redo WAL, and
+crash-consistent implicit statement transactions. Distance TopK queries written
+as normal SQL can automatically use a matching HNSW index while retaining exact
+candidate re-ranking in the regular projection, sort, and limit pipeline.
+
+Each DML or DDL statement is one `Serializable` transaction; metadata, storage,
+persistent B+Tree indexes, and persistent HNSW indexes share the same commit
+record.
 
 This project is still early-stage. The current release is best viewed as a
 database kernel and learning/experimentation ground, not as a production-ready
 storage engine.
 
-## What works in v0.6.0
+## What works in v0.7.0
 
 - SQL lexer, parser, AST, binder, logical planner, evaluator, executor, and
 engine facade.
@@ -35,6 +40,22 @@ scans.
   - `SHOW INDEXES FROM collection`
 - Automatic scalar-index maintenance on `INSERT`, `UPDATE`, and `DELETE`
 through `IndexEngine`.
+- Implicit statement-level transactions for `INSERT`, `UPDATE`, `DELETE`, and
+  DDL, with a core-level single-writer guard and atomic multi-row statement
+  commit.
+- Versioned redo WAL records with LSNs and checksums, incomplete-tail
+  truncation, committed-transaction redo, and idempotent startup recovery
+  across collection storage, B+Tree, and HNSW files.
+- Basic `DatabaseEngine::observability()` counters for current WAL size,
+  WAL generation, checkpoint duration/reclaimed bytes, transaction counts and
+  commit duration, and startup redo activity.
+- Synchronous manual `DatabaseEngine::checkpoint()` plus an optional WAL-size
+  threshold checked after successful DDL/DML statements, with durable
+  participant flushing, generation-based WAL rotation, stale temporary-segment
+  cleanup, and crash recovery at each publication boundary.
+- Transactional DDL publication for database, collection, B+Tree, and HNSW
+  lifecycle changes, including Meta snapshot redo and idempotent file replace
+  and delete operations.
 - Rule-based scalar access-path selection for supported equality and range
 predicates.
 - Basic database and collection management:
@@ -83,13 +104,19 @@ results against reference calculations.
 
 ## Current limitations
 
-v0.6.0 is still an experimental single-node release:
+v0.7.0 is still an experimental single-node release:
 
 - The example server uses `litedb-data` by default; `--data-dir` selects a
   different persistent data directory.
-- No WAL, checksums, compaction, checkpointing, or crash-consistent commit
-protocol yet.
-- No transactions, MVCC, or isolation guarantees.
+- Transactions are currently implicit and statement-scoped only. There is no
+  SQL `BEGIN`, `COMMIT`, or `ROLLBACK`; DML and DDL cannot yet be grouped into a
+  caller-controlled multi-statement transaction.
+- Execution currently uses a global single writer and fixed statement-level
+  `Serializable` isolation. There is no MVCC, concurrent-writer scheduling,
+  lock manager, or additional isolation level.
+- Checkpointing is synchronous. A WAL-size threshold can trigger it after a
+  successful write statement; background checkpointing, commit-count/time
+  thresholds, WAL archiving, and compaction are not implemented.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
 - The optimizer is rule-based. It has no statistics, cardinality estimation, or
 cost model for choosing between sequential, scalar-index, and vector-index
@@ -138,9 +165,9 @@ ctest --test-dir build --output-on-failure
 ```
 
 The current suite covers parser, catalog, schema, persistent B+Tree and HNSW
-indexes, storage and recovery, binder, logical and physical planning,
-optimizer, evaluator, executor, database engine, function registry, protocol,
-memory, and client/server behavior.
+indexes, storage and recovery, WAL, transactions and checkpoints, binder,
+logical and physical planning, optimizer, evaluator, executor, database engine,
+function registry, protocol, memory, and client/server behavior.
 
 ## Quick start
 
@@ -169,10 +196,10 @@ On Windows:
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
 ```
 
-The data directory contains `manifest.ldb`, `meta.lmeta`, collection store
-files under `collections/`, B+Tree files under `indexes/`, and HNSW files under
-`vindexes/`. The v0.6 storage and index formats are experimental and do not
-promise compatibility with future versions.
+The data directory contains `manifest.ldb`, `meta.lmeta`, redo WAL segments
+under `wal/`, collection store files under `collections/`, B+Tree files under
+`indexes/`, and HNSW files under `vindexes/`. The v0.7 storage, index, and WAL
+formats are experimental and do not promise compatibility with future versions.
 
 In another terminal, start the client CLI:
 
@@ -295,6 +322,8 @@ internal/src/core/function     Scalar function registry and built-in functions
 internal/src/core/index        Persistent B+Tree indexes and IndexEngine
 internal/src/core/vindex       Flat/HNSW backends and VectorIndexEngine
 internal/src/core/storage      Persistent collection storage engine and cursor
+internal/src/core/wal          Redo WAL store, codec, manager, and recovery
+internal/src/core/transaction  Statement transactions, commit, and checkpoint
 internal/src/core/database     Database runtime, sessions, manifest, and lifecycle coordination
 internal/src/core/binder       Name resolution and semantic binding
 internal/src/core/logical_plan Logical plan construction
@@ -315,15 +344,16 @@ docs/design_docs/              Design notes, test SQL, and roadmap
 
 ## Roadmap
 
-Near-term work after v0.6.0:
+Near-term work after v0.7.0:
 
 - Statistics, cardinality estimation, and cost-based selection among SeqScan,
 B+Tree, and HNSW access paths.
 - `EXPLAIN` support and explicit index maintenance/rebuild commands.
-- Reliability improvements such as WAL, crash-consistent commits, checksums,
-compaction, and file-format version management.
-- Transactions, MVCC/isolation, and broader SQL support such as joins,
-subqueries, aggregates, and `GROUP BY`.
+- Background checkpointing, WAL archiving, compaction, and file-format version
+management.
+- Explicit multi-statement transactions (`BEGIN` / `COMMIT` / `ROLLBACK`),
+MVCC/isolation levels, and broader SQL support such as joins, subqueries,
+aggregates, and `GROUP BY`.
 - HNSW performance tuning, larger recall benchmarks, tombstone cleanup, and
 query-level search controls.
 

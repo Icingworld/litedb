@@ -13,4 +13,5 @@ target_link_libraries(litedb_executor PUBLIC
     litedb_storage
     litedb_meta
     litedb_vindex
+    litedb_transaction
 )

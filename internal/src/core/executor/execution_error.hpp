@@ -18,6 +18,7 @@ enum class ExecutionErrorCode
     SchemaError,                   ///< Schema 错误
     StorageError,                  ///< 存储错误
     IndexError,                    ///< 索引错误
+    TransactionError,              ///< 事务或 WAL 错误
     EvaluationError,               ///< 表达式求值错误
     CollectionNotFound,            ///< 集合不存在
 };

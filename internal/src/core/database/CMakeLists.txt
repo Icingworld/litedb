@@ -22,4 +22,6 @@ target_link_libraries(litedb_database PUBLIC
     litedb_schema
     litedb_storage
     litedb_vindex
+    litedb_wal
+    litedb_transaction
 )

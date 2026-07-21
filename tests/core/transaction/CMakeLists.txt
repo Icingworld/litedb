@@ -1,0 +1,23 @@
+add_executable(transaction_tests transaction_tests.cpp)
+target_link_libraries(transaction_tests PRIVATE litedb_transaction)
+add_test(NAME transaction_tests COMMAND transaction_tests)
+
+add_executable(transaction_recovery_tests transaction_recovery_tests.cpp)
+target_link_libraries(transaction_recovery_tests PRIVATE litedb_database litedb_wal)
+add_test(NAME transaction_recovery_tests COMMAND transaction_recovery_tests)
+
+add_executable(transaction_crash_tests transaction_crash_tests.cpp)
+target_link_libraries(transaction_crash_tests PRIVATE litedb_database)
+add_test(NAME transaction_crash_tests COMMAND transaction_crash_tests)
+
+add_executable(ddl_crash_tests ddl_crash_tests.cpp)
+target_link_libraries(ddl_crash_tests PRIVATE litedb_database)
+add_test(NAME ddl_crash_tests COMMAND ddl_crash_tests)
+
+add_executable(checkpoint_crash_tests checkpoint_crash_tests.cpp)
+target_link_libraries(checkpoint_crash_tests PRIVATE litedb_database)
+add_test(NAME checkpoint_crash_tests COMMAND checkpoint_crash_tests)
+
+add_executable(checkpoint_tests checkpoint_tests.cpp)
+target_link_libraries(checkpoint_tests PRIVATE litedb_database litedb_wal)
+add_test(NAME checkpoint_tests COMMAND checkpoint_tests)

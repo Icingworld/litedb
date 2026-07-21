@@ -49,6 +49,12 @@ public:
     std::expected<void, StorageError> open_collection(schema::CollectionSchema schema);
 
     /**
+     * @brief 从正式存储文件重新加载一个已存在的集合
+     * @details 新存储成功打开后才替换当前运行时状态
+     */
+    std::expected<void, StorageError> reload_collection(schema::CollectionSchema schema);
+
+    /**
      * @brief 删除集合及其存储文件
      * @param collection_id 集合 ID
      * @return 结果

@@ -13,7 +13,9 @@
 #include "core/logical_plan/logical_planner.hpp"
 #include "core/schema/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
+#include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
+#include "core/wal/wal_store.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"
 
@@ -111,14 +113,14 @@ ExecutionResult execute_ok(
     MetaEngine & catalog,
     StorageEngine & storage,
     IndexEngine & index_engine,
+    litedb::core::vindex::VectorIndexEngine & vector_index_engine,
+    litedb::core::transaction::TransactionManager & transaction_manager,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
 )
 {
     auto plan = plan_ok(catalog, index_engine, sql, database_id);
-    auto filesystem = litedb::core::filesystem::create_platform_filesystem();
-    litedb::core::vindex::VectorIndexEngine vector_index_engine {{}, filesystem};
-    Executor executor {catalog, storage, index_engine, vector_index_engine};
+    Executor executor {catalog, storage, index_engine, vector_index_engine, transaction_manager};
     auto result = executor.execute(*plan);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
@@ -130,14 +132,14 @@ ExecutionError execute_error(
     MetaEngine & catalog,
     StorageEngine & storage,
     IndexEngine & index_engine,
+    litedb::core::vindex::VectorIndexEngine & vector_index_engine,
+    litedb::core::transaction::TransactionManager & transaction_manager,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
 )
 {
     auto plan = plan_ok(catalog, index_engine, sql, database_id);
-    auto filesystem = litedb::core::filesystem::create_platform_filesystem();
-    litedb::core::vindex::VectorIndexEngine vector_index_engine {{}, filesystem};
-    Executor executor {catalog, storage, index_engine, vector_index_engine};
+    Executor executor {catalog, storage, index_engine, vector_index_engine, transaction_manager};
     auto result = executor.execute(*plan);
     require(!result.has_value(), "statement should fail to execute");
     return std::move(result.error());
@@ -151,6 +153,8 @@ struct Fixture
     StorageEngine storage {storage_directory.path(), filesystem};
     IndexEngine index_engine {storage_directory.path(), filesystem};
     litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
+    std::optional<litedb::core::wal::WalManager> wal_store;
+    std::unique_ptr<litedb::core::transaction::TransactionManager> transaction_manager;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -179,6 +183,12 @@ struct Fixture
         require(collection_schema.has_value(), "fixture schema load failed");
         require(storage.create_collection(std::move(collection_schema.value())).has_value(), "fixture storage creation failed");
         require(storage.contains_collection(users_id), "created collection storage missing");
+        auto opened_wal = litedb::core::wal::WalManager::open(storage_directory.path() / "wal", filesystem);
+        require(opened_wal.has_value(), "fixture WAL creation failed");
+        wal_store = std::move(*opened_wal);
+        transaction_manager = std::make_unique<litedb::core::transaction::TransactionManager>(
+            storage_directory.path(), filesystem, catalog, storage, index_engine, vector_index_engine, *wal_store, 0
+        );
     }
 };
 
@@ -214,6 +224,8 @@ void insert_user(Fixture & fixture, std::int64_t id, std::string_view name, std:
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "INSERT INTO users VALUES ("
             + std::to_string(id)
             + ", '"
@@ -244,25 +256,25 @@ void test_use_show_and_describe()
     Fixture fixture;
 
     SessionContext session {.current_database_id = fixture.database_id};
-    auto use_result = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "USE demo;");
+    auto use_result = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "USE demo;");
     require(use_result.kind == ExecutionResultKind::UseDatabase, "USE result kind mismatch");
     require(use_result.selected_database_id.value() == fixture.database_id, "USE selected database id mismatch");
     require(use_result.selected_database_name.value() == "demo", "USE selected database name mismatch");
     require(session.current_database_id.value() == fixture.database_id, "USE should not mutate external session");
 
-    auto databases = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "SHOW DATABASES;", fixture.database_id);
+    auto databases = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SHOW DATABASES;", fixture.database_id);
     require(databases.kind == ExecutionResultKind::RowSet, "SHOW DATABASES result kind mismatch");
     require(databases.columns.size() == 1, "SHOW DATABASES column count mismatch");
     require(databases.rows.size() == 1, "SHOW DATABASES row count mismatch");
     require(get_value<std::string>(databases.rows[0].values[0]) == "demo", "SHOW DATABASES value mismatch");
 
-    auto collections = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "SHOW COLLECTIONS;", fixture.database_id);
+    auto collections = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SHOW COLLECTIONS;", fixture.database_id);
     require(collections.rows.size() == 1, "SHOW COLLECTIONS row count mismatch");
     require(get_value<std::string>(collections.rows[0].values[0]) == "users", "SHOW COLLECTIONS value mismatch");
 
     (void) create_index(fixture, "idx_age");
 
-    auto indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "SHOW INDEXES FROM users;", fixture.database_id);
+    auto indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SHOW INDEXES FROM users;", fixture.database_id);
     require(indexes.kind == ExecutionResultKind::RowSet, "SHOW INDEXES result kind mismatch");
     require(indexes.columns.size() == 4, "SHOW INDEXES column count mismatch");
     require(indexes.rows.size() == 1, "SHOW INDEXES row count mismatch");
@@ -288,7 +300,7 @@ void test_use_show_and_describe()
     });
     require(created_vector_index.has_value(), "fixture vector index creation failed");
 
-    auto vector_indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "SHOW VINDEXES FROM users;", fixture.database_id);
+    auto vector_indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SHOW VINDEXES FROM users;", fixture.database_id);
     require(vector_indexes.kind == ExecutionResultKind::RowSet, "SHOW VINDEXES result kind mismatch");
     require(vector_indexes.columns.size() == 9, "SHOW VINDEXES column count mismatch");
     require(vector_indexes.rows.size() == 1, "SHOW VINDEXES row count mismatch");
@@ -302,7 +314,7 @@ void test_use_show_and_describe()
     require(get_value<std::int64_t>(vector_indexes.rows[0].values[7]) == 80, "SHOW VINDEXES ef_search mismatch");
     require(get_value<std::int64_t>(vector_indexes.rows[0].values[8]) == 7, "SHOW VINDEXES random_seed mismatch");
 
-    auto describe = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "DESCRIBE users;", fixture.database_id);
+    auto describe = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "DESCRIBE users;", fixture.database_id);
     require(describe.columns.size() == 6, "DESCRIBE column count mismatch");
     require(describe.rows.size() == 4, "DESCRIBE row count mismatch");
     require(get_value<std::string>(describe.rows[0].values[0]) == "id", "DESCRIBE column name mismatch");
@@ -321,6 +333,8 @@ void test_insert_select_update_and_delete()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT name FROM users WHERE age >= 18 ORDER BY age DESC LIMIT 2 OFFSET 0;",
         fixture.database_id
     );
@@ -335,6 +349,8 @@ void test_insert_select_update_and_delete()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT age + 1 AS next_age FROM users ORDER BY next_age ASC;",
         fixture.database_id
     );
@@ -349,6 +365,8 @@ void test_insert_select_update_and_delete()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT id AS user_id FROM users ORDER BY user_id ASC;",
         fixture.database_id
     );
@@ -358,16 +376,18 @@ void test_insert_select_update_and_delete()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT age + 1 FROM users ORDER BY age ASC;",
         fixture.database_id
     );
     require(expression_without_alias.columns[0].name == "expr1", "SELECT expression fallback name mismatch");
 
-    auto update = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "UPDATE users SET age = age + 1 WHERE id = 1;", fixture.database_id);
+    auto update = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "UPDATE users SET age = age + 1 WHERE id = 1;", fixture.database_id);
     require(update.kind == ExecutionResultKind::Command, "UPDATE result kind mismatch");
     require(update.affected_rows == 1, "UPDATE affected rows mismatch");
 
-    auto updated = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "SELECT age FROM users WHERE id = 1;", fixture.database_id);
+    auto updated = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SELECT age FROM users WHERE id = 1;", fixture.database_id);
     require(updated.rows.size() == 1, "updated SELECT row count mismatch");
     require(get_value<std::int32_t>(updated.rows[0].values[0]) == 19, "updated value mismatch");
 
@@ -377,10 +397,10 @@ void test_insert_select_update_and_delete()
     require(first_record && first_record->has_value(), "first record missing before delete");
     const auto first_record_id = (**first_record).record_id;
 
-    auto del = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "DELETE FROM users WHERE age < 18;", fixture.database_id);
+    auto del = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "DELETE FROM users WHERE age < 18;", fixture.database_id);
     require(del.affected_rows == 1, "DELETE affected rows mismatch");
 
-    auto remaining = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, "SELECT id FROM users ORDER BY id ASC;", fixture.database_id);
+    auto remaining = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SELECT id FROM users ORDER BY id ASC;", fixture.database_id);
     require(remaining.rows.size() == 2, "remaining row count mismatch");
     require(get_value<std::int64_t>(remaining.rows[0].values[0]) == 1, "remaining first id mismatch");
     require(get_value<std::int64_t>(remaining.rows[1].values[0]) == 2, "remaining second id mismatch");
@@ -402,6 +422,8 @@ void test_order_by_keeps_null_last()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "INSERT INTO users (id, name, embedding) VALUES (3, 'null-age', [0.1, 0.2, 0.3]);",
         fixture.database_id
     );
@@ -411,6 +433,8 @@ void test_order_by_keeps_null_last()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT name FROM users ORDER BY age DESC;",
         fixture.database_id
     );
@@ -435,6 +459,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT id FROM users WHERE age = 18 ORDER BY id ASC;",
         fixture.database_id
     );
@@ -446,6 +472,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT id FROM users WHERE age >= 18 ORDER BY id ASC;",
         fixture.database_id
     );
@@ -457,6 +485,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT id FROM users WHERE age BETWEEN 18 AND 20 ORDER BY id ASC;",
         fixture.database_id
     );
@@ -466,6 +496,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "UPDATE users SET name = 'adult' WHERE age >= 20;",
         fixture.database_id
     );
@@ -475,6 +507,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT name FROM users WHERE id = 2;",
         fixture.database_id
     );
@@ -484,6 +518,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "DELETE FROM users WHERE age < 18;",
         fixture.database_id
     );
@@ -499,6 +535,8 @@ void test_index_scan_execution_paths()
         fixture.catalog,
         fixture.storage,
         fixture.index_engine,
+        fixture.vector_index_engine,
+        *fixture.transaction_manager,
         "SELECT id FROM users WHERE age >= 18 ORDER BY id ASC;",
         fixture.database_id
     );
@@ -511,7 +549,7 @@ void test_error_mapping()
     auto dropped_storage = fixture.storage.drop_collection(fixture.users_id);
     require(dropped_storage.has_value(), "fixture storage drop failed");
 
-    auto missing_storage = execute_error(fixture.catalog, fixture.storage, fixture.index_engine, "SELECT * FROM users;", fixture.database_id);
+    auto missing_storage = execute_error(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SELECT * FROM users;", fixture.database_id);
     require(missing_storage.code == ExecutionErrorCode::CollectionNotFound, "missing storage error mismatch");
 
     auto schema = load_collection_schema(fixture.catalog, fixture.users_id);
@@ -531,7 +569,9 @@ void test_error_mapping()
         loc,
     };
 
-    Executor executor {fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine};
+    Executor executor {
+        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
+    };
     auto invalid_literal = executor.execute(bad_insert);
     require(!invalid_literal.has_value(), "invalid literal INSERT should fail");
     require(invalid_literal.error().code == ExecutionErrorCode::EvaluationError, "evaluation error mapping mismatch");
@@ -546,7 +586,9 @@ void test_ddl_requires_database_engine()
         "CREATE INDEX idx_age ON users (age);",
         fixture.database_id
     );
-    Executor executor {fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine};
+    Executor executor {
+        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
+    };
     auto result = executor.execute(*plan);
     require(!result.has_value(), "Executor should reject standalone DDL");
     require(result.error().code == ExecutionErrorCode::UnsupportedStatement, "standalone DDL error mismatch");

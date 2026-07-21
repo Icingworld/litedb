@@ -153,10 +153,10 @@ std::expected<void, HnswStoreError> HnswStore::commit(
     if (upserts.empty()) {
         return std::unexpected(error(ErrorCode::InvalidMutation, "HNSW commit has no node mutations"));
     }
-    if (metadata_.transaction_id == std::numeric_limits<std::uint64_t>::max()) {
-        return std::unexpected(error(ErrorCode::InvalidMutation, "HNSW transaction id is exhausted"));
+    if (metadata_.frame_sequence == std::numeric_limits<std::uint64_t>::max()) {
+        return std::unexpected(error(ErrorCode::InvalidMutation, "HNSW frame sequence is exhausted"));
     }
-    metadata.transaction_id = metadata_.transaction_id + 1;
+    metadata.frame_sequence = metadata_.frame_sequence + 1;
 
     NodeMap next_nodes = nodes_;
     std::unordered_set<HnswNodeId> mutated;
@@ -281,7 +281,7 @@ std::expected<void, HnswStoreError> HnswStore::load()
         if (!frame) {
             return std::unexpected(codec_error(std::move(frame.error())));
         }
-        if (frame->metadata.transaction_id != metadata_.transaction_id + 1) {
+        if (frame->metadata.frame_sequence != metadata_.frame_sequence + 1) {
             return std::unexpected(error(ErrorCode::CorruptedGraph, "HNSW transaction ids are not contiguous"));
         }
         std::unordered_set<HnswNodeId> mutated;

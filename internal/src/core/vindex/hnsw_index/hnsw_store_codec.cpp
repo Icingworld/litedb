@@ -263,7 +263,7 @@ std::expected<std::vector<std::byte>, HnswStoreCodecError> HnswStoreCodec::encod
     std::size_t dimension
 )
 {
-    if (dimension == 0 || frame.metadata.transaction_id == 0 || frame.metadata.next_node_id == 0) {
+    if (dimension == 0 || frame.metadata.frame_sequence == 0 || frame.metadata.next_node_id == 0) {
         return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW commit metadata"));
     }
     Writer payload;
@@ -303,7 +303,7 @@ std::expected<std::vector<std::byte>, HnswStoreCodecError> HnswStoreCodec::encod
     writer.number(FormatVersion);
     writer.number(std::uint16_t {0});
     writer.number(static_cast<std::uint64_t>(FramePrefixSize + body.size()));
-    writer.number(frame.metadata.transaction_id);
+    writer.number(frame.metadata.frame_sequence);
     writer.number(crc32(body));
     writer.number(std::uint32_t {0});
     auto prefix = std::move(writer).take();
@@ -347,11 +347,11 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
     }
     Reader prefix(bytes.first(FramePrefixSize));
     (void) prefix.skip(16);
-    const auto transaction_id = prefix.number<std::uint64_t>();
+    const auto frame_sequence = prefix.number<std::uint64_t>();
     const auto stored_checksum = prefix.number<std::uint32_t>();
     const auto reserved = prefix.number<std::uint32_t>();
     const auto payload = bytes.subspan(FramePrefixSize);
-    if (!transaction_id || !stored_checksum || !reserved || *reserved != 0 || *stored_checksum != crc32(payload)) {
+    if (!frame_sequence || !stored_checksum || !reserved || *reserved != 0 || *stored_checksum != crc32(payload)) {
         return std::unexpected(error(ErrorCode::CorruptedData, "HNSW commit frame checksum mismatch"));
     }
 
@@ -379,7 +379,7 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
         .entry_point = *entry_point,
         .max_level = static_cast<std::size_t>(*max_level),
         .active_count = static_cast<std::size_t>(*active_count),
-        .transaction_id = *transaction_id,
+        .frame_sequence = *frame_sequence,
     };
     frame.upserts.reserve(static_cast<std::size_t>(*upsert_count));
     for (std::size_t index = 0; index < *upsert_count; ++index) {

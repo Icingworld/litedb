@@ -29,6 +29,7 @@
 #include "core/physical_plan/statement/physical_row_mutation_plan.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/schema/schema_loader.hpp"
+#include "core/transaction/transaction_manager.hpp"
 
 namespace litedb::core::executor
 {
@@ -126,6 +127,16 @@ ExecutionError from_index_error(index::IndexError error, AstNodeLocation locatio
 ExecutionError from_vector_index_error(vindex::VectorIndexError error, AstNodeLocation location)
 {
     return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
+}
+
+[[nodiscard]]
+ExecutionError from_transaction_error(transaction::TransactionError error, AstNodeLocation location)
+{
+    return make_error(
+        ExecutionErrorCode::TransactionError,
+        location,
+        "Transaction " + std::to_string(error.transaction_id) + ": " + std::move(error.message)
+    );
 }
 
 [[nodiscard]]
@@ -949,8 +960,7 @@ std::expected<ExecutionResult, ExecutionError> execute_use(const PhysicalUsePlan
 std::expected<ExecutionResult, ExecutionError> execute_insert(
     const PhysicalInsertPlan & plan,
     storage::StorageEngine & storage,
-    index::IndexEngine & index_engine,
-    vindex::VectorIndexEngine & vector_index_engine
+    transaction::TransactionManager & transaction_manager
 )
 {
     auto collection_storage = find_storage(storage, plan.collection_id(), plan.location());
@@ -970,33 +980,15 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         record_data.values.push_back(std::move(value.value()));
     }
 
-    auto index_bindings = index_engine.prepare_insert(plan.collection_id(), record_data);
-    if (!index_bindings.has_value()) {
-        return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
+    auto transaction = transaction_manager.begin_implicit();
+    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error()), plan.location()));
+    auto staged = transaction_manager.stage_insert(*transaction, plan.collection_id(), std::move(record_data));
+    if (!staged) {
+        (void) transaction_manager.abort(*transaction);
+        return std::unexpected(from_transaction_error(std::move(staged.error()), plan.location()));
     }
-
-    auto vector_bindings = vector_index_engine.prepare_insert(plan.collection_id(), record_data);
-    if (!vector_bindings) {
-        return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
-    }
-
-    auto inserted = storage.insert(plan.collection_id(), std::move(record_data));
-    if (!inserted.has_value()) {
-        return std::unexpected(from_storage_error(std::move(inserted.error()), plan.location()));
-    }
-
-    auto indexed = index_engine.on_insert(inserted.value(), index_bindings.value());
-    if (!indexed.has_value()) {
-        (void) storage.erase(plan.collection_id(), inserted.value());
-        return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
-    }
-
-    auto vector_indexed = vector_index_engine.on_insert(inserted.value(), *vector_bindings);
-    if (!vector_indexed) {
-        (void) index_engine.on_delete(inserted.value(), *index_bindings);
-        (void) storage.erase(plan.collection_id(), inserted.value());
-        return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
-    }
+    auto committed = transaction_manager.commit(*transaction);
+    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error()), plan.location()));
 
     return command_result(1);
 }
@@ -1007,7 +999,8 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
-    vindex::VectorIndexEngine & vector_index_engine
+    vindex::VectorIndexEngine & vector_index_engine,
+    transaction::TransactionManager & transaction_manager
 )
 {
     auto rows = execute_physical(plan.input(), catalog, storage, index_engine, vector_index_engine);
@@ -1020,39 +1013,20 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    std::size_t affected_rows = 0;
+    auto transaction = transaction_manager.begin_implicit();
+    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error()), plan.location()));
     for (const auto & row : rows->rows) {
-        auto index_bindings = index_engine.prepare_delete(plan.collection_id(), row.source_record.data);
-        if (!index_bindings.has_value()) {
-            return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
+        auto staged = transaction_manager.stage_delete(
+            *transaction, plan.collection_id(), row.source_record.record_id, row.source_record.data
+        );
+        if (!staged) {
+            (void) transaction_manager.abort(*transaction);
+            return std::unexpected(from_transaction_error(std::move(staged.error()), plan.location()));
         }
-
-        auto vector_bindings = vector_index_engine.prepare_delete(plan.collection_id(), row.source_record.data);
-        if (!vector_bindings) {
-            return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
-        }
-
-        auto vector_indexed = vector_index_engine.on_delete(row.source_record.record_id, *vector_bindings);
-        if (!vector_indexed) {
-            return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
-        }
-
-        auto indexed = index_engine.on_delete(row.source_record.record_id, index_bindings.value());
-        if (!indexed.has_value()) {
-            (void) vector_index_engine.on_insert(row.source_record.record_id, *vector_bindings);
-            return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
-        }
-
-        auto erased = storage.erase(plan.collection_id(), row.source_record.record_id);
-        if (!erased.has_value()) {
-            (void) index_engine.on_insert(row.source_record.record_id, *index_bindings);
-            (void) vector_index_engine.on_insert(row.source_record.record_id, *vector_bindings);
-            return std::unexpected(from_storage_error(std::move(erased.error()), plan.location()));
-        }
-        ++affected_rows;
     }
-
-    return command_result(affected_rows);
+    auto committed = transaction_manager.commit(*transaction);
+    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error()), plan.location()));
+    return command_result(rows->rows.size());
 }
 
 [[nodiscard]]
@@ -1074,7 +1048,8 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
     meta::MetaEngine & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
-    vindex::VectorIndexEngine & vector_index_engine
+    vindex::VectorIndexEngine & vector_index_engine,
+    transaction::TransactionManager & transaction_manager
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -1093,13 +1068,15 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
     }
 
     evaluator::ExpressionEvaluator evaluator;
-    std::size_t affected_rows = 0;
+    auto transaction = transaction_manager.begin_implicit();
+    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error()), plan.location()));
     for (const auto & row : rows->rows) {
         auto record_data = row.source_record.data;
 
         for (const auto & assignment : plan.assignments()) {
             auto ordinal = ordinal_for_column(collection_schema.value(), assignment.column.column_id);
             if (!ordinal.has_value() || ordinal.value() >= record_data.values.size()) {
+                (void) transaction_manager.abort(*transaction);
                 return std::unexpected(make_error(
                     ExecutionErrorCode::InvalidPlan,
                     plan.location(),
@@ -1109,47 +1086,27 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
 
             auto value = evaluator.evaluate(*assignment.value, row.evaluation_record);
             if (!value.has_value()) {
+                (void) transaction_manager.abort(*transaction);
                 return std::unexpected(from_evaluation_error(std::move(value.error())));
             }
             record_data.values[ordinal.value()] = std::move(value.value());
         }
 
-        auto index_bindings = index_engine.prepare_update(plan.collection_id(), row.source_record.data, record_data);
-        if (!index_bindings.has_value()) {
-            return std::unexpected(from_index_error(std::move(index_bindings.error()), plan.location()));
-        }
-
-        auto vector_bindings = vector_index_engine.prepare_update(
-            plan.collection_id(), row.source_record.data, record_data
+        auto staged = transaction_manager.stage_update(
+            *transaction,
+            plan.collection_id(),
+            row.source_record.record_id,
+            row.source_record.data,
+            std::move(record_data)
         );
-        if (!vector_bindings) {
-            return std::unexpected(from_vector_index_error(std::move(vector_bindings.error()), plan.location()));
+        if (!staged) {
+            (void) transaction_manager.abort(*transaction);
+            return std::unexpected(from_transaction_error(std::move(staged.error()), plan.location()));
         }
-
-        auto updated = storage.update(plan.collection_id(), row.source_record.record_id, std::move(record_data));
-        if (!updated.has_value()) {
-            return std::unexpected(from_storage_error(std::move(updated.error()), plan.location()));
-        }
-
-        auto indexed = index_engine.on_update(row.source_record.record_id, index_bindings.value());
-        if (!indexed.has_value()) {
-            (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
-            return std::unexpected(from_index_error(std::move(indexed.error()), plan.location()));
-        }
-        auto vector_indexed = vector_index_engine.on_update(row.source_record.record_id, *vector_bindings);
-        if (!vector_indexed) {
-            auto scalar_rollback = *index_bindings;
-            for (auto & binding : scalar_rollback) {
-                std::swap(binding.old_key, binding.new_key);
-            }
-            (void) index_engine.on_update(row.source_record.record_id, scalar_rollback);
-            (void) storage.update(plan.collection_id(), row.source_record.record_id, row.source_record.data);
-            return std::unexpected(from_vector_index_error(std::move(vector_indexed.error()), plan.location()));
-        }
-        ++affected_rows;
     }
-
-    return command_result(affected_rows);
+    auto committed = transaction_manager.commit(*transaction);
+    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error()), plan.location()));
+    return command_result(rows->rows.size());
 }
 
 [[nodiscard]]
@@ -1319,6 +1276,21 @@ Executor::Executor(
 {
 }
 
+Executor::Executor(
+    meta::MetaEngine & catalog,
+    storage::StorageEngine & storage,
+    index::IndexEngine & index_engine,
+    vindex::VectorIndexEngine & vector_index_engine,
+    transaction::TransactionManager & transaction_manager
+) noexcept
+    : catalog_(catalog)
+    , storage_(storage)
+    , index_engine_(index_engine)
+    , vector_index_engine_(&vector_index_engine)
+    , transaction_manager_(&transaction_manager)
+{
+}
+
 std::expected<ExecutionResult, ExecutionError> Executor::execute(const PhysicalStatementPlan & plan)
 {
     switch (plan.kind()) {
@@ -1344,16 +1316,30 @@ std::expected<ExecutionResult, ExecutionError> Executor::execute(const PhysicalS
     case PhysicalStatementPlanKind::DescribeCollection:
         return execute_describe_collection(static_cast<const PhysicalDescribeCollectionPlan &>(plan), catalog_);
     case PhysicalStatementPlanKind::Insert:
+        if (transaction_manager_ == nullptr) {
+            return std::unexpected(make_error(ExecutionErrorCode::TransactionError, plan.location(),
+                                              "DML execution requires a TransactionManager"));
+        }
         return execute_insert(
-            static_cast<const PhysicalInsertPlan &>(plan), storage_, index_engine_, *vector_index_engine_
+            static_cast<const PhysicalInsertPlan &>(plan), storage_, *transaction_manager_
         );
     case PhysicalStatementPlanKind::Update:
+        if (transaction_manager_ == nullptr) {
+            return std::unexpected(make_error(ExecutionErrorCode::TransactionError, plan.location(),
+                                              "DML execution requires a TransactionManager"));
+        }
         return execute_update(
-            static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_
+            static_cast<const PhysicalUpdatePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_,
+            *transaction_manager_
         );
     case PhysicalStatementPlanKind::Delete:
+        if (transaction_manager_ == nullptr) {
+            return std::unexpected(make_error(ExecutionErrorCode::TransactionError, plan.location(),
+                                              "DML execution requires a TransactionManager"));
+        }
         return execute_delete(
-            static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_
+            static_cast<const PhysicalDeletePlan &>(plan), catalog_, storage_, index_engine_, *vector_index_engine_,
+            *transaction_manager_
         );
     case PhysicalStatementPlanKind::Query:
         return execute_query(

@@ -343,6 +343,61 @@ std::expected<void, IndexError> IndexEngine::restore_all(
     return {};
 }
 
+std::expected<void, IndexError> IndexEngine::reload_collection(
+    const meta::MetaEngine & catalog,
+    const storage::StorageEngine & storage,
+    common::CollectionId collection_id
+)
+{
+    if (!storage.contains_collection(collection_id)) {
+        return std::unexpected(make_error(IndexErrorCode::StorageError, "Index collection is absent from storage"));
+    }
+
+    auto collection_schema = schema::load_collection_schema(catalog, collection_id);
+    if (!collection_schema) {
+        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message));
+    }
+
+    IndexEngine restored {data_directory_, *filesystem_};
+    for (const auto * index_entry : catalog.list_indexes(collection_id)) {
+        if (index_entry == nullptr) continue;
+        const auto column_id = index_entry->column_id();
+        if (!column_id) {
+            return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
+        }
+        const auto * column = collection_schema->find_column(*column_id);
+        if (column == nullptr || column->type().id == common::LogicalTypeId::Vector) {
+            return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid"));
+        }
+        auto backend = restored.restore_backend(*index_entry, column->type());
+        if (!backend) return std::unexpected(std::move(backend.error()));
+
+        restored.stores_by_id_.emplace(index_entry->id(), IndexStore {IndexDescriptor {
+            .index_id = index_entry->id(),
+            .collection_id = index_entry->collection_id(),
+            .column_id = *column_id,
+            .column_ordinal = column->ordinal(),
+            .key_type = column->type(),
+            .kind = (*backend)->kind(),
+            .unique = index_entry->unique(),
+        }, std::move(*backend)});
+        restored.indexes_by_collection_[collection_id].push_back(index_entry->id());
+    }
+
+    if (const auto current = indexes_by_collection_.find(collection_id); current != indexes_by_collection_.end()) {
+        for (const auto index_id : current->second) stores_by_id_.erase(index_id);
+        indexes_by_collection_.erase(current);
+    }
+    for (auto & [index_id, store] : restored.stores_by_id_) {
+        stores_by_id_.emplace(index_id, std::move(store));
+    }
+    if (const auto ids = restored.indexes_by_collection_.find(collection_id);
+        ids != restored.indexes_by_collection_.end()) {
+        indexes_by_collection_.emplace(collection_id, std::move(ids->second));
+    }
+    return {};
+}
+
 std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_insert(
     common::CollectionId collection_id,
     const schema::RecordData & record_data

@@ -74,6 +74,11 @@ class IndexEngine
 public:
     IndexEngine(std::filesystem::path data_directory, filesystem::FileSystem & filesystem) noexcept;
 
+    IndexEngine(const IndexEngine &) = delete;
+    IndexEngine & operator=(const IndexEngine &) = delete;
+    IndexEngine(IndexEngine &&) noexcept = default;
+    IndexEngine & operator=(IndexEngine &&) noexcept = default;
+
 public:
     /**
      * @brief 创建索引
@@ -105,6 +110,16 @@ public:
     std::expected<void, IndexError> restore_all(
         const meta::MetaEngine & catalog,
         const storage::StorageEngine & storage
+    );
+
+    /**
+     * @brief 从正式索引文件原子刷新一个集合的全部标量索引
+     */
+    [[nodiscard]]
+    std::expected<void, IndexError> reload_collection(
+        const meta::MetaEngine & catalog,
+        const storage::StorageEngine & storage,
+        common::CollectionId collection_id
     );
 
     /**

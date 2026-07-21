@@ -2,11 +2,13 @@
 
 [EN](../../README.md) | 简体中文
 
-`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.6.0 已形成可重启的单机数据库闭环，具备持久化 collection 存储、持久化 B+Tree 标量索引、持久化 HNSW 向量索引以及基于规则的查询规划。用户可以继续使用普通距离排序 SQL；存在匹配索引时，TopK 查询会自动使用 HNSW，并由常规投影、排序和限制流水线对候选执行精确距离重排。
+`litedb` 是一款使用现代 C++ 编写的轻量级实验性数据库。v0.7.0 已形成可重启的单机数据库闭环，具备持久化 collection 存储、持久化 B+Tree 标量索引、持久化 HNSW 向量索引、基于规则的查询规划、带 checksum 的 redo WAL，以及 crash-consistent 的隐式语句级事务。用户可以继续使用普通距离排序 SQL；存在匹配索引时，TopK 查询会自动使用 HNSW，并由常规投影、排序和限制流水线对候选执行精确距离重排。
+
+每条 DML 或 DDL 语句对应一个 `Serializable` 事务；Meta、Storage、持久化 B+Tree 与持久化 HNSW 共享同一条 Commit Record。
 
 本项目仍处于早期阶段。当前版本更适合作为数据库内核与学习/实验平台，而非可直接用于生产的存储引擎。
 
-## v0.6.0 已实现的功能
+## v0.7.0 已实现的功能
 
 - SQL 词法分析器、解析器、AST、绑定器（binder）、逻辑规划器、求值器（evaluator）、执行器（executor）以及引擎门面（facade）。
 - 内存目录、模式（schema）模型与集合（collection）存储。
@@ -22,6 +24,11 @@
   - `DROP INDEX IF EXISTS ... ON collection`
   - `SHOW INDEXES FROM collection`
 - 通过 `IndexEngine` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
+- 对 `INSERT`、`UPDATE`、`DELETE` 与 DDL 提供隐式语句级事务，内核层单写者保护，以及多行语句的原子提交。
+- 带版本号、LSN 与 checksum 的 redo WAL；支持不完整尾部截断、已提交事务 redo，以及对 collection 存储、B+Tree 与 HNSW 文件的幂等启动恢复。
+- 基础 `DatabaseEngine::observability()` 计数器：当前 WAL 大小、WAL generation、checkpoint 耗时/回收字节、事务计数与提交耗时，以及启动 redo 活动。
+- 同步手动 `DatabaseEngine::checkpoint()`，以及在成功 DDL/DML 后按可选 WAL 大小阈值触发的 checkpoint；包含参与者持久化刷盘、基于 generation 的 WAL 轮换、过期临时段清理，以及各发布边界上的崩溃恢复。
+- 事务性 DDL 发布：覆盖 database、collection、B+Tree 与 HNSW 生命周期变更，包括 Meta 快照 redo，以及幂等的文件替换与删除。
 - 对支持的等值和范围谓词进行基于规则的标量索引访问路径选择。
 - 基础数据库与集合管理：
   - `CREATE DATABASE`、`DROP DATABASE`、`USE`、`SHOW DATABASES`
@@ -56,11 +63,12 @@
 
 ## 当前限制
 
-v0.6.0 仍然是实验性的单机版本：
+v0.7.0 仍然是实验性的单机版本：
 
 - 示例服务端默认使用 `litedb-data`，可通过 `--data-dir` 指定其他持久化数据目录。
-- 尚无 WAL、checksum、compaction、checkpoint 或 crash-consistent commit 协议。
-- 无事务、MVCC 或隔离性保证。
+- 事务目前仅为隐式语句级范围，尚无 SQL `BEGIN`、`COMMIT`、`ROLLBACK`；DML 与 DDL 还不能组成调用方控制的多语句事务。
+- 执行层固定为全局单写者与语句级 `Serializable` 隔离；尚无 MVCC、并发写调度、锁管理器或其他隔离级别。
+- Checkpoint 为同步执行。WAL 大小阈值可在成功写语句后触发；尚无后台 checkpoint、按提交次数/时间阈值、WAL 归档或 compaction。
 - 不支持 SQL 连接（join）、子查询、聚合、`GROUP BY` 或完整 SQL 兼容性。
 - 优化器目前基于规则，尚无统计信息、基数估算，也不会通过代价模型比较 SeqScan、B+Tree 和 HNSW 访问路径。
 - 尚无 SQL `EXPLAIN` 和显式向量索引重建命令。
@@ -102,7 +110,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-当前测试覆盖解析器、meta、schema、持久化 B+Tree/HNSW、存储与恢复、绑定器、逻辑/物理计划、优化器、求值器、执行器、数据库引擎、函数注册表、协议、内存以及客户端/服务端行为。
+当前测试覆盖解析器、meta、schema、持久化 B+Tree/HNSW、存储与恢复、WAL、事务与 checkpoint、绑定器、逻辑/物理计划、优化器、求值器、执行器、数据库引擎、函数注册表、协议、内存以及客户端/服务端行为。
 
 ## 快速开始
 
@@ -130,7 +138,7 @@ ctest --test-dir build --output-on-failure
 .\build\examples\server\litedb_example_server.exe --host 127.0.0.1 --port 5252 --data-dir .\data
 ```
 
-该目录中会生成 `manifest.ldb`、`meta.lmeta`、位于 `collections/` 下的 collection 存储文件、位于 `indexes/` 下的 B+Tree 文件，以及位于 `vindexes/` 下的 HNSW 文件。v0.6 的存储与索引格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
+该目录中会生成 `manifest.ldb`、`meta.lmeta`、位于 `wal/` 下的 redo WAL 段、位于 `collections/` 下的 collection 存储文件、位于 `indexes/` 下的 B+Tree 文件，以及位于 `vindexes/` 下的 HNSW 文件。v0.7 的存储、索引与 WAL 格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
 
 在另一个终端中启动客户端 CLI：
 
@@ -249,6 +257,8 @@ internal/src/core/function     标量函数注册表与内置函数
 internal/src/core/index        持久化 B+Tree 与 IndexEngine
 internal/src/core/vindex       Flat/HNSW 后端与 VectorIndexEngine
 internal/src/core/storage      持久化集合存储引擎与游标
+internal/src/core/wal          redo WAL 存储、编解码、管理与恢复
+internal/src/core/transaction  语句级事务、提交与 checkpoint
 internal/src/core/database     数据库运行时、会话、manifest 与生命周期协调
 internal/src/core/binder       名称解析与语义绑定
 internal/src/core/logical_plan 逻辑计划构建
@@ -269,12 +279,12 @@ docs/design_docs/              设计文档、测试 SQL 与路线图
 
 ## 路线图
 
-v0.6.0 之后的近期计划：
+v0.7.0 之后的近期计划：
 
 - 引入统计信息、基数估算，以及在 SeqScan、B+Tree、HNSW 之间进行选择的代价模型。
 - 增加 `EXPLAIN` 和显式索引维护/重建命令。
-- 加强 WAL、崩溃一致提交、checksum、compaction 和文件格式版本管理。
-- 支持事务、MVCC/隔离，以及 join、子查询、聚合和 `GROUP BY` 等更完整的 SQL 能力。
+- 增加后台 checkpoint、WAL 归档、compaction 和文件格式版本管理。
+- 支持显式多语句事务（`BEGIN` / `COMMIT` / `ROLLBACK`）、MVCC/更多隔离级别，以及 join、子查询、聚合和 `GROUP BY` 等更完整的 SQL 能力。
 - 继续优化 HNSW 性能，增加更大规模的召回率基准、tombstone 清理和查询级搜索参数。
 
 `docs/design_docs/` 中的设计文档更详细地说明了预期的 SQL 语法、执行流水线与项目路线图。
