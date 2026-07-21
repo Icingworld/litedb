@@ -2,7 +2,7 @@
 
 ## 边界
 
-当前事务层提供单写者、隐式语句级 `Serializable` 事务。每条 DML 或 DDL 语句都是一个事务；Meta、Storage、持久化 B+Tree 和持久化 HNSW 共享同一 Commit Record。显式 `BEGIN/COMMIT`、MVCC 和 LockManager 不在当前版本范围内。当前提供同步手动 checkpoint，尚无后台或阈值自动 checkpoint。
+当前事务层提供单写者、隐式语句级 `Serializable` 事务。每条 DML 或 DDL 语句都是一个事务；Meta、Storage、持久化 B+Tree 和持久化 HNSW 共享同一 Commit Record。显式 `BEGIN/COMMIT`、MVCC 和 LockManager 不在当前版本范围内。当前提供同步手动 checkpoint，以及可选的 WAL 大小阈值自动 checkpoint；尚无后台 checkpoint。
 
 ## no-steal prepare
 
@@ -29,6 +29,17 @@ LSN 是 record 在当前 WAL 段中的字节偏移；第一版不允许事务跨
 5. 将临时段 rename 为正式段并同步 WAL 目录；
 6. 切换内存 active segment；
 7. 清理旧 generation 并再次同步 WAL 目录。
+
+`DatabaseConfig::automatic_checkpoint.wal_size_threshold_bytes` 控制自动策略，默认值 `0` 表示禁用。成功的 DDL/DML 已完成 commit 并释放 writer guard 后，DatabaseEngine 检查当前 WAL 大小；达到阈值时同步调用同一 checkpoint 协议。只读语句不会触发检查。自动 checkpoint 失败不会把已经 durable 的写语句改报为失败，以避免调用方重试已提交事务；失败通过 `DatabaseObservability` 的自动 checkpoint 计数器暴露。若 WAL 轮换结果不确定，TransactionManager 仍进入 `RecoveryRequired` 并拒绝后续请求。
+
+```cpp
+auto database = DatabaseEngine::open({
+    .data_dir = path,
+    .automatic_checkpoint = {
+        .wal_size_threshold_bytes = 256ULL * 1024 * 1024,
+    },
+});
+```
 
 旧 WAL 不会原地 truncate。发布新正式段之前崩溃时，启动继续选择旧段并 redo；发布之后崩溃时，启动选择 generation 最大的正式段，参与者文件此时已经持久化。`.wal.tmp` 从不具备权威性，启动会清理。若最高 generation 的正式段损坏，启动直接失败，不回退到旧段。
 

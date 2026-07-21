@@ -100,6 +100,34 @@ executor::ExecutionResult command_result(std::size_t affected_rows)
     return result;
 }
 
+bool writes_wal(physical_plan::PhysicalStatementPlanKind kind) noexcept
+{
+    using physical_plan::PhysicalStatementPlanKind;
+    switch (kind) {
+    case PhysicalStatementPlanKind::CreateDatabase:
+    case PhysicalStatementPlanKind::CreateCollection:
+    case PhysicalStatementPlanKind::CreateIndex:
+    case PhysicalStatementPlanKind::CreateVectorIndex:
+    case PhysicalStatementPlanKind::DropDatabase:
+    case PhysicalStatementPlanKind::DropCollection:
+    case PhysicalStatementPlanKind::DropIndex:
+    case PhysicalStatementPlanKind::DropVectorIndex:
+    case PhysicalStatementPlanKind::Insert:
+    case PhysicalStatementPlanKind::Update:
+    case PhysicalStatementPlanKind::Delete:
+        return true;
+    case PhysicalStatementPlanKind::Use:
+    case PhysicalStatementPlanKind::ShowDatabases:
+    case PhysicalStatementPlanKind::ShowCollections:
+    case PhysicalStatementPlanKind::ShowIndexes:
+    case PhysicalStatementPlanKind::ShowVectorIndexes:
+    case PhysicalStatementPlanKind::DescribeCollection:
+    case PhysicalStatementPlanKind::Query:
+        return false;
+    }
+    return false;
+}
+
 } // namespace
 
 DatabaseEngine::DatabaseEngine(DatabaseConfig config)
@@ -112,6 +140,7 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , index_engine_(data_directory_, filesystem_)
     , vector_index_engine_(data_directory_ / "vindexes", filesystem_)
     , transaction_options_(std::move(config.transaction_options))
+    , automatic_checkpoint_(config.automatic_checkpoint)
 {
 }
 
@@ -160,7 +189,27 @@ DatabaseObservability DatabaseEngine::observability() const noexcept
                            : transaction::TransactionMetrics {},
         .recovered_committed_transactions = recovered_committed_transactions_,
         .replayed_writes = replayed_writes_,
+        .automatic_checkpoint_attempts = automatic_checkpoint_attempts_.load(std::memory_order_relaxed),
+        .completed_automatic_checkpoints = completed_automatic_checkpoints_.load(std::memory_order_relaxed),
+        .failed_automatic_checkpoints = failed_automatic_checkpoints_.load(std::memory_order_relaxed),
     };
+}
+
+void DatabaseEngine::maybe_run_automatic_checkpoint()
+{
+    if (transaction_manager_ == nullptr || automatic_checkpoint_.wal_size_threshold_bytes == 0) return;
+    if (transaction_manager_->metrics().wal_size_bytes < automatic_checkpoint_.wal_size_threshold_bytes) return;
+
+    automatic_checkpoint_attempts_.fetch_add(1, std::memory_order_relaxed);
+    auto checkpointed = transaction_manager_->checkpoint();
+    if (checkpointed) {
+        completed_automatic_checkpoints_.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        // The triggering statement is already durably committed. Expose a
+        // maintenance failure through metrics instead of returning a failure
+        // that could make the caller retry the committed statement.
+        failed_automatic_checkpoints_.fetch_add(1, std::memory_order_relaxed);
+    }
 }
 
 std::expected<void, DatabaseError> DatabaseEngine::checkpoint()
@@ -268,27 +317,33 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         });
     }
 
-    switch (plan.kind()) {
-    case PhysicalStatementPlanKind::CreateDatabase:
-        return execute_create_database(static_cast<const physical_plan::PhysicalCreateDatabasePlan &>(plan));
-    case PhysicalStatementPlanKind::CreateCollection:
-        return execute_create_collection(static_cast<const physical_plan::PhysicalCreateCollectionPlan &>(plan));
-    case PhysicalStatementPlanKind::CreateIndex:
-        return execute_create_index(static_cast<const physical_plan::PhysicalCreateIndexPlan &>(plan));
-    case PhysicalStatementPlanKind::CreateVectorIndex:
-        return execute_create_vector_index(static_cast<const physical_plan::PhysicalCreateVectorIndexPlan &>(plan));
-    case PhysicalStatementPlanKind::DropDatabase:
-        return execute_drop_database(static_cast<const physical_plan::PhysicalDropDatabasePlan &>(plan));
-    case PhysicalStatementPlanKind::DropCollection:
-        return execute_drop_collection(static_cast<const physical_plan::PhysicalDropCollectionPlan &>(plan));
-    case PhysicalStatementPlanKind::DropIndex:
-        return execute_drop_index(static_cast<const physical_plan::PhysicalDropIndexPlan &>(plan));
-    case PhysicalStatementPlanKind::DropVectorIndex:
-        return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
-    default:
-        executor::Executor executor {meta_, storage_, index_engine_, vector_index_engine_, *transaction_manager_};
-        return executor.execute(plan);
+    auto executed = [&]() -> std::expected<executor::ExecutionResult, executor::ExecutionError> {
+        switch (plan.kind()) {
+        case PhysicalStatementPlanKind::CreateDatabase:
+            return execute_create_database(static_cast<const physical_plan::PhysicalCreateDatabasePlan &>(plan));
+        case PhysicalStatementPlanKind::CreateCollection:
+            return execute_create_collection(static_cast<const physical_plan::PhysicalCreateCollectionPlan &>(plan));
+        case PhysicalStatementPlanKind::CreateIndex:
+            return execute_create_index(static_cast<const physical_plan::PhysicalCreateIndexPlan &>(plan));
+        case PhysicalStatementPlanKind::CreateVectorIndex:
+            return execute_create_vector_index(static_cast<const physical_plan::PhysicalCreateVectorIndexPlan &>(plan));
+        case PhysicalStatementPlanKind::DropDatabase:
+            return execute_drop_database(static_cast<const physical_plan::PhysicalDropDatabasePlan &>(plan));
+        case PhysicalStatementPlanKind::DropCollection:
+            return execute_drop_collection(static_cast<const physical_plan::PhysicalDropCollectionPlan &>(plan));
+        case PhysicalStatementPlanKind::DropIndex:
+            return execute_drop_index(static_cast<const physical_plan::PhysicalDropIndexPlan &>(plan));
+        case PhysicalStatementPlanKind::DropVectorIndex:
+            return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
+        default:
+            executor::Executor executor {meta_, storage_, index_engine_, vector_index_engine_, *transaction_manager_};
+            return executor.execute(plan);
+        }
+    }();
+    if (executed && writes_wal(plan.kind())) {
+        maybe_run_automatic_checkpoint();
     }
+    return executed;
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::commit_catalog_transaction(

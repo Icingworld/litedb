@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <memory>
@@ -39,6 +41,12 @@ class PhysicalDropVectorIndexPlan;
 namespace litedb::core::database
 {
 
+struct AutomaticCheckpointOptions
+{
+    /** 0 disables automatic checkpointing. */
+    std::uint64_t wal_size_threshold_bytes {0};
+};
+
 /**
  * @brief 数据库配置
  */
@@ -46,6 +54,7 @@ struct DatabaseConfig
 {
     std::filesystem::path data_dir;                         ///< 数据目录
     transaction::TransactionOptions transaction_options;   ///< 事务测试与观测配置
+    AutomaticCheckpointOptions automatic_checkpoint;       ///< WAL size based checkpoint policy
 };
 
 struct DatabaseObservability
@@ -53,6 +62,9 @@ struct DatabaseObservability
     transaction::TransactionMetrics transaction;
     std::size_t recovered_committed_transactions {0};
     std::size_t replayed_writes {0};
+    std::uint64_t automatic_checkpoint_attempts {0};
+    std::uint64_t completed_automatic_checkpoints {0};
+    std::uint64_t failed_automatic_checkpoints {0};
 };
 
 /**
@@ -148,6 +160,8 @@ private:
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute(
         const physical_plan::PhysicalStatementPlan & plan
     );
+
+    void maybe_run_automatic_checkpoint();
 
     /**
      * @brief 执行创建数据库
@@ -309,8 +323,12 @@ private:
     std::optional<wal::WalManager> wal_manager_;     ///< WAL 分段管理器
     std::unique_ptr<transaction::TransactionManager> transaction_manager_; ///< 事务管理器
     transaction::TransactionOptions transaction_options_; ///< 事务配置
+    AutomaticCheckpointOptions automatic_checkpoint_;     ///< WAL size based checkpoint policy
     std::size_t recovered_committed_transactions_ {0}; ///< 启动发现的已提交事务数
     std::size_t replayed_writes_ {0};                ///< 启动 redo 写入数
+    std::atomic_uint64_t automatic_checkpoint_attempts_ {0};
+    std::atomic_uint64_t completed_automatic_checkpoints_ {0};
+    std::atomic_uint64_t failed_automatic_checkpoints_ {0};
     std::mutex mutex_;                     ///< 互斥锁
 };
 

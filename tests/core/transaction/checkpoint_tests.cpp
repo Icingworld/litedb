@@ -30,6 +30,52 @@ std::unique_ptr<database::DatabaseEngine> open_database(const std::filesystem::p
     return std::move(*opened);
 }
 
+std::unique_ptr<database::DatabaseEngine> open_database(database::DatabaseConfig config)
+{
+    auto opened = database::DatabaseEngine::open(std::move(config));
+    if (!opened) throw std::runtime_error(opened.error().message);
+    return std::move(*opened);
+}
+
+void test_automatic_checkpoint_by_wal_size()
+{
+    const auto directory = std::filesystem::temp_directory_path() / "litedb_automatic_checkpoint_tests";
+    std::filesystem::remove_all(directory);
+
+    {
+        auto engine = open_database(database::DatabaseConfig {
+            .data_dir = directory,
+            .automatic_checkpoint = {
+                .wal_size_threshold_bytes = wal::WalCodec::FileHeaderSize + 1,
+            },
+        });
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        execute_ok(session, "CREATE COLLECTION docs (id BIGINT);");
+        execute_ok(session, "INSERT INTO docs VALUES (1);");
+
+        const auto observation = engine->observability();
+        require(observation.automatic_checkpoint_attempts == 3,
+                "automatic checkpoint attempt count mismatch");
+        require(observation.completed_automatic_checkpoints == 3 &&
+                observation.failed_automatic_checkpoints == 0,
+                "automatic checkpoint completion count mismatch");
+        require(observation.transaction.completed_checkpoints == 3,
+                "transaction checkpoint metrics did not include automatic checkpoints");
+        require(observation.transaction.wal_generation == 4,
+                "automatic checkpoint did not rotate the WAL after each write statement");
+        require(observation.transaction.wal_size_bytes == wal::WalCodec::FileHeaderSize,
+                "automatic checkpoint did not reclaim the WAL");
+    }
+
+    auto reopened = open_database(directory);
+    database::Session session {*reopened};
+    execute_ok(session, "USE demo;");
+    const auto rows = execute_ok(session, "SELECT id FROM docs;");
+    require(rows.rows.size() == 1, "automatic checkpoint restart lost committed data");
+}
+
 } // namespace
 
 int main()
@@ -49,6 +95,9 @@ int main()
         const auto before = engine->observability().transaction;
         require(before.wal_generation == 1 && before.wal_size_bytes > wal::WalCodec::FileHeaderSize,
                 "initial WAL observation mismatch");
+        const auto automatic_before = engine->observability();
+        require(automatic_before.automatic_checkpoint_attempts == 0,
+                "automatic checkpoint should be disabled by default");
         require(engine->checkpoint().has_value(), "manual checkpoint failed");
 
         const auto after = engine->observability().transaction;
@@ -77,5 +126,6 @@ int main()
     execute_ok(session, "USE demo;");
     const auto rows = execute_ok(session, "SELECT id FROM docs;");
     require(rows.rows.size() == 2, "checkpoint restart lost committed rows");
+    test_automatic_checkpoint_by_wal_size();
     return 0;
 }
