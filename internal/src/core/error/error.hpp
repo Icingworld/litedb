@@ -2,7 +2,6 @@
 
 #include <concepts>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -185,20 +184,6 @@ public:
         context_ = detail::ErasedErrorContext {std::forward<C>(context)};
     }
 
-    template <ErrorType E>
-    explicit Error(E error_code, std::string_view message, Error cause)
-        : Error(error_code, message)
-    {
-        cause_ = std::make_unique<Error>(std::move(cause));
-    }
-
-    template <ErrorType E, ErrorContextType C>
-    explicit Error(E error_code, std::string_view message, C && context, Error cause)
-        : Error(error_code, message, std::forward<C>(context))
-    {
-        cause_ = std::make_unique<Error>(std::move(cause));
-    }
-
     Error(const Error &) = delete;
 
     Error & operator=(const Error &) = delete;
@@ -252,16 +237,6 @@ public:
     }
 
     /**
-     * @brief 获取导致当前错误的下层错误
-     * @return 下层错误；当前错误没有 cause 时返回 nullptr
-     */
-    [[nodiscard]]
-    const Error * cause() const noexcept
-    {
-        return cause_.get();
-    }
-
-    /**
      * @brief 编码错误码
      * @return 编码后的错误码
      */
@@ -276,7 +251,6 @@ private:
     std::uint8_t code_;                         ///< 错误码
     std::string message_;                       ///< 错误信息
     detail::ErasedErrorContext context_;        ///< 模块上下文
-    std::unique_ptr<Error> cause_;              ///< 下层错误
 };
 
 } // namespace litedb::core::error
