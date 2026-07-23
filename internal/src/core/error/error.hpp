@@ -6,6 +6,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <memory>
 
 namespace litedb::core::error
 {
@@ -48,7 +49,26 @@ concept ErrorType =
     };
 
 /**
+ * @brief 错误上下文
+ */
+class ErrorContext
+{
+public:
+    virtual ~ErrorContext() = default;
+};
+
+/**
+ * @brief 错误上下文类型概念
+ * @tparam C 错误上下文类型
+ * @details 错误上下文类型 C 必须满足以下条件：
+ * 1. C 必须公开继承自 ErrorContext
+ */
+template <typename C>
+concept ErrorContextType = std::derived_from<std::remove_cvref_t<C>, ErrorContext>;
+
+/**
  * @brief 错误
+ * @details 因为持有 unique_ptr，错误对象不可拷贝
  */
 class Error
 {
@@ -58,7 +78,16 @@ public:
         : category_(ErrorTraits<E>::category)
         , code_(std::to_underlying(error_code))
         , message_(message)
+        , context_(nullptr)
     {
+    }
+
+    template <ErrorType E, ErrorContextType C>
+    explicit Error(E error_code, std::string_view message, C && context)
+        : Error(error_code, message)
+    {
+        using Context = std::remove_cvref_t<C>;
+        context_ = std::make_unique<Context>(std::forward<C>(context));
     }
 
 public:
@@ -93,6 +122,17 @@ public:
     }
 
     /**
+     * @brief 获取错误上下文
+     * @return 错误上下文，如果没有上下文，则返回 nullptr
+     */
+    template <ErrorContextType C>
+    [[nodiscard]]
+    const C * context() const noexcept
+    {
+        return dynamic_cast<C *>(context_.get());
+    }
+
+    /**
      * @brief 编码错误码
      * @return 编码后的错误码
      */
@@ -103,9 +143,10 @@ public:
     }
 
 private:
-    ErrorCategory category_;    ///< 错误所属模块
-    std::uint8_t code_;         ///< 错误码
-    std::string message_;       ///< 错误信息
+    ErrorCategory category_;                    ///< 错误所属模块
+    std::uint8_t code_;                         ///< 错误码
+    std::string message_;                       ///< 错误信息
+    std::unique_ptr<ErrorContext> context_;     ///< 错误上下文
 };
 
 } // namespace litedb::core::error
