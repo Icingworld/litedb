@@ -14,6 +14,7 @@ namespace
 
 using namespace litedb::core::filesystem;
 using namespace litedb::core::filesystem::backend;
+using litedb::core::error::Error;
 
 void require(bool condition, const char * message)
 {
@@ -52,12 +53,12 @@ public:
         ++state_->handle_destructions;
     }
 
-    std::expected<void, FileSystemError> close() override
+    std::expected<void, Error> close() override
     {
         return {};
     }
 
-    std::expected<std::size_t, FileSystemError> read_at(
+    std::expected<std::size_t, Error> read_at(
         std::uint64_t offset,
         std::span<std::byte> buffer
     ) override
@@ -71,7 +72,7 @@ public:
         return count;
     }
 
-    std::expected<void, FileSystemError> write_at(
+    std::expected<void, Error> write_at(
         std::uint64_t offset,
         std::span<const std::byte> data
     ) override
@@ -84,30 +85,30 @@ public:
         return {};
     }
 
-    std::expected<void, FileSystemError> append(std::span<const std::byte> data) override
+    std::expected<void, Error> append(std::span<const std::byte> data) override
     {
         state_->data.insert(state_->data.end(), data.begin(), data.end());
         return {};
     }
 
-    std::expected<std::uint64_t, FileSystemError> size() override
+    std::expected<std::uint64_t, Error> size() override
     {
         return state_->data.size();
     }
 
-    std::expected<void, FileSystemError> truncate(std::uint64_t size) override
+    std::expected<void, Error> truncate(std::uint64_t size) override
     {
         state_->data.resize(static_cast<std::size_t>(size));
         return {};
     }
 
-    std::expected<void, FileSystemError> sync_data() override
+    std::expected<void, Error> sync_data() override
     {
         state_->data_synced = true;
         return {};
     }
 
-    std::expected<void, FileSystemError> sync_all() override
+    std::expected<void, Error> sync_all() override
     {
         state_->all_synced = true;
         return {};
@@ -130,7 +131,7 @@ public:
         ++state_->filesystem_destructions;
     }
 
-    std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> open(
+    std::expected<std::unique_ptr<FileHandleBackend>, Error> open(
         const std::filesystem::path & path,
         const FileOpenOptions & options
     ) override
@@ -138,7 +139,7 @@ public:
         state_->last_path = path;
         state_->last_options = options;
         if (path == "missing") {
-            return std::unexpected(FileSystemError {FileSystemErrorCode::NotFound, "missing"});
+            return std::unexpected(Error {FileSystemErrorCode::NotFound, "missing"});
         }
 
         std::unique_ptr<FileHandleBackend> handle =
@@ -146,7 +147,7 @@ public:
         return handle;
     }
 
-    std::expected<std::vector<std::filesystem::path>, FileSystemError> list_dir(
+    std::expected<std::vector<std::filesystem::path>, Error> list_dir(
         const std::filesystem::path & path
     ) override
     {
@@ -154,20 +155,20 @@ public:
         return std::vector<std::filesystem::path> {"first", "second"};
     }
 
-    std::expected<bool, FileSystemError> exists(const std::filesystem::path & path) override
+    std::expected<bool, Error> exists(const std::filesystem::path & path) override
     {
         state_->last_path = path;
         return path != "missing";
     }
 
-    std::expected<void, FileSystemError> create_dir_all(const std::filesystem::path & path) override
+    std::expected<void, Error> create_dir_all(const std::filesystem::path & path) override
     {
         state_->last_path = path;
         state_->directory_created = true;
         return {};
     }
 
-    std::expected<void, FileSystemError> rename(
+    std::expected<void, Error> rename(
         const std::filesystem::path & from,
         const std::filesystem::path & to
     ) override
@@ -177,7 +178,7 @@ public:
         return {};
     }
 
-    std::expected<void, FileSystemError> replace_file_atomic(
+    std::expected<void, Error> replace_file_atomic(
         const std::filesystem::path & from,
         const std::filesystem::path & to
     ) override
@@ -188,14 +189,14 @@ public:
         return {};
     }
 
-    std::expected<void, FileSystemError> remove(const std::filesystem::path & path) override
+    std::expected<void, Error> remove(const std::filesystem::path & path) override
     {
         state_->last_path = path;
         state_->removed = true;
         return {};
     }
 
-    std::expected<void, FileSystemError> sync_directory(const std::filesystem::path & path) override
+    std::expected<void, Error> sync_directory(const std::filesystem::path & path) override
     {
         state_->last_path = path;
         state_->directory_synced = true;
@@ -246,15 +247,15 @@ int main()
 
         const std::byte appended[] {std::byte {4}};
         require(file.append(appended).has_value(), "append failed");
-        require(file.size().value() == 4, "append produced wrong file size");
+        require(*file.size() == 4, "append produced wrong file size");
         require(file.truncate(2).has_value(), "truncate failed");
-        require(file.size().value() == 2, "truncate produced wrong file size");
+        require(*file.size() == 2, "truncate produced wrong file size");
         require(file.sync_data().has_value() && state->data_synced, "sync_data failed");
         require(file.sync_all().has_value() && state->all_synced, "sync_all failed");
 
         const auto missing = moved_filesystem.open("missing");
         require(
-            !missing && missing.error().code == FileSystemErrorCode::NotFound,
+            !missing && missing.error().is(FileSystemErrorCode::NotFound),
             "open did not propagate backend error"
         );
 
@@ -266,13 +267,13 @@ int main()
             }
         );
         require(
-            !invalid_open && invalid_open.error().code == FileSystemErrorCode::InvalidArgument,
+            !invalid_open && invalid_open.error().is(FileSystemErrorCode::InvalidArgument),
             "read-only truncate must be rejected before reaching the backend"
         );
 
         const auto entries = moved_filesystem.list_dir("root");
         require(entries && entries->size() == 2 && state->last_path == "root", "list_dir forwarding failed");
-        require(moved_filesystem.exists("present").value(), "exists forwarding failed");
+        require(*moved_filesystem.exists("present"), "exists forwarding failed");
         require(moved_filesystem.create_dir_all("new-dir").has_value(), "create_dir_all failed");
         require(state->directory_created && state->last_path == "new-dir", "create_dir_all forwarding failed");
         require(moved_filesystem.rename("old", "new").has_value(), "rename failed");

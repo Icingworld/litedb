@@ -51,50 +51,65 @@ FileSystemErrorCode map_errno(int error)
     }
 }
 
-FileSystemError make_errno_error(
+error::Error make_errno_error(
     int error,
     std::string operation,
     const std::filesystem::path & path
 )
 {
     const std::error_code native_code(error, std::generic_category());
-    return FileSystemError {
-        map_errno(error),
-        operation + " failed: " + std::strerror(error),
+    FileSystemErrorContext context {
         std::move(operation),
         path,
         {},
         native_code,
     };
+    return error::Error {
+        map_errno(error),
+        context.operation + " failed: " + native_code.message(),
+        std::move(context),
+    };
 }
 
-FileSystemError range_error(
+error::Error range_error(
     std::string operation,
     const std::filesystem::path & path
 )
 {
-    return FileSystemError {
-        FileSystemErrorCode::InvalidArgument,
-        operation + " range exceeds the native file offset limit",
+    const auto message = operation + " range exceeds the native file offset limit";
+    FileSystemErrorContext context {
         std::move(operation),
         path,
+        {},
+        {},
+    };
+    return error::Error {
+        FileSystemErrorCode::InvalidArgument,
+        message,
+        std::move(context),
     };
 }
 
-FileSystemError closed_error(
+error::Error closed_error(
     std::string operation,
     const std::filesystem::path & path
 )
 {
-    return FileSystemError {
-        FileSystemErrorCode::InvalidArgument,
-        operation + " failed because the file handle is closed",
+    const auto message = operation + " failed because the file handle is closed";
+    FileSystemErrorContext context {
         std::move(operation),
         path,
+        {},
+        {},
+    };
+    return error::Error {
+        FileSystemErrorCode::InvalidArgument,
+        message,
+        std::move(context),
     };
 }
 
-std::expected<off_t, FileSystemError> checked_range(
+std::expected<off_t, error::Error> checked_range(
     std::uint64_t offset,
     std::size_t size,
     std::string operation,
@@ -108,7 +123,7 @@ std::expected<off_t, FileSystemError> checked_range(
     return static_cast<off_t>(offset);
 }
 
-std::expected<void, FileSystemError> write_all_at(
+std::expected<void, error::Error> write_all_at(
     int fd,
     const std::byte * data,
     std::size_t size,
@@ -130,11 +145,16 @@ std::expected<void, FileSystemError> write_all_at(
             return std::unexpected(make_errno_error(errno, "pwrite", path));
         }
         if (written == 0) {
-            return std::unexpected(FileSystemError {
-                FileSystemErrorCode::IoError,
-                "pwrite wrote zero bytes",
+            FileSystemErrorContext context {
                 "pwrite",
                 path,
+                {},
+                {},
+            };
+            return std::unexpected(error::Error {
+                FileSystemErrorCode::IoError,
+                "pwrite wrote zero bytes",
+                std::move(context),
             });
         }
         written_total += static_cast<std::size_t>(written);
@@ -155,7 +175,7 @@ PosixFileHandleBackend::~PosixFileHandleBackend()
     static_cast<void>(close());
 }
 
-std::expected<void, FileSystemError> PosixFileHandleBackend::close()
+std::expected<void, error::Error> PosixFileHandleBackend::close()
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
@@ -169,7 +189,7 @@ std::expected<void, FileSystemError> PosixFileHandleBackend::close()
     return {};
 }
 
-std::expected<std::size_t, FileSystemError> PosixFileHandleBackend::read_at(
+std::expected<std::size_t, error::Error> PosixFileHandleBackend::read_at(
     std::uint64_t offset,
     std::span<std::byte> buffer
 )
@@ -179,7 +199,7 @@ std::expected<std::size_t, FileSystemError> PosixFileHandleBackend::read_at(
         return std::unexpected(closed_error("pread", path_));
     }
 
-    const auto native_offset = checked_range(offset, buffer.size(), "pread", path_);
+    auto native_offset = checked_range(offset, buffer.size(), "pread", path_);
     if (!native_offset) {
         return std::unexpected(std::move(native_offset.error()));
     }
@@ -205,7 +225,7 @@ std::expected<std::size_t, FileSystemError> PosixFileHandleBackend::read_at(
     return read_total;
 }
 
-std::expected<void, FileSystemError> PosixFileHandleBackend::write_at(
+std::expected<void, error::Error> PosixFileHandleBackend::write_at(
     std::uint64_t offset,
     std::span<const std::byte> data
 )
@@ -215,14 +235,14 @@ std::expected<void, FileSystemError> PosixFileHandleBackend::write_at(
         return std::unexpected(closed_error("pwrite", path_));
     }
 
-    const auto native_offset = checked_range(offset, data.size(), "pwrite", path_);
+    auto native_offset = checked_range(offset, data.size(), "pwrite", path_);
     if (!native_offset) {
         return std::unexpected(std::move(native_offset.error()));
     }
     return write_all_at(fd_, data.data(), data.size(), *native_offset, path_);
 }
 
-std::expected<void, FileSystemError> PosixFileHandleBackend::append(std::span<const std::byte> data)
+std::expected<void, error::Error> PosixFileHandleBackend::append(std::span<const std::byte> data)
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
@@ -233,7 +253,7 @@ std::expected<void, FileSystemError> PosixFileHandleBackend::append(std::span<co
     if (offset < 0) {
         return std::unexpected(make_errno_error(errno, "lseek", path_));
     }
-    const auto native_offset = checked_range(
+    auto native_offset = checked_range(
         static_cast<std::uint64_t>(offset),
         data.size(),
         "append",
@@ -245,7 +265,7 @@ std::expected<void, FileSystemError> PosixFileHandleBackend::append(std::span<co
     return write_all_at(fd_, data.data(), data.size(), *native_offset, path_);
 }
 
-std::expected<std::uint64_t, FileSystemError> PosixFileHandleBackend::size()
+std::expected<std::uint64_t, error::Error> PosixFileHandleBackend::size()
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
@@ -259,14 +279,14 @@ std::expected<std::uint64_t, FileSystemError> PosixFileHandleBackend::size()
     return static_cast<std::uint64_t>(stat_buffer.st_size);
 }
 
-std::expected<void, FileSystemError> PosixFileHandleBackend::truncate(std::uint64_t size)
+std::expected<void, error::Error> PosixFileHandleBackend::truncate(std::uint64_t size)
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
         return std::unexpected(closed_error("ftruncate", path_));
     }
 
-    const auto native_size = checked_range(size, 0, "ftruncate", path_);
+    auto native_size = checked_range(size, 0, "ftruncate", path_);
     if (!native_size) {
         return std::unexpected(std::move(native_size.error()));
     }
@@ -276,7 +296,7 @@ std::expected<void, FileSystemError> PosixFileHandleBackend::truncate(std::uint6
     return {};
 }
 
-std::expected<void, FileSystemError> PosixFileHandleBackend::sync_data()
+std::expected<void, error::Error> PosixFileHandleBackend::sync_data()
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
@@ -300,7 +320,7 @@ std::expected<void, FileSystemError> PosixFileHandleBackend::sync_data()
     return {};
 }
 
-std::expected<void, FileSystemError> PosixFileHandleBackend::sync_all()
+std::expected<void, error::Error> PosixFileHandleBackend::sync_all()
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {

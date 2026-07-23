@@ -101,37 +101,67 @@ std::string win32_error_message(DWORD error)
     return message;
 }
 
-FileSystemError make_win32_error(
+error::Error make_error(
+    FileSystemErrorCode code,
+    std::string message,
+    std::string operation,
+    const std::filesystem::path & path,
+    std::error_code native_code = {}
+)
+{
+    FileSystemErrorContext context {
+        std::move(operation),
+        path,
+        {},
+        std::move(native_code),
+    };
+    return error::Error {code, message, std::move(context)};
+}
+
+error::Error make_win32_error(
     DWORD error,
     std::string operation,
     const std::filesystem::path & path
 )
 {
     const std::error_code native_code(static_cast<int>(error), std::system_category());
-    return FileSystemError {
+    return make_error(
         map_win32_error(error),
         operation + " failed: " + win32_error_message(error),
         std::move(operation),
         path,
-        {},
-        native_code,
-    };
+        native_code
+    );
 }
 
-FileSystemError range_error(
+error::Error range_error(
     std::string operation,
     const std::filesystem::path & path
 )
 {
-    return FileSystemError {
+    const auto message = operation + " range exceeds the native file offset limit";
+    return make_error(
         FileSystemErrorCode::InvalidArgument,
-        operation + " range exceeds the native file offset limit",
+        message,
         std::move(operation),
-        path,
-    };
+        path
+    );
 }
 
-std::expected<void, FileSystemError> write_all_locked(
+error::Error closed_error(
+    std::string operation,
+    const std::filesystem::path & path
+)
+{
+    return make_error(
+        FileSystemErrorCode::InvalidArgument,
+        "file handle is closed",
+        std::move(operation),
+        path
+    );
+}
+
+std::expected<void, error::Error> write_all_locked(
     HANDLE handle,
     const std::byte * data,
     std::size_t size,
@@ -156,12 +186,12 @@ std::expected<void, FileSystemError> write_all_locked(
             return std::unexpected(make_win32_error(GetLastError(), "WriteFile", path));
         }
         if (written == 0) {
-            return std::unexpected(FileSystemError {
+            return std::unexpected(make_error(
                 FileSystemErrorCode::IoError,
                 "WriteFile wrote zero bytes",
                 "WriteFile",
-                path,
-            });
+                path
+            ));
         }
         written_total += written;
     }
@@ -182,7 +212,7 @@ Win32FileHandleBackend::~Win32FileHandleBackend()
     static_cast<void>(close());
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::close()
+std::expected<void, error::Error> Win32FileHandleBackend::close()
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
@@ -197,7 +227,7 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::close()
     return {};
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::seek_locked(
+std::expected<void, error::Error> Win32FileHandleBackend::seek_locked(
     std::uint64_t offset,
     std::size_t size,
     const char * operation
@@ -215,22 +245,17 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::seek_locked(
     return {};
 }
 
-std::expected<std::size_t, FileSystemError> Win32FileHandleBackend::read_at(
+std::expected<std::size_t, error::Error> Win32FileHandleBackend::read_at(
     std::uint64_t offset,
     std::span<std::byte> buffer
 )
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidArgument,
-            "file handle is closed",
-            "ReadFile",
-            path_,
-        });
+        return std::unexpected(closed_error("ReadFile", path_));
     }
 
-    if (const auto seek = seek_locked(offset, buffer.size(), "ReadFile"); !seek) {
+    if (auto seek = seek_locked(offset, buffer.size(), "ReadFile"); !seek) {
         return std::unexpected(std::move(seek.error()));
     }
 
@@ -259,37 +284,27 @@ std::expected<std::size_t, FileSystemError> Win32FileHandleBackend::read_at(
     return read_total;
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::write_at(
+std::expected<void, error::Error> Win32FileHandleBackend::write_at(
     std::uint64_t offset,
     std::span<const std::byte> data
 )
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidArgument,
-            "file handle is closed",
-            "WriteFile",
-            path_,
-        });
+        return std::unexpected(closed_error("WriteFile", path_));
     }
 
-    if (const auto seek = seek_locked(offset, data.size(), "WriteFile"); !seek) {
-        return seek;
+    if (auto seek = seek_locked(offset, data.size(), "WriteFile"); !seek) {
+        return std::move(seek);
     }
     return write_all_locked(handle_, data.data(), data.size(), path_);
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::append(std::span<const std::byte> data)
+std::expected<void, error::Error> Win32FileHandleBackend::append(std::span<const std::byte> data)
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidArgument,
-            "file handle is closed",
-            "append",
-            path_,
-        });
+        return std::unexpected(closed_error("append", path_));
     }
 
     LARGE_INTEGER distance {};
@@ -305,16 +320,11 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::append(std::span<co
     return write_all_locked(handle_, data.data(), data.size(), path_);
 }
 
-std::expected<std::uint64_t, FileSystemError> Win32FileHandleBackend::size()
+std::expected<std::uint64_t, error::Error> Win32FileHandleBackend::size()
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidArgument,
-            "file handle is closed",
-            "GetFileSizeEx",
-            path_,
-        });
+        return std::unexpected(closed_error("GetFileSizeEx", path_));
     }
 
     LARGE_INTEGER file_size {};
@@ -327,20 +337,15 @@ std::expected<std::uint64_t, FileSystemError> Win32FileHandleBackend::size()
     return static_cast<std::uint64_t>(file_size.QuadPart);
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::truncate(std::uint64_t size)
+std::expected<void, error::Error> Win32FileHandleBackend::truncate(std::uint64_t size)
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidArgument,
-            "file handle is closed",
-            "SetEndOfFile",
-            path_,
-        });
+        return std::unexpected(closed_error("SetEndOfFile", path_));
     }
 
-    if (const auto seek = seek_locked(size, 0, "SetEndOfFile"); !seek) {
-        return seek;
+    if (auto seek = seek_locked(size, 0, "SetEndOfFile"); !seek) {
+        return std::move(seek);
     }
     if (!SetEndOfFile(handle_)) {
         return std::unexpected(make_win32_error(GetLastError(), "SetEndOfFile", path_));
@@ -348,21 +353,16 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::truncate(std::uint6
     return {};
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::sync_data()
+std::expected<void, error::Error> Win32FileHandleBackend::sync_data()
 {
     return sync_all();
 }
 
-std::expected<void, FileSystemError> Win32FileHandleBackend::sync_all()
+std::expected<void, error::Error> Win32FileHandleBackend::sync_all()
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidArgument,
-            "file handle is closed",
-            "FlushFileBuffers",
-            path_,
-        });
+        return std::unexpected(closed_error("FlushFileBuffers", path_));
     }
 
     if (!FlushFileBuffers(handle_)) {

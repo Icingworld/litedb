@@ -58,7 +58,7 @@ FileSystemErrorCode map_error_code(const std::error_code & error)
     return FileSystemErrorCode::IoError;
 }
 
-FileSystemError make_error(
+error::Error make_error(
     const std::error_code & error,
     std::string operation,
     const std::filesystem::path & path,
@@ -66,17 +66,20 @@ FileSystemError make_error(
 )
 {
     auto message = operation + " failed: " + error.message();
-    return FileSystemError {
-        map_error_code(error),
-        std::move(message),
+    FileSystemErrorContext context {
         std::move(operation),
         path,
         related_path,
         error,
     };
+    return error::Error (
+        map_error_code(error),
+        std::move(message),
+        std::move(context)
+    );
 }
 
-FileSystemError make_errno_error(
+error::Error make_errno_error(
     int error,
     std::string operation,
     const std::filesystem::path & path,
@@ -128,7 +131,7 @@ std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend()
     return std::make_unique<PosixFileSystemBackend>();
 }
 
-std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> PosixFileSystemBackend::open(
+std::expected<std::unique_ptr<FileHandleBackend>, error::Error> PosixFileSystemBackend::open(
     const std::filesystem::path & path,
     const FileOpenOptions & options
 )
@@ -147,7 +150,7 @@ std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> PosixFileSyst
     return backend;
 }
 
-std::expected<std::vector<std::filesystem::path>, FileSystemError> PosixFileSystemBackend::list_dir(
+std::expected<std::vector<std::filesystem::path>, error::Error> PosixFileSystemBackend::list_dir(
     const std::filesystem::path & path
 )
 {
@@ -156,11 +159,16 @@ std::expected<std::vector<std::filesystem::path>, FileSystemError> PosixFileSyst
         if (error) {
             return std::unexpected(make_error(error, "is_directory", path));
         }
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::NotADirectory,
-            "path is not a directory",
+        FileSystemErrorContext context {
             "is_directory",
             path,
+            {},
+            {},
+        };
+        return std::unexpected(error::Error {
+            FileSystemErrorCode::NotADirectory,
+            "path is not a directory",
+            std::move(context),
         });
     }
 
@@ -174,7 +182,7 @@ std::expected<std::vector<std::filesystem::path>, FileSystemError> PosixFileSyst
     return entries;
 }
 
-std::expected<bool, FileSystemError> PosixFileSystemBackend::exists(const std::filesystem::path & path)
+std::expected<bool, error::Error> PosixFileSystemBackend::exists(const std::filesystem::path & path)
 {
     std::error_code error;
     const bool result = std::filesystem::exists(path, error);
@@ -184,7 +192,7 @@ std::expected<bool, FileSystemError> PosixFileSystemBackend::exists(const std::f
     return result;
 }
 
-std::expected<void, FileSystemError> PosixFileSystemBackend::create_dir_all(
+std::expected<void, error::Error> PosixFileSystemBackend::create_dir_all(
     const std::filesystem::path & path
 )
 {
@@ -196,7 +204,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::create_dir_all(
     return {};
 }
 
-std::expected<void, FileSystemError> PosixFileSystemBackend::rename(
+std::expected<void, error::Error> PosixFileSystemBackend::rename(
     const std::filesystem::path & from,
     const std::filesystem::path & to
 )
@@ -207,12 +215,16 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::rename(
         return std::unexpected(make_error(error, "symlink_status", to));
     }
     if (std::filesystem::exists(destination_status)) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::AlreadyExists,
-            "rename destination already exists",
+        FileSystemErrorContext context {
             "rename",
             from,
             to,
+            {},
+        };
+        return std::unexpected(error::Error {
+            FileSystemErrorCode::AlreadyExists,
+            "rename destination already exists",
+            std::move(context),
         });
     }
     std::filesystem::rename(from, to, error);
@@ -222,7 +234,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::rename(
     return {};
 }
 
-std::expected<void, FileSystemError> PosixFileSystemBackend::replace_file_atomic(
+std::expected<void, error::Error> PosixFileSystemBackend::replace_file_atomic(
     const std::filesystem::path & from,
     const std::filesystem::path & to
 )
@@ -235,7 +247,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::replace_file_atomic
     return {};
 }
 
-std::expected<void, FileSystemError> PosixFileSystemBackend::remove(const std::filesystem::path & path)
+std::expected<void, error::Error> PosixFileSystemBackend::remove(const std::filesystem::path & path)
 {
     std::error_code error;
     std::filesystem::remove(path, error);
@@ -245,7 +257,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::remove(const std::f
     return {};
 }
 
-std::expected<void, FileSystemError> PosixFileSystemBackend::sync_directory(
+std::expected<void, error::Error> PosixFileSystemBackend::sync_directory(
     const std::filesystem::path & path
 )
 {

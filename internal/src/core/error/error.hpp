@@ -216,6 +216,19 @@ public:
     }
 
     /**
+     * @brief 判断是否为指定的模块错误码
+     * @tparam E 模块错误码枚举
+     * @param error_code 待匹配的错误码
+     */
+    template <ErrorType E>
+    [[nodiscard]]
+    bool is(E error_code) const noexcept
+    {
+        return category_ == ErrorTraits<E>::category &&
+               code_ == std::to_underlying(error_code);
+    }
+
+    /**
      * @brief 获取错误信息
      * @return 错误信息
      */

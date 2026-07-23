@@ -42,14 +42,14 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> close();
+    std::expected<void, error::Error> close();
 
     /**
      * @brief 从指定偏移读取数据
      * @return 实际读取的字节数；到达文件末尾时允许小于缓冲区大小
      */
     [[nodiscard]]
-    std::expected<std::size_t, FileSystemError> read_at(
+    std::expected<std::size_t, error::Error> read_at(
         std::uint64_t offset,
         std::span<std::byte> buffer
     );
@@ -60,7 +60,7 @@ public:
      * 成功时保证整个缓冲区均已写入，否则返回错误。
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> write_at(
+    std::expected<void, error::Error> write_at(
         std::uint64_t offset,
         std::span<const std::byte> data
     );
@@ -72,31 +72,31 @@ public:
      * 竞态而互相覆盖。不同 FileHandle 或进程之间不提供原子追加保证。
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> append(std::span<const std::byte> data);
+    std::expected<void, error::Error> append(std::span<const std::byte> data);
 
     /**
      * @brief 获取当前文件大小
      */
     [[nodiscard]]
-    std::expected<std::uint64_t, FileSystemError> size();
+    std::expected<std::uint64_t, error::Error> size();
 
     /**
      * @brief 将文件调整到指定大小
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> truncate(std::uint64_t size);
+    std::expected<void, error::Error> truncate(std::uint64_t size);
 
     /**
      * @brief 将文件数据及读取数据所必需的元数据同步到持久化存储
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> sync_data();
+    std::expected<void, error::Error> sync_data();
 
     /**
      * @brief 将文件数据及文件的全部元数据同步到持久化存储
      */
     [[nodiscard]]
-    std::expected<void, FileSystemError> sync_all();
+    std::expected<void, error::Error> sync_all();
 
 private:
     std::unique_ptr<backend::FileHandleBackend> backend_;   ///< 文件句柄后端

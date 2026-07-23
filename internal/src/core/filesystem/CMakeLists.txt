@@ -5,6 +5,7 @@ add_library(litedb_filesystem
     platform_filesystem.cpp
 )
 
+# 根据不同平台添加不同的后端实现
 if(WIN32)
     target_sources(litedb_filesystem PRIVATE
         backend/win32/win_file_handle_backend.cpp

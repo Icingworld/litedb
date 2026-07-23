@@ -61,7 +61,7 @@ int main()
 
     const auto nested_dir = root / "nested" / "dir";
     require(filesystem.create_dir_all(nested_dir).has_value(), "create_dir_all failed");
-    require(filesystem.exists(nested_dir).value(), "created directory does not exist");
+    require(*filesystem.exists(nested_dir), "created directory does not exist");
 
     const auto path = nested_dir / "data.ldb";
     const FileOpenOptions create_options {
@@ -81,7 +81,7 @@ int main()
         std::span {&overflow_byte, 1}
     );
     require(
-        !overflow_write && overflow_write.error().code == FileSystemErrorCode::InvalidArgument,
+        !overflow_write && overflow_write.error().is(FileSystemErrorCode::InvalidArgument),
         "write_at must reject offset plus length overflow"
     );
     std::array<std::byte, 1> overflow_buffer {};
@@ -90,7 +90,7 @@ int main()
         overflow_buffer
     );
     require(
-        !overflow_read && overflow_read.error().code == FileSystemErrorCode::InvalidArgument,
+        !overflow_read && overflow_read.error().is(FileSystemErrorCode::InvalidArgument),
         "read_at must reject offset plus length overflow"
     );
 
@@ -110,9 +110,9 @@ int main()
 
     const auto appended = bytes({5, 6});
     require(handle.append(appended).has_value(), "append failed");
-    require(handle.size().value() == 6, "append produced wrong file size");
+    require(*handle.size() == 6, "append produced wrong file size");
     require(handle.truncate(3).has_value(), "truncate failed");
-    require(handle.size().value() == 3, "truncate produced wrong file size");
+    require(*handle.size() == 3, "truncate produced wrong file size");
     require(handle.sync_all().has_value(), "sync_all failed");
     require(handle.close().has_value(), "close failed");
 
@@ -124,7 +124,7 @@ int main()
         }
     );
     require(
-        !create_new_again && create_new_again.error().code == FileSystemErrorCode::AlreadyExists,
+        !create_new_again && create_new_again.error().is(FileSystemErrorCode::AlreadyExists),
         "CreateNew must fail for an existing file"
     );
 
@@ -151,7 +151,7 @@ int main()
         std::span {&overflow_byte, 1}
     );
     require(
-        !readonly_write && readonly_write.error().code == FileSystemErrorCode::PermissionDenied,
+        !readonly_write && readonly_write.error().is(FileSystemErrorCode::PermissionDenied),
         "write through a read-only handle must return PermissionDenied"
     );
     require(readonly->close().has_value(), "failed to close read-only handle");
@@ -167,7 +167,7 @@ int main()
     std::array<std::byte, 1> writeonly_buffer {};
     const auto writeonly_read = writeonly->read_at(0, writeonly_buffer);
     require(
-        !writeonly_read && writeonly_read.error().code == FileSystemErrorCode::PermissionDenied,
+        !writeonly_read && writeonly_read.error().is(FileSystemErrorCode::PermissionDenied),
         "read through a write-only handle must return PermissionDenied"
     );
     require(writeonly->close().has_value(), "failed to close write-only handle");
@@ -180,23 +180,28 @@ int main()
         }
     );
     require(
-        !invalid_truncate && invalid_truncate.error().code == FileSystemErrorCode::InvalidArgument,
+        !invalid_truncate && invalid_truncate.error().is(FileSystemErrorCode::InvalidArgument),
         "read-only truncate must be rejected consistently"
     );
+    const auto * invalid_context =
+        invalid_truncate.error().context<FileSystemErrorContext>();
     require(
-        invalid_truncate.error().operation == "open" &&
-            invalid_truncate.error().path == path,
+        invalid_context != nullptr &&
+            invalid_context->operation == "open" &&
+            invalid_context->path == path,
         "invalid open error must preserve operation and path context"
     );
 
     const auto missing_path = nested_dir / "missing.ldb";
     const auto missing = filesystem.open(missing_path);
+    require(!missing, "opening a missing file must fail");
+    const auto * missing_context = missing.error().context<FileSystemErrorContext>();
     require(
-        !missing &&
-            missing.error().code == FileSystemErrorCode::NotFound &&
-            !missing.error().operation.empty() &&
-            missing.error().path == missing_path &&
-            static_cast<bool>(missing.error().native_code),
+        missing.error().is(FileSystemErrorCode::NotFound) &&
+            missing_context != nullptr &&
+            !missing_context->operation.empty() &&
+            missing_context->path == missing_path &&
+            static_cast<bool>(missing_context->native_code),
         "native open error must preserve operation, path, and native cause"
     );
 
@@ -206,8 +211,8 @@ int main()
 
     const auto renamed = nested_dir / "renamed.ldb";
     require(filesystem.rename(path, renamed).has_value(), "rename failed");
-    require(!filesystem.exists(path).value(), "old path still exists after rename");
-    require(filesystem.exists(renamed).value(), "renamed path missing");
+    require(!*filesystem.exists(path), "old path still exists after rename");
+    require(*filesystem.exists(renamed), "renamed path missing");
 
     const auto occupied = nested_dir / "occupied.ldb";
     auto occupied_handle = filesystem.open(
@@ -225,10 +230,10 @@ int main()
     const auto rename_over_existing = filesystem.rename(renamed, occupied);
     require(
         !rename_over_existing &&
-            rename_over_existing.error().code == FileSystemErrorCode::AlreadyExists,
+            rename_over_existing.error().is(FileSystemErrorCode::AlreadyExists),
         "rename must not replace an existing destination"
     );
-    require(filesystem.exists(renamed).value(), "failed rename removed the source");
+    require(*filesystem.exists(renamed), "failed rename removed the source");
 
     const auto replacement = nested_dir / "replacement.tmp";
     auto replacement_handle = filesystem.open(
@@ -250,7 +255,7 @@ int main()
         filesystem.replace_file_atomic(replacement, occupied).has_value(),
         "atomic replacement failed"
     );
-    require(!filesystem.exists(replacement).value(), "replacement source still exists");
+    require(!*filesystem.exists(replacement), "replacement source still exists");
 
     auto replaced = filesystem.open(occupied);
     require(replaced.has_value(), "failed to open replaced file");
@@ -304,7 +309,7 @@ int main()
     second_thread.join();
     require(first_ok && second_ok, "same-handle concurrent append failed");
     require(
-        concurrent->size().value() ==
+        *concurrent->size() ==
             2 * append_count * first_record.size(),
         "same-handle concurrent append lost bytes"
     );
@@ -344,7 +349,7 @@ int main()
 
     const auto sync_result = filesystem.sync_directory(nested_dir);
     require(
-        sync_result.has_value() || sync_result.error().code == FileSystemErrorCode::Unsupported,
+        sync_result.has_value() || sync_result.error().is(FileSystemErrorCode::Unsupported),
         "sync_directory returned an unexpected error"
     );
 
@@ -354,5 +359,5 @@ int main()
     require(filesystem.remove(nested_dir).has_value(), "remove leaf directory failed");
     require(filesystem.remove(root / "nested").has_value(), "remove parent directory failed");
     require(filesystem.remove(root).has_value(), "remove root directory failed");
-    require(!filesystem.exists(root).value(), "removed root still exists");
+    require(!*filesystem.exists(root), "removed root still exists");
 }
