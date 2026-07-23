@@ -87,9 +87,9 @@ int main()
 
     const auto committed_size = std::filesystem::file_size(store->path());
     {
-        auto file = filesystem.open(store->path(), filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        auto file = filesystem.open(store->path(), filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open WAL for truncation failed");
         const std::array garbage {std::byte {4}, std::byte {5}};
@@ -100,9 +100,9 @@ int main()
     require(std::filesystem::file_size(store->path()) == committed_size, "incomplete tail not truncated");
 
     {
-        auto file = filesystem.open(store->path(), filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        auto file = filesystem.open(store->path(), filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open WAL for checksum corruption failed");
         std::array<std::byte, 1> checksum_byte {};
@@ -131,9 +131,9 @@ int main()
 
     const auto temporary = segmented_directory / "00000000000000000003.wal.tmp";
     {
-        auto file = filesystem.open(temporary, filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+        auto file = filesystem.open(temporary, filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::CreateOrTruncate,
         });
         require(file.has_value(), "create stale WAL temporary file failed");
         const std::array garbage {std::byte {1}};
@@ -152,9 +152,9 @@ int main()
     }
     const auto highest_path = segmented_directory / "00000000000000000002.wal";
     {
-        auto file = filesystem.open(highest_path, filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        auto file = filesystem.open(highest_path, filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open highest WAL generation failed");
         std::array<std::byte, 1> checksum_byte {};

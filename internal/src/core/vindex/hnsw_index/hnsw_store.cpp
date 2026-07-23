@@ -75,8 +75,8 @@ std::expected<HnswStore, HnswStoreError> HnswStore::create(
         }
     }
     auto opened = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::CreateNew,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::CreateNew,
     });
     if (!opened) {
         return std::unexpected(filesystem_error(std::move(opened.error())));
@@ -99,8 +99,8 @@ std::expected<HnswStore, HnswStoreError> HnswStore::open(
 )
 {
     auto opened = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::OpenExisting,
     });
     if (!opened) {
         return std::unexpected(filesystem_error(std::move(opened.error())));

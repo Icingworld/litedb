@@ -1,5 +1,6 @@
 add_library(litedb_filesystem
     file_handle.cpp
+    file_open_options.hpp
     filesystem.cpp
     platform_filesystem.cpp
 )

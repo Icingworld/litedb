@@ -28,6 +28,11 @@ public:
         const std::filesystem::path & to
     ) override;
 
+    std::expected<void, FileSystemError> replace_file_atomic(
+        const std::filesystem::path & from,
+        const std::filesystem::path & to
+    ) override;
+
     std::expected<void, FileSystemError> remove(const std::filesystem::path & path) override;
 
     std::expected<void, FileSystemError> sync_directory(const std::filesystem::path & path) override;

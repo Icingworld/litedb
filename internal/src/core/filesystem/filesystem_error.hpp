@@ -1,6 +1,8 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
+#include <system_error>
 
 namespace litedb::core::filesystem
 {
@@ -30,8 +32,12 @@ enum class FileSystemErrorCode
  */
 struct FileSystemError
 {
-    FileSystemErrorCode code;           ///< 错误码
-    std::string message;                ///< 错误信息
+    FileSystemErrorCode code;                 ///< 跨平台错误码
+    std::string message;                      ///< 可直接展示的错误信息
+    std::string operation;                    ///< 失败的文件系统操作
+    std::filesystem::path path;               ///< 主要操作路径
+    std::filesystem::path related_path;       ///< rename/replace 等操作的第二路径
+    std::error_code native_code;              ///< 原始平台错误码
 };
 
 } // namespace litedb::core::filesystem

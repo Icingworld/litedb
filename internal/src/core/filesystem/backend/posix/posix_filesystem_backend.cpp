@@ -58,14 +58,50 @@ FileSystemErrorCode map_error_code(const std::error_code & error)
     return FileSystemErrorCode::IoError;
 }
 
-FileSystemError make_error(const std::error_code & error, std::string operation)
+std::string display_path(const std::filesystem::path & path)
 {
-    return FileSystemError {map_error_code(error), std::move(operation) + " failed: " + error.message()};
+    try {
+        return path.string();
+    } catch (...) {
+        return "<unprintable path>";
+    }
 }
 
-FileSystemError make_errno_error(int error, std::string operation)
+FileSystemError make_error(
+    const std::error_code & error,
+    std::string operation,
+    const std::filesystem::path & path,
+    const std::filesystem::path & related_path = {}
+)
 {
-    return make_error(std::error_code(error, std::generic_category()), std::move(operation));
+    auto message = operation + " '" + display_path(path) + "'";
+    if (!related_path.empty()) {
+        message += " -> '" + display_path(related_path) + "'";
+    }
+    message += " failed: " + error.message();
+    return FileSystemError {
+        map_error_code(error),
+        std::move(message),
+        std::move(operation),
+        path,
+        related_path,
+        error,
+    };
+}
+
+FileSystemError make_errno_error(
+    int error,
+    std::string operation,
+    const std::filesystem::path & path,
+    const std::filesystem::path & related_path = {}
+)
+{
+    return make_error(
+        std::error_code(error, std::generic_category()),
+        std::move(operation),
+        path,
+        related_path
+    );
 }
 
 int to_access_flags(FileAccess access)
@@ -117,10 +153,10 @@ std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> PosixFileSyst
     } while (fd < 0 && errno == EINTR);
 
     if (fd < 0) {
-        return std::unexpected(make_errno_error(errno, "open"));
+        return std::unexpected(make_errno_error(errno, "open", path));
     }
 
-    std::unique_ptr<FileHandleBackend> backend = std::make_unique<PosixFileHandleBackend>(fd);
+    std::unique_ptr<FileHandleBackend> backend = std::make_unique<PosixFileHandleBackend>(fd, path);
     return backend;
 }
 
@@ -131,15 +167,20 @@ std::expected<std::vector<std::filesystem::path>, FileSystemError> PosixFileSyst
     std::error_code error;
     if (!std::filesystem::is_directory(path, error)) {
         if (error) {
-            return std::unexpected(make_error(error, "is_directory"));
+            return std::unexpected(make_error(error, "is_directory", path));
         }
-        return std::unexpected(FileSystemError {FileSystemErrorCode::NotADirectory, "path is not a directory"});
+        return std::unexpected(FileSystemError {
+            FileSystemErrorCode::NotADirectory,
+            "path is not a directory: '" + display_path(path) + "'",
+            "is_directory",
+            path,
+        });
     }
 
     std::vector<std::filesystem::path> entries;
     for (std::filesystem::directory_iterator it {path, error}, end; it != end; it.increment(error)) {
         if (error) {
-            return std::unexpected(make_error(error, "directory_iterator"));
+            return std::unexpected(make_error(error, "directory_iterator", path));
         }
         entries.push_back(it->path().filename());
     }
@@ -151,7 +192,7 @@ std::expected<bool, FileSystemError> PosixFileSystemBackend::exists(const std::f
     std::error_code error;
     const bool result = std::filesystem::exists(path, error);
     if (error) {
-        return std::unexpected(make_error(error, "exists"));
+        return std::unexpected(make_error(error, "exists", path));
     }
     return result;
 }
@@ -163,7 +204,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::create_dir_all(
     std::error_code error;
     std::filesystem::create_directories(path, error);
     if (error) {
-        return std::unexpected(make_error(error, "create_directories"));
+        return std::unexpected(make_error(error, "create_directories", path));
     }
     return {};
 }
@@ -174,9 +215,35 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::rename(
 )
 {
     std::error_code error;
+    const auto destination_status = std::filesystem::symlink_status(to, error);
+    if (error) {
+        return std::unexpected(make_error(error, "symlink_status", to));
+    }
+    if (std::filesystem::exists(destination_status)) {
+        return std::unexpected(FileSystemError {
+            FileSystemErrorCode::AlreadyExists,
+            "rename destination already exists: '" + display_path(to) + "'",
+            "rename",
+            from,
+            to,
+        });
+    }
     std::filesystem::rename(from, to, error);
     if (error) {
-        return std::unexpected(make_error(error, "rename"));
+        return std::unexpected(make_error(error, "rename", from, to));
+    }
+    return {};
+}
+
+std::expected<void, FileSystemError> PosixFileSystemBackend::replace_file_atomic(
+    const std::filesystem::path & from,
+    const std::filesystem::path & to
+)
+{
+    std::error_code error;
+    std::filesystem::rename(from, to, error);
+    if (error) {
+        return std::unexpected(make_error(error, "replace_file_atomic", from, to));
     }
     return {};
 }
@@ -186,7 +253,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::remove(const std::f
     std::error_code error;
     std::filesystem::remove(path, error);
     if (error) {
-        return std::unexpected(make_error(error, "remove"));
+        return std::unexpected(make_error(error, "remove", path));
     }
     return {};
 }
@@ -201,7 +268,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::sync_directory(
     } while (fd < 0 && errno == EINTR);
 
     if (fd < 0) {
-        return std::unexpected(make_errno_error(errno, "open directory"));
+        return std::unexpected(make_errno_error(errno, "open directory", path));
     }
 
     while (::fsync(fd) != 0) {
@@ -210,7 +277,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::sync_directory(
         }
         const int error = errno;
         ::close(fd);
-        return std::unexpected(make_errno_error(error, "fsync directory"));
+        return std::unexpected(make_errno_error(error, "fsync directory", path));
     }
     ::close(fd);
     return {};

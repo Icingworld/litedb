@@ -1,6 +1,7 @@
 #include "core/filesystem/filesystem.hpp"
 
 #include <cassert>
+#include <stdexcept>
 #include <utility>
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
@@ -8,10 +9,26 @@
 namespace litedb::core::filesystem
 {
 
+namespace
+{
+
+std::string display_path(const std::filesystem::path & path)
+{
+    try {
+        return path.string();
+    } catch (...) {
+        return "<unprintable path>";
+    }
+}
+
+} // namespace
+
 FileSystem::FileSystem(std::unique_ptr<backend::FileSystemBackend> backend)
     : backend_(std::move(backend))
 {
-    assert(backend_);
+    if (!backend_) {
+        throw std::invalid_argument("filesystem backend must not be null");
+    }
 }
 
 FileSystem::FileSystem(FileSystem &&) noexcept = default;
@@ -22,10 +39,21 @@ FileSystem::~FileSystem() = default;
 
 std::expected<FileHandle, FileSystemError> FileSystem::open(
     const std::filesystem::path & path,
-    const backend::FileOpenOptions & options
+    const FileOpenOptions & options
 )
 {
     assert(backend_);
+
+    if (options.access == FileAccess::ReadOnly &&
+        (options.create_mode == FileCreateMode::TruncateExisting ||
+         options.create_mode == FileCreateMode::CreateOrTruncate)) {
+        return std::unexpected(FileSystemError {
+            FileSystemErrorCode::InvalidArgument,
+            "open failed for '" + display_path(path) + "': truncate create mode requires write access",
+            "open",
+            path,
+        });
+    }
 
     auto result = backend_->open(path, options);
     if (!result) {
@@ -61,6 +89,15 @@ std::expected<void, FileSystemError> FileSystem::rename(
 {
     assert(backend_);
     return backend_->rename(from, to);
+}
+
+std::expected<void, FileSystemError> FileSystem::replace_file_atomic(
+    const std::filesystem::path & from,
+    const std::filesystem::path & to
+)
+{
+    assert(backend_);
+    return backend_->replace_file_atomic(from, to);
 }
 
 std::expected<void, FileSystemError> FileSystem::remove(const std::filesystem::path & path)

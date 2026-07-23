@@ -68,10 +68,10 @@ std::expected<WalStore, WalError> WalStore::open(
     auto opened = filesystem.open(
         path,
         {
-            filesystem::backend::FileAccess::ReadWrite,
+            filesystem::FileAccess::ReadWrite,
             create_header.has_value()
-                ? filesystem::backend::FileCreateMode::OpenOrCreate
-                : filesystem::backend::FileCreateMode::OpenExisting,
+                ? filesystem::FileCreateMode::OpenOrCreate
+                : filesystem::FileCreateMode::OpenExisting,
         }
     );
     if (!opened) {

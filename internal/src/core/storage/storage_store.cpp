@@ -191,8 +191,8 @@ std::expected<std::unique_ptr<StorageStore>, StorageStoreError> StorageStore::cr
     if (auto made = filesystem.create_dir_all(parent); !made) {
         return std::unexpected(fs_error(std::move(made.error())));
     }
-    auto opened = filesystem.open(path, {filesystem::backend::FileAccess::ReadWrite,
-                                         filesystem::backend::FileCreateMode::CreateNew});
+    auto opened = filesystem.open(path, {filesystem::FileAccess::ReadWrite,
+                                         filesystem::FileCreateMode::CreateNew});
     if (!opened) {
         return std::unexpected(fs_error(std::move(opened.error())));
     }
@@ -206,8 +206,8 @@ std::expected<std::unique_ptr<StorageStore>, StorageStoreError> StorageStore::cr
 std::expected<std::unique_ptr<StorageStore>, StorageStoreError> StorageStore::open(
     std::filesystem::path path, common::CollectionId collection_id, filesystem::FileSystem & filesystem)
 {
-    auto opened = filesystem.open(path, {filesystem::backend::FileAccess::ReadWrite,
-                                         filesystem::backend::FileCreateMode::OpenExisting});
+    auto opened = filesystem.open(path, {filesystem::FileAccess::ReadWrite,
+                                         filesystem::FileCreateMode::OpenExisting});
     if (!opened) {
         return std::unexpected(fs_error(std::move(opened.error())));
     }

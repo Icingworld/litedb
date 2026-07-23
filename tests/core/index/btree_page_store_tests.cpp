@@ -173,8 +173,8 @@ void test_corrupted_node_is_reported_on_read(const std::filesystem::path & direc
     }
     {
         auto file = filesystem.open(path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "corrupted page raw open failed");
         const std::array invalid_magic {std::byte {0}};
@@ -202,8 +202,8 @@ void test_invalid_header_and_file_size_are_rejected(const std::filesystem::path 
     }
     {
         auto file = filesystem.open(version_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "bad version raw open failed");
         const std::array version {std::byte {2}, std::byte {0}};
@@ -221,8 +221,8 @@ void test_invalid_header_and_file_size_are_rejected(const std::filesystem::path 
     }
     {
         auto file = filesystem.open(truncated_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "truncated raw open failed");
         require(file->truncate(BTreePageStore::HeaderSize + BTreePageCodec::PageSize - 1).has_value(),

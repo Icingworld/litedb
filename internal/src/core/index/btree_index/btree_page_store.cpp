@@ -173,8 +173,8 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::create(
         }
     }
     auto opened = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::CreateNew,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::CreateNew,
     });
     if (!opened.has_value()) {
         return std::unexpected(filesystem_error(std::move(opened.error())));
@@ -198,8 +198,8 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::open(
         return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid expected B+ tree key type"));
     }
     auto opened = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::OpenExisting,
     });
     if (!opened.has_value()) {
         return std::unexpected(filesystem_error(std::move(opened.error())));

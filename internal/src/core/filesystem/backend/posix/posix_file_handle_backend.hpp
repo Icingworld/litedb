@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <mutex>
 #include <span>
 
@@ -16,7 +17,7 @@ namespace litedb::core::filesystem::backend
 class PosixFileHandleBackend final : public FileHandleBackend
 {
 public:
-    explicit PosixFileHandleBackend(int fd);
+    PosixFileHandleBackend(int fd, std::filesystem::path path);
 
     PosixFileHandleBackend(const PosixFileHandleBackend &) = delete;
 
@@ -49,6 +50,7 @@ public:
 
 private:
     int fd_ {-1};
+    std::filesystem::path path_;
     std::mutex mutex_;
 };
 

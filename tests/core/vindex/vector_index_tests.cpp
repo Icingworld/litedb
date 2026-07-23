@@ -162,8 +162,8 @@ void test_hnsw_store_recovers_truncated_tail()
     const auto committed_size = std::filesystem::file_size(index_path);
     {
         auto file = filesystem.open(index_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open hnsw file for tail append failed");
         const std::array garbage {std::byte {0x48}, std::byte {0x57}, std::byte {0x43}};
@@ -189,8 +189,8 @@ void test_hnsw_store_rejects_corrupted_commit()
     }
     {
         auto file = filesystem.open(index_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open hnsw file for corruption failed");
         const std::array corrupted {std::byte {0xff}};

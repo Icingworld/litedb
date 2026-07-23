@@ -119,10 +119,10 @@ std::expected<void, WalError> FileWriteBatch::apply(
         auto file = filesystem.open(
             path,
             {
-                filesystem::backend::FileAccess::ReadWrite,
+                filesystem::FileAccess::ReadWrite,
                 write.mode == FileWriteMode::Replace
-                    ? filesystem::backend::FileCreateMode::CreateOrTruncate
-                    : filesystem::backend::FileCreateMode::OpenOrCreate,
+                    ? filesystem::FileCreateMode::CreateOrTruncate
+                    : filesystem::FileCreateMode::OpenOrCreate,
             }
         );
         if (!file) {

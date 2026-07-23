@@ -1,6 +1,7 @@
 #include "core/filesystem/file_handle.hpp"
 
 #include <cassert>
+#include <stdexcept>
 #include <utility>
 
 #include "core/filesystem/backend/file_handle_backend.hpp"
@@ -11,7 +12,9 @@ namespace litedb::core::filesystem
 FileHandle::FileHandle(std::unique_ptr<backend::FileHandleBackend> backend)
     : backend_(std::move(backend))
 {
-    assert(backend_);
+    if (!backend_) {
+        throw std::invalid_argument("file handle backend must not be null");
+    }
 }
 
 FileHandle::FileHandle(FileHandle &&) noexcept = default;

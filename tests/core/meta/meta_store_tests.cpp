@@ -90,6 +90,13 @@ void test_missing_file_and_roundtrip(const std::filesystem::path & path)
     require(collection.indexes[0].column_ids.size() == 2, "composite index columns mismatch");
     require(collection.vector_indexes[0].metric == meta::entry::VectorDistanceMetric::Cosine,
             "vector metric mismatch");
+
+    auto replacement = snapshot;
+    replacement.next_vector_index_id = 42;
+    require(store.save(replacement).has_value(), "replace existing meta snapshot failed");
+    const auto replaced = store.load();
+    require(replaced.has_value(), "load replaced meta snapshot failed");
+    require(replaced->next_vector_index_id == 42, "meta snapshot replacement did not publish");
 }
 
 void write_test_header(
@@ -100,8 +107,8 @@ void write_test_header(
 )
 {
     auto file = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::CreateOrTruncate,
     });
     require(file.has_value(), "open test meta file failed");
     io::FileByteWriter byte_writer {*file};

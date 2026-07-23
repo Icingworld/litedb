@@ -649,8 +649,8 @@ std::expected<MetaSnapshot, MetaStoreError> MetaStore::load() const
         return MetaSnapshot {};
     }
 
-    auto file = filesystem_->open(path_, {.access = filesystem::backend::FileAccess::ReadOnly,
-                                         .create_mode = filesystem::backend::FileCreateMode::OpenExisting});
+    auto file = filesystem_->open(path_, {.access = filesystem::FileAccess::ReadOnly,
+                                         .create_mode = filesystem::FileCreateMode::OpenExisting});
     if (!file) {
         return std::unexpected(from_filesystem_error(std::move(file.error())));
     }
@@ -670,8 +670,8 @@ std::expected<void, MetaStoreError> MetaStore::save(const MetaSnapshot & snapsho
     }
     auto temp_path = path_;
     temp_path += ".tmp";
-    auto file = filesystem_->open(temp_path, {.access = filesystem::backend::FileAccess::ReadWrite,
-                                              .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate});
+    auto file = filesystem_->open(temp_path, {.access = filesystem::FileAccess::ReadWrite,
+                                              .create_mode = filesystem::FileCreateMode::CreateOrTruncate});
     if (!file) {
         return std::unexpected(from_filesystem_error(std::move(file.error())));
     }
@@ -688,17 +688,7 @@ std::expected<void, MetaStoreError> MetaStore::save(const MetaSnapshot & snapsho
         return std::unexpected(from_filesystem_error(std::move(closed.error())));
     }
 
-    auto exists = filesystem_->exists(path_);
-    if (!exists) {
-        return std::unexpected(from_filesystem_error(std::move(exists.error())));
-    }
-    if (*exists) {
-        auto removed = filesystem_->remove(path_);
-        if (!removed) {
-            return std::unexpected(from_filesystem_error(std::move(removed.error())));
-        }
-    }
-    if (auto renamed = filesystem_->rename(temp_path, path_); !renamed) {
+    if (auto renamed = filesystem_->replace_file_atomic(temp_path, path_); !renamed) {
         return std::unexpected(from_filesystem_error(std::move(renamed.error())));
     }
     if (!parent.empty()) {

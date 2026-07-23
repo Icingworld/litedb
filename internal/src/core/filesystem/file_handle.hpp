@@ -66,10 +66,10 @@ public:
     );
 
     /**
-     * @brief 将数据原子地追加到文件末尾
+     * @brief 将数据追加到文件末尾
      *
-     * “原子”指同一文件的并发追加不会因查询文件大小与写入之间的竞态而互相覆盖。
-     * 单次追加是否可能被拆分，由具体文件系统实现说明。
+     * 同一 FileHandle 实例上的操作会被串行化，不会因查询文件大小与写入之间的
+     * 竞态而互相覆盖。不同 FileHandle 或进程之间不提供原子追加保证。
      */
     [[nodiscard]]
     std::expected<void, FileSystemError> append(std::span<const std::byte> data);

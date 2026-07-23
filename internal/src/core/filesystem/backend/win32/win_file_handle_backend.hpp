@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <mutex>
 #include <span>
 
@@ -22,7 +23,7 @@ namespace litedb::core::filesystem::backend
 class Win32FileHandleBackend final : public FileHandleBackend
 {
 public:
-    explicit Win32FileHandleBackend(HANDLE handle);
+    Win32FileHandleBackend(HANDLE handle, std::filesystem::path path);
 
     Win32FileHandleBackend(const Win32FileHandleBackend &) = delete;
 
@@ -54,9 +55,14 @@ public:
     std::expected<void, FileSystemError> sync_all() override;
 
 private:
-    std::expected<void, FileSystemError> seek_locked(std::uint64_t offset);
+    std::expected<void, FileSystemError> seek_locked(
+        std::uint64_t offset,
+        std::size_t size,
+        const char * operation
+    );
 
     HANDLE handle_ {INVALID_HANDLE_VALUE};
+    std::filesystem::path path_;
     std::mutex mutex_;
 };
 

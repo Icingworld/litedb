@@ -27,12 +27,14 @@ struct TestState
     std::vector<std::byte> data;
     std::filesystem::path last_path;
     std::filesystem::path rename_to;
+    std::filesystem::path replace_to;
     FileOpenOptions last_options;
     bool data_synced {false};
     bool all_synced {false};
     bool directory_synced {false};
     bool directory_created {false};
     bool removed {false};
+    bool replaced {false};
     int handle_destructions {0};
     int filesystem_destructions {0};
 };
@@ -175,6 +177,17 @@ public:
         return {};
     }
 
+    std::expected<void, FileSystemError> replace_file_atomic(
+        const std::filesystem::path & from,
+        const std::filesystem::path & to
+    ) override
+    {
+        state_->last_path = from;
+        state_->replace_to = to;
+        state_->replaced = true;
+        return {};
+    }
+
     std::expected<void, FileSystemError> remove(const std::filesystem::path & path) override
     {
         state_->last_path = path;
@@ -203,6 +216,22 @@ int main()
     static_assert(std::is_nothrow_move_constructible_v<FileSystem>);
     static_assert(!std::is_copy_constructible_v<FileHandle>);
     static_assert(std::is_nothrow_move_constructible_v<FileHandle>);
+
+    bool null_filesystem_rejected = false;
+    try {
+        FileSystem invalid {std::unique_ptr<FileSystemBackend> {}};
+    } catch (const std::invalid_argument &) {
+        null_filesystem_rejected = true;
+    }
+    require(null_filesystem_rejected, "null filesystem backend must be rejected");
+
+    bool null_handle_rejected = false;
+    try {
+        FileHandle invalid {std::unique_ptr<FileHandleBackend> {}};
+    } catch (const std::invalid_argument &) {
+        null_handle_rejected = true;
+    }
+    require(null_handle_rejected, "null file handle backend must be rejected");
 
     auto state = std::make_shared<TestState>();
     {
@@ -245,6 +274,18 @@ int main()
             "open did not propagate backend error"
         );
 
+        const auto invalid_open = moved_filesystem.open(
+            "data.ldb",
+            FileOpenOptions {
+                .access = FileAccess::ReadOnly,
+                .create_mode = FileCreateMode::CreateOrTruncate,
+            }
+        );
+        require(
+            !invalid_open && invalid_open.error().code == FileSystemErrorCode::InvalidArgument,
+            "read-only truncate must be rejected before reaching the backend"
+        );
+
         const auto entries = moved_filesystem.list_dir("root");
         require(entries && entries->size() == 2 && state->last_path == "root", "list_dir forwarding failed");
         require(moved_filesystem.exists("present").value(), "exists forwarding failed");
@@ -252,6 +293,16 @@ int main()
         require(state->directory_created && state->last_path == "new-dir", "create_dir_all forwarding failed");
         require(moved_filesystem.rename("old", "new").has_value(), "rename failed");
         require(state->last_path == "old" && state->rename_to == "new", "rename forwarding failed");
+        require(
+            moved_filesystem.replace_file_atomic("temporary", "published").has_value(),
+            "replace_file_atomic failed"
+        );
+        require(
+            state->replaced &&
+                state->last_path == "temporary" &&
+                state->replace_to == "published",
+            "replace_file_atomic forwarding failed"
+        );
         require(moved_filesystem.remove("obsolete").has_value(), "remove failed");
         require(state->removed && state->last_path == "obsolete", "remove forwarding failed");
         require(moved_filesystem.sync_directory("root").has_value(), "sync_directory failed");

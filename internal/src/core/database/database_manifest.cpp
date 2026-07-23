@@ -135,9 +135,9 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!exists.value()) {
         auto file = filesystem_->open(
             path,
-            filesystem::backend::FileOpenOptions {
-                .access = filesystem::backend::FileAccess::ReadWrite,
-                .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+            filesystem::FileOpenOptions {
+                .access = filesystem::FileAccess::ReadWrite,
+                .create_mode = filesystem::FileCreateMode::CreateOrTruncate,
             }
         );
         if (!file.has_value()) {
@@ -177,9 +177,9 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
 
     auto file = filesystem_->open(
         path,
-        filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadOnly,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadOnly,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         }
     );
     if (!file.has_value()) {

@@ -180,8 +180,8 @@ std::expected<void, std::string> sync_file(
     auto opened = filesystem.open(
         path,
         {
-            filesystem::backend::FileAccess::ReadWrite,
-            filesystem::backend::FileCreateMode::OpenExisting,
+            filesystem::FileAccess::ReadWrite,
+            filesystem::FileCreateMode::OpenExisting,
         }
     );
     if (!opened) return std::unexpected(std::move(opened.error().message));

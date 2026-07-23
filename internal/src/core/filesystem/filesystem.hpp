@@ -5,12 +5,19 @@
 #include <memory>
 #include <vector>
 
-#include "core/filesystem/backend/filesystem_backend.hpp"
 #include "core/filesystem/filesystem_error.hpp"
 #include "core/filesystem/file_handle.hpp"
+#include "core/filesystem/file_open_options.hpp"
 
 namespace litedb::core::filesystem
 {
+
+namespace backend
+{
+
+class FileSystemBackend;
+
+} // namespace backend
 
 /**
  * @brief 文件系统
@@ -40,7 +47,7 @@ public:
     [[nodiscard]]
     std::expected<FileHandle, FileSystemError> open(
         const std::filesystem::path & path,
-        const backend::FileOpenOptions & options = {}
+        const FileOpenOptions & options = {}
     );
 
     /**
@@ -70,13 +77,25 @@ public:
     std::expected<void, FileSystemError> create_dir_all(const std::filesystem::path & path);
 
     /**
-     * @brief 重命名文件或目录
+     * @brief 在目标不存在时重命名文件或目录
      * @param from 原文件或目录路径
      * @param to 新文件或目录路径
-     * @return 结果
+     * @return 结果；目标已存在时返回 AlreadyExists
      */
     [[nodiscard]]
     std::expected<void, FileSystemError> rename(
+        const std::filesystem::path & from,
+        const std::filesystem::path & to
+    );
+
+    /**
+     * @brief 原子地发布文件，目标文件存在时替换它
+     *
+     * 源文件必须已完成写入和同步，且必须与目标文件位于同一文件系统。
+     * 成功后调用方应同步目标文件的父目录。
+     */
+    [[nodiscard]]
+    std::expected<void, FileSystemError> replace_file_atomic(
         const std::filesystem::path & from,
         const std::filesystem::path & to
     );
