@@ -252,7 +252,7 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
     if (descriptor.kind == IndexKind::BTree) {
         auto removed = filesystem_->remove(index_path(index_id));
         if (!removed.has_value()) {
-            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(removed.error().message)));
+            return std::unexpected(make_error(IndexErrorCode::StorageError, removed.error().message()));
         }
     }
     return {};

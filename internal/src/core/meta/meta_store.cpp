@@ -1,11 +1,13 @@
 #include "core/meta/meta_store.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <utility>
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
 #include "core/io/binary_io.hpp"
+#include "core/io/buffer_byte_writer.hpp"
 #include "core/io/file_byte_reader.hpp"
 #include "core/io/file_byte_writer.hpp"
 #include "core/io/io_helper.hpp"
@@ -20,6 +22,10 @@ namespace
 constexpr std::uint32_t MetaMagic = 0x544d444c;         // LDMT
 constexpr std::uint16_t MetaFormatVersion = 1;          // 元数据格式版本
 constexpr std::uint16_t MetaHeaderSize = 8;             // 元数据头大小
+constexpr std::size_t MaxMetaBytes = 64 * 1024 * 1024;
+constexpr std::uint32_t MaxMetaStringBytes = 16 * 1024 * 1024;
+constexpr std::uint32_t MaxMetaItems = 1'000'000;
+constexpr std::uint32_t MaxUntrustedReserve = 1024;
 
 /**
  * @brief 从文件系统错误创建元数据存储错误
@@ -27,9 +33,9 @@ constexpr std::uint16_t MetaHeaderSize = 8;             // 元数据头大小
  * @return 元数据存储错误
  */
 [[nodiscard]]
-MetaStoreError from_filesystem_error(filesystem::FileSystemError error)
+MetaStoreError from_filesystem_error(error::Error error)
 {
-    return make_error(MetaStoreErrorCode::FileSystemError, std::move(error.message));
+    return make_error(MetaStoreErrorCode::FileSystemError, error.message());
 }
 
 /**
@@ -40,17 +46,16 @@ MetaStoreError from_filesystem_error(filesystem::FileSystemError error)
 [[nodiscard]]
 MetaStoreError from_io_error(io::IoError error)
 {
-    switch (error.code) {
-    case io::IoErrorCode::UnexpectedEof:
-        return make_error(MetaStoreErrorCode::UnexpectedEof, std::move(error.message));
-    case io::IoErrorCode::InvalidData:
-        return make_error(MetaStoreErrorCode::InvalidFormat, std::move(error.message));
-    case io::IoErrorCode::ValueTooLarge:
-        return make_error(MetaStoreErrorCode::ValueTooLarge, std::move(error.message));
-    case io::IoErrorCode::FileSystemError:
-        return make_error(MetaStoreErrorCode::FileSystemError, std::move(error.message));
+    if (error.category() == error::ErrorCategory::FileSystem) {
+        return make_error(MetaStoreErrorCode::FileSystemError, error.message());
     }
-    return make_error(MetaStoreErrorCode::InvalidFormat, std::move(error.message));
+    if (error.is(io::IoErrorCode::UnexpectedEof)) {
+        return make_error(MetaStoreErrorCode::UnexpectedEof, error.message());
+    }
+    if (error.is(io::IoErrorCode::ValueTooLarge)) {
+        return make_error(MetaStoreErrorCode::ValueTooLarge, error.message());
+    }
+    return make_error(MetaStoreErrorCode::InvalidFormat, error.message());
 }
 
 /**
@@ -158,10 +163,10 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, io::IoError> result() const
+    std::expected<void, io::IoError> take_result()
     {
         if (error_) {
-            return std::unexpected(*error_);
+            return std::unexpected(std::move(*error_));
         }
         return {};
     }
@@ -190,8 +195,9 @@ private:
 class CodecReader
 {
 public:
-    explicit CodecReader(io::BinaryReader & reader) noexcept
+    CodecReader(io::BinaryReader & reader, std::uint32_t max_items) noexcept
         : reader_(&reader)
+        , remaining_items_(max_items)
     {
     }
 
@@ -241,6 +247,31 @@ public:
         return read(reader_->read_string());
     }
 
+    std::uint32_t read_count(std::size_t minimum_encoded_bytes)
+    {
+        const auto count = read_u32();
+        if (!ok()) {
+            return 0;
+        }
+        if (count > remaining_items_) {
+            fail(io::make_io_error(
+                io::IoErrorCode::ValueTooLarge,
+                "metadata item count exceeds the configured limit"
+            ));
+            return 0;
+        }
+        if (minimum_encoded_bytes != 0 &&
+            count > reader_->remaining_bytes() / minimum_encoded_bytes) {
+            fail(io::make_io_error(
+                io::IoErrorCode::UnexpectedEof,
+                "metadata item count exceeds the remaining binary data"
+            ));
+            return 0;
+        }
+        remaining_items_ -= count;
+        return count;
+    }
+
     /**
      * @brief 设置错误
      * @param message 错误消息
@@ -249,6 +280,13 @@ public:
     {
         if (!error_) {
             error_ = invalid_data(std::move(message));
+        }
+    }
+
+    void fail(io::IoError error)
+    {
+        if (!error_) {
+            error_ = std::move(error);
         }
     }
 
@@ -264,10 +302,10 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, io::IoError> result() const
+    std::expected<void, io::IoError> take_result()
     {
         if (error_) {
-            return std::unexpected(*error_);
+            return std::unexpected(std::move(*error_));
         }
         return {};
     }
@@ -295,6 +333,7 @@ private:
 private:
     io::BinaryReader * reader_;           ///< 二进制读取器
     std::optional<io::IoError> error_;    ///< 错误
+    std::uint32_t remaining_items_;       ///< 剩余集合元素预算
 };
 
 /**
@@ -395,11 +434,11 @@ schema::DefaultExpression read_default_expression(CodecReader & reader)
     expression.kind = static_cast<schema::DefaultExpressionKind>(expression_kind);
     expression.literal_kind = static_cast<schema::DefaultLiteralKind>(literal_kind);
     expression.value = reader.read_string();
-    const auto count = reader.read_u32();
+    const auto count = reader.read_count(10);
     if (!reader.ok()) {
         return expression;
     }
-    expression.elements.reserve(count);
+    expression.elements.reserve(std::min(count, MaxUntrustedReserve));
     for (std::uint32_t i = 0; i < count && reader.ok(); ++i) {
         expression.elements.push_back(read_default_expression(reader));
     }
@@ -515,7 +554,7 @@ std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer
             }
         }
     }
-    return writer.result();
+    return writer.take_result();
 }
 
 /**
@@ -525,7 +564,7 @@ std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer
  */
 std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & binary_reader)
 {
-    CodecReader reader {binary_reader};
+    CodecReader reader {binary_reader, MaxMetaItems};
     if (reader.read_u32() != MetaMagic) {
         reader.fail("invalid meta file magic");
     }
@@ -543,25 +582,26 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
     snapshot.next_column_id = reader.read_u64();
     snapshot.next_index_id = reader.read_u64();
     snapshot.next_vector_index_id = reader.read_u64();
-    const auto database_count = reader.read_u32();
+    const auto database_count = reader.read_count(16);
     if (!reader.ok()) {
-        return std::unexpected(from_io_error(reader.result().error()));
+        auto result = reader.take_result();
+        return std::unexpected(from_io_error(std::move(result.error())));
     }
-    snapshot.databases.reserve(database_count);
+    snapshot.databases.reserve(std::min(database_count, MaxUntrustedReserve));
     for (std::uint32_t d = 0; d < database_count && reader.ok(); ++d) {
         MetaSnapshotDatabase database;
         database.id = reader.read_u64();
         database.name = reader.read_string();
-        const auto collection_count = reader.read_u32();
-        database.collections.reserve(collection_count);
+        const auto collection_count = reader.read_count(33);
+        database.collections.reserve(std::min(collection_count, MaxUntrustedReserve));
         for (std::uint32_t c = 0; c < collection_count && reader.ok(); ++c) {
             MetaSnapshotCollection collection;
             collection.id = reader.read_u64();
             collection.database_id = reader.read_u64();
             collection.name = reader.read_string();
             collection.comment = read_optional_string(reader);
-            const auto column_count = reader.read_u32();
-            collection.columns.reserve(column_count);
+            const auto column_count = reader.read_count(18);
+            collection.columns.reserve(std::min(column_count, MaxUntrustedReserve));
             for (std::uint32_t n = 0; n < column_count && reader.ok(); ++n) {
                 MetaSnapshotColumn column;
                 column.id = reader.read_u64();
@@ -578,13 +618,13 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
                 column.comment = read_optional_string(reader);
                 collection.columns.push_back(std::move(column));
             }
-            const auto index_count = reader.read_u32();
-            collection.indexes.reserve(index_count);
+            const auto index_count = reader.read_count(18);
+            collection.indexes.reserve(std::min(index_count, MaxUntrustedReserve));
             for (std::uint32_t n = 0; n < index_count && reader.ok(); ++n) {
                 MetaSnapshotIndex index;
                 index.id = reader.read_u64();
-                const auto index_column_count = reader.read_u32();
-                index.column_ids.reserve(index_column_count);
+                const auto index_column_count = reader.read_count(8);
+                index.column_ids.reserve(std::min(index_column_count, MaxUntrustedReserve));
                 for (std::uint32_t k = 0; k < index_column_count && reader.ok(); ++k) {
                     index.column_ids.push_back(reader.read_u64());
                 }
@@ -597,8 +637,8 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
                 index.unique = read_bool(reader);
                 collection.indexes.push_back(std::move(index));
             }
-            const auto vector_index_count = reader.read_u32();
-            collection.vector_indexes.reserve(vector_index_count);
+            const auto vector_index_count = reader.read_count(62);
+            collection.vector_indexes.reserve(std::min(vector_index_count, MaxUntrustedReserve));
             for (std::uint32_t n = 0; n < vector_index_count && reader.ok(); ++n) {
                 MetaSnapshotVectorIndex index;
                 index.id = reader.read_u64();
@@ -625,7 +665,7 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
         }
         snapshot.databases.push_back(std::move(database));
     }
-    if (auto result = reader.result(); !result) {
+    if (auto result = reader.take_result(); !result) {
         return std::unexpected(from_io_error(std::move(result.error())));
     }
     return snapshot;
@@ -654,8 +694,24 @@ std::expected<MetaSnapshot, MetaStoreError> MetaStore::load() const
     if (!file) {
         return std::unexpected(from_filesystem_error(std::move(file.error())));
     }
+    auto file_size = file->size();
+    if (!file_size) {
+        return std::unexpected(from_filesystem_error(std::move(file_size.error())));
+    }
+    if (*file_size > MaxMetaBytes) {
+        return std::unexpected(make_error(
+            MetaStoreErrorCode::ValueTooLarge,
+            "metadata file exceeds the configured size limit"
+        ));
+    }
     io::FileByteReader byte_reader {*file};
-    io::BinaryReader reader {byte_reader};
+    io::BinaryReader reader {
+        byte_reader,
+        io::BinaryDecodeLimits {
+            .max_total_bytes = *file_size,
+            .max_string_bytes = MaxMetaStringBytes,
+        },
+    };
     return read_snapshot(reader);
 }
 
@@ -676,9 +732,13 @@ std::expected<void, MetaStoreError> MetaStore::save(const MetaSnapshot & snapsho
         return std::unexpected(from_filesystem_error(std::move(file.error())));
     }
 
-    io::FileByteWriter byte_writer {*file};
-    io::BinaryWriter writer {byte_writer};
+    io::BufferByteWriter encoded {MaxMetaBytes};
+    io::BinaryWriter writer {encoded};
     if (auto written = write_snapshot(writer, snapshot); !written) {
+        return std::unexpected(from_io_error(std::move(written.error())));
+    }
+    io::FileByteWriter byte_writer {*file};
+    if (auto written = byte_writer.write_bytes(encoded.bytes()); !written) {
         return std::unexpected(from_io_error(std::move(written.error())));
     }
     if (auto synced = file->sync_all(); !synced) {
@@ -693,7 +753,7 @@ std::expected<void, MetaStoreError> MetaStore::save(const MetaSnapshot & snapsho
     }
     if (!parent.empty()) {
         auto synced = filesystem_->sync_directory(parent);
-        if (!synced && synced.error().code != filesystem::FileSystemErrorCode::Unsupported) {
+        if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
             return std::unexpected(from_filesystem_error(std::move(synced.error())));
         }
     }

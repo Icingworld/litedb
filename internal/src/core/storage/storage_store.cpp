@@ -12,6 +12,7 @@
 #include "core/io/binary_io.hpp"
 #include "core/io/buffer_byte_reader.hpp"
 #include "core/io/buffer_byte_writer.hpp"
+#include "core/storage/value_codec.hpp"
 
 namespace litedb::core::storage
 {
@@ -25,6 +26,8 @@ constexpr std::uint32_t PageMagic = 0x3247504c;  // LPG2
 constexpr std::size_t HeaderSize = StorageStore::PageSize;
 constexpr std::size_t PageHeaderSize = 16;
 constexpr std::size_t SlotSize = 8;
+constexpr std::size_t MaxEncodedRecordSize =
+    StorageStore::PageSize - PageHeaderSize - SlotSize;
 constexpr std::uint8_t Active = 1;
 constexpr std::uint8_t Deleted = 2;
 
@@ -44,9 +47,9 @@ StorageStoreError error(StorageStoreErrorCode code, std::string message)
  * @param value 文件系统错误
  * @return 持久化存储器错误
  */
-StorageStoreError fs_error(filesystem::FileSystemError value)
+StorageStoreError fs_error(error::Error value)
 {
-    return error(StorageStoreErrorCode::FileSystemError, std::move(value.message));
+    return error(StorageStoreErrorCode::FileSystemError, value.message());
 }
 
 /**
@@ -54,7 +57,15 @@ StorageStoreError fs_error(filesystem::FileSystemError value)
  * @param value IO 错误
  * @return 持久化存储器错误
  */
-StorageStoreError io_error(io::IoError value) { return error(StorageStoreErrorCode::IoError, std::move(value.message)); }
+StorageStoreError io_error(io::IoError value)
+{
+    return error(
+        value.category() == error::ErrorCategory::FileSystem
+            ? StorageStoreErrorCode::FileSystemError
+            : StorageStoreErrorCode::IoError,
+        value.message()
+    );
+}
 
 /**
  * @brief 读取数字
@@ -92,7 +103,7 @@ void write_number(std::byte * target, T value)
  */
 std::expected<std::vector<std::byte>, StorageStoreError> encode(common::RecordId id, const common::RecordData & data)
 {
-    io::BufferByteWriter bytes;
+    io::BufferByteWriter bytes {MaxEncodedRecordSize};
     io::BinaryWriter writer {bytes};
     if (auto result = writer.write_u64(id); !result) {
         return std::unexpected(io_error(std::move(result.error())));
@@ -104,7 +115,7 @@ std::expected<std::vector<std::byte>, StorageStoreError> encode(common::RecordId
         return std::unexpected(io_error(std::move(result.error())));
     }
     for (const auto & value : data.values) {
-        if (auto result = writer.write_value(value); !result) {
+        if (auto result = write_value(writer, value); !result) {
             return std::unexpected(io_error(std::move(result.error())));
         }
     }
@@ -118,8 +129,20 @@ std::expected<std::vector<std::byte>, StorageStoreError> encode(common::RecordId
  */
 std::expected<common::Record, StorageStoreError> decode(std::span<const std::byte> bytes)
 {
+    if (bytes.size() > MaxEncodedRecordSize) {
+        return std::unexpected(error(
+            StorageStoreErrorCode::RecordTooLarge,
+            "Encoded record exceeds the storage page limit"
+        ));
+    }
     io::BufferByteReader source {bytes};
-    io::BinaryReader reader {source};
+    io::BinaryReader reader {
+        source,
+        io::BinaryDecodeLimits {
+            .max_total_bytes = bytes.size(),
+            .max_string_bytes = static_cast<std::uint32_t>(bytes.size()),
+        },
+    };
     auto id = reader.read_u64();
     auto count = reader.read_u32();
     if (!id) {
@@ -128,10 +151,22 @@ std::expected<common::Record, StorageStoreError> decode(std::span<const std::byt
     if (!count) {
         return std::unexpected(io_error(std::move(count.error())));
     }
+    if (*count > reader.remaining_bytes()) {
+        return std::unexpected(error(
+            StorageStoreErrorCode::InvalidFormat,
+            "Record value count exceeds the remaining encoded data"
+        ));
+    }
     common::RecordData data;
-    data.values.reserve(*count);
+    data.values.reserve(std::min<std::uint32_t>(*count, 1024));
     for (std::uint32_t index = 0; index < *count; ++index) {
-        auto value = reader.read_value();
+        auto value = read_value(
+            reader,
+            ValueDecodeLimits {
+                .max_vector_elements =
+                    static_cast<std::uint32_t>(reader.remaining_bytes() / sizeof(double)),
+            }
+        );
         if (!value) {
             return std::unexpected(io_error(std::move(value.error())));
         }

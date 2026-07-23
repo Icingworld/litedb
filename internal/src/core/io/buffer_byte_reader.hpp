@@ -23,6 +23,7 @@ public:
      * @return 结果
      * @note 允许短读，返回的字节数可能小于请求的字节数
      */
+    [[nodiscard]]
     std::expected<std::size_t, IoError> read_some(std::span<std::byte> data) override;
 
 private:

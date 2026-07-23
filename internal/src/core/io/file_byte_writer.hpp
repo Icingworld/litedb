@@ -10,6 +10,8 @@ namespace litedb::core::io
 
 /**
  * @brief 基于文件偏移的字节写入器
+ * @note 借用传入的 FileHandle，写入器不得比文件句柄存活更久。
+ * @note 逻辑偏移仅支持单消费者访问，不保证多线程共享安全。
  */
 class FileByteWriter final : public ByteWriter
 {
@@ -22,6 +24,7 @@ public:
      * @param data 字节数据
      * @return 结果
      */
+    [[nodiscard]]
     std::expected<void, IoError> write_bytes(std::span<const std::byte> data) override;
 
     /**
@@ -38,6 +41,7 @@ private:
 
 /**
  * @brief 基于文件追加语义的字节写入器
+ * @note 借用传入的 FileHandle，追加器不得比文件句柄存活更久。
  */
 class FileByteAppender final : public ByteWriter
 {
@@ -50,6 +54,7 @@ public:
      * @param data 字节数据
      * @return 结果
      */
+    [[nodiscard]]
     std::expected<void, IoError> write_bytes(std::span<const std::byte> data) override;
 
 private:

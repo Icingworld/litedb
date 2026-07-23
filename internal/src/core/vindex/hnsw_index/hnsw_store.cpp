@@ -24,9 +24,9 @@ Error error(ErrorCode code, std::string message)
 }
 
 [[nodiscard]]
-Error filesystem_error(filesystem::FileSystemError value)
+Error filesystem_error(litedb::core::error::Error value)
 {
-    return error(ErrorCode::FileSystemError, std::move(value.message));
+    return error(ErrorCode::FileSystemError, value.message());
 }
 
 [[nodiscard]]

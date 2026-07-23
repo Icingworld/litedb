@@ -3,9 +3,9 @@
 namespace litedb::core::io
 {
 
-IoError make_io_error(IoErrorCode code, const std::string & message)
+IoError make_io_error(IoErrorCode code, std::string_view message)
 {
-    return IoError { code, message };
+    return IoError {code, message};
 }
 
 } // namespace litedb::core::io

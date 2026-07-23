@@ -18,9 +18,9 @@ namespace litedb::core::wal
 namespace
 {
 
-WalError fs_error(filesystem::FileSystemError value)
+WalError fs_error(error::Error value)
 {
-    return make_error(WalErrorCode::FileSystemError, std::move(value.message));
+    return make_error(WalErrorCode::FileSystemError, value.message());
 }
 
 std::optional<std::uint64_t> parse_generation(const std::filesystem::path & path)
@@ -41,7 +41,7 @@ std::expected<void, WalError> sync_directory_if_supported(
 )
 {
     auto synced = filesystem.sync_directory(path);
-    if (!synced && synced.error().code != filesystem::FileSystemErrorCode::Unsupported) {
+    if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
         return std::unexpected(fs_error(std::move(synced.error())));
     }
     return {};

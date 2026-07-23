@@ -3,6 +3,7 @@ set(STORAGE_SOURCES
     storage_cursor.cpp
     storage_engine.cpp
     storage_store.cpp
+    value_codec.cpp
 )
 
 add_library(litedb_storage ${STORAGE_SOURCES})

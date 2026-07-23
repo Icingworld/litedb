@@ -7,6 +7,7 @@
 #include "core/io/binary_io.hpp"
 #include "core/io/buffer_byte_writer.hpp"
 #include "core/storage/storage_store.hpp"
+#include "core/storage/value_codec.hpp"
 
 namespace litedb::core::storage
 {
@@ -62,7 +63,7 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
     if (!exists) {
         return std::unexpected(StorageError {
             StorageErrorCode::StoreError,
-            std::move(exists.error().message),
+            exists.error().message(),
             StorageStoreErrorCode::FileSystemError,
         });
     }
@@ -95,7 +96,7 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
     if (!exists) {
         return std::unexpected(StorageError {
             StorageErrorCode::StoreError,
-            std::move(exists.error().message),
+            exists.error().message(),
             StorageStoreErrorCode::FileSystemError,
         });
     }
@@ -139,7 +140,7 @@ std::expected<void, StorageError> StorageEngine::drop_collection(common::Collect
         if (!removed) {
             return std::unexpected(StorageError {
                 StorageErrorCode::StoreError,
-                std::move(removed.error().message),
+                removed.error().message(),
                 StorageStoreErrorCode::FileSystemError,
             });
         }
@@ -195,13 +196,14 @@ std::expected<void, StorageError> StorageEngine::validate(
             ));
         }
     }
-    io::BufferByteWriter bytes;
+    constexpr auto MaxEncodedRecordSize = StorageStore::PageSize - 24;
+    io::BufferByteWriter bytes {MaxEncodedRecordSize};
     io::BinaryWriter writer {bytes};
     if (!writer.write_u64(1) || !writer.write_u32(static_cast<std::uint32_t>(data.values.size()))) {
         return std::unexpected(make_error(StorageErrorCode::RecordTooLarge, "Unable to encode record"));
     }
     for (const auto & value : data.values) {
-        if (!writer.write_value(value)) {
+        if (!write_value(writer, value)) {
             return std::unexpected(make_error(StorageErrorCode::RecordTooLarge, "Unable to encode record"));
         }
     }

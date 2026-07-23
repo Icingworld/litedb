@@ -15,11 +15,15 @@ namespace litedb::core::io
 class BufferByteWriter final : public ByteWriter
 {
 public:
+    explicit BufferByteWriter(std::size_t max_bytes) noexcept;
+
+public:
     /**
      * @brief 写入字节数据
      * @param data 字节数据
      * @return 结果
      */
+    [[nodiscard]]
     std::expected<void, IoError> write_bytes(std::span<const std::byte> data) override;
 
     /**
@@ -39,6 +43,7 @@ public:
 
 private:
     std::vector<std::byte> bytes_;     ///< 字节数据
+    std::size_t max_bytes_;            ///< 最大缓冲区大小
 };
 
 } // namespace litedb::core::io

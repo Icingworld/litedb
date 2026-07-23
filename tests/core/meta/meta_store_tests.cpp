@@ -8,6 +8,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace
@@ -144,6 +145,27 @@ void test_load_error_codes(const std::filesystem::path & path)
     require(!truncated.has_value(), "truncated meta file should fail");
     require(truncated.error().code == meta::MetaStoreErrorCode::UnexpectedEof,
             "truncated file error code mismatch");
+
+    auto file = filesystem.open(path, {
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::CreateOrTruncate,
+    });
+    require(file.has_value(), "open malicious meta file failed");
+    io::FileByteWriter byte_writer {*file};
+    io::BinaryWriter writer {byte_writer};
+    require(writer.write_u32(meta_magic).has_value(), "write malicious magic failed");
+    require(writer.write_u16(1).has_value(), "write malicious version failed");
+    require(writer.write_u16(8).has_value(), "write malicious header failed");
+    for (int index = 0; index < 5; ++index) {
+        require(writer.write_u64(1).has_value(), "write malicious id failed");
+    }
+    require(writer.write_u32(std::numeric_limits<std::uint32_t>::max()).has_value(),
+            "write malicious count failed");
+    require(file->close().has_value(), "close malicious meta file failed");
+    auto oversized_count = store.load();
+    require(!oversized_count.has_value(), "oversized metadata count should fail");
+    require(oversized_count.error().code == meta::MetaStoreErrorCode::ValueTooLarge,
+            "oversized metadata count error mismatch");
 }
 
 } // namespace

@@ -184,9 +184,9 @@ std::expected<void, std::string> sync_file(
             filesystem::FileCreateMode::OpenExisting,
         }
     );
-    if (!opened) return std::unexpected(std::move(opened.error().message));
+    if (!opened) return std::unexpected(opened.error().message());
     auto synced = opened->sync_all();
-    if (!synced) return std::unexpected(std::move(synced.error().message));
+    if (!synced) return std::unexpected(synced.error().message());
     return {};
 }
 
@@ -196,8 +196,8 @@ std::expected<void, std::string> sync_directory_if_supported(
 )
 {
     auto synced = filesystem.sync_directory(path);
-    if (!synced && synced.error().code != filesystem::FileSystemErrorCode::Unsupported) {
-        return std::unexpected(std::move(synced.error().message));
+    if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
+        return std::unexpected(synced.error().message());
     }
     return {};
 }
@@ -305,7 +305,7 @@ std::expected<void, TransactionError> TransactionManager::sync_checkpoint_partic
         auto created = filesystem_->create_dir_all(path);
         if (!created) {
             return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                         "Failed to create checkpoint directory: " + created.error().message));
+                                     "Failed to create checkpoint directory: " + created.error().message()));
         }
         auto synced = sync_directory_if_supported(*filesystem_, path);
         if (!synced) {

@@ -17,9 +17,9 @@ namespace
  * @return WAL 错误
  */
 [[nodiscard]]
-WalError fs_error(filesystem::FileSystemError value)
+WalError fs_error(error::Error value)
 {
-    return make_error(WalErrorCode::FileSystemError, std::move(value.message));
+    return make_error(WalErrorCode::FileSystemError, value.message());
 }
 
 } // namespace

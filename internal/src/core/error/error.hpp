@@ -17,6 +17,7 @@ enum class ErrorCategory : std::uint8_t
 {
     Unknown = 0,                ///< 未知
     FileSystem = 1,             ///< 文件系统
+    Io = 2,                     ///< 二进制输入输出
 };
 
 /**
