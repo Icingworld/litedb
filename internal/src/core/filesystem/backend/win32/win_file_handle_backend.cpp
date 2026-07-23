@@ -14,15 +14,6 @@ namespace litedb::core::filesystem::backend
 namespace
 {
 
-std::string display_path(const std::filesystem::path & path)
-{
-    try {
-        return path.string();
-    } catch (...) {
-        return "<unprintable path>";
-    }
-}
-
 FileSystemErrorCode map_win32_error(DWORD error)
 {
     switch (error) {
@@ -119,7 +110,7 @@ FileSystemError make_win32_error(
     const std::error_code native_code(static_cast<int>(error), std::system_category());
     return FileSystemError {
         map_win32_error(error),
-        operation + " failed for '" + display_path(path) + "': " + win32_error_message(error),
+        operation + " failed: " + win32_error_message(error),
         std::move(operation),
         path,
         {},
@@ -134,7 +125,7 @@ FileSystemError range_error(
 {
     return FileSystemError {
         FileSystemErrorCode::InvalidArgument,
-        operation + " range exceeds the native file offset limit for '" + display_path(path) + "'",
+        operation + " range exceeds the native file offset limit",
         std::move(operation),
         path,
     };
@@ -167,7 +158,7 @@ std::expected<void, FileSystemError> write_all_locked(
         if (written == 0) {
             return std::unexpected(FileSystemError {
                 FileSystemErrorCode::IoError,
-                "WriteFile wrote zero bytes for '" + display_path(path) + "'",
+                "WriteFile wrote zero bytes",
                 "WriteFile",
                 path,
             });
@@ -233,7 +224,7 @@ std::expected<std::size_t, FileSystemError> Win32FileHandleBackend::read_at(
     if (handle_ == INVALID_HANDLE_VALUE) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "file handle is closed: '" + display_path(path_) + "'",
+            "file handle is closed",
             "ReadFile",
             path_,
         });
@@ -277,7 +268,7 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::write_at(
     if (handle_ == INVALID_HANDLE_VALUE) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "file handle is closed: '" + display_path(path_) + "'",
+            "file handle is closed",
             "WriteFile",
             path_,
         });
@@ -295,7 +286,7 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::append(std::span<co
     if (handle_ == INVALID_HANDLE_VALUE) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "file handle is closed: '" + display_path(path_) + "'",
+            "file handle is closed",
             "append",
             path_,
         });
@@ -320,7 +311,7 @@ std::expected<std::uint64_t, FileSystemError> Win32FileHandleBackend::size()
     if (handle_ == INVALID_HANDLE_VALUE) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "file handle is closed: '" + display_path(path_) + "'",
+            "file handle is closed",
             "GetFileSizeEx",
             path_,
         });
@@ -342,7 +333,7 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::truncate(std::uint6
     if (handle_ == INVALID_HANDLE_VALUE) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "file handle is closed: '" + display_path(path_) + "'",
+            "file handle is closed",
             "SetEndOfFile",
             path_,
         });
@@ -368,7 +359,7 @@ std::expected<void, FileSystemError> Win32FileHandleBackend::sync_all()
     if (handle_ == INVALID_HANDLE_VALUE) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "file handle is closed: '" + display_path(path_) + "'",
+            "file handle is closed",
             "FlushFileBuffers",
             path_,
         });

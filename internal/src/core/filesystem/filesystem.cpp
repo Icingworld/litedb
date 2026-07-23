@@ -1,7 +1,6 @@
 #include "core/filesystem/filesystem.hpp"
 
 #include <cassert>
-#include <stdexcept>
 #include <utility>
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
@@ -9,26 +8,10 @@
 namespace litedb::core::filesystem
 {
 
-namespace
-{
-
-std::string display_path(const std::filesystem::path & path)
-{
-    try {
-        return path.string();
-    } catch (...) {
-        return "<unprintable path>";
-    }
-}
-
-} // namespace
-
 FileSystem::FileSystem(std::unique_ptr<backend::FileSystemBackend> backend)
     : backend_(std::move(backend))
 {
-    if (!backend_) {
-        throw std::invalid_argument("filesystem backend must not be null");
-    }
+    assert(backend_);
 }
 
 FileSystem::FileSystem(FileSystem &&) noexcept = default;
@@ -49,7 +32,7 @@ std::expected<FileHandle, FileSystemError> FileSystem::open(
          options.create_mode == FileCreateMode::CreateOrTruncate)) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::InvalidArgument,
-            "open failed for '" + display_path(path) + "': truncate create mode requires write access",
+            "open failed: truncate create mode requires write access",
             "open",
             path,
         });

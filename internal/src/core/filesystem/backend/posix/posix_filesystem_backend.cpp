@@ -58,15 +58,6 @@ FileSystemErrorCode map_error_code(const std::error_code & error)
     return FileSystemErrorCode::IoError;
 }
 
-std::string display_path(const std::filesystem::path & path)
-{
-    try {
-        return path.string();
-    } catch (...) {
-        return "<unprintable path>";
-    }
-}
-
 FileSystemError make_error(
     const std::error_code & error,
     std::string operation,
@@ -74,11 +65,7 @@ FileSystemError make_error(
     const std::filesystem::path & related_path = {}
 )
 {
-    auto message = operation + " '" + display_path(path) + "'";
-    if (!related_path.empty()) {
-        message += " -> '" + display_path(related_path) + "'";
-    }
-    message += " failed: " + error.message();
+    auto message = operation + " failed: " + error.message();
     return FileSystemError {
         map_error_code(error),
         std::move(message),
@@ -171,7 +158,7 @@ std::expected<std::vector<std::filesystem::path>, FileSystemError> PosixFileSyst
         }
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::NotADirectory,
-            "path is not a directory: '" + display_path(path) + "'",
+            "path is not a directory",
             "is_directory",
             path,
         });
@@ -222,7 +209,7 @@ std::expected<void, FileSystemError> PosixFileSystemBackend::rename(
     if (std::filesystem::exists(destination_status)) {
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::AlreadyExists,
-            "rename destination already exists: '" + display_path(to) + "'",
+            "rename destination already exists",
             "rename",
             from,
             to,

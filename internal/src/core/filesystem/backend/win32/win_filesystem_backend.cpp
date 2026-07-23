@@ -58,15 +58,6 @@ FileSystemErrorCode map_error_code(const std::error_code & error)
     return FileSystemErrorCode::IoError;
 }
 
-std::string display_path(const std::filesystem::path & path)
-{
-    try {
-        return path.string();
-    } catch (...) {
-        return "<unprintable path>";
-    }
-}
-
 FileSystemError make_error(
     const std::error_code & error,
     std::string operation,
@@ -74,11 +65,7 @@ FileSystemError make_error(
     const std::filesystem::path & related_path = {}
 )
 {
-    auto message = operation + " '" + display_path(path) + "'";
-    if (!related_path.empty()) {
-        message += " -> '" + display_path(related_path) + "'";
-    }
-    message += " failed: " + error.message();
+    auto message = operation + " failed: " + error.message();
     return FileSystemError {
         map_error_code(error),
         std::move(message),
@@ -134,20 +121,6 @@ DWORD to_creation_disposition(FileCreateMode mode)
     return OPEN_EXISTING;
 }
 
-std::expected<std::wstring, FileSystemError> to_native_path(const std::filesystem::path & path)
-{
-    try {
-        return path.native();
-    } catch (const std::exception & error) {
-        return std::unexpected(FileSystemError {
-            FileSystemErrorCode::InvalidPath,
-            "native path conversion failed for '" + display_path(path) + "': " + error.what(),
-            "path.native",
-            path,
-        });
-    }
-}
-
 } // namespace
 
 std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend()
@@ -160,13 +133,8 @@ std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> Win32FileSyst
     const FileOpenOptions & options
 )
 {
-    auto native_path = to_native_path(path);
-    if (!native_path) {
-        return std::unexpected(std::move(native_path.error()));
-    }
-
     const HANDLE handle = CreateFileW(
-        native_path->c_str(),
+        path.c_str(),
         to_desired_access(options.access),
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         nullptr,
@@ -193,7 +161,7 @@ std::expected<std::vector<std::filesystem::path>, FileSystemError> Win32FileSyst
         }
         return std::unexpected(FileSystemError {
             FileSystemErrorCode::NotADirectory,
-            "path is not a directory: '" + display_path(path) + "'",
+            "path is not a directory",
             "is_directory",
             path,
         });
@@ -236,16 +204,7 @@ std::expected<void, FileSystemError> Win32FileSystemBackend::rename(
     const std::filesystem::path & to
 )
 {
-    auto native_from = to_native_path(from);
-    if (!native_from) {
-        return std::unexpected(std::move(native_from.error()));
-    }
-    auto native_to = to_native_path(to);
-    if (!native_to) {
-        return std::unexpected(std::move(native_to.error()));
-    }
-
-    if (!MoveFileExW(native_from->c_str(), native_to->c_str(), MOVEFILE_WRITE_THROUGH)) {
+    if (!MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH)) {
         return std::unexpected(make_win32_error(GetLastError(), "MoveFileExW", from, to));
     }
     return {};
@@ -256,18 +215,9 @@ std::expected<void, FileSystemError> Win32FileSystemBackend::replace_file_atomic
     const std::filesystem::path & to
 )
 {
-    auto native_from = to_native_path(from);
-    if (!native_from) {
-        return std::unexpected(std::move(native_from.error()));
-    }
-    auto native_to = to_native_path(to);
-    if (!native_to) {
-        return std::unexpected(std::move(native_to.error()));
-    }
-
     if (!MoveFileExW(
-            native_from->c_str(),
-            native_to->c_str(),
+            from.c_str(),
+            to.c_str(),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
         )) {
         return std::unexpected(make_win32_error(
@@ -294,13 +244,8 @@ std::expected<void, FileSystemError> Win32FileSystemBackend::sync_directory(
     const std::filesystem::path & path
 )
 {
-    auto native_path = to_native_path(path);
-    if (!native_path) {
-        return std::unexpected(std::move(native_path.error()));
-    }
-
     const HANDLE handle = CreateFileW(
-        native_path->c_str(),
+        path.c_str(),
         FILE_LIST_DIRECTORY,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         nullptr,

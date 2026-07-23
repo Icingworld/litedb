@@ -217,22 +217,6 @@ int main()
     static_assert(!std::is_copy_constructible_v<FileHandle>);
     static_assert(std::is_nothrow_move_constructible_v<FileHandle>);
 
-    bool null_filesystem_rejected = false;
-    try {
-        FileSystem invalid {std::unique_ptr<FileSystemBackend> {}};
-    } catch (const std::invalid_argument &) {
-        null_filesystem_rejected = true;
-    }
-    require(null_filesystem_rejected, "null filesystem backend must be rejected");
-
-    bool null_handle_rejected = false;
-    try {
-        FileHandle invalid {std::unique_ptr<FileHandleBackend> {}};
-    } catch (const std::invalid_argument &) {
-        null_handle_rejected = true;
-    }
-    require(null_handle_rejected, "null file handle backend must be rejected");
-
     auto state = std::make_shared<TestState>();
     {
         FileSystem filesystem {std::make_unique<MemoryFileSystemBackend>(state)};

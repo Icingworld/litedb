@@ -19,15 +19,6 @@ namespace litedb::core::filesystem::backend
 namespace
 {
 
-std::string display_path(const std::filesystem::path & path)
-{
-    try {
-        return path.string();
-    } catch (...) {
-        return "<unprintable path>";
-    }
-}
-
 FileSystemErrorCode map_errno(int error)
 {
     switch (error) {
@@ -69,7 +60,7 @@ FileSystemError make_errno_error(
     const std::error_code native_code(error, std::generic_category());
     return FileSystemError {
         map_errno(error),
-        operation + " failed for '" + display_path(path) + "': " + std::strerror(error),
+        operation + " failed: " + std::strerror(error),
         std::move(operation),
         path,
         {},
@@ -84,7 +75,7 @@ FileSystemError range_error(
 {
     return FileSystemError {
         FileSystemErrorCode::InvalidArgument,
-        operation + " range exceeds the native file offset limit for '" + display_path(path) + "'",
+        operation + " range exceeds the native file offset limit",
         std::move(operation),
         path,
     };
@@ -97,7 +88,7 @@ FileSystemError closed_error(
 {
     return FileSystemError {
         FileSystemErrorCode::InvalidArgument,
-        operation + " failed because the file handle is closed: '" + display_path(path) + "'",
+        operation + " failed because the file handle is closed",
         std::move(operation),
         path,
     };
@@ -141,7 +132,7 @@ std::expected<void, FileSystemError> write_all_at(
         if (written == 0) {
             return std::unexpected(FileSystemError {
                 FileSystemErrorCode::IoError,
-                "pwrite wrote zero bytes for '" + display_path(path) + "'",
+                "pwrite wrote zero bytes",
                 "pwrite",
                 path,
             });

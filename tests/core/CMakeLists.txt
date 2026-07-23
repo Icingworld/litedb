@@ -1,3 +1,4 @@
+add_subdirectory(error)
 add_subdirectory(parser)
 add_subdirectory(meta)
 add_subdirectory(schema)
