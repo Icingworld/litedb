@@ -7,7 +7,7 @@
 
 #include "core/common/logical_type.hpp"
 
-namespace litedb::core::schema
+namespace litedb::core::common
 {
 
 using NullValue = std::monostate;
@@ -52,10 +52,10 @@ public:
      * @return 是否匹配类型
      */
     [[nodiscard]]
-    bool matches_type(const common::LogicalType & type) const noexcept;
+    bool matches_type(const LogicalType & type) const noexcept;
 
 private:
     ValueData data_;     ///< 值数据
 };
 
-} // namespace litedb::core::schema
+} // namespace litedb::core::common

@@ -148,7 +148,7 @@ SHOW INDEXES FROM users;
 索引查询返回的是 `RecordId`，因此 storage 必须支持按 id 读取记录：
 
 ```cpp
-std::expected<schema::Record, StorageError> get(common::RecordId record_id) const;
+std::expected<common::Record, StorageError> get(common::RecordId record_id) const;
 ```
 
 这个接口有两个用途：

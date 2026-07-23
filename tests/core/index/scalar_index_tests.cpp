@@ -16,7 +16,6 @@ namespace
 
 using namespace litedb::core::common;
 using namespace litedb::core::index;
-using namespace litedb::core::schema;
 
 class EqualityOnlyTestIndex final : public ScalarIndex
 {

@@ -1,39 +1,39 @@
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 
 #include "core/meta/meta.hpp"
 
 #include <utility>
 
-namespace litedb::core::schema
+namespace litedb::core::storage
 {
 
 namespace
 {
 
-SchemaError make_error(SchemaErrorCode code, std::string message)
+SchemaLoadError make_error(SchemaLoadErrorCode code, std::string message)
 {
-    return SchemaError {code, std::move(message)};
+    return SchemaLoadError {code, std::move(message)};
 }
 
 } // namespace
 
-std::expected<CollectionSchema, SchemaError> load_collection_schema(
+std::expected<schema::CollectionSchema, SchemaLoadError> load_collection_schema(
     const meta::MetaEngine & catalog,
     common::CollectionId collection_id
 )
 {
     const auto * collection = catalog.find_collection(collection_id);
     if (collection == nullptr) {
-        return std::unexpected(make_error(SchemaErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(make_error(SchemaLoadErrorCode::CollectionNotFound, "Collection not found"));
     }
 
     const auto * database = catalog.find_database(collection->database_id());
     if (database == nullptr) {
-        return std::unexpected(make_error(SchemaErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(make_error(SchemaLoadErrorCode::DatabaseNotFound, "Database not found"));
     }
 
     const auto catalog_columns = catalog.list_columns(collection_id);
-    std::vector<ColumnSchema> columns;
+    std::vector<schema::ColumnSchema> columns;
     columns.reserve(catalog_columns.size());
 
     for (std::size_t ordinal = 0; ordinal < catalog_columns.size(); ++ordinal) {
@@ -55,7 +55,7 @@ std::expected<CollectionSchema, SchemaError> load_collection_schema(
         );
     }
 
-    return CollectionSchema {
+    return schema::CollectionSchema {
         collection->database_id(),
         collection->id(),
         collection->name(),
@@ -64,4 +64,4 @@ std::expected<CollectionSchema, SchemaError> load_collection_schema(
     };
 }
 
-} // namespace litedb::core::schema
+} // namespace litedb::core::storage

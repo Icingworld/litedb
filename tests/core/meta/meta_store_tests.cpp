@@ -43,10 +43,10 @@ meta::MetaSnapshot make_snapshot()
     embedding.id = 4;
     embedding.name = "embedding";
     embedding.type = {common::LogicalTypeId::Vector, 3};
-    embedding.default_expression = meta::entry::DefaultExpression::vector({
-        meta::entry::DefaultExpression::literal(meta::entry::DefaultLiteralKind::Float, "0.0"),
-        meta::entry::DefaultExpression::literal(meta::entry::DefaultLiteralKind::Float, "0.0"),
-        meta::entry::DefaultExpression::literal(meta::entry::DefaultLiteralKind::Float, "0.0"),
+    embedding.default_expression = schema::DefaultExpression::vector({
+        schema::DefaultExpression::literal(schema::DefaultLiteralKind::Float, "0.0"),
+        schema::DefaultExpression::literal(schema::DefaultLiteralKind::Float, "0.0"),
+        schema::DefaultExpression::literal(schema::DefaultLiteralKind::Float, "0.0"),
     });
 
     meta::MetaSnapshotCollection collection;

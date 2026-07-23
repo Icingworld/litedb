@@ -1,8 +1,8 @@
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 
 #include <utility>
 
-namespace litedb::core::meta::entry
+namespace litedb::core::schema
 {
 
 DefaultExpression DefaultExpression::null_literal()
@@ -27,4 +27,4 @@ DefaultExpression DefaultExpression::vector(std::vector<DefaultExpression> eleme
     return expression;
 }
 
-} // namespace litedb::core::meta::entry
+} // namespace litedb::core::schema

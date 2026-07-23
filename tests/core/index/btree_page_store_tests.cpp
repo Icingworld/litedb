@@ -11,7 +11,7 @@
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace
 {
@@ -19,7 +19,7 @@ namespace
 using namespace litedb::core;
 using namespace litedb::core::index;
 using namespace litedb::core::index::btree_index;
-using litedb::core::schema::Value;
+using litedb::core::common::Value;
 
 void require(bool condition, const std::string & message)
 {

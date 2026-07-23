@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 #include "core/storage/storage_error.hpp"
 
 namespace litedb::core::storage
@@ -34,7 +34,7 @@ public:
      * @return 下一个记录
      */
     [[nodiscard]]
-    std::expected<std::optional<schema::Record>, StorageError> next();
+    std::expected<std::optional<common::Record>, StorageError> next();
 
 private:
     StorageCursor(const StorageStore & store, std::vector<common::RecordId> record_ids) noexcept;

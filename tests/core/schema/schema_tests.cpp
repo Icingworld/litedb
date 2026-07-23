@@ -1,5 +1,5 @@
 #include "core/meta/meta_engine.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 
 #include <exception>
 #include <iostream>
@@ -12,6 +12,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::meta;
 using namespace litedb::core::meta::entry;
 using namespace litedb::core::schema;
+using namespace litedb::core::storage;
 
 void require(bool condition, const char * message)
 {
@@ -107,7 +108,7 @@ void test_load_missing_collection_schema_fails()
     MetaEngine catalog;
     auto loaded = load_collection_schema(catalog, 999);
     require(!loaded.has_value(), "missing collection schema should fail");
-    require(loaded.error().code == SchemaErrorCode::CollectionNotFound, "missing collection error code mismatch");
+    require(loaded.error().code == SchemaLoadErrorCode::CollectionNotFound, "missing collection error code mismatch");
 }
 
 } // namespace

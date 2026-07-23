@@ -5,7 +5,7 @@
 
 #include "core/meta/meta_engine.hpp"
 #include "core/index/btree_index/btree_index.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
 namespace litedb::core::index
@@ -69,7 +69,7 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_bac
 }
 
 std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_from_record(
-    const schema::RecordData & record_data,
+    const common::RecordData & record_data,
     std::size_t column_ordinal,
     const common::LogicalType & key_type
 )
@@ -296,7 +296,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                 continue;
             }
 
-            auto collection_schema = schema::load_collection_schema(catalog, collection->id());
+            auto collection_schema = storage::load_collection_schema(catalog, collection->id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(make_error(
                     IndexErrorCode::InvalidIndexColumn,
@@ -353,7 +353,7 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
         return std::unexpected(make_error(IndexErrorCode::StorageError, "Index collection is absent from storage"));
     }
 
-    auto collection_schema = schema::load_collection_schema(catalog, collection_id);
+    auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message));
     }
@@ -400,7 +400,7 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
 
 std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_insert(
     common::CollectionId collection_id,
-    const schema::RecordData & record_data
+    const common::RecordData & record_data
 ) const
 {
     IndexKeyBindings bindings;
@@ -455,8 +455,8 @@ std::expected<void, IndexError> IndexEngine::on_insert(
 
 std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
     common::CollectionId collection_id,
-    const schema::RecordData & old_record_data,
-    const schema::RecordData & new_record_data
+    const common::RecordData & old_record_data,
+    const common::RecordData & new_record_data
 ) const
 {
     IndexUpdateBindings bindings;
@@ -558,7 +558,7 @@ std::expected<void, IndexError> IndexEngine::on_update(
 
 std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_delete(
     common::CollectionId collection_id,
-    const schema::RecordData & old_record_data
+    const common::RecordData & old_record_data
 ) const
 {
     IndexKeyBindings bindings;

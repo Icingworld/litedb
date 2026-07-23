@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 
@@ -24,7 +24,7 @@ public:
         common::LogicalType type,
         bool nullable,
         bool unique,
-        std::optional<meta::entry::DefaultExpression> default_expression,
+        std::optional<DefaultExpression> default_expression,
         std::optional<std::string> comment
     );
 
@@ -83,7 +83,7 @@ public:
      * @return 默认值
      */
     [[nodiscard]]
-    const std::optional<meta::entry::DefaultExpression> & default_expression() const noexcept;
+    const std::optional<DefaultExpression> & default_expression() const noexcept;
 
     /**
      * @brief 获取注释
@@ -100,7 +100,7 @@ private:
     common::LogicalType type_;                                              ///< 列类型
     bool nullable_;                                                         ///< 是否可为空
     bool unique_;                                                           ///< 是否唯一
-    std::optional<meta::entry::DefaultExpression> default_expression_;   ///< 默认值
+    std::optional<DefaultExpression> default_expression_;                   ///< 默认值
     std::optional<std::string> comment_;                                    ///< 注释
 };
 

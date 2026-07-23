@@ -21,8 +21,8 @@ const std::vector<FunctionSignature> & ScalarFunction::signatures() const noexce
     return signatures_;
 }
 
-std::expected<schema::Value, FunctionError> ScalarFunction::evaluate(
-    const std::vector<schema::Value> & arguments,
+std::expected<common::Value, FunctionError> ScalarFunction::evaluate(
+    const std::vector<common::Value> & arguments,
     const ScalarFunctionContext & context,
     parser::ast::AstNodeLocation location
 ) const

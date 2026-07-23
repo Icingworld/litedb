@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::index::btree_index
 {
@@ -212,43 +212,43 @@ std::expected<ScalarIndexKey, BTreePageCodecError> decode_key(
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::UnsupportedKeyType, "Unsupported B+ tree key type"));
     }
 
-    schema::Value value;
+    common::Value value;
     switch (key_type.id) {
     case common::LogicalTypeId::Boolean:
         if (bytes.size() != 1 || std::to_integer<std::uint8_t>(bytes[0]) > 1) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Boolean index key"));
         }
-        value = schema::Value {std::to_integer<std::uint8_t>(bytes[0]) == 1};
+        value = common::Value {std::to_integer<std::uint8_t>(bytes[0]) == 1};
         break;
     case common::LogicalTypeId::Integer:
         if (bytes.size() != sizeof(std::int32_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Integer index key"));
         }
-        value = schema::Value {read_number<std::int32_t>(bytes.data())};
+        value = common::Value {read_number<std::int32_t>(bytes.data())};
         break;
     case common::LogicalTypeId::BigInt:
         if (bytes.size() != sizeof(std::int64_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded BigInt index key"));
         }
-        value = schema::Value {read_number<std::int64_t>(bytes.data())};
+        value = common::Value {read_number<std::int64_t>(bytes.data())};
         break;
     case common::LogicalTypeId::Float:
         if (bytes.size() != sizeof(std::uint32_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Float index key"));
         }
-        value = schema::Value {std::bit_cast<float>(read_number<std::uint32_t>(bytes.data()))};
+        value = common::Value {std::bit_cast<float>(read_number<std::uint32_t>(bytes.data()))};
         break;
     case common::LogicalTypeId::Double:
         if (bytes.size() != sizeof(std::uint64_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Double index key"));
         }
-        value = schema::Value {std::bit_cast<double>(read_number<std::uint64_t>(bytes.data()))};
+        value = common::Value {std::bit_cast<double>(read_number<std::uint64_t>(bytes.data()))};
         break;
     case common::LogicalTypeId::Varchar:
         if (key_type.parameter.has_value() && bytes.size() > *key_type.parameter) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Encoded Varchar index key exceeds declared length"));
         }
-        value = schema::Value {bytes.empty()
+        value = common::Value {bytes.empty()
             ? std::string {}
             : std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size())};
         break;

@@ -1,4 +1,4 @@
-﻿#include "core/vindex/vector_index_engine.hpp"
+#include "core/vindex/vector_index_engine.hpp"
 
 #include <algorithm>
 #include <string>
@@ -6,7 +6,7 @@
 
 #include "core/filesystem/filesystem.hpp"
 #include "core/meta/meta_engine.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/vindex/flat_index/flat_index.hpp"
 #include "core/vindex/hnsw_index/hnsw_index.hpp"
@@ -25,7 +25,7 @@ VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 
 [[nodiscard]]
 std::expected<std::optional<VectorIndexKey>, VectorIndexError> key_from_record(
-    const schema::RecordData & record_data,
+    const common::RecordData & record_data,
     std::size_t column_ordinal
 )
 {
@@ -98,7 +98,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
                     "Vector index collection is absent from storage"
                 ));
             }
-            auto collection_schema = schema::load_collection_schema(catalog, collection->id());
+            auto collection_schema = storage::load_collection_schema(catalog, collection->id());
             if (!collection_schema) {
                 return std::unexpected(make_error(
                     VectorIndexErrorCode::InvalidMetadata,
@@ -143,7 +143,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
             "Vector index collection is absent from storage"
         ));
     }
-    auto collection_schema = schema::load_collection_schema(catalog, collection_id);
+    auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema) {
         return std::unexpected(make_error(
             VectorIndexErrorCode::InvalidMetadata,
@@ -258,7 +258,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::erase(common::VIndexId 
 
 std::expected<VectorIndexKeyBindings, VectorIndexError> VectorIndexEngine::prepare_insert(
     common::CollectionId collection_id,
-    const schema::RecordData & record_data
+    const common::RecordData & record_data
 ) const
 {
     VectorIndexKeyBindings bindings;
@@ -305,8 +305,8 @@ std::expected<void, VectorIndexError> VectorIndexEngine::on_insert(
 
 std::expected<VectorIndexUpdateBindings, VectorIndexError> VectorIndexEngine::prepare_update(
     common::CollectionId collection_id,
-    const schema::RecordData & old_record_data,
-    const schema::RecordData & new_record_data
+    const common::RecordData & old_record_data,
+    const common::RecordData & new_record_data
 ) const
 {
     VectorIndexUpdateBindings bindings;
@@ -387,7 +387,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::on_update(
 
 std::expected<VectorIndexKeyBindings, VectorIndexError> VectorIndexEngine::prepare_delete(
     common::CollectionId collection_id,
-    const schema::RecordData & old_record_data
+    const common::RecordData & old_record_data
 ) const
 {
     return prepare_insert(collection_id, old_record_data);

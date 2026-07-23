@@ -1,6 +1,8 @@
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
-namespace litedb::core::schema
+#include <utility>
+
+namespace litedb::core::common
 {
 
 Value::Value() = default;
@@ -25,32 +27,32 @@ const ValueData & Value::data() const noexcept
     return data_;
 }
 
-bool Value::matches_type(const common::LogicalType & type) const noexcept
+bool Value::matches_type(const LogicalType & type) const noexcept
 {
     if (is_null()) {
         return true;
     }
 
     switch (type.id) {
-    case common::LogicalTypeId::Null:
+    case LogicalTypeId::Null:
         return is_null();
-    case common::LogicalTypeId::Boolean:
+    case LogicalTypeId::Boolean:
         return std::holds_alternative<bool>(data_);
-    case common::LogicalTypeId::Integer:
+    case LogicalTypeId::Integer:
         return std::holds_alternative<std::int32_t>(data_);
-    case common::LogicalTypeId::BigInt:
+    case LogicalTypeId::BigInt:
         return std::holds_alternative<std::int64_t>(data_);
-    case common::LogicalTypeId::Float:
+    case LogicalTypeId::Float:
         return std::holds_alternative<float>(data_);
-    case common::LogicalTypeId::Double:
+    case LogicalTypeId::Double:
         return std::holds_alternative<double>(data_);
-    case common::LogicalTypeId::Varchar:
+    case LogicalTypeId::Varchar:
         return std::holds_alternative<std::string>(data_);
-    case common::LogicalTypeId::Vector:
+    case LogicalTypeId::Vector:
         return std::holds_alternative<VectorValue>(data_);
     }
 
     return false;
 }
 
-} // namespace litedb::core::schema
+} // namespace litedb::core::common

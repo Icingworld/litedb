@@ -9,7 +9,7 @@
 #include "core/common/ids.hpp"
 #include "core/filesystem/file_handle.hpp"
 #include "core/filesystem/filesystem.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 #include "core/storage/storage_cursor.hpp"
 #include "core/storage/storage_error.hpp"
 
@@ -68,14 +68,14 @@ public:
      * @return 记录
      */
     [[nodiscard]]
-    std::expected<schema::Record, StorageStoreError> get(common::RecordId id) const;
+    std::expected<common::Record, StorageStoreError> get(common::RecordId id) const;
 
     /**
      * @brief 插入记录
      * @param data 记录数据
      * @return 记录 ID
      */
-    std::expected<common::RecordId, StorageStoreError> insert(schema::RecordData data);
+    std::expected<common::RecordId, StorageStoreError> insert(common::RecordData data);
 
     /**
      * @brief 更新记录
@@ -83,7 +83,7 @@ public:
      * @param data 记录数据
      * @return 是否成功
      */
-    std::expected<void, StorageStoreError> update(common::RecordId id, schema::RecordData data);
+    std::expected<void, StorageStoreError> update(common::RecordId id, common::RecordData data);
 
     /**
      * @brief 删除记录
@@ -126,7 +126,7 @@ private:
      */
     std::expected<PhysicalRid, StorageStoreError> place(
         common::RecordId id,
-        const schema::RecordData & data
+        const common::RecordData & data
     );
 
     /**
@@ -134,7 +134,7 @@ private:
      * @param rid 物理记录 ID
      * @return 记录
      */
-    std::expected<schema::Record, StorageStoreError> read(PhysicalRid rid) const;
+    std::expected<common::Record, StorageStoreError> read(PhysicalRid rid) const;
 
     /**
      * @brief 标记记录为删除

@@ -19,7 +19,7 @@
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/schema/collection.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
 namespace
@@ -236,7 +236,7 @@ void test_hnsw_matches_brute_force_top_one()
     auto created = HnswIndex::create(index_path, 14, 20, 31, options, filesystem);
     require(created.has_value(), "create recall hnsw index failed");
 
-    std::vector<schema::VectorValue> vectors;
+    std::vector<common::VectorValue> vectors;
     vectors.reserve(128);
     for (std::size_t index = 0; index < 128; ++index) {
         const auto x = std::sin(static_cast<double>(index) * 0.37) * 10.0;
@@ -247,7 +247,7 @@ void test_hnsw_matches_brute_force_top_one()
 
     std::size_t matches = 0;
     for (std::size_t query_index = 0; query_index < 32; ++query_index) {
-        const schema::VectorValue query {
+        const common::VectorValue query {
             std::sin(static_cast<double>(query_index) * 0.43) * 9.0,
             std::cos(static_cast<double>(query_index) * 0.29) * 9.0,
         };
@@ -423,7 +423,7 @@ void test_vector_index_engine_restores_and_rebuilds_all()
             .hnsw_options = {.max_neighbors = 4, .ef_construction = 32, .ef_search_default = 32, .random_seed = 7},
         });
         require(index_id.has_value(), "create vector catalog index failed");
-        auto collection_schema = schema::load_collection_schema(catalog, *collection_id);
+        auto collection_schema = storage::load_collection_schema(catalog, *collection_id);
         require(collection_schema.has_value(), "load vector catalog schema failed");
         const auto * index_entry = catalog.find_vector_index(*index_id);
         require(index_entry != nullptr, "vector catalog index entry missing");

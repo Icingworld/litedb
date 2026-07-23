@@ -66,7 +66,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
         // 检查列是否重复
         std::unordered_set<std::string> seen_columns;
         for (std::size_t index = 0; index < statement.columns().size(); ++index) {
-            const auto column_key = meta::normalize_identifier(statement.columns()[index]);
+            const auto column_key = common::normalize_identifier(statement.columns()[index]);
             if (!seen_columns.emplace(column_key).second) {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::DuplicateColumn,

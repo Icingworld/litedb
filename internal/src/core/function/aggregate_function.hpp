@@ -6,7 +6,7 @@
 
 #include "core/function/function.hpp"
 #include "core/function/function_error.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::function
 {
@@ -46,7 +46,7 @@ public:
     [[nodiscard]]
     virtual std::expected<void, FunctionError> update(
         AggregateState & state,
-        const std::vector<schema::Value> & arguments,
+        const std::vector<common::Value> & arguments,
         parser::ast::AstNodeLocation location
     ) const = 0;
 
@@ -57,7 +57,7 @@ public:
      * @return 最终化结果
      */
     [[nodiscard]]
-    virtual std::expected<schema::Value, FunctionError> finalize(
+    virtual std::expected<common::Value, FunctionError> finalize(
         const AggregateState & state,
         parser::ast::AstNodeLocation location
     ) const = 0;

@@ -10,7 +10,7 @@
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/executor/executor.hpp"
 #include "core/physical_plan/statement/physical_command_plan.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/wal/recovery_manager.hpp"
 
 namespace litedb::core::database
@@ -602,7 +602,7 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
                 continue;
             }
 
-            auto collection_schema = schema::load_collection_schema(meta_, collection->id());
+            auto collection_schema = storage::load_collection_schema(meta_, collection->id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(storage::StorageError {
                     .code = storage::StorageErrorCode::StoreError,
@@ -633,7 +633,7 @@ executor::ExecutionError DatabaseEngine::from_meta_error(
 }
 
 executor::ExecutionError DatabaseEngine::from_schema_error(
-    schema::SchemaError error,
+    storage::SchemaLoadError error,
     parser::ast::AstNodeLocation location
 )
 {

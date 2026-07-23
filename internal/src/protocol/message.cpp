@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "core/common/logical_type.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::protocol
 {
@@ -260,10 +260,10 @@ std::expected<core::common::LogicalType, ProtocolError> read_logical_type(Reader
     };
 }
 
-void write_value(Writer & writer, const core::schema::Value & value)
+void write_value(Writer & writer, const core::common::Value & value)
 {
-    using core::schema::NullValue;
-    using core::schema::VectorValue;
+    using core::common::NullValue;
+    using core::common::VectorValue;
 
     std::visit(
         [&](const auto & data) {
@@ -301,7 +301,7 @@ void write_value(Writer & writer, const core::schema::Value & value)
 }
 
 [[nodiscard]]
-std::expected<core::schema::Value, ProtocolError> read_value(Reader & reader)
+std::expected<core::common::Value, ProtocolError> read_value(Reader & reader)
 {
     auto tag = reader.read_u8();
     if (!tag.has_value()) {
@@ -311,55 +311,55 @@ std::expected<core::schema::Value, ProtocolError> read_value(Reader & reader)
     const auto type = static_cast<core::common::LogicalTypeId>(tag.value());
     switch (type) {
     case core::common::LogicalTypeId::Null:
-        return core::schema::Value::null();
+        return core::common::Value::null();
     case core::common::LogicalTypeId::Boolean: {
         auto value = reader.read_u8();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return core::schema::Value {value.value() != 0};
+        return core::common::Value {value.value() != 0};
     }
     case core::common::LogicalTypeId::Integer: {
         auto value = reader.read_u32();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return core::schema::Value {std::bit_cast<std::int32_t>(value.value())};
+        return core::common::Value {std::bit_cast<std::int32_t>(value.value())};
     }
     case core::common::LogicalTypeId::BigInt: {
         auto value = reader.read_u64();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return core::schema::Value {std::bit_cast<std::int64_t>(value.value())};
+        return core::common::Value {std::bit_cast<std::int64_t>(value.value())};
     }
     case core::common::LogicalTypeId::Float: {
         auto value = reader.read_float();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return core::schema::Value {value.value()};
+        return core::common::Value {value.value()};
     }
     case core::common::LogicalTypeId::Double: {
         auto value = reader.read_double();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return core::schema::Value {value.value()};
+        return core::common::Value {value.value()};
     }
     case core::common::LogicalTypeId::Varchar: {
         auto value = reader.read_string();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return core::schema::Value {std::move(value.value())};
+        return core::common::Value {std::move(value.value())};
     }
     case core::common::LogicalTypeId::Vector: {
         auto count = reader.read_u32();
         if (!count.has_value()) {
             return std::unexpected(count.error());
         }
-        core::schema::VectorValue values;
+        core::common::VectorValue values;
         values.reserve(count.value());
         for (std::uint32_t index = 0; index < count.value(); ++index) {
             auto value = reader.read_double();
@@ -368,7 +368,7 @@ std::expected<core::schema::Value, ProtocolError> read_value(Reader & reader)
             }
             values.push_back(value.value());
         }
-        return core::schema::Value {std::move(values)};
+        return core::common::Value {std::move(values)};
     }
     }
 

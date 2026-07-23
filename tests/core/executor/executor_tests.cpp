@@ -11,7 +11,7 @@
 #include "core/physical_plan/statement/physical_insert_plan.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
 #include "core/logical_plan/logical_planner.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"

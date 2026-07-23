@@ -11,6 +11,6 @@ add_library(litedb_io
 target_include_directories(litedb_io PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 target_link_libraries(litedb_io PUBLIC
+    litedb_common
     litedb_filesystem
-    litedb_schema
 )

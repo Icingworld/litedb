@@ -13,7 +13,7 @@ ColumnSchema::ColumnSchema(
     common::LogicalType type,
     bool nullable,
     bool unique,
-    std::optional<meta::entry::DefaultExpression> default_expression,
+    std::optional<DefaultExpression> default_expression,
     std::optional<std::string> comment
 )
     : column_id_(column_id)
@@ -63,7 +63,7 @@ bool ColumnSchema::unique() const noexcept
     return unique_;
 }
 
-const std::optional<meta::entry::DefaultExpression> & ColumnSchema::default_expression() const noexcept
+const std::optional<DefaultExpression> & ColumnSchema::default_expression() const noexcept
 {
     return default_expression_;
 }

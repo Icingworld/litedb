@@ -100,7 +100,7 @@ hnsw_index::HnswStoreDescriptor descriptor(
 
 [[nodiscard]]
 std::expected<double, VectorIndexError> distance_to(
-    const schema::VectorValue & query,
+    const common::VectorValue & query,
     const Node & node,
     VectorDistanceMetric metric
 )
@@ -111,7 +111,7 @@ std::expected<double, VectorIndexError> distance_to(
 [[nodiscard]]
 std::expected<Candidate, VectorIndexError> greedy_search(
     const NodeMap & nodes,
-    const schema::VectorValue & query,
+    const common::VectorValue & query,
     NodeId entry_id,
     std::size_t layer,
     VectorDistanceMetric metric
@@ -152,7 +152,7 @@ std::expected<Candidate, VectorIndexError> greedy_search(
 [[nodiscard]]
 std::expected<std::vector<Candidate>, VectorIndexError> search_layer(
     const NodeMap & nodes,
-    const schema::VectorValue & query,
+    const common::VectorValue & query,
     NodeId entry_id,
     std::size_t ef,
     std::size_t layer,

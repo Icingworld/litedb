@@ -7,7 +7,7 @@
 #include "core/io/io_error.hpp"
 #include "core/io/byte_reader.hpp"
 #include "core/io/byte_writer.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::io
 {
@@ -89,7 +89,7 @@ public:
      * @param value 值
      * @return 结果
      */
-    std::expected<void, IoError> write_value(const schema::Value & value);
+    std::expected<void, IoError> write_value(const common::Value & value);
 
 private:
     /**
@@ -171,7 +171,7 @@ public:
      * @brief 读取值
      * @return 读取结果
      */
-    std::expected<schema::Value, IoError> read_value();
+    std::expected<common::Value, IoError> read_value();
 
 private:
     /**

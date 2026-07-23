@@ -35,7 +35,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
     std::vector<BoundAssignment> assignments;
     std::unordered_set<std::string> seen_columns;
     for (const auto & assignment : statement.assignments()) {
-        const auto column_key = meta::normalize_identifier(assignment.column);
+        const auto column_key = common::normalize_identifier(assignment.column);
         if (!seen_columns.emplace(column_key).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,

@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <expected>
 
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 #include "core/vindex/vector_index_error.hpp"
 
 namespace litedb::core::vindex
@@ -15,7 +15,7 @@ namespace litedb::core::vindex
 class VectorIndexKey
 {
 private:
-    explicit VectorIndexKey(schema::VectorValue vector);
+    explicit VectorIndexKey(common::VectorValue vector);
 
 public:
     /**
@@ -25,7 +25,7 @@ public:
      */
     [[nodiscard]]
     static std::expected<VectorIndexKey, VectorIndexError> from_value(
-        const schema::Value & value
+        const common::Value & value
     );
 
     /**
@@ -35,7 +35,7 @@ public:
      */
     [[nodiscard]]
     static std::expected<VectorIndexKey, VectorIndexError> from_vector(
-        schema::VectorValue vector
+        common::VectorValue vector
     );
 
     /**
@@ -43,7 +43,7 @@ public:
      * @return 向量值
      */
     [[nodiscard]]
-    const schema::VectorValue & value() const noexcept;
+    const common::VectorValue & value() const noexcept;
 
     /**
      * @brief 获取向量维度
@@ -53,7 +53,7 @@ public:
     std::size_t dimension() const noexcept;
 
 private:
-    schema::VectorValue value_;             ///< 向量值
+    common::VectorValue value_;             ///< 向量值
 };
 
 } // namespace litedb::core::vindex

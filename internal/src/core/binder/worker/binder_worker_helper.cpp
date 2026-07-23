@@ -19,7 +19,7 @@
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/binder/bound/expression/bound_wildcard_expression.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/meta.hpp"
 #include "core/function/builtin/builtin_functions.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
@@ -160,7 +160,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 {
     // 检查限定符是否匹配集合
     if (expression.qualifier().has_value()
-        && meta::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+        && common::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidQualifier,
             expression.location(),
@@ -509,7 +509,7 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
 ) const
 {
     if (expression.qualifier().has_value()
-        && meta::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+        && common::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidQualifier,
             expression.location(),
@@ -534,10 +534,10 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_default_expression(
-    const meta::entry::DefaultExpression & expression, AstNodeLocation location
+    const schema::DefaultExpression & expression, AstNodeLocation location
 ) const
 {
-    if (expression.kind == meta::entry::DefaultExpressionKind::Vector) {
+    if (expression.kind == schema::DefaultExpressionKind::Vector) {
         std::vector<std::unique_ptr<BoundExpression>> elements;
         elements.reserve(expression.elements.size());
         for (const auto & element : expression.elements) {
@@ -562,15 +562,15 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
     }
 
     switch (expression.literal_kind) {
-    case meta::entry::DefaultLiteralKind::Null:
+    case schema::DefaultLiteralKind::Null:
         return std::make_unique<BoundNullExpression>(type(LogicalTypeId::Null), location);
-    case meta::entry::DefaultLiteralKind::Boolean:
+    case schema::DefaultLiteralKind::Boolean:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Boolean), expression.value, location);
-    case meta::entry::DefaultLiteralKind::Integer:
+    case schema::DefaultLiteralKind::Integer:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Integer), expression.value, location);
-    case meta::entry::DefaultLiteralKind::Float:
+    case schema::DefaultLiteralKind::Float:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Double), expression.value, location);
-    case meta::entry::DefaultLiteralKind::String:
+    case schema::DefaultLiteralKind::String:
         return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Varchar), expression.value, location);
     }
 
@@ -586,7 +586,7 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
     result.reserve(columns.size());
 
     for (const auto & column : columns) {
-        if (!seen_columns.emplace(meta::normalize_identifier(column.name)).second) [[unlikely]] {
+        if (!seen_columns.emplace(common::normalize_identifier(column.name)).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,
                 location,
@@ -598,7 +598,7 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
             return std::unexpected(std::move(logical_type.error()));
         }
 
-        std::optional<meta::entry::DefaultExpression> default_expression;
+        std::optional<schema::DefaultExpression> default_expression;
         if (column.default_value != nullptr) {
             auto default_snapshot = snapshot_default_expression(*column.default_value);
             if (!default_snapshot.has_value()) [[unlikely]] {
@@ -663,7 +663,7 @@ std::expected<LogicalType, BinderError> BinderWorkerHelper::bind_data_type(
     [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Unsupported data type"));
 }
 
-std::expected<meta::entry::DefaultExpression, BinderError> BinderWorkerHelper::snapshot_default_expression(
+std::expected<schema::DefaultExpression, BinderError> BinderWorkerHelper::snapshot_default_expression(
     const ExpressionNode & expression
 ) const
 {
@@ -671,27 +671,27 @@ std::expected<meta::entry::DefaultExpression, BinderError> BinderWorkerHelper::s
         const auto & literal = static_cast<const LiteralExpression &>(expression);
         switch (literal.literal_type()) {
         case TokenType::Null:
-            return meta::entry::DefaultExpression::null_literal();
+            return schema::DefaultExpression::null_literal();
         case TokenType::True:
             [[fallthrough]];
         case TokenType::False:
-            return meta::entry::DefaultExpression::literal(
-                meta::entry::DefaultLiteralKind::Boolean,
+            return schema::DefaultExpression::literal(
+                schema::DefaultLiteralKind::Boolean,
                 literal.value()
             );
         case TokenType::IntegerLiteral:
-            return meta::entry::DefaultExpression::literal(
-                meta::entry::DefaultLiteralKind::Integer,
+            return schema::DefaultExpression::literal(
+                schema::DefaultLiteralKind::Integer,
                 literal.value()
             );
         case TokenType::FloatLiteral:
-            return meta::entry::DefaultExpression::literal(
-                meta::entry::DefaultLiteralKind::Float,
+            return schema::DefaultExpression::literal(
+                schema::DefaultLiteralKind::Float,
                 literal.value()
             );
         case TokenType::StringLiteral:
-            return meta::entry::DefaultExpression::literal(
-                meta::entry::DefaultLiteralKind::String,
+            return schema::DefaultExpression::literal(
+                schema::DefaultLiteralKind::String,
                 literal.value()
             );
         default:
@@ -701,7 +701,7 @@ std::expected<meta::entry::DefaultExpression, BinderError> BinderWorkerHelper::s
 
     if (expression.kind() == AstNodeKind::Vector) {
         const auto & vector = static_cast<const VectorExpression &>(expression);
-        std::vector<meta::entry::DefaultExpression> elements;
+        std::vector<schema::DefaultExpression> elements;
         elements.reserve(vector.elements().size());
         for (const auto & element : vector.elements()) {
             auto snapshot = snapshot_default_expression(*element);
@@ -710,7 +710,7 @@ std::expected<meta::entry::DefaultExpression, BinderError> BinderWorkerHelper::s
             }
             elements.push_back(std::move(snapshot.value()));
         }
-        return meta::entry::DefaultExpression::vector(std::move(elements));
+        return schema::DefaultExpression::vector(std::move(elements));
     }
 
     [[unlikely]] return std::unexpected(make_binder_error(

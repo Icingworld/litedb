@@ -76,7 +76,7 @@ public:
      * @return 记录
      */
     [[nodiscard]]
-    std::expected<schema::Record, StorageError> get(
+    std::expected<common::Record, StorageError> get(
         common::CollectionId collection_id,
         common::RecordId record_id
     ) const;
@@ -89,7 +89,7 @@ public:
      */
     std::expected<common::RecordId, StorageError> insert(
         common::CollectionId collection_id,
-        schema::RecordData data
+        common::RecordData data
     );
 
     /**
@@ -102,7 +102,7 @@ public:
     std::expected<void, StorageError> update(
         common::CollectionId collection_id,
         common::RecordId record_id,
-        schema::RecordData data
+        common::RecordData data
     );
 
     /**
@@ -156,7 +156,7 @@ private:
     [[nodiscard]]
     std::expected<void, StorageError> validate(
         const schema::CollectionSchema & schema,
-        const schema::RecordData & data
+        const common::RecordData & data
     ) const;
 
 private:

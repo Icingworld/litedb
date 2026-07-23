@@ -22,9 +22,9 @@ schema::CollectionSchema users_schema()
              schema::ColumnSchema {2, 10, 1, "age", {common::LogicalTypeId::Integer, {}}, true, false, {}, {}}}};
 }
 
-schema::RecordData user(std::string name, std::int32_t age)
+common::RecordData user(std::string name, std::int32_t age)
 {
-    return {{schema::Value {std::move(name)}, schema::Value {age}}};
+    return {{common::Value {std::move(name)}, common::Value {age}}};
 }
 
 void contract(storage::StorageEngine & engine, bool open_existing)
@@ -43,7 +43,7 @@ void contract(storage::StorageEngine & engine, bool open_existing)
     require(row && row->has_value() && (**row).record_id == *first, "cursor row mismatch");
     auto end = cursor->next();
     require(end && !end->has_value(), "cursor eof mismatch");
-    auto invalid = engine.insert(10, {{schema::Value {std::int32_t {1}}}});
+    auto invalid = engine.insert(10, {{common::Value {std::int32_t {1}}}});
     require(!invalid && invalid.error().code == storage::StorageErrorCode::ValueCountMismatch, "validation mismatch");
     auto oversized = engine.insert(10, user(std::string(5000, 'z'), 1));
     require(!oversized && oversized.error().code == storage::StorageErrorCode::RecordTooLarge, "oversized record accepted");

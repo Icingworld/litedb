@@ -72,10 +72,10 @@ std::string trim(std::string_view value)
 }
 
 [[nodiscard]]
-std::string value_to_string(const litedb::core::schema::Value & value)
+std::string value_to_string(const litedb::core::common::Value & value)
 {
-    using litedb::core::schema::NullValue;
-    using litedb::core::schema::VectorValue;
+    using litedb::core::common::NullValue;
+    using litedb::core::common::VectorValue;
 
     return std::visit(
         [](const auto & data) -> std::string {

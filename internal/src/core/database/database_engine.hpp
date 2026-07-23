@@ -17,7 +17,7 @@
 #include "core/index/index_engine.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/meta/meta_store.hpp"
-#include "core/schema/schema_error.hpp"
+#include "core/storage/schema_load_error.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
@@ -277,7 +277,7 @@ private:
      */
     [[nodiscard]]
     static executor::ExecutionError from_schema_error(
-        schema::SchemaError error,
+        storage::SchemaLoadError error,
         parser::ast::AstNodeLocation location
     );
 

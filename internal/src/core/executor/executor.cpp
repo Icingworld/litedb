@@ -28,7 +28,7 @@
 #include "core/physical_plan/statement/physical_query_plan.hpp"
 #include "core/physical_plan/statement/physical_row_mutation_plan.hpp"
 #include "core/physical_plan/statement/physical_statement_plan.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/transaction/transaction_manager.hpp"
 
 namespace litedb::core::executor
@@ -76,9 +76,9 @@ constexpr AstNodeLocation internal_location {0, 0};
 
 struct PipelineRow
 {
-    schema::Record source_record;
-    schema::Record evaluation_record;
-    std::vector<schema::Value> output_values;
+    common::Record source_record;
+    common::Record evaluation_record;
+    std::vector<common::Value> output_values;
 };
 
 struct PipelineResult
@@ -106,7 +106,7 @@ ExecutionError from_meta_error(meta::MetaEngineError error, AstNodeLocation loca
 }
 
 [[nodiscard]]
-ExecutionError from_schema_error(schema::SchemaError error, AstNodeLocation location)
+ExecutionError from_schema_error(storage::SchemaLoadError error, AstNodeLocation location)
 {
     return make_error(ExecutionErrorCode::SchemaError, location, std::move(error.message));
 }
@@ -236,15 +236,15 @@ std::string vector_metric_name(meta::entry::VectorDistanceMetric metric)
 }
 
 [[nodiscard]]
-schema::Record make_empty_record()
+common::Record make_empty_record()
 {
-    return schema::Record {.record_id = 0, .data = schema::RecordData {}};
+    return common::Record {.record_id = 0, .data = common::RecordData {}};
 }
 
 [[nodiscard]]
-schema::Record make_evaluation_record(
+common::Record make_evaluation_record(
     const schema::CollectionSchema & collection_schema,
-    const schema::Record & source_record
+    const common::Record & source_record
 )
 {
     common::ColumnId max_column_id = 0;
@@ -252,9 +252,9 @@ schema::Record make_evaluation_record(
         max_column_id = std::max(max_column_id, column.column_id());
     }
 
-    schema::Record evaluation_record;
+    common::Record evaluation_record;
     evaluation_record.record_id = source_record.record_id;
-    evaluation_record.data.values.resize(static_cast<std::size_t>(max_column_id), schema::Value::null());
+    evaluation_record.data.values.resize(static_cast<std::size_t>(max_column_id), common::Value::null());
 
     for (std::size_t ordinal = 0; ordinal < collection_schema.columns().size(); ++ordinal) {
         if (ordinal >= source_record.data.values.size()) {
@@ -295,7 +295,7 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
     AstNodeLocation location
 )
 {
-    auto collection_schema = schema::load_collection_schema(catalog, collection_id);
+    auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema.has_value()) {
         return std::unexpected(from_schema_error(std::move(collection_schema.error()), location));
     }
@@ -314,7 +314,7 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
 void append_pipeline_row(
     PipelineResult & result,
     const schema::CollectionSchema & collection_schema,
-    schema::Record record
+    common::Record record
 )
 {
     auto evaluation_record = make_evaluation_record(collection_schema, record);
@@ -714,7 +714,7 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
 
     evaluator::ExpressionEvaluator evaluator;
     for (auto & row : input->rows) {
-        std::vector<schema::Value> values;
+        std::vector<common::Value> values;
         values.reserve(projections.size());
         for (const auto & projection : projections) {
             auto value = evaluator.evaluate(*projection.expression, row.evaluation_record);
@@ -730,13 +730,13 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
 }
 
 [[nodiscard]]
-int value_rank(const schema::Value & value)
+int value_rank(const common::Value & value)
 {
     return static_cast<int>(value.data().index());
 }
 
 [[nodiscard]]
-int compare_values(const schema::Value & left, const schema::Value & right)
+int compare_values(const common::Value & left, const common::Value & right)
 {
     if (left.is_null() && right.is_null()) {
         return 0;
@@ -770,13 +770,13 @@ int compare_values(const schema::Value & left, const schema::Value & right)
 }
 
 [[nodiscard]]
-std::expected<std::vector<schema::Value>, ExecutionError> evaluate_order_keys(
+std::expected<std::vector<common::Value>, ExecutionError> evaluate_order_keys(
     const PhysicalSort & order_by,
     const PipelineRow & row
 )
 {
     evaluator::ExpressionEvaluator evaluator;
-    std::vector<schema::Value> keys;
+    std::vector<common::Value> keys;
     keys.reserve(order_by.order_by().size());
     for (const auto & item : order_by.order_by()) {
         auto value = evaluator.evaluate(*item.expression, row.evaluation_record);
@@ -805,7 +805,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
     struct SortRow
     {
         PipelineRow row;
-        std::vector<schema::Value> keys;
+        std::vector<common::Value> keys;
         std::size_t position {0};
     };
 
@@ -970,7 +970,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 
     evaluator::ExpressionEvaluator evaluator;
     const auto empty_record = make_empty_record();
-    schema::RecordData record_data;
+    common::RecordData record_data;
     record_data.values.reserve(plan.values().size());
     for (const auto & expression : plan.values()) {
         auto value = evaluator.evaluate(*expression, empty_record);
@@ -1115,7 +1115,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::Meta
     std::vector<ExecutionRow> rows;
     for (const auto * database : catalog.list_databases()) {
         if (database != nullptr) {
-            rows.push_back(ExecutionRow {.values = {schema::Value {database->name()}}});
+            rows.push_back(ExecutionRow {.values = {common::Value {database->name()}}});
         }
     }
 
@@ -1134,7 +1134,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_collections(
     std::vector<ExecutionRow> rows;
     for (const auto * collection : catalog.list_collections(plan.database_id())) {
         if (collection != nullptr) {
-            rows.push_back(ExecutionRow {.values = {schema::Value {collection->name()}}});
+            rows.push_back(ExecutionRow {.values = {common::Value {collection->name()}}});
         }
     }
 
@@ -1160,10 +1160,10 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
         const auto * column = column_id.has_value() ? catalog.find_column(column_id.value()) : nullptr;
         rows.push_back(ExecutionRow {
             .values = {
-                schema::Value {index->name()},
-                column != nullptr ? schema::Value {column->name()} : schema::Value::null(),
-                schema::Value {index_kind_name(index->kind())},
-                schema::Value {index->unique()},
+                common::Value {index->name()},
+                column != nullptr ? common::Value {column->name()} : common::Value::null(),
+                common::Value {index_kind_name(index->kind())},
+                common::Value {index->unique()},
             },
         });
     }
@@ -1194,15 +1194,15 @@ std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
         const auto * column = catalog.find_column(index->column_id());
         rows.push_back(ExecutionRow {
             .values = {
-                schema::Value {index->name()},
-                column != nullptr ? schema::Value {column->name()} : schema::Value::null(),
-                schema::Value {vector_index_kind_name(index->index_kind())},
-                schema::Value {vector_metric_name(index->metric())},
-                schema::Value {static_cast<std::int64_t>(index->dimension())},
-                schema::Value {static_cast<std::int64_t>(index->max_neighbors())},
-                schema::Value {static_cast<std::int64_t>(index->ef_construction())},
-                schema::Value {static_cast<std::int64_t>(index->ef_search_default())},
-                schema::Value {static_cast<std::int64_t>(index->random_seed())},
+                common::Value {index->name()},
+                column != nullptr ? common::Value {column->name()} : common::Value::null(),
+                common::Value {vector_index_kind_name(index->index_kind())},
+                common::Value {vector_metric_name(index->metric())},
+                common::Value {static_cast<std::int64_t>(index->dimension())},
+                common::Value {static_cast<std::int64_t>(index->max_neighbors())},
+                common::Value {static_cast<std::int64_t>(index->ef_construction())},
+                common::Value {static_cast<std::int64_t>(index->ef_search_default())},
+                common::Value {static_cast<std::int64_t>(index->random_seed())},
             },
         });
     }
@@ -1238,12 +1238,12 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
     for (const auto & column : collection_schema->columns()) {
         rows.push_back(ExecutionRow {
             .values = {
-                schema::Value {column.column_name()},
-                schema::Value {logical_type_name(column.type())},
-                schema::Value {column.nullable()},
-                schema::Value {column.unique()},
-                column.comment().has_value() ? schema::Value {column.comment().value()} : schema::Value::null(),
-                collection_schema->comment().has_value() ? schema::Value {collection_schema->comment().value()} : schema::Value::null(),
+                common::Value {column.column_name()},
+                common::Value {logical_type_name(column.type())},
+                common::Value {column.nullable()},
+                common::Value {column.unique()},
+                column.comment().has_value() ? common::Value {column.comment().value()} : common::Value::null(),
+                collection_schema->comment().has_value() ? common::Value {collection_schema->comment().value()} : common::Value::null(),
             },
         });
     }

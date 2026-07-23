@@ -365,7 +365,7 @@ std::optional<std::string> read_optional_string(CodecReader & reader)
  * @param writer 编码器写入器
  * @param expression 表达式
  */
-void write_default_expression(CodecWriter & writer, const entry::DefaultExpression & expression)
+void write_default_expression(CodecWriter & writer, const schema::DefaultExpression & expression)
 {
     writer.write_u8(static_cast<std::uint8_t>(expression.kind));
     writer.write_u8(static_cast<std::uint8_t>(expression.literal_kind));
@@ -381,19 +381,19 @@ void write_default_expression(CodecWriter & writer, const entry::DefaultExpressi
  * @param reader 编码器读取器
  * @return 表达式
  */
-entry::DefaultExpression read_default_expression(CodecReader & reader)
+schema::DefaultExpression read_default_expression(CodecReader & reader)
 {
-    entry::DefaultExpression expression;
+    schema::DefaultExpression expression;
     const auto expression_kind = reader.read_u8();
     const auto literal_kind = reader.read_u8();
-    if (expression_kind > static_cast<std::uint8_t>(entry::DefaultExpressionKind::Vector)) {
+    if (expression_kind > static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector)) {
         reader.fail("invalid default expression kind");
     }
-    if (literal_kind > static_cast<std::uint8_t>(entry::DefaultLiteralKind::String)) {
+    if (literal_kind > static_cast<std::uint8_t>(schema::DefaultLiteralKind::String)) {
         reader.fail("invalid default literal kind");
     }
-    expression.kind = static_cast<entry::DefaultExpressionKind>(expression_kind);
-    expression.literal_kind = static_cast<entry::DefaultLiteralKind>(literal_kind);
+    expression.kind = static_cast<schema::DefaultExpressionKind>(expression_kind);
+    expression.literal_kind = static_cast<schema::DefaultLiteralKind>(literal_kind);
     expression.value = reader.read_string();
     const auto count = reader.read_u32();
     if (!reader.ok()) {
@@ -411,7 +411,7 @@ entry::DefaultExpression read_default_expression(CodecReader & reader)
  * @param writer 编码器写入器
  * @param value 值
  */
-void write_optional_expression(CodecWriter & writer, const std::optional<entry::DefaultExpression> & value)
+void write_optional_expression(CodecWriter & writer, const std::optional<schema::DefaultExpression> & value)
 {
     writer.write_u8(value ? 1U : 0U);
     if (value) {
@@ -424,7 +424,7 @@ void write_optional_expression(CodecWriter & writer, const std::optional<entry::
  * @param reader 编码器读取器
  * @return 表达式
  */
-std::optional<entry::DefaultExpression> read_optional_expression(CodecReader & reader)
+std::optional<schema::DefaultExpression> read_optional_expression(CodecReader & reader)
 {
     const auto present = reader.read_u8();
     if (!reader.ok()) {
@@ -434,7 +434,7 @@ std::optional<entry::DefaultExpression> read_optional_expression(CodecReader & r
         reader.fail("invalid optional expression marker");
         return std::nullopt;
     }
-    return present == 0 ? std::nullopt : std::optional<entry::DefaultExpression> {read_default_expression(reader)};
+    return present == 0 ? std::nullopt : std::optional<schema::DefaultExpression> {read_default_expression(reader)};
 }
 
 /**

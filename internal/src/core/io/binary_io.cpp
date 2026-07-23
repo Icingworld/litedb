@@ -220,12 +220,12 @@ std::expected<void, IoError> BinaryWriter::write_string(const std::string & valu
     return {};
 }
 
-std::expected<void, IoError> BinaryWriter::write_value(const schema::Value & value)
+std::expected<void, IoError> BinaryWriter::write_value(const common::Value & value)
 {
     return std::visit(
         [this](const auto & data) -> std::expected<void, IoError> {
             using T = std::decay_t<decltype(data)>;
-            if constexpr (std::is_same_v<T, schema::NullValue>) {
+            if constexpr (std::is_same_v<T, common::NullValue>) {
                 return write_u8(static_cast<std::uint8_t>(EncodedValueKind::Null));
             }
             if constexpr (std::is_same_v<T, bool>) {
@@ -270,7 +270,7 @@ std::expected<void, IoError> BinaryWriter::write_value(const schema::Value & val
                 }
                 return write_string(data);
             }
-            if constexpr (std::is_same_v<T, schema::VectorValue>) {
+            if constexpr (std::is_same_v<T, common::VectorValue>) {
                 if (data.size() > std::numeric_limits<std::uint32_t>::max()) {
                     return std::unexpected(
                         make_io_error(IoErrorCode::ValueTooLarge, "vector is too large to encode")
@@ -379,7 +379,7 @@ std::expected<std::string, IoError> BinaryReader::read_string()
     return value;
 }
 
-std::expected<schema::Value, IoError> BinaryReader::read_value()
+std::expected<common::Value, IoError> BinaryReader::read_value()
 {
     const auto kind_byte = read_u8();
     if (!kind_byte.has_value()) {
@@ -388,48 +388,48 @@ std::expected<schema::Value, IoError> BinaryReader::read_value()
     const auto kind = static_cast<EncodedValueKind>(kind_byte.value());
     switch (kind) {
     case EncodedValueKind::Null:
-        return schema::Value::null();
+        return common::Value::null();
     case EncodedValueKind::Boolean: {
         auto value = read_u8();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return schema::Value {value.value() != 0};
+        return common::Value {value.value() != 0};
     }
     case EncodedValueKind::Integer: {
         auto value = read_i32();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return schema::Value {value.value()};
+        return common::Value {value.value()};
     }
     case EncodedValueKind::BigInt: {
         auto value = read_i64();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return schema::Value {value.value()};
+        return common::Value {value.value()};
     }
     case EncodedValueKind::Float: {
         auto value = read_f32();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return schema::Value {value.value()};
+        return common::Value {value.value()};
     }
     case EncodedValueKind::Double: {
         auto value = read_f64();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return schema::Value {value.value()};
+        return common::Value {value.value()};
     }
     case EncodedValueKind::String: {
         auto value = read_string();
         if (!value.has_value()) {
             return std::unexpected(value.error());
         }
-        return schema::Value {std::move(value.value())};
+        return common::Value {std::move(value.value())};
     }
     case EncodedValueKind::Vector: {
         const auto count = read_u32();
@@ -439,7 +439,7 @@ std::expected<schema::Value, IoError> BinaryReader::read_value()
         if (count.value() > std::numeric_limits<std::uint32_t>::max()) {
             return std::unexpected(make_io_error(IoErrorCode::ValueTooLarge, "vector is too large to decode"));
         }
-        schema::VectorValue values;
+        common::VectorValue values;
         values.reserve(count.value());
         for (std::uint32_t index = 0; index < count.value(); ++index) {
             auto value = read_f64();
@@ -448,7 +448,7 @@ std::expected<schema::Value, IoError> BinaryReader::read_value()
             }
             values.push_back(value.value());
         }
-        return schema::Value {std::move(values)};
+        return common::Value {std::move(values)};
     }
     }
 

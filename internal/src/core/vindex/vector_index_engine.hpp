@@ -9,7 +9,7 @@
 #include "core/common/ids.hpp"
 #include "core/meta/entry/vector_index_entry.hpp"
 #include "core/schema/collection.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 #include "core/vindex/vector_index_store.hpp"
 
 namespace litedb::core::filesystem
@@ -110,7 +110,7 @@ public:
 
     [[nodiscard]] std::expected<VectorIndexKeyBindings, VectorIndexError> prepare_insert(
         common::CollectionId collection_id,
-        const schema::RecordData & record_data
+        const common::RecordData & record_data
     ) const;
     [[nodiscard]] std::expected<void, VectorIndexError> on_insert(
         common::RecordId record_id,
@@ -118,8 +118,8 @@ public:
     );
     [[nodiscard]] std::expected<VectorIndexUpdateBindings, VectorIndexError> prepare_update(
         common::CollectionId collection_id,
-        const schema::RecordData & old_record_data,
-        const schema::RecordData & new_record_data
+        const common::RecordData & old_record_data,
+        const common::RecordData & new_record_data
     ) const;
     [[nodiscard]] std::expected<void, VectorIndexError> on_update(
         common::RecordId record_id,
@@ -127,7 +127,7 @@ public:
     );
     [[nodiscard]] std::expected<VectorIndexKeyBindings, VectorIndexError> prepare_delete(
         common::CollectionId collection_id,
-        const schema::RecordData & old_record_data
+        const common::RecordData & old_record_data
     ) const;
     [[nodiscard]] std::expected<void, VectorIndexError> on_delete(
         common::RecordId record_id,

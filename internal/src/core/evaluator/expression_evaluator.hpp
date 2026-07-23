@@ -4,8 +4,8 @@
 
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/evaluator/evaluation_error.hpp"
-#include "core/schema/record.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/record.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::evaluator
 {
@@ -23,9 +23,9 @@ public:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> evaluate(
+    std::expected<common::Value, EvaluationError> evaluate(
         const binder::bound::BoundExpression & expression,
-        const schema::Record & record
+        const common::Record & record
     ) const;
 
     /**
@@ -37,7 +37,7 @@ public:
     [[nodiscard]]
     std::expected<bool, EvaluationError> evaluate_predicate(
         const binder::bound::BoundExpression & expression,
-        const schema::Record & record
+        const common::Record & record
     ) const;
 };
 

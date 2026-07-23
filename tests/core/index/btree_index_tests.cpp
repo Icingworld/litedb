@@ -11,7 +11,7 @@
 
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/index/index_store.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace
 {
@@ -37,7 +37,7 @@ std::filesystem::path make_temp_directory()
 
 ScalarIndexKey key(std::int32_t value)
 {
-    auto result = ScalarIndexKey::from_value(schema::Value {value});
+    auto result = ScalarIndexKey::from_value(common::Value {value});
     if (!result.has_value()) {
         throw std::runtime_error("failed to create scalar index key");
     }
@@ -46,7 +46,7 @@ ScalarIndexKey key(std::int32_t value)
 
 ScalarIndexKey bigint_key(std::int64_t value)
 {
-    auto result = ScalarIndexKey::from_value(schema::Value {value});
+    auto result = ScalarIndexKey::from_value(common::Value {value});
     if (!result.has_value()) {
         throw std::runtime_error("failed to create bigint scalar index key");
     }
@@ -55,7 +55,7 @@ ScalarIndexKey bigint_key(std::int64_t value)
 
 ScalarIndexKey varchar_key(std::string value)
 {
-    auto result = ScalarIndexKey::from_value(schema::Value {std::move(value)});
+    auto result = ScalarIndexKey::from_value(common::Value {std::move(value)});
     if (!result.has_value()) {
         throw std::runtime_error("failed to create varchar scalar index key");
     }

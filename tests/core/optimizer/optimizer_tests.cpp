@@ -21,7 +21,7 @@
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
 #include "core/logical_plan/logical_planner.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
@@ -97,7 +97,7 @@ struct Fixture
         require(collection.has_value(), "fixture collection create failed");
         users_id = collection.value();
 
-        auto schema = litedb::core::schema::load_collection_schema(catalog, users_id);
+        auto schema = litedb::core::storage::load_collection_schema(catalog, users_id);
         require(schema.has_value(), "fixture schema load failed");
         auto storage_created = storage.create_collection(std::move(schema.value()));
         require(storage_created.has_value(), "fixture storage create failed");

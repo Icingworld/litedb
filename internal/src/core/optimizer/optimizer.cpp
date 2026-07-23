@@ -38,8 +38,8 @@
 #include "core/logical_plan/statement/mutation/delete_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
-#include "core/schema/record.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/record.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::optimizer
 {
@@ -196,7 +196,7 @@ std::string numeric_to_string(auto value)
 
 [[nodiscard]]
 std::optional<std::unique_ptr<BoundExpression>> value_to_expression(
-    const schema::Value & value,
+    const common::Value & value,
     const BoundExpression & original
 )
 {
@@ -207,7 +207,7 @@ std::optional<std::unique_ptr<BoundExpression>> value_to_expression(
     return std::visit(
         [&original](const auto & data) -> std::optional<std::unique_ptr<BoundExpression>> {
             using T = std::decay_t<decltype(data)>;
-            if constexpr (std::is_same_v<T, schema::NullValue>) {
+            if constexpr (std::is_same_v<T, common::NullValue>) {
                 return std::make_unique<BoundNullExpression>(original.type(), original.location());
             } else if constexpr (std::is_same_v<T, bool>) {
                 return make_bool_literal(data, original.location());
@@ -236,7 +236,7 @@ std::optional<std::unique_ptr<BoundExpression>> try_fold_constant(
     }
 
     evaluator::ExpressionEvaluator evaluator;
-    auto value = evaluator.evaluate(expression, schema::Record {});
+    auto value = evaluator.evaluate(expression, common::Record {});
     if (!value.has_value()) {
         return std::nullopt;
     }
@@ -252,7 +252,7 @@ std::optional<index::ScalarIndexKey> expression_to_index_key(const BoundExpressi
     }
 
     evaluator::ExpressionEvaluator evaluator;
-    auto value = evaluator.evaluate(expression, schema::Record {});
+    auto value = evaluator.evaluate(expression, common::Record {});
     if (!value.has_value()) {
         return std::nullopt;
     }

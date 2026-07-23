@@ -30,7 +30,7 @@
 #include "core/logical_plan/statement/logical_statement_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/command/use_plan.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"
@@ -109,7 +109,7 @@ struct Fixture
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
+                .default_expression = litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",
@@ -129,7 +129,7 @@ struct Fixture
         }
         users_id = collection.value();
 
-        auto schema = litedb::core::schema::load_collection_schema(catalog, users_id);
+        auto schema = litedb::core::storage::load_collection_schema(catalog, users_id);
         if (!schema.has_value()) {
             throw std::runtime_error(schema.error().message);
         }
@@ -197,7 +197,7 @@ IndexId create_managed_index(
     const auto * entry = fixture.catalog.find_index(created.value());
     require(entry != nullptr, "fixture index entry missing");
 
-    auto schema = litedb::core::schema::load_collection_schema(fixture.catalog, fixture.users_id);
+    auto schema = litedb::core::storage::load_collection_schema(fixture.catalog, fixture.users_id);
     if (!schema.has_value()) {
         throw std::runtime_error(schema.error().message);
     }

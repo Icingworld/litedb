@@ -4,21 +4,21 @@
 
 #include "core/meta/meta_engine.hpp"
 #include "core/schema/collection.hpp"
-#include "core/schema/schema_error.hpp"
+#include "core/storage/schema_load_error.hpp"
 
-namespace litedb::core::schema
+namespace litedb::core::storage
 {
 
 /**
- * @brief 加载集合 schema
+ * @brief 从 Catalog 加载集合 schema
  * @param catalog 目录读取器
  * @param collection_id 集合 ID
  * @return 集合 schema
  */
 [[nodiscard]]
-std::expected<CollectionSchema, SchemaError> load_collection_schema(
+std::expected<schema::CollectionSchema, SchemaLoadError> load_collection_schema(
     const meta::MetaEngine & catalog,
     common::CollectionId collection_id
 );
 
-} // namespace litedb::core::schema
+} // namespace litedb::core::storage

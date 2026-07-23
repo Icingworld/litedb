@@ -24,8 +24,8 @@ VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
  */
 [[nodiscard]]
 std::expected<void, VectorIndexError> validate_same_dimension(
-    const schema::VectorValue & left,
-    const schema::VectorValue & right
+    const common::VectorValue & left,
+    const common::VectorValue & right
 )
 {
     if (left.empty() || right.empty()) {
@@ -44,7 +44,7 @@ std::expected<void, VectorIndexError> validate_same_dimension(
  * @return 两个向量之间的 L2 距离
  */
 [[nodiscard]]
-double l2_distance(const schema::VectorValue & left, const schema::VectorValue & right)
+double l2_distance(const common::VectorValue & left, const common::VectorValue & right)
 {
     double sum = 0.0;
     for (std::size_t index = 0; index < left.size(); ++index) {
@@ -61,7 +61,7 @@ double l2_distance(const schema::VectorValue & left, const schema::VectorValue &
  * @return 两个向量之间的负内积
  */
 [[nodiscard]]
-double negative_inner_product(const schema::VectorValue & left, const schema::VectorValue & right)
+double negative_inner_product(const common::VectorValue & left, const common::VectorValue & right)
 {
     double result = 0.0;
     for (std::size_t index = 0; index < left.size(); ++index) {
@@ -77,7 +77,7 @@ double negative_inner_product(const schema::VectorValue & left, const schema::Ve
  * @return 两个向量之间的余弦距离
  */
 [[nodiscard]]
-double cosine_distance(const schema::VectorValue & left, const schema::VectorValue & right)
+double cosine_distance(const common::VectorValue & left, const common::VectorValue & right)
 {
     double dot = 0.0;
     double left_norm = 0.0;
@@ -96,8 +96,8 @@ double cosine_distance(const schema::VectorValue & left, const schema::VectorVal
 } // namespace
 
 std::expected<double, VectorIndexError> vector_distance(
-    const schema::VectorValue & left,
-    const schema::VectorValue & right,
+    const common::VectorValue & left,
+    const common::VectorValue & right,
     VectorDistanceMetric metric
 )
 {

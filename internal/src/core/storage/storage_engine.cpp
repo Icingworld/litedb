@@ -154,7 +154,7 @@ bool StorageEngine::contains_collection(common::CollectionId id) const noexcept
 
 std::expected<void, StorageError> StorageEngine::validate(
     const schema::CollectionSchema & schema,
-    const schema::RecordData & data
+    const common::RecordData & data
 ) const
 {
     if (data.values.size() != schema.columns().size()) {
@@ -188,7 +188,7 @@ std::expected<void, StorageError> StorageEngine::validate(
         }
         if (column.type().id == common::LogicalTypeId::Vector
             && column.type().parameter
-            && std::get<schema::VectorValue>(value.data()).size() != *column.type().parameter) {
+            && std::get<common::VectorValue>(value.data()).size() != *column.type().parameter) {
             return std::unexpected(make_error(
                 StorageErrorCode::TypeMismatch,
                 "VECTOR dimension mismatch: " + column.column_name()
@@ -211,7 +211,7 @@ std::expected<void, StorageError> StorageEngine::validate(
     return {};
 }
 
-std::expected<schema::Record, StorageError> StorageEngine::get(
+std::expected<common::Record, StorageError> StorageEngine::get(
     common::CollectionId collection_id,
     common::RecordId record_id
 ) const
@@ -229,7 +229,7 @@ std::expected<schema::Record, StorageError> StorageEngine::get(
 
 std::expected<common::RecordId, StorageError> StorageEngine::insert(
     common::CollectionId collection_id,
-    schema::RecordData data
+    common::RecordData data
 )
 {
     auto it = collections_.find(collection_id);
@@ -249,7 +249,7 @@ std::expected<common::RecordId, StorageError> StorageEngine::insert(
 std::expected<void, StorageError> StorageEngine::update(
     common::CollectionId collection_id,
     common::RecordId record_id,
-    schema::RecordData data
+    common::RecordData data
 )
 {
     auto it = collections_.find(collection_id);

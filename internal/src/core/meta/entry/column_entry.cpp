@@ -13,7 +13,7 @@ ColumnEntry::ColumnEntry(
     common::LogicalType type,
     bool unique,
     bool nullable,
-    std::optional<DefaultExpression> default_expression,
+    std::optional<schema::DefaultExpression> default_expression,
     std::optional<std::string> comment
 )
     : MetaEntry(MetaEntryKind::Column, id, std::move(name))
@@ -57,7 +57,7 @@ bool ColumnEntry::nullable() const noexcept
     return nullable_;
 }
 
-const std::optional<DefaultExpression> & ColumnEntry::default_expression() const noexcept
+const std::optional<schema::DefaultExpression> & ColumnEntry::default_expression() const noexcept
 {
     return default_expression_;
 }

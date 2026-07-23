@@ -29,7 +29,6 @@ using namespace litedb::core::common;
 using namespace litedb::core::evaluator;
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
-using namespace litedb::core::schema;
 
 constexpr AstNodeLocation loc {1, 1};
 

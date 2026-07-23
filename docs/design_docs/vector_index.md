@@ -122,14 +122,14 @@ on_*:
 struct VectorIndexKeyBinding
 {
     common::VIndexId index_id;
-    schema::VectorValue vector;
+    common::VectorValue vector;
 };
 
 struct VectorIndexUpdateBinding
 {
     common::VIndexId index_id;
-    std::optional<schema::VectorValue> old_vector;
-    std::optional<schema::VectorValue> new_vector;
+    std::optional<common::VectorValue> old_vector;
+    std::optional<common::VectorValue> new_vector;
     bool vector_changed {false};
 };
 ```

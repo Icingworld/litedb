@@ -17,17 +17,17 @@ StorageCursor::StorageCursor(
 {
 }
 
-std::expected<std::optional<schema::Record>, StorageError> StorageCursor::next()
+std::expected<std::optional<common::Record>, StorageError> StorageCursor::next()
 {
     if (position_ == record_ids_.size()) {
-        return std::optional<schema::Record> {};
+        return std::optional<common::Record> {};
     }
 
     auto record = store_->get(record_ids_[position_++]);
     if (!record.has_value()) {
         return std::unexpected(from_storage_store_error(std::move(record.error())));
     }
-    return std::optional<schema::Record> {std::move(record.value())};
+    return std::optional<common::Record> {std::move(record.value())};
 }
 
 } // namespace litedb::core::storage

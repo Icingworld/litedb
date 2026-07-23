@@ -19,7 +19,7 @@ namespace
 using namespace litedb::client;
 using namespace litedb::core::database;
 using namespace litedb::core::executor;
-using namespace litedb::core::schema;
+using namespace litedb::core::common;
 using namespace litedb::server;
 
 void require(bool condition, const char * message)

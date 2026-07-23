@@ -15,7 +15,7 @@
 #include "core/index/index_store.hpp"
 #include "core/meta/meta.hpp"
 #include "core/schema/collection.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 
 namespace litedb::core::storage
 {
@@ -128,7 +128,7 @@ public:
     [[nodiscard]]
     std::expected<IndexKeyBindings, IndexError> prepare_insert(
         common::CollectionId collection_id,
-        const schema::RecordData & record_data
+        const common::RecordData & record_data
     ) const;
 
     /**
@@ -143,8 +143,8 @@ public:
     [[nodiscard]]
     std::expected<IndexUpdateBindings, IndexError> prepare_update(
         common::CollectionId collection_id,
-        const schema::RecordData & old_record_data,
-        const schema::RecordData & new_record_data
+        const common::RecordData & old_record_data,
+        const common::RecordData & new_record_data
     ) const;
 
     /**
@@ -162,7 +162,7 @@ public:
     [[nodiscard]]
     std::expected<IndexKeyBindings, IndexError> prepare_delete(
         common::CollectionId collection_id,
-        const schema::RecordData & old_record_data
+        const common::RecordData & old_record_data
     ) const;
 
     /**
@@ -245,7 +245,7 @@ private:
      */
     [[nodiscard]]
     static std::expected<std::optional<ScalarIndexKey>, IndexError> make_key_from_record(
-        const schema::RecordData & record_data,
+        const common::RecordData & record_data,
         std::size_t column_ordinal,
         const common::LogicalType & key_type
     );

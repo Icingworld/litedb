@@ -78,7 +78,7 @@ const ExpressionNode * order_by_alias_target(
         return nullptr;
     }
 
-    const auto it = aliases.find(meta::normalize_identifier(column.column()));
+    const auto it = aliases.find(common::normalize_identifier(column.column()));
     if (it == aliases.end()) {
         return nullptr;
     }
@@ -102,7 +102,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expre
 )
 {
     if (const auto * alias_target = order_by_alias_target(expression, aliases); alias_target != nullptr) {
-        const auto alias_key = meta::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
+        const auto alias_key = common::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
         if (aliases.at(alias_key).count > 1) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::AmbiguousAlias,
@@ -160,7 +160,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
         }
 
         if (alias.has_value()) {
-            auto & binding = aliases[meta::normalize_identifier(alias.value())];
+            auto & binding = aliases[common::normalize_identifier(alias.value())];
             binding.expression = &expression_node;
             ++binding.count;
         }

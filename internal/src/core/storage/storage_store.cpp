@@ -90,7 +90,7 @@ void write_number(std::byte * target, T value)
  * @param data 记录数据
  * @return 编码后的数据
  */
-std::expected<std::vector<std::byte>, StorageStoreError> encode(common::RecordId id, const schema::RecordData & data)
+std::expected<std::vector<std::byte>, StorageStoreError> encode(common::RecordId id, const common::RecordData & data)
 {
     io::BufferByteWriter bytes;
     io::BinaryWriter writer {bytes};
@@ -116,7 +116,7 @@ std::expected<std::vector<std::byte>, StorageStoreError> encode(common::RecordId
  * @param bytes 编码后的数据
  * @return 记录
  */
-std::expected<schema::Record, StorageStoreError> decode(std::span<const std::byte> bytes)
+std::expected<common::Record, StorageStoreError> decode(std::span<const std::byte> bytes)
 {
     io::BufferByteReader source {bytes};
     io::BinaryReader reader {source};
@@ -128,7 +128,7 @@ std::expected<schema::Record, StorageStoreError> decode(std::span<const std::byt
     if (!count) {
         return std::unexpected(io_error(std::move(count.error())));
     }
-    schema::RecordData data;
+    common::RecordData data;
     data.values.reserve(*count);
     for (std::uint32_t index = 0; index < *count; ++index) {
         auto value = reader.read_value();
@@ -140,7 +140,7 @@ std::expected<schema::Record, StorageStoreError> decode(std::span<const std::byt
     if (*id == 0) {
         return std::unexpected(error(StorageStoreErrorCode::InvalidFormat, "Record id cannot be zero"));
     }
-    return schema::Record {*id, std::move(data)};
+    return common::Record {*id, std::move(data)};
 }
 
 /**
@@ -304,7 +304,7 @@ std::expected<void, StorageStoreError> StorageStore::load()
     return {};
 }
 
-std::expected<PhysicalRid, StorageStoreError> StorageStore::place(common::RecordId id, const schema::RecordData & data)
+std::expected<PhysicalRid, StorageStoreError> StorageStore::place(common::RecordId id, const common::RecordData & data)
 {
     auto encoded = encode(id, data);
     if (!encoded) {
@@ -373,7 +373,7 @@ std::expected<PhysicalRid, StorageStoreError> StorageStore::place(common::Record
     return std::unexpected(error(StorageStoreErrorCode::InvalidStoreState, "Unable to allocate record slot"));
 }
 
-std::expected<schema::Record, StorageStoreError> StorageStore::read(PhysicalRid rid) const
+std::expected<common::Record, StorageStoreError> StorageStore::read(PhysicalRid rid) const
 {
     std::array<std::byte, PageSize> page {};
     auto loaded = file_.read_at(HeaderSize + static_cast<std::uint64_t>(rid.page_id) * PageSize, page);
@@ -396,7 +396,7 @@ std::expected<schema::Record, StorageStoreError> StorageStore::read(PhysicalRid 
     return decode(std::span(page).subspan(offset, length));
 }
 
-std::expected<schema::Record, StorageStoreError> StorageStore::get(common::RecordId id) const
+std::expected<common::Record, StorageStoreError> StorageStore::get(common::RecordId id) const
 {
     const auto it = locations_.find(id);
     if (it == locations_.end()) {
@@ -405,7 +405,7 @@ std::expected<schema::Record, StorageStoreError> StorageStore::get(common::Recor
     return read(it->second);
 }
 
-std::expected<common::RecordId, StorageStoreError> StorageStore::insert(schema::RecordData data)
+std::expected<common::RecordId, StorageStoreError> StorageStore::insert(common::RecordData data)
 {
     const auto id = next_record_id_;
     auto rid = place(id, data);
@@ -432,7 +432,7 @@ std::expected<void, StorageStoreError> StorageStore::mark_deleted(PhysicalRid ri
     return {};
 }
 
-std::expected<void, StorageStoreError> StorageStore::update(common::RecordId id, schema::RecordData data)
+std::expected<void, StorageStoreError> StorageStore::update(common::RecordId id, common::RecordData data)
 {
     const auto it = locations_.find(id);
     if (it == locations_.end()) {

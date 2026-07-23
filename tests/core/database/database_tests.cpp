@@ -17,7 +17,7 @@ namespace
 using namespace litedb::core::database;
 using namespace litedb::core::executor;
 using namespace litedb::core::index;
-using namespace litedb::core::schema;
+using namespace litedb::core::common;
 
 void require(bool condition, const char * message)
 {

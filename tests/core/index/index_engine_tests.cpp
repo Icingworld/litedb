@@ -1,6 +1,6 @@
 #include "core/meta/meta_engine.hpp"
 #include "core/index/index_engine.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"

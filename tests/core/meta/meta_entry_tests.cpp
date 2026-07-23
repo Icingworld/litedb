@@ -2,7 +2,7 @@
 #include "core/meta/entry/collection_entry.hpp"
 #include "core/meta/entry/column_entry.hpp"
 #include "core/meta/entry/database_entry.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/entry/index_entry.hpp"
 #include "core/meta/entry/meta_entry.hpp"
 #include "core/meta/entry/vector_index_entry.hpp"
@@ -39,7 +39,7 @@ void test_database_entry_tracks_collections()
     require(database.name() == "Demo", "database name mismatch");
     require(database.key() == "demo", "database key mismatch");
 
-    const auto users_key = meta::normalize_identifier("Users");
+    const auto users_key = common::normalize_identifier("Users");
     database.add_collection(users_key, 10);
     database.add_collection(users_key, 10);
 
@@ -82,7 +82,7 @@ void test_collection_entry_tracks_children()
 
 void test_column_entry_constraints_and_defaults()
 {
-    auto default_value = DefaultExpression::literal(DefaultLiteralKind::String, "unknown");
+    auto default_value = litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::String, "unknown");
     ColumnEntry id {
         100,
         10,
@@ -166,14 +166,14 @@ void test_vector_index_entry()
 
 void test_default_expression_vector()
 {
-    auto expression = DefaultExpression::vector({
-        DefaultExpression::literal(DefaultLiteralKind::Float, "0.1"),
-        DefaultExpression::literal(DefaultLiteralKind::Float, "0.2"),
+    auto expression = litedb::core::schema::DefaultExpression::vector({
+        litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::Float, "0.1"),
+        litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::Float, "0.2"),
     });
 
-    require(expression.kind == DefaultExpressionKind::Vector, "default vector kind mismatch");
+    require(expression.kind == litedb::core::schema::DefaultExpressionKind::Vector, "default vector kind mismatch");
     require(expression.elements.size() == 2, "default vector size mismatch");
-    require(expression.elements[0].literal_kind == DefaultLiteralKind::Float, "default vector literal mismatch");
+    require(expression.elements[0].literal_kind == litedb::core::schema::DefaultLiteralKind::Float, "default vector literal mismatch");
     require(expression.elements[1].value == "0.2", "default vector value mismatch");
 }
 

@@ -86,7 +86,7 @@ std::expected<void, MetaEngineError> MetaEngine::commit(const MetaSnapshot & sou
 
 const entry::DatabaseEntry * MetaEngine::find_database(std::string_view name) const
 {
-    const auto key = database_keys_.find(normalize_identifier(name));
+    const auto key = database_keys_.find(common::normalize_identifier(name));
     return key == database_keys_.end() ? nullptr : find_database(key->second);
 }
 
@@ -108,7 +108,7 @@ const entry::CollectionEntry * MetaEngine::find_collection(common::DatabaseId da
     if (database == nullptr) {
         return nullptr;
     }
-    const auto id = database->find_collection_id(normalize_identifier(name));
+    const auto id = database->find_collection_id(common::normalize_identifier(name));
     return id ? find_collection(*id) : nullptr;
 }
 
@@ -130,7 +130,7 @@ const entry::ColumnEntry * MetaEngine::find_column(common::CollectionId collecti
     if (collection == nullptr) {
         return nullptr;
     }
-    const auto id = collection->find_column_id(normalize_identifier(name));
+    const auto id = collection->find_column_id(common::normalize_identifier(name));
     return id ? find_column(*id) : nullptr;
 }
 
@@ -146,7 +146,7 @@ const entry::IndexEntry * MetaEngine::find_index(common::CollectionId collection
     if (collection == nullptr) {
         return nullptr;
     }
-    const auto id = collection->find_index_id(normalize_identifier(name));
+    const auto id = collection->find_index_id(common::normalize_identifier(name));
     return id ? find_index(*id) : nullptr;
 }
 
@@ -162,7 +162,7 @@ const entry::VectorIndexEntry * MetaEngine::find_vector_index(common::Collection
     if (collection == nullptr) {
         return nullptr;
     }
-    const auto id = collection->find_vector_index_id(normalize_identifier(name));
+    const auto id = collection->find_vector_index_id(common::normalize_identifier(name));
     return id ? find_vector_index(*id) : nullptr;
 }
 
@@ -265,7 +265,7 @@ std::expected<common::DatabaseId, MetaEngineError> MetaEngine::create_database(c
     if (blank(request.name)) {
         return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Database name cannot be empty"));
     }
-    const auto key = normalize_identifier(request.name);
+    const auto key = common::normalize_identifier(request.name);
     if (const auto it = database_keys_.find(key); it != database_keys_.end()) {
         if (request.if_not_exists) {
             return it->second;
@@ -323,7 +323,7 @@ std::expected<common::CollectionId, MetaEngineError> MetaEngine::create_collecti
     if (blank(request.name)) {
         return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Collection name cannot be empty"));
     }
-    const auto key = normalize_identifier(request.name);
+    const auto key = common::normalize_identifier(request.name);
     if (const auto existing = database->find_collection_id(key)) {
         if (request.if_not_exists) {
             return *existing;
@@ -338,7 +338,7 @@ std::expected<common::CollectionId, MetaEngineError> MetaEngine::create_collecti
         if (blank(column.name)) {
             return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Column name cannot be empty"));
         }
-        if (!column_keys.insert(normalize_identifier(column.name)).second) {
+        if (!column_keys.insert(common::normalize_identifier(column.name)).second) {
             return std::unexpected(make_error(MetaEngineErrorCode::DuplicateColumn, "Duplicate column: " + column.name));
         }
     }
@@ -423,7 +423,7 @@ std::expected<common::IndexId, MetaEngineError> MetaEngine::create_index(const C
     if (blank(request.name) || request.column_ids.empty()) {
         return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Index name and columns cannot be empty"));
     }
-    const auto key = normalize_identifier(request.name);
+    const auto key = common::normalize_identifier(request.name);
     if (const auto existing = collection->find_index_id(key)) {
         if (request.if_not_exists) {
             return *existing;
@@ -499,7 +499,7 @@ std::expected<common::VIndexId, MetaEngineError> MetaEngine::create_vector_index
     if (blank(request.name)) {
         return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Vector index name cannot be empty"));
     }
-    const auto key = normalize_identifier(request.name);
+    const auto key = common::normalize_identifier(request.name);
     if (const auto existing = collection->find_vector_index_id(key)) {
         if (request.if_not_exists) {
             return *existing;
@@ -665,7 +665,7 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
             std::unordered_set<common::ColumnId> collection_columns;
             for (std::size_t ordinal = 0; ordinal < collection_snapshot.columns.size(); ++ordinal) {
                 const auto & value = collection_snapshot.columns[ordinal];
-                if (value.id == 0 || blank(value.name) || rebuilt.columns_.contains(value.id) || collection_ptr->contains_column(normalize_identifier(value.name))) {
+                if (value.id == 0 || blank(value.name) || rebuilt.columns_.contains(value.id) || collection_ptr->contains_column(common::normalize_identifier(value.name))) {
                     return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate column in meta snapshot"));
                 }
                 if (static_cast<std::uint8_t>(value.type.id) > static_cast<std::uint8_t>(common::LogicalTypeId::Vector)
@@ -683,7 +683,7 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
             }
             for (const auto & value : collection_snapshot.indexes) {
                 if (value.id == 0 || blank(value.name) || value.column_ids.empty() || rebuilt.indexes_.contains(value.id)
-                    || collection_ptr->contains_index(normalize_identifier(value.name))
+                    || collection_ptr->contains_index(common::normalize_identifier(value.name))
                     || value.index_kind != entry::IndexKind::BTree) {
                     return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate index in meta snapshot"));
                 }
@@ -705,8 +705,8 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
             }
             for (const auto & value : collection_snapshot.vector_indexes) {
                 if (value.id == 0 || blank(value.name) || rebuilt.vector_indexes_.contains(value.id)
-                    || collection_ptr->contains_index(normalize_identifier(value.name))
-                    || collection_ptr->contains_vector_index(normalize_identifier(value.name))
+                    || collection_ptr->contains_index(common::normalize_identifier(value.name))
+                    || collection_ptr->contains_vector_index(common::normalize_identifier(value.name))
                     || !collection_columns.contains(value.column_id)
                     || static_cast<std::uint8_t>(value.index_kind) > static_cast<std::uint8_t>(entry::VectorIndexKind::Hnsw)
                     || static_cast<std::uint8_t>(value.metric) > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {

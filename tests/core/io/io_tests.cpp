@@ -38,7 +38,7 @@ void require_ok(std::expected<void, io::IoError> result, const char * message)
 }
 
 template <typename T>
-const T & get_value(const schema::Value & value)
+const T & get_value(const common::Value & value)
 {
     return std::get<T>(value.data());
 }
@@ -49,8 +49,8 @@ void test_binary_roundtrip()
     io::BinaryWriter writer {bytes};
     require_ok(writer.write_u32(42), "write u32 failed");
     require_ok(writer.write_string("hello"), "write string failed");
-    require_ok(writer.write_value(schema::Value {std::int64_t {7}}), "write bigint failed");
-    require_ok(writer.write_value(schema::Value {schema::VectorValue {1.0, 2.0, 3.0}}), "write vector failed");
+    require_ok(writer.write_value(common::Value {std::int64_t {7}}), "write bigint failed");
+    require_ok(writer.write_value(common::Value {common::VectorValue {1.0, 2.0, 3.0}}), "write vector failed");
 
     io::BufferByteReader input {bytes.bytes()};
     io::BinaryReader reader {input};
@@ -59,7 +59,7 @@ void test_binary_roundtrip()
     const auto bigint = require_value(reader.read_value(), "read bigint failed");
     require(get_value<std::int64_t>(bigint) == 7, "bigint value mismatch");
     const auto vector_value = require_value(reader.read_value(), "read vector failed");
-    const auto vector = get_value<schema::VectorValue>(vector_value);
+    const auto vector = get_value<common::VectorValue>(vector_value);
     require(vector.size() == 3, "vector size mismatch");
     require(vector[1] == 2.0, "vector value mismatch");
 }

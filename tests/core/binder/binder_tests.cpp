@@ -82,7 +82,7 @@ struct Fixture
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
+                .default_expression = litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",

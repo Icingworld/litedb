@@ -5,7 +5,7 @@
 
 #include "core/function/function.hpp"
 #include "core/function/function_error.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::function
 {
@@ -26,8 +26,8 @@ public:
     /**
      * @brief 评估函数
      */
-    using EvalFn = std::expected<schema::Value, FunctionError> (*)(
-        const std::vector<schema::Value> & arguments,
+    using EvalFn = std::expected<common::Value, FunctionError> (*)(
+        const std::vector<common::Value> & arguments,
         const ScalarFunctionContext & context,
         parser::ast::AstNodeLocation location
     );
@@ -55,8 +55,8 @@ public:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, FunctionError> evaluate(
-        const std::vector<schema::Value> & arguments,
+    std::expected<common::Value, FunctionError> evaluate(
+        const std::vector<common::Value> & arguments,
         const ScalarFunctionContext & context,
         parser::ast::AstNodeLocation location
     ) const;

@@ -162,7 +162,7 @@ void test_committed_wal_redoes_all_participants_and_ignores_loser()
     require(selected.rows.size() == 1 && std::get<std::int64_t>(selected.rows[0].values[0].data()) == 7,
             "committed storage write was not recovered or loser was replayed");
 
-    auto scalar_key = index::ScalarIndexKey::from_value(schema::Value {std::int64_t {7}});
+    auto scalar_key = index::ScalarIndexKey::from_value(common::Value {std::int64_t {7}});
     require(scalar_key.has_value(), "scalar key failed");
     auto scalar = recovered->index_engine().find_equal(index_id, *scalar_key);
     require(scalar && scalar->size() == 1, "scalar index WAL redo failed");

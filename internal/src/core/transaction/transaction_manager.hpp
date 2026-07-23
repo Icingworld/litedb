@@ -108,7 +108,7 @@ public:
     std::expected<void, TransactionError> stage_insert(
         TransactionContext & transaction,
         common::CollectionId collection_id,
-        schema::RecordData after
+        common::RecordData after
     );
 
     /**
@@ -125,8 +125,8 @@ public:
         TransactionContext & transaction,
         common::CollectionId collection_id,
         common::RecordId record_id,
-        schema::RecordData before,
-        schema::RecordData after
+        common::RecordData before,
+        common::RecordData after
     );
 
     /**
@@ -142,7 +142,7 @@ public:
         TransactionContext & transaction,
         common::CollectionId collection_id,
         common::RecordId record_id,
-        schema::RecordData before
+        common::RecordData before
     );
 
     /**
