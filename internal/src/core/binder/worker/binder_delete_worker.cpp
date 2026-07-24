@@ -32,18 +32,18 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDeleteWorker::
 
     std::unique_ptr<BoundExpression> where;
     if (statement.where() != nullptr) {
-        auto bound_where = helper.bind_expression(*statement.where(), collection.value());
+        auto bound_where = helper.bind_expression(*statement.where(), *collection);
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
-        if (!is_boolean(bound_where.value()->type())) [[unlikely]] {
+        if (!is_boolean((*bound_where)->type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 statement.where()->location(),
                 "WHERE expression must be BOOLEAN"
             ));
         }
-        where = std::move(bound_where.value());
+        where = std::move(*bound_where);
     }
 
     return std::make_unique<BoundDeleteStatement>(

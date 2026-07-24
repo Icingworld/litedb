@@ -70,7 +70,7 @@ void test_load_collection_schema_from_catalog()
     auto loaded = load_collection_schema(catalog.view(), collection_id);
     require(loaded.has_value(), "collection schema load failed");
 
-    const auto & schema = loaded.value();
+    const auto & schema = *loaded;
     require(schema.collection_id() == collection_id, "collection id mismatch");
     require(schema.collection_name() == "users", "collection name mismatch");
     require(schema.comment().has_value(), "collection comment missing");
@@ -108,7 +108,7 @@ void test_load_missing_collection_schema_fails()
     CatalogEditor catalog;
     auto loaded = load_collection_schema(catalog.view(), 999);
     require(!loaded.has_value(), "missing collection schema should fail");
-    require(loaded.error().code == SchemaLoadErrorCode::CollectionNotFound, "missing collection error code mismatch");
+    require(loaded.error().is(SchemaLoadErrorCode::CollectionNotFound), "missing collection error code mismatch");
 }
 
 } // namespace

@@ -587,7 +587,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             auto schema = storage::load_collection_schema(after_catalog_view, collection->id());
             if (!schema) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("schema", std::move(schema.error().message))));
+                                             mutation_error("schema", std::move(schema.error().message()))));
             }
             auto opened = catalog_->view().find_collection(collection->id()) != nullptr
                               ? staged_storage.open_collection(std::move(*schema))
@@ -611,7 +611,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             for (const auto * collection : after_catalog_view.list_collections(database->id())) {
                 if (collection == nullptr) continue;
                 auto schema = storage::load_collection_schema(after_catalog_view, collection->id());
-                if (!schema) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(schema.error().message)));
+                if (!schema) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(schema.error().message())));
                 for (const auto * index : after_catalog_view.list_indexes(collection->id())) {
                     if (index == nullptr || catalog_->view().find_index(index->id()) != nullptr) continue;
                     auto created = creator.create_index(*index, *schema, staged_storage);
@@ -645,7 +645,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             for (const auto * collection : after_catalog_view.list_collections(database->id())) {
                 if (collection == nullptr) continue;
                 auto schema = storage::load_collection_schema(after_catalog_view, collection->id());
-                if (!schema) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(schema.error().message)));
+                if (!schema) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(schema.error().message())));
                 for (const auto * index : after_catalog_view.list_vector_indexes(collection->id())) {
                     if (index == nullptr || catalog_->view().find_vector_index(index->id()) != nullptr) continue;
                     auto created = creator.create_index(*index, *schema, staged_storage);
@@ -726,7 +726,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             auto collection_schema = storage::load_collection_schema(catalog_->view(), collection_id);
             if (!collection_schema) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("schema", std::move(collection_schema.error().message))));
+                                             mutation_error("schema", std::move(collection_schema.error().message()))));
             }
             auto opened = staged_storage.open_collection(std::move(*collection_schema));
             if (!opened) {
@@ -841,7 +841,7 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
             auto collection_schema = storage::load_collection_schema(catalog_->view(), collection_id);
             if (!collection_schema) {
                 return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
-                                             std::move(collection_schema.error().message)));
+                                             std::move(collection_schema.error().message())));
             }
             auto storage_reloaded = storage_->reload_collection(std::move(*collection_schema));
             if (!storage_reloaded) {
@@ -884,7 +884,7 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
         for (const auto * collection : catalog_view.list_collections(database->id())) {
             if (collection == nullptr) continue;
             auto schema = storage::load_collection_schema(catalog_->view(), collection->id());
-            if (!schema) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(schema.error().message)));
+            if (!schema) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(schema.error().message())));
             auto opened = restored_storage.open_collection(std::move(*schema));
             if (!opened) return std::unexpected(source_error(
                 TransactionErrorCode::ApplyFailed,

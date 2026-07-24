@@ -19,8 +19,9 @@ asio::awaitable<std::expected<void, ClientError>> Client::connect(std::string_vi
     const auto address = asio::ip::make_address(std::string(host), error);
     if (error) {
         co_return std::unexpected(ClientError {
-            .code = ClientErrorCode::NetworkError,
-            .message = error.message(),
+            ClientErrorCode::NetworkError,
+            error.message(),
+            ClientErrorContext {.native_code = error.value()},
         });
     }
 
@@ -30,8 +31,9 @@ asio::awaitable<std::expected<void, ClientError>> Client::connect(std::string_vi
     );
     if (error) {
         co_return std::unexpected(ClientError {
-            .code = ClientErrorCode::NetworkError,
-            .message = error.message(),
+            ClientErrorCode::NetworkError,
+            error.message(),
+            ClientErrorContext {.native_code = error.value()},
         });
     }
 
@@ -52,12 +54,12 @@ asio::awaitable<std::expected<void, ClientError>> Client::ping()
 
     auto response = co_await roundtrip(std::move(request));
     if (!response.has_value()) {
-        co_return std::unexpected(response.error());
+        co_return std::unexpected(std::move(response.error()));
     }
     if (response->header.kind != protocol::MessageKind::PongResponse) {
         co_return std::unexpected(ClientError {
-            .code = ClientErrorCode::UnexpectedResponse,
-            .message = "expected pong response",
+            ClientErrorCode::UnexpectedResponse,
+            "expected pong response",
         });
     }
 
@@ -78,32 +80,32 @@ asio::awaitable<std::expected<core::executor::ExecutionResult, ClientError>> Cli
 
     auto response = co_await roundtrip(std::move(request));
     if (!response.has_value()) {
-        co_return std::unexpected(response.error());
+        co_return std::unexpected(std::move(response.error()));
     }
     if (response->header.kind == protocol::MessageKind::ErrorResponse) {
         auto error = protocol::decode_error_response(response->payload);
         if (!error.has_value()) {
-            co_return std::unexpected(from_protocol_error(error.error()));
+            co_return std::unexpected(from_protocol_error(std::move(error.error())));
         }
         co_return std::unexpected(ClientError {
-            .code = ClientErrorCode::ServerError,
-            .server_code = error->code,
-            .message = std::move(error->message),
+            ClientErrorCode::ServerError,
+            error->message,
+            ClientErrorContext {.server_code = error->code},
         });
     }
     if (response->header.kind != protocol::MessageKind::ExecuteSqlResponse) {
         co_return std::unexpected(ClientError {
-            .code = ClientErrorCode::UnexpectedResponse,
-            .message = "expected execute SQL response",
+            ClientErrorCode::UnexpectedResponse,
+            "expected execute SQL response",
         });
     }
 
     auto result = protocol::decode_execute_sql_response(response->payload);
     if (!result.has_value()) {
-        co_return std::unexpected(from_protocol_error(result.error()));
+        co_return std::unexpected(from_protocol_error(std::move(result.error())));
     }
 
-    co_return std::move(result.value());
+    co_return std::move(*result);
 }
 
 void Client::close()
@@ -118,19 +120,25 @@ std::uint64_t Client::next_request_id() noexcept
     return next_request_id_++;
 }
 
-ClientError Client::from_network_error(const net::NetworkError & error) const
+ClientError Client::from_network_error(net::NetworkError error) const
 {
+    auto message = error.message();
     return ClientError {
-        .code = ClientErrorCode::NetworkError,
-        .message = error.message,
+        ClientErrorCode::NetworkError,
+        message,
+        ClientErrorContext {.source_code = error.encode_code()},
+        std::move(error),
     };
 }
 
-ClientError Client::from_protocol_error(const protocol::ProtocolError & error) const
+ClientError Client::from_protocol_error(protocol::ProtocolError error) const
 {
+    auto message = error.message();
     return ClientError {
-        .code = ClientErrorCode::ProtocolError,
-        .message = error.message,
+        ClientErrorCode::ProtocolError,
+        message,
+        ClientErrorContext {.source_code = error.encode_code()},
+        std::move(error),
     };
 }
 
@@ -139,21 +147,21 @@ asio::awaitable<std::expected<protocol::Frame, ClientError>> Client::roundtrip(p
     const auto request_id = frame.header.request_id;
     auto written = co_await net::async_write_frame(socket_, frame);
     if (!written.has_value()) {
-        co_return std::unexpected(from_network_error(written.error()));
+        co_return std::unexpected(from_network_error(std::move(written.error())));
     }
 
     auto response = co_await net::async_read_frame(socket_);
     if (!response.has_value()) {
-        co_return std::unexpected(from_network_error(response.error()));
+        co_return std::unexpected(from_network_error(std::move(response.error())));
     }
     if (response->header.request_id != request_id) {
         co_return std::unexpected(ClientError {
-            .code = ClientErrorCode::UnexpectedResponse,
-            .message = "response request id mismatch",
+            ClientErrorCode::UnexpectedResponse,
+            "response request id mismatch",
         });
     }
 
-    co_return std::move(response.value());
+    co_return std::move(*response);
 }
 
 } // namespace litedb::client

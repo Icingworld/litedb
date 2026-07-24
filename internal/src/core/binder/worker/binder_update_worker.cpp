@@ -53,46 +53,46 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
             ));
         }
 
-        auto value = helper.bind_expression(*assignment.value, collection.value());
+        auto value = helper.bind_expression(*assignment.value, *collection);
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
-        if (!can_cast(value.value()->type(), column->type())) [[unlikely]] {
+        if (!can_cast((*value)->type(), column->type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
-                value.value()->location(),
+                (*value)->location(),
                 "UPDATE value type does not match column: " + column->name()
             ));
         }
-        if (value.value()->type().id == LogicalTypeId::Null && !column->nullable()) [[unlikely]] {
+        if ((*value)->type().id == LogicalTypeId::Null && !column->nullable()) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::NotNullable,
-                value.value()->location(),
+                (*value)->location(),
                 "Column cannot be NULL: " + column->name()
             ));
         }
 
         assignments.push_back(BoundAssignment {
             .column = bound_column_from_entry(*column),
-            .value = cast_if_needed(std::move(value.value()), column->type()),
+            .value = cast_if_needed(std::move(*value), column->type()),
         });
     }
 
     // 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
     if (statement.where() != nullptr) {
-        auto bound_where = helper.bind_expression(*statement.where(), collection.value());
+        auto bound_where = helper.bind_expression(*statement.where(), *collection);
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
-        if (!is_boolean(bound_where.value()->type())) [[unlikely]] {
+        if (!is_boolean((*bound_where)->type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 statement.where()->location(),
                 "WHERE expression must be BOOLEAN"
             ));
         }
-        where = std::move(bound_where.value());
+        where = std::move(*bound_where);
     }
 
     return std::make_unique<BoundUpdateStatement>(

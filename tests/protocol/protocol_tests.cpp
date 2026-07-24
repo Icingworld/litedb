@@ -103,7 +103,7 @@ void test_truncated_payload_fails()
     std::vector<std::uint8_t> payload {0, 0, 0, 8, 'S'};
     auto decoded = decode_execute_sql_request(payload);
     require(!decoded.has_value(), "truncated payload should fail");
-    require(decoded.error().code == ProtocolErrorCode::UnexpectedEnd, "truncated error code mismatch");
+    require(decoded.error().is(ProtocolErrorCode::UnexpectedEnd), "truncated error code mismatch");
 }
 
 } // namespace

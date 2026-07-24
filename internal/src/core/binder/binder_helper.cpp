@@ -14,11 +14,7 @@ using namespace litedb::core::parser::ast;
 
 BinderError make_binder_error(BinderErrorCode code, AstNodeLocation location, std::string message)
 {
-    return BinderError {
-        .code = code,
-        .location = location,
-        .message = std::move(message),
-    };
+    return BinderError {code, message, BinderErrorContext {location}};
 }
 
 LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter)

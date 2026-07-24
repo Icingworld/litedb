@@ -49,9 +49,9 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(std::string(result.error().message).append(": ").append(sql));
+        throw std::runtime_error(std::string(result.error().message()).append(": ").append(sql));
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 struct Fixture
@@ -110,9 +110,9 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::string print_without_location(const BoundStatement & statement)

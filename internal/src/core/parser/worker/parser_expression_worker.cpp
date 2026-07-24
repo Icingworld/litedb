@@ -35,7 +35,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto left = parse_and_expression();
     if (!left.has_value()) [[unlikely]] {
-        return std::unexpected(left.error());
+        return std::unexpected(std::move(left.error()));
     }
 
     while (context_.check(TokenType::Or)) {
@@ -43,13 +43,13 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right = parse_and_expression();
         if (!right.has_value()) [[unlikely]] {
-            return std::unexpected(right.error());
+            return std::unexpected(std::move(right.error()));
         }
 
         left = std::make_unique<ast::BinaryExpression>(
-            std::move(left.value()),
+            std::move(*left),
             op.type(),
-            std::move(right.value()),
+            std::move(*right),
             context_.ast_location(op.location())
         );
     }
@@ -61,7 +61,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto left = parse_not_expression();
     if (!left.has_value()) [[unlikely]] {
-        return std::unexpected(left.error());
+        return std::unexpected(std::move(left.error()));
     }
 
     while (context_.check(TokenType::And)) {
@@ -69,13 +69,13 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right = parse_not_expression();
         if (!right.has_value()) [[unlikely]] {
-            return std::unexpected(right.error());
+            return std::unexpected(std::move(right.error()));
         }
 
         left = std::make_unique<ast::BinaryExpression>(
-            std::move(left.value()),
+            std::move(*left),
             op.type(),
-            std::move(right.value()),
+            std::move(*right),
             context_.ast_location(op.location())
         );
     }
@@ -90,12 +90,12 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto operand = parse_not_expression();
         if (!operand.has_value()) [[unlikely]] {
-            return std::unexpected(operand.error());
+            return std::unexpected(std::move(operand.error()));
         }
 
         return std::make_unique<ast::UnaryExpression>(
             op.type(),
-            std::move(operand.value()),
+            std::move(*operand),
             context_.ast_location(op.location())
         );
     }
@@ -107,7 +107,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto left = parse_additive_expression();
     if (!left.has_value()) [[unlikely]] {
-        return std::unexpected(left.error());
+        return std::unexpected(std::move(left.error()));
     }
 
     if (is_comparison_operator(context_.current().type())) {
@@ -115,13 +115,13 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right = parse_additive_expression();
         if (!right.has_value()) [[unlikely]] {
-            return std::unexpected(right.error());
+            return std::unexpected(std::move(right.error()));
         }
 
         return std::make_unique<ast::BinaryExpression>(
-            std::move(left.value()),
+            std::move(*left),
             op.type(),
-            std::move(right.value()),
+            std::move(*right),
             context_.ast_location(op.location())
         );
     }
@@ -138,12 +138,12 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto pattern = parse_additive_expression();
         if (!pattern.has_value()) [[unlikely]] {
-            return std::unexpected(pattern.error());
+            return std::unexpected(std::move(pattern.error()));
         }
 
         std::unique_ptr<ast::ExpressionNode> expression = std::make_unique<ast::LikeExpression>(
-            std::move(left.value()),
-            std::move(pattern.value()),
+            std::move(*left),
+            std::move(*pattern),
             context_.ast_location(op.location())
         );
         if (negated) {
@@ -161,7 +161,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after IN");
         if (!left_paren.has_value()) [[unlikely]] {
-            return std::unexpected(left_paren.error());
+            return std::unexpected(std::move(left_paren.error()));
         }
         if (context_.check(TokenType::RightParen)) [[unlikely]] {
             return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one IN value"));
@@ -171,9 +171,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
         while (true) {
             auto value = parse_expression();
             if (!value.has_value()) [[unlikely]] {
-                return std::unexpected(value.error());
+                return std::unexpected(std::move(value.error()));
             }
-            values.push_back(std::move(value.value()));
+            values.push_back(std::move(*value));
 
             if (!context_.match(TokenType::Comma)) {
                 break;
@@ -182,11 +182,11 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after IN values");
         if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
+            return std::unexpected(std::move(right_paren.error()));
         }
 
         std::unique_ptr<ast::ExpressionNode> expression = std::make_unique<ast::InExpression>(
-            std::move(left.value()),
+            std::move(*left),
             std::move(values),
             context_.ast_location(op.location())
         );
@@ -205,23 +205,23 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto lower = parse_additive_expression();
         if (!lower.has_value()) [[unlikely]] {
-            return std::unexpected(lower.error());
+            return std::unexpected(std::move(lower.error()));
         }
 
         auto and_token = context_.consume(TokenType::And, "Expected AND in BETWEEN expression");
         if (!and_token.has_value()) [[unlikely]] {
-            return std::unexpected(and_token.error());
+            return std::unexpected(std::move(and_token.error()));
         }
 
         auto upper = parse_additive_expression();
         if (!upper.has_value()) [[unlikely]] {
-            return std::unexpected(upper.error());
+            return std::unexpected(std::move(upper.error()));
         }
 
         std::unique_ptr<ast::ExpressionNode> expression = std::make_unique<ast::BetweenExpression>(
-            std::move(left.value()),
-            std::move(lower.value()),
-            std::move(upper.value()),
+            std::move(*left),
+            std::move(*lower),
+            std::move(*upper),
             context_.ast_location(op.location())
         );
         if (negated) {
@@ -245,7 +245,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto left = parse_multiplicative_expression();
     if (!left.has_value()) [[unlikely]] {
-        return std::unexpected(left.error());
+        return std::unexpected(std::move(left.error()));
     }
 
     while (context_.check(TokenType::Plus) || context_.check(TokenType::Minus)) {
@@ -253,13 +253,13 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right = parse_multiplicative_expression();
         if (!right.has_value()) [[unlikely]] {
-            return std::unexpected(right.error());
+            return std::unexpected(std::move(right.error()));
         }
 
         left = std::make_unique<ast::BinaryExpression>(
-            std::move(left.value()),
+            std::move(*left),
             op.type(),
-            std::move(right.value()),
+            std::move(*right),
             context_.ast_location(op.location())
         );
     }
@@ -271,7 +271,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto left = parse_unary_expression();
     if (!left.has_value()) [[unlikely]] {
-        return std::unexpected(left.error());
+        return std::unexpected(std::move(left.error()));
     }
 
     while (context_.check(TokenType::Star) || context_.check(TokenType::Slash) || context_.check(TokenType::Modulo)) {
@@ -279,13 +279,13 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right = parse_unary_expression();
         if (!right.has_value()) [[unlikely]] {
-            return std::unexpected(right.error());
+            return std::unexpected(std::move(right.error()));
         }
 
         left = std::make_unique<ast::BinaryExpression>(
-            std::move(left.value()),
+            std::move(*left),
             op.type(),
-            std::move(right.value()),
+            std::move(*right),
             context_.ast_location(op.location())
         );
     }
@@ -300,12 +300,12 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto operand = parse_unary_expression();
         if (!operand.has_value()) [[unlikely]] {
-            return std::unexpected(operand.error());
+            return std::unexpected(std::move(operand.error()));
         }
 
         return std::make_unique<ast::UnaryExpression>(
             op.type(),
-            std::move(operand.value()),
+            std::move(*operand),
             context_.ast_location(op.location())
         );
     }
@@ -328,12 +328,12 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     if (context_.match(TokenType::LeftParen)) {
         auto expression = parse_expression();
         if (!expression.has_value()) [[unlikely]] {
-            return std::unexpected(expression.error());
+            return std::unexpected(std::move(expression.error()));
         }
 
         auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after expression");
         if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
+            return std::unexpected(std::move(right_paren.error()));
         }
 
         return expression;
@@ -346,7 +346,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto first = context_.consume(TokenType::Identifier, "Expected column name");
     if (!first.has_value()) [[unlikely]] {
-        return std::unexpected(first.error());
+        return std::unexpected(std::move(first.error()));
     }
 
     std::optional<std::string> qualifier;
@@ -357,7 +357,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto second = context_.consume(TokenType::Identifier, "Expected column name after '.'");
         if (!second.has_value()) [[unlikely]] {
-            return std::unexpected(second.error());
+            return std::unexpected(std::move(second.error()));
         }
         column = std::string(second->value());
     }
@@ -373,7 +373,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 {
     auto first = context_.consume(TokenType::Identifier, "Expected function or column name");
     if (!first.has_value()) [[unlikely]] {
-        return std::unexpected(first.error());
+        return std::unexpected(std::move(first.error()));
     }
 
     std::string name(first->value());
@@ -383,9 +383,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
             while (true) {
                 auto argument = parse_expression();
                 if (!argument.has_value()) [[unlikely]] {
-                    return std::unexpected(argument.error());
+                    return std::unexpected(std::move(argument.error()));
                 }
-                arguments.push_back(std::move(argument.value()));
+                arguments.push_back(std::move(*argument));
                 if (!context_.match(TokenType::Comma)) {
                     break;
                 }
@@ -394,7 +394,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
         auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after function arguments");
         if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
+            return std::unexpected(std::move(right_paren.error()));
         }
 
         return std::make_unique<ast::FunctionCallExpression>(
@@ -409,7 +409,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
         qualifier = std::move(name);
         auto second = context_.consume(TokenType::Identifier, "Expected column name after '.'");
         if (!second.has_value()) [[unlikely]] {
-            return std::unexpected(second.error());
+            return std::unexpected(std::move(second.error()));
         }
         name = std::string(second->value());
     }
@@ -450,9 +450,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     while (true) {
         auto element = parse_expression();
         if (!element.has_value()) [[unlikely]] {
-            return std::unexpected(element.error());
+            return std::unexpected(std::move(element.error()));
         }
-        elements.push_back(std::move(element.value()));
+        elements.push_back(std::move(*element));
 
         if (!context_.match(TokenType::Comma)) {
             break;
@@ -461,7 +461,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
 
     auto right_bracket = context_.consume(TokenType::RightBracket, "Expected ']' after vector literal");
     if (!right_bracket.has_value()) [[unlikely]] {
-        return std::unexpected(right_bracket.error());
+        return std::unexpected(std::move(right_bracket.error()));
     }
 
     return std::make_unique<ast::VectorExpression>(

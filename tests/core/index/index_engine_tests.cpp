@@ -99,9 +99,9 @@ struct Fixture
 
         auto collection_schema = load_collection_schema(catalog.view(), users_id);
         if (!collection_schema.has_value()) {
-            throw std::runtime_error(collection_schema.error().message);
+            throw std::runtime_error(collection_schema.error().message());
         }
-        auto created_storage = storage.create_collection(std::move(collection_schema.value()));
+        auto created_storage = storage.create_collection(std::move(*collection_schema));
         if (!created_storage.has_value()) {
             throw std::runtime_error(created_storage.error().message());
         }
@@ -111,7 +111,7 @@ struct Fixture
     {
         RecordData record_data;
         record_data.values.push_back(Value {id});
-        record_data.values.push_back(age.has_value() ? Value {age.value()} : Value::null());
+        record_data.values.push_back(age.has_value() ? Value {*age} : Value::null());
         auto inserted = storage.insert(users_id, std::move(record_data));
         if (!inserted.has_value()) {
             throw std::runtime_error(inserted.error().message());
@@ -140,9 +140,9 @@ struct Fixture
     {
         auto collection_schema = load_collection_schema(catalog.view(), users_id);
         if (!collection_schema.has_value()) {
-            throw std::runtime_error(collection_schema.error().message);
+            throw std::runtime_error(collection_schema.error().message());
         }
-        return std::move(collection_schema.value());
+        return std::move(*collection_schema);
     }
 };
 

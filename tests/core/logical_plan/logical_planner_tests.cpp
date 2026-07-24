@@ -75,9 +75,9 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(std::string(result.error().message).append(": ").append(sql));
+        throw std::runtime_error(std::string(result.error().message()).append(": ").append(sql));
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 struct Fixture
@@ -135,9 +135,9 @@ struct Fixture
 
         auto schema = litedb::core::storage::load_collection_schema(catalog.view(), users_id);
         if (!schema.has_value()) {
-            throw std::runtime_error(schema.error().message);
+            throw std::runtime_error(schema.error().message());
         }
-        auto storage_created = storage.create_collection(std::move(schema.value()));
+        auto storage_created = storage.create_collection(std::move(*schema));
         if (!storage_created.has_value()) {
             throw std::runtime_error(storage_created.error().message());
         }
@@ -152,9 +152,9 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<LogicalStatementPlan> plan_ok(
@@ -167,9 +167,9 @@ std::unique_ptr<LogicalStatementPlan> plan_ok(
     LogicalPlanner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 const LogicalPlanNode & query_root(const LogicalStatementPlan & plan)
@@ -203,10 +203,10 @@ IndexId create_managed_index(
 
     auto schema = litedb::core::storage::load_collection_schema(fixture.catalog.view(), fixture.users_id);
     if (!schema.has_value()) {
-        throw std::runtime_error(schema.error().message);
+        throw std::runtime_error(schema.error().message());
     }
     require(fixture.storage.contains_collection(fixture.users_id), "fixture collection storage missing");
-    auto managed = fixture.index_engine.create_index(*entry, schema.value(), fixture.storage);
+    auto managed = fixture.index_engine.create_index(*entry, *schema, fixture.storage);
     if (!managed.has_value()) {
         throw std::runtime_error(managed.error().message());
     }
@@ -465,7 +465,7 @@ void test_null_statement_error()
     LogicalPlanner planner;
     auto result = planner.plan(nullptr);
     require(!result.has_value(), "null statement should fail");
-    require(result.error().code == PlannerErrorCode::InvalidArgument, "null statement error code mismatch");
+    require(result.error().is(PlannerErrorCode::InvalidArgument), "null statement error code mismatch");
 }
 
 } // namespace

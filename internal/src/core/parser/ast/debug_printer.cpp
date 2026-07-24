@@ -310,7 +310,7 @@ void AstDebugPrinter::write_optional_field(const char * name, const std::optiona
     write_indent();
     out_ << name << ": ";
     if (value.has_value()) {
-        out_ << value.value();
+        out_ << *value;
     } else {
         out_ << "<none>";
     }

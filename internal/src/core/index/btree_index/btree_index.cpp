@@ -16,9 +16,11 @@ namespace
 [[nodiscard]]
 IndexError storage_error(btree_index::BTreePageStoreError error)
 {
+    auto message = "BTreeIndex page store error: " + error.message();
     return IndexError {
         IndexErrorCode::StorageError,
-        "BTreeIndex page store error: " + std::move(error.message),
+        message,
+        std::move(error),
     };
 }
 
@@ -34,23 +36,16 @@ IndexError corrupted_tree(std::string message)
 [[nodiscard]]
 IndexError codec_error(btree_index::BTreePageCodecError error)
 {
-    switch (error.code) {
-    case btree_index::BTreePageCodecErrorCode::UnsupportedKeyType:
-        return IndexError {IndexErrorCode::UnsupportedKeyType, std::move(error.message)};
-    case btree_index::BTreePageCodecErrorCode::KeyTypeMismatch:
-        return IndexError {IndexErrorCode::KeyTypeMismatch, std::move(error.message)};
-    case btree_index::BTreePageCodecErrorCode::InvalidPage:
-    case btree_index::BTreePageCodecErrorCode::PageTooLarge:
-    case btree_index::BTreePageCodecErrorCode::InvalidFormat:
-    case btree_index::BTreePageCodecErrorCode::UnsupportedVersion:
-    case btree_index::BTreePageCodecErrorCode::ChecksumMismatch:
-    case btree_index::BTreePageCodecErrorCode::CorruptedPage:
-        return IndexError {
-            IndexErrorCode::StorageError,
-            "BTreeIndex page codec error: " + std::move(error.message),
-        };
+    if (error.is(btree_index::BTreePageCodecErrorCode::UnsupportedKeyType)) {
+        auto message = error.message();
+        return IndexError {IndexErrorCode::UnsupportedKeyType, message, std::move(error)};
     }
-    return IndexError {IndexErrorCode::StorageError, "Unknown BTreeIndex page codec error"};
+    if (error.is(btree_index::BTreePageCodecErrorCode::KeyTypeMismatch)) {
+        auto message = error.message();
+        return IndexError {IndexErrorCode::KeyTypeMismatch, message, std::move(error)};
+    }
+    auto message = "BTreeIndex page codec error: " + error.message();
+    return IndexError {IndexErrorCode::StorageError, message, std::move(error)};
 }
 
 class BTreeInserter final
@@ -1234,7 +1229,7 @@ std::expected<BTreeIndex, btree_index::BTreePageStoreError> BTreeIndex::create(
     if (!store.has_value()) {
         return std::unexpected(std::move(store.error()));
     }
-    return BTreeIndex {std::move(store.value())};
+    return BTreeIndex {std::move(*store)};
 }
 
 std::expected<BTreeIndex, btree_index::BTreePageStoreError> BTreeIndex::open(
@@ -1253,7 +1248,7 @@ std::expected<BTreeIndex, btree_index::BTreePageStoreError> BTreeIndex::open(
     if (!store.has_value()) {
         return std::unexpected(std::move(store.error()));
     }
-    return BTreeIndex {std::move(store.value())};
+    return BTreeIndex {std::move(*store)};
 }
 
 IndexKind BTreeIndex::kind() const noexcept

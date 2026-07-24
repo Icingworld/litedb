@@ -53,7 +53,7 @@ using ErrorCode = BTreePageStoreErrorCode;
 [[nodiscard]]
 Error error(ErrorCode code, std::string message)
 {
-    return Error {code, std::move(message), std::nullopt};
+    return Error {code, message, BTreePageStoreErrorContext {}};
 }
 
 [[nodiscard]]
@@ -65,14 +65,20 @@ Error filesystem_error(litedb::core::error::Error value)
 [[nodiscard]]
 Error codec_error(BTreePageCodecError value)
 {
-    const auto code = value.code == BTreePageCodecErrorCode::ChecksumMismatch
+    const auto code = value.is(BTreePageCodecErrorCode::ChecksumMismatch)
         ? ErrorCode::ChecksumMismatch
-        : value.code == BTreePageCodecErrorCode::CorruptedPage ||
-                      value.code == BTreePageCodecErrorCode::InvalidFormat ||
-                      value.code == BTreePageCodecErrorCode::UnsupportedVersion
+        : value.is(BTreePageCodecErrorCode::CorruptedPage) ||
+                      value.is(BTreePageCodecErrorCode::InvalidFormat) ||
+                      value.is(BTreePageCodecErrorCode::UnsupportedVersion)
         ? ErrorCode::CorruptedPage
         : ErrorCode::PageCodecError;
-    return Error {code, std::move(value.message), value.code};
+    auto message = value.message();
+    return Error {
+        code,
+        message,
+        BTreePageStoreErrorContext {static_cast<BTreePageCodecErrorCode>(value.code())},
+        std::move(value),
+    };
 }
 
 template <typename T>
@@ -367,7 +373,7 @@ std::expected<BTreePage, BTreePageStoreError> BTreePageStore::read_page(BTreePag
     if (!valid.has_value()) {
         return std::unexpected(std::move(valid.error()));
     }
-    return std::move(decoded.value());
+    return std::move(*decoded);
 }
 
 std::expected<void, BTreePageStoreError> BTreePageStore::write_page(const BTreePage & page)
@@ -706,7 +712,13 @@ std::expected<void, BTreePageStoreError> BTreePageStore::append_page(const BTree
         --next_page_id_;
         auto rolled_back = file_.truncate(offset);
         if (!rolled_back.has_value()) {
-            header.error().message += "; failed to roll back appended page: " + rolled_back.error().message();
+            auto failure = std::move(header.error());
+            auto message = failure.message() + "; failed to roll back appended page: " + rolled_back.error().message();
+            return std::unexpected(Error {
+                static_cast<ErrorCode>(failure.code()),
+                message,
+                std::move(failure),
+            });
         }
         return header;
     }

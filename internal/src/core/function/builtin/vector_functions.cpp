@@ -32,11 +32,7 @@ FunctionError make_error(
     std::string message
 )
 {
-    return FunctionError {
-        .code = code,
-        .location = location,
-        .message = std::move(message),
-    };
+    return FunctionError {code, message, FunctionErrorContext {location}};
 }
 
 [[nodiscard]]

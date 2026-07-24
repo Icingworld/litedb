@@ -19,7 +19,7 @@ Token Lexer::next()
 {
     // 如果已经预读，直接返回预读的 Token
     if (peeked_token_.has_value()) {
-        const Token token = peeked_token_.value();
+        const Token token = *peeked_token_;
         peeked_token_ = std::nullopt;
         return token;
     }
@@ -34,7 +34,7 @@ const Token & Lexer::peek()
         peeked_token_ = next_internal();
     }
 
-    return peeked_token_.value();
+    return *peeked_token_;
 }
 
 bool Lexer::has_more() const noexcept
@@ -164,7 +164,7 @@ Token Lexer::read_identifier_or_keyword()
     }
 
     if (const auto type = keyword_type(upper_value); type.has_value()) {
-        return Token(type.value(), value, start);
+        return Token(*type, value, start);
     }
 
     return Token(TokenType::Identifier, value, start);

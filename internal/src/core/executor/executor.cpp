@@ -96,58 +96,85 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
 [[nodiscard]]
 ExecutionError make_error(ExecutionErrorCode code, AstNodeLocation location, std::string message)
 {
-    return ExecutionError {code, location, std::move(message)};
+    return ExecutionError {code, message, ExecutionErrorContext {location}};
+}
+
+[[nodiscard]]
+ExecutionError make_error(
+    ExecutionErrorCode code,
+    AstNodeLocation location,
+    std::string message,
+    error::Error cause
+)
+{
+    return ExecutionError {code, message, ExecutionErrorContext {location}, std::move(cause)};
 }
 
 [[nodiscard]]
 ExecutionError from_meta_error(meta::MetaError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::MetaError, location, error.message());
+    auto message = error.message();
+    return make_error(ExecutionErrorCode::MetaError, location, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
 ExecutionError from_schema_error(storage::SchemaLoadError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::SchemaError, location, std::move(error.message));
+    auto message = error.message();
+    return make_error(ExecutionErrorCode::SchemaError, location, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
 ExecutionError from_storage_error(storage::StorageError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::StorageError, location, error.message());
+    auto message = error.message();
+    return make_error(ExecutionErrorCode::StorageError, location, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
 ExecutionError from_index_error(index::IndexError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::IndexError, location, error.message());
+    auto message = error.message();
+    return make_error(ExecutionErrorCode::IndexError, location, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
 ExecutionError from_vector_index_error(vindex::VectorIndexError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::IndexError, location, error.message());
+    auto message = error.message();
+    return make_error(ExecutionErrorCode::IndexError, location, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
 ExecutionError from_transaction_error(transaction::TransactionError error, AstNodeLocation location)
 {
     const auto * context = error.context<transaction::TransactionErrorContext>();
+    auto message =
+        "Transaction " +
+        std::to_string(context != nullptr
+                           ? context->transaction_id
+                           : transaction::InvalidTransactionId) +
+        ": " + error.message();
     return make_error(
         ExecutionErrorCode::TransactionError,
         location,
-        "Transaction " +
-            std::to_string(context != nullptr
-                               ? context->transaction_id
-                               : transaction::InvalidTransactionId) +
-            ": " + error.message()
+        std::move(message),
+        std::move(error)
     );
 }
 
 [[nodiscard]]
 ExecutionError from_evaluation_error(evaluator::EvaluationError error)
 {
-    return make_error(ExecutionErrorCode::EvaluationError, error.location, std::move(error.message));
+    const auto * context = error.context<evaluator::EvaluationErrorContext>();
+    const auto location = context == nullptr ? internal_location : context->location;
+    auto message = error.message();
+    return make_error(
+        ExecutionErrorCode::EvaluationError,
+        location,
+        std::move(message),
+        std::move(error)
+    );
 }
 
 [[nodiscard]]
@@ -304,7 +331,7 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
     if (!collection_schema.has_value()) {
         return std::unexpected(from_schema_error(std::move(collection_schema.error()), location));
     }
-    return std::move(collection_schema.value());
+    return std::move(*collection_schema);
 }
 
 [[nodiscard]]
@@ -359,7 +386,7 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
     }
 
     PipelineResult result;
-    append_scan_columns(result, collection_schema.value());
+    append_scan_columns(result, *collection_schema);
 
     auto cursor = storage.scan(scan.collection_id());
     if (!cursor) return std::unexpected(from_storage_error(std::move(cursor.error()), scan.location()));
@@ -367,7 +394,7 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
         auto next = cursor->next();
         if (!next) return std::unexpected(from_storage_error(std::move(next.error()), scan.location()));
         if (!*next) break;
-        append_pipeline_row(result, collection_schema.value(), std::move(**next));
+        append_pipeline_row(result, *collection_schema, std::move(**next));
     }
 
     return result;
@@ -476,13 +503,13 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
     }
 
     PipelineResult result;
-    append_scan_columns(result, collection_schema.value());
+    append_scan_columns(result, *collection_schema);
     for (const auto record_id : *record_ids) {
         auto record = storage.get(scan.collection_id(), record_id);
         if (!record.has_value()) {
             return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
         }
-        append_pipeline_row(result, collection_schema.value(), std::move(*record));
+        append_pipeline_row(result, *collection_schema, std::move(*record));
     }
 
     return result;
@@ -506,7 +533,7 @@ std::expected<void, ExecutionError> apply_predicate(
         if (!matched.has_value()) {
             return std::unexpected(from_evaluation_error(std::move(matched.error())));
         }
-        if (matched.value()) {
+        if (*matched) {
             rows.push_back(std::move(row));
         }
     }
@@ -531,7 +558,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
     }
 
     PipelineResult result;
-    append_scan_columns(result, collection_schema.value());
+    append_scan_columns(result, *collection_schema);
     auto cursor = storage.scan(search.collection_id());
     if (!cursor.has_value()) {
         return std::unexpected(from_storage_error(std::move(cursor.error()), search.location()));
@@ -544,7 +571,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
         if (!next->has_value()) {
             break;
         }
-        append_pipeline_row(result, collection_schema.value(), std::move(**next));
+        append_pipeline_row(result, *collection_schema, std::move(**next));
     }
     auto filtered = apply_predicate(result, search.predicate());
     if (!filtered.has_value()) {
@@ -599,7 +626,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
     if (!query_value.has_value()) {
         return std::unexpected(from_evaluation_error(std::move(query_value.error())));
     }
-    auto query_key = vindex::VectorIndexKey::from_value(query_value.value());
+    auto query_key = vindex::VectorIndexKey::from_value(*query_value);
     if (!query_key.has_value()) {
         return std::unexpected(from_vector_index_error(std::move(query_key.error()), search.location()));
     }
@@ -640,14 +667,14 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         }
 
         PipelineResult result;
-        append_scan_columns(result, collection_schema.value());
+        append_scan_columns(result, *collection_schema);
         result.rows.reserve(matches->size());
         for (const auto & match : *matches) {
             auto record = storage.get(search.collection_id(), match.record_id);
             if (!record.has_value()) {
                 return std::unexpected(from_storage_error(std::move(record.error()), search.location()));
             }
-            append_pipeline_row(result, collection_schema.value(), std::move(*record));
+            append_pipeline_row(result, *collection_schema, std::move(*record));
         }
         auto filtered = apply_predicate(result, search.predicate());
         if (!filtered.has_value()) {
@@ -685,7 +712,7 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
             return std::unexpected(from_evaluation_error(std::move(predicate.error())));
         }
 
-        if (predicate.value()) {
+        if (*predicate) {
             rows.push_back(std::move(row));
         }
     }
@@ -746,7 +773,7 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
             if (!value.has_value()) {
                 return std::unexpected(from_evaluation_error(std::move(value.error())));
             }
-            values.push_back(std::move(value.value()));
+            values.push_back(std::move(*value));
         }
         row.output_values = std::move(values);
     }
@@ -808,7 +835,7 @@ std::expected<std::vector<common::Value>, ExecutionError> evaluate_order_keys(
         if (!value.has_value()) {
             return std::unexpected(from_evaluation_error(std::move(value.error())));
         }
-        keys.push_back(std::move(value.value()));
+        keys.push_back(std::move(*value));
     }
     return keys;
 }
@@ -843,7 +870,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
         }
         sort_rows.push_back(SortRow {
             .row = std::move(input->rows[position]),
-            .keys = std::move(keys.value()),
+            .keys = std::move(*keys),
             .position = position,
         });
     }
@@ -1002,7 +1029,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         if (!value.has_value()) {
             return std::unexpected(from_evaluation_error(std::move(value.error())));
         }
-        record_data.values.push_back(std::move(value.value()));
+        record_data.values.push_back(std::move(*value));
     }
 
     auto transaction = transaction_manager.begin_implicit();
@@ -1099,8 +1126,8 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         auto record_data = row.source_record.data;
 
         for (const auto & assignment : plan.assignments()) {
-            auto ordinal = ordinal_for_column(collection_schema.value(), assignment.column.column_id);
-            if (!ordinal.has_value() || ordinal.value() >= record_data.values.size()) {
+            auto ordinal = ordinal_for_column(*collection_schema, assignment.column.column_id);
+            if (!ordinal.has_value() || *ordinal >= record_data.values.size()) {
                 (void) transaction_manager.abort(*transaction);
                 return std::unexpected(make_error(
                     ExecutionErrorCode::InvalidPlan,
@@ -1114,7 +1141,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
                 (void) transaction_manager.abort(*transaction);
                 return std::unexpected(from_evaluation_error(std::move(value.error())));
             }
-            record_data.values[ordinal.value()] = std::move(value.value());
+            record_data.values[*ordinal] = std::move(*value);
         }
 
         auto staged = transaction_manager.stage_update(
@@ -1182,7 +1209,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
         }
 
         const auto column_id = index->column_id();
-        const auto * column = column_id.has_value() ? catalog.find_column(column_id.value()) : nullptr;
+        const auto * column = column_id.has_value() ? catalog.find_column(*column_id) : nullptr;
         rows.push_back(ExecutionRow {
             .values = {
                 common::Value {index->name()},

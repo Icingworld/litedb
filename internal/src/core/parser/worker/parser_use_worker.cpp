@@ -23,11 +23,11 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUseWorker:
     ParserSchemaHelper schema_helper(context_);
     auto database = schema_helper.parse_identifier_string("Expected database name");
     if (!database.has_value()) [[unlikely]] {
-        return std::unexpected(database.error());
+        return std::unexpected(std::move(database.error()));
     }
 
     return std::make_unique<ast::UseStatement>(
-        std::move(database.value()),
+        std::move(*database),
         context_.ast_location(location)
     );
 }

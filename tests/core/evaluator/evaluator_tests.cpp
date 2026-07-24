@@ -299,7 +299,7 @@ void test_errors()
 
     auto invalid_literal = evaluator.evaluate(*literal(LogicalTypeId::Integer, "not-an-int"), row);
     require(!invalid_literal.has_value(), "invalid literal should fail");
-    require(invalid_literal.error().code == EvaluationErrorCode::InvalidLiteral, "invalid literal error mismatch");
+    require(invalid_literal.error().is(EvaluationErrorCode::InvalidLiteral), "invalid literal error mismatch");
 
     auto divide_by_zero = BoundBinaryExpression {
         literal(LogicalTypeId::Integer, "1"),
@@ -310,16 +310,16 @@ void test_errors()
     };
     auto divide_result = evaluator.evaluate(divide_by_zero, row);
     require(!divide_result.has_value(), "divide by zero should fail");
-    require(divide_result.error().code == EvaluationErrorCode::DivisionByZero, "divide by zero error mismatch");
+    require(divide_result.error().is(EvaluationErrorCode::DivisionByZero), "divide by zero error mismatch");
 
     auto bad_column = evaluator.evaluate(*column(99, LogicalTypeId::Integer, "missing"), row);
     require(!bad_column.has_value(), "bad column should fail");
-    require(bad_column.error().code == EvaluationErrorCode::InvalidColumnReference, "bad column error mismatch");
+    require(bad_column.error().is(EvaluationErrorCode::InvalidColumnReference), "bad column error mismatch");
 
     auto wildcard = BoundWildcardExpression {std::nullopt, loc};
     auto wildcard_result = evaluator.evaluate(wildcard, row);
     require(!wildcard_result.has_value(), "wildcard should fail");
-    require(wildcard_result.error().code == EvaluationErrorCode::UnsupportedExpression, "wildcard error mismatch");
+    require(wildcard_result.error().is(EvaluationErrorCode::UnsupportedExpression), "wildcard error mismatch");
 }
 
 } // namespace

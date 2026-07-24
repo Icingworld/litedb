@@ -25,6 +25,17 @@ enum class ErrorCategory : std::uint8_t
     VectorIndex = 6,            ///< 向量索引
     Wal = 7,                    ///< 预写日志
     Transaction = 8,            ///< 事务协调
+    Parser = 9,
+    Binder = 10,
+    Planner = 11,
+    Optimizer = 12,
+    Function = 13,
+    Evaluation = 14,
+    Execution = 15,
+    Database = 16,
+    Protocol = 17,
+    Network = 18,
+    Client = 19,
 };
 
 /**

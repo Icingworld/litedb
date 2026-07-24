@@ -401,7 +401,7 @@ std::expected<std::vector<std::vector<std::byte>>, BTreePageCodecError> encode_e
             if (!bytes.has_value()) {
                 return std::unexpected(std::move(bytes.error()));
             }
-            encoded.push_back(std::move(bytes.value()));
+            encoded.push_back(std::move(*bytes));
         }
     } else {
         const auto & internal = std::get<BTreeInternalPage>(page);
@@ -411,7 +411,7 @@ std::expected<std::vector<std::vector<std::byte>>, BTreePageCodecError> encode_e
             if (!bytes.has_value()) {
                 return std::unexpected(std::move(bytes.error()));
             }
-            encoded.push_back(std::move(bytes.value()));
+            encoded.push_back(std::move(*bytes));
         }
     }
     return encoded;

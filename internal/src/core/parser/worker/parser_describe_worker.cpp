@@ -28,12 +28,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDescribeWo
     ParserSchemaHelper schema_helper(context_);
     auto collection = schema_helper.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     return std::make_unique<ast::DescribeStatement>(
         ast::SchemaObjectType::Collection,
-        std::move(collection.value()),
+        std::move(*collection),
         context_.ast_location(location)
     );
 }

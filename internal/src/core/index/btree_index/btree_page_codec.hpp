@@ -7,6 +7,7 @@
 #include <string>
 
 #include "core/common/logical_type.hpp"
+#include "core/error/error.hpp"
 #include "core/index/btree_index/btree_page.hpp"
 
 namespace litedb::core::index::btree_index
@@ -15,7 +16,7 @@ namespace litedb::core::index::btree_index
 /**
  * @brief B+ 树页编解码错误码
  */
-enum class BTreePageCodecErrorCode
+enum class BTreePageCodecErrorCode : std::uint8_t
 {
     UnsupportedKeyType,      ///< 不支持的索引键类型
     KeyTypeMismatch,         ///< 页中的键与索引键类型不匹配
@@ -30,11 +31,7 @@ enum class BTreePageCodecErrorCode
 /**
  * @brief B+ 树页编解码错误
  */
-struct BTreePageCodecError
-{
-    BTreePageCodecErrorCode code;     ///< 错误码
-    std::string message;              ///< 错误信息
-};
+using BTreePageCodecError = error::Error;
 
 /**
  * @brief B+ 树逻辑页与固定大小物理页之间的编解码器
@@ -92,3 +89,12 @@ public:
 };
 
 } // namespace litedb::core::index::btree_index
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<index::btree_index::BTreePageCodecErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Index;
+};
+} // namespace litedb::core::error

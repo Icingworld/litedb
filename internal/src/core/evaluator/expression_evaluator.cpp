@@ -54,18 +54,25 @@ EvaluationError make_error(
     std::string message
 )
 {
-    return EvaluationError {code, location, std::move(message)};
+    return EvaluationError {code, message, EvaluationErrorContext {location}};
 }
 
 [[nodiscard]]
 EvaluationError from_function_error(function::FunctionError error)
 {
+    const auto code = error.is(function::FunctionErrorCode::InvalidType)
+        ? EvaluationErrorCode::InvalidType
+        : EvaluationErrorCode::UnsupportedExpression;
+    const auto * context = error.context<function::FunctionErrorContext>();
+    const auto location = context == nullptr
+        ? parser::ast::AstNodeLocation {}
+        : context->location;
+    auto message = error.message();
     return EvaluationError {
-        .code = error.code == function::FunctionErrorCode::InvalidType
-            ? EvaluationErrorCode::InvalidType
-            : EvaluationErrorCode::UnsupportedExpression,
-        .location = error.location,
-        .message = std::move(error.message),
+        code,
+        message,
+        EvaluationErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -720,14 +727,14 @@ public:
             if (!value.has_value()) {
                 return std::unexpected(std::move(value.error()));
             }
-            arguments.push_back(std::move(value.value()));
+            arguments.push_back(std::move(*value));
         }
 
         auto result = expression.function().evaluate(arguments, function::ScalarFunctionContext {}, expression.location());
         if (!result.has_value()) {
             return std::unexpected(from_function_error(std::move(result.error())));
         }
-        return std::move(result.value());
+        return std::move(*result);
     }
 
 private:

@@ -36,9 +36,9 @@ std::unique_ptr<DatabaseEngine> open_database(DatabaseConfig config)
 {
     auto opened = DatabaseEngine::open(std::move(config));
     if (!opened.has_value()) {
-        throw std::runtime_error(opened.error().message);
+        throw std::runtime_error(opened.error().message());
     }
-    return std::move(opened.value());
+    return std::move(*opened);
 }
 
 class TestDatabase
@@ -77,9 +77,9 @@ ExecutionResult execute_ok(TestDatabase & engine, std::string_view sql)
 {
     auto result = engine.execute_sql(sql);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 SessionError execute_error(TestDatabase & engine, std::string_view sql)
@@ -328,10 +328,10 @@ void test_engine_error_mapping()
     TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
 
     auto parse_error = execute_error(engine, "SELECT FROM;");
-    require(parse_error.code == SessionErrorCode::ParserError, "parser error code mismatch");
+    require(parse_error.is(SessionErrorCode::ParserError), "parser error code mismatch");
 
     auto binder_error = execute_error(engine, "SHOW COLLECTIONS;");
-    require(binder_error.code == SessionErrorCode::BinderError, "binder error code mismatch");
+    require(binder_error.is(SessionErrorCode::BinderError), "binder error code mismatch");
 }
 
 void test_sessions_share_instance_but_keep_context()

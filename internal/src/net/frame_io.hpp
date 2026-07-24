@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <optional>
 #include <string>
 
 #include <asio.hpp>
@@ -11,18 +12,20 @@
 namespace litedb::net
 {
 
-enum class NetworkErrorCode
+enum class NetworkErrorCode : std::uint8_t
 {
     IoError,
     ProtocolError,
     FrameTooLarge,
 };
 
-struct NetworkError
+struct NetworkErrorContext
 {
-    NetworkErrorCode code;
-    std::string message;
+    std::optional<int> native_code;
+    std::optional<std::uint16_t> source_code;
 };
+
+using NetworkError = core::error::Error;
 
 using TcpSocket = asio::ip::tcp::socket;
 
@@ -36,3 +39,12 @@ asio::awaitable<std::expected<protocol::Frame, NetworkError>> async_read_frame(
 asio::awaitable<std::expected<void, NetworkError>> async_write_frame(TcpSocket & socket, const protocol::Frame & frame);
 
 } // namespace litedb::net
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<::litedb::net::NetworkErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Network;
+};
+} // namespace litedb::core::error

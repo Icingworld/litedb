@@ -24,12 +24,15 @@ namespace
  * @param error manifest 错误
  * @return 数据库错误
  */
-DatabaseError to_database_error(ManifestError error)
+DatabaseError wrap_database_error(DatabaseErrorCode code, error::Error error)
 {
-    return DatabaseError {
-        .code = DatabaseErrorCode::ManifestError,
-        .message = std::move(error.message),
-    };
+    auto message = error.message();
+    return DatabaseError {code, message, std::move(error)};
+}
+
+DatabaseError manifest_error_to_database(ManifestError error)
+{
+    return wrap_database_error(DatabaseErrorCode::ManifestError, std::move(error));
 }
 
 /**
@@ -39,10 +42,7 @@ DatabaseError to_database_error(ManifestError error)
  */
 DatabaseError meta_error_to_database(meta::MetaError error)
 {
-    return DatabaseError {
-        .code = DatabaseErrorCode::MetaError,
-        .message = error.message(),
-    };
+    return wrap_database_error(DatabaseErrorCode::MetaError, std::move(error));
 }
 
 /**
@@ -52,10 +52,7 @@ DatabaseError meta_error_to_database(meta::MetaError error)
  */
 DatabaseError storage_error_to_database(storage::StorageError error)
 {
-    return DatabaseError {
-        .code = DatabaseErrorCode::StorageError,
-        .message = error.message(),
-    };
+    return wrap_database_error(DatabaseErrorCode::StorageError, std::move(error));
 }
 
 /**
@@ -63,28 +60,19 @@ DatabaseError storage_error_to_database(storage::StorageError error)
  * @param error 索引引擎错误
  * @return 数据库错误
  */
-DatabaseError to_database_error(index::IndexError error)
+DatabaseError index_error_to_database(index::IndexError error)
 {
-    return DatabaseError {
-        .code = DatabaseErrorCode::IndexError,
-        .message = error.message(),
-    };
+    return wrap_database_error(DatabaseErrorCode::IndexError, std::move(error));
 }
 
 DatabaseError vector_error_to_database(vindex::VectorIndexError error)
 {
-    return DatabaseError {
-        .code = DatabaseErrorCode::IndexError,
-        .message = error.message(),
-    };
+    return wrap_database_error(DatabaseErrorCode::IndexError, std::move(error));
 }
 
 DatabaseError wal_error_to_database(wal::WalError error)
 {
-    return DatabaseError {
-        .code = DatabaseErrorCode::WalError,
-        .message = error.message(),
-    };
+    return wrap_database_error(DatabaseErrorCode::WalError, std::move(error));
 }
 
 /**
@@ -175,14 +163,17 @@ executor::ExecutionError from_transaction_error(
 )
 {
     const auto * context = error.context<transaction::TransactionErrorContext>();
+    auto message =
+        "Transaction " +
+        std::to_string(context != nullptr
+                           ? context->transaction_id
+                           : transaction::InvalidTransactionId) +
+        ": " + error.message();
     return executor::ExecutionError {
-        .code = executor::ExecutionErrorCode::TransactionError,
-        .location = location,
-        .message = "Transaction " +
-                   std::to_string(context != nullptr
-                                      ? context->transaction_id
-                                      : transaction::InvalidTransactionId) +
-                   ": " + error.message(),
+        executor::ExecutionErrorCode::TransactionError,
+        message,
+        executor::ExecutionErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -223,18 +214,17 @@ std::expected<void, DatabaseError> DatabaseEngine::checkpoint()
     std::scoped_lock lock {mutex_};
     if (transaction_manager_ == nullptr) {
         return std::unexpected(DatabaseError {
-            .code = DatabaseErrorCode::TransactionError,
-            .message = "Database transaction manager is not initialized",
+            DatabaseErrorCode::TransactionError,
+            "Database transaction manager is not initialized",
         });
     }
     auto checkpointed = transaction_manager_->checkpoint();
     if (!checkpointed) {
-        return std::unexpected(DatabaseError {
-            .code = checkpointed.error().is(transaction::TransactionErrorCode::WalError)
-                        ? DatabaseErrorCode::WalError
-                        : DatabaseErrorCode::TransactionError,
-            .message = checkpointed.error().message(),
-        });
+        const auto code = checkpointed.error().is(transaction::TransactionErrorCode::WalError)
+            ? DatabaseErrorCode::WalError
+            : DatabaseErrorCode::TransactionError;
+        auto message = checkpointed.error().message();
+        return std::unexpected(DatabaseError {code, message, std::move(checkpointed.error())});
     }
     return {};
 }
@@ -245,8 +235,8 @@ std::expected<void, DatabaseError> DatabaseEngine::cleanup_transaction_staging()
     std::filesystem::remove_all(data_directory_ / ".transactions", error);
     if (error) {
         return std::unexpected(DatabaseError {
-            .code = DatabaseErrorCode::TransactionError,
-            .message = "Failed to clean stale transaction staging: " + error.message(),
+            DatabaseErrorCode::TransactionError,
+            "Failed to clean stale transaction staging: " + error.message(),
         });
     }
     return {};
@@ -261,7 +251,7 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     auto initialized = manifest_.ensure_initialized();
     if (!initialized.has_value()) {
-        return std::unexpected(to_database_error(std::move(initialized.error())));
+        return std::unexpected(manifest_error_to_database(std::move(initialized.error())));
     }
 
     auto opened_wal = wal::WalManager::open(
@@ -298,7 +288,7 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     auto indexes_restored = index_engine_.restore_all(meta(), storage_);
     if (!indexes_restored.has_value()) {
-        return std::unexpected(to_database_error(std::move(indexes_restored.error())));
+        return std::unexpected(index_error_to_database(std::move(indexes_restored.error())));
     }
 
     auto vector_indexes_restored = vector_index_engine_.restore_all(meta(), storage_);
@@ -322,9 +312,9 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
 
     if (transaction_manager_ != nullptr && transaction_manager_->recovery_required()) {
         return std::unexpected(executor::ExecutionError {
-            .code = executor::ExecutionErrorCode::TransactionError,
-            .location = plan.location(),
-            .message = "Database requires WAL recovery before accepting more requests",
+            executor::ExecutionErrorCode::TransactionError,
+            "Database requires WAL recovery before accepting more requests",
+            executor::ExecutionErrorContext {plan.location()},
         });
     }
 
@@ -617,7 +607,7 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
             if (!collection_schema.has_value()) {
                 return std::unexpected(storage::make_storage_error(
                     storage::StorageErrorCode::InvalidFormat,
-                    std::move(collection_schema.error().message),
+                    std::move(collection_schema.error().message()),
                     {
                         .operation = storage::StorageOperation::Load,
                         .collection_id = collection->id(),
@@ -625,7 +615,7 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
                 ));
             }
 
-            auto opened = storage_.open_collection(std::move(collection_schema.value()));
+            auto opened = storage_.open_collection(std::move(*collection_schema));
             if (!opened.has_value()) {
                 return std::unexpected(std::move(opened.error()));
             }
@@ -639,10 +629,12 @@ executor::ExecutionError DatabaseEngine::from_meta_error(
     parser::ast::AstNodeLocation location
 )
 {
+    auto message = error.message();
     return executor::ExecutionError {
-        .code = executor::ExecutionErrorCode::MetaError,
-        .location = location,
-        .message = error.message(),
+        executor::ExecutionErrorCode::MetaError,
+        message,
+        executor::ExecutionErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -651,10 +643,12 @@ executor::ExecutionError DatabaseEngine::from_schema_error(
     parser::ast::AstNodeLocation location
 )
 {
+    auto message = error.message();
     return executor::ExecutionError {
-        .code = executor::ExecutionErrorCode::SchemaError,
-        .location = location,
-        .message = std::move(error.message),
+        executor::ExecutionErrorCode::SchemaError,
+        message,
+        executor::ExecutionErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -663,10 +657,12 @@ executor::ExecutionError DatabaseEngine::from_storage_error(
     parser::ast::AstNodeLocation location
 )
 {
+    auto message = error.message();
     return executor::ExecutionError {
-        .code = executor::ExecutionErrorCode::StorageError,
-        .location = location,
-        .message = error.message(),
+        executor::ExecutionErrorCode::StorageError,
+        message,
+        executor::ExecutionErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -675,10 +671,12 @@ executor::ExecutionError DatabaseEngine::from_index_error(
     parser::ast::AstNodeLocation location
 )
 {
+    auto message = error.message();
     return executor::ExecutionError {
-        .code = executor::ExecutionErrorCode::IndexError,
-        .location = location,
-        .message = error.message(),
+        executor::ExecutionErrorCode::IndexError,
+        message,
+        executor::ExecutionErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -687,10 +685,12 @@ executor::ExecutionError DatabaseEngine::from_vector_index_error(
     parser::ast::AstNodeLocation location
 )
 {
+    auto message = error.message();
     return executor::ExecutionError {
-        .code = executor::ExecutionErrorCode::IndexError,
-        .location = location,
-        .message = error.message(),
+        executor::ExecutionErrorCode::IndexError,
+        message,
+        executor::ExecutionErrorContext {location},
+        std::move(error),
     };
 }
 

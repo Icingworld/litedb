@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -13,7 +14,7 @@
 namespace litedb::client
 {
 
-enum class ClientErrorCode
+enum class ClientErrorCode : std::uint8_t
 {
     NetworkError,
     ProtocolError,
@@ -21,12 +22,14 @@ enum class ClientErrorCode
     UnexpectedResponse,
 };
 
-struct ClientError
+struct ClientErrorContext
 {
-    ClientErrorCode code;
     std::uint16_t server_code {0};
-    std::string message;
+    std::optional<int> native_code;
+    std::optional<std::uint16_t> source_code;
 };
+
+using ClientError = core::error::Error;
 
 class Client
 {
@@ -52,10 +55,10 @@ private:
     std::uint64_t next_request_id() noexcept;
 
     [[nodiscard]]
-    ClientError from_network_error(const net::NetworkError & error) const;
+    ClientError from_network_error(net::NetworkError error) const;
 
     [[nodiscard]]
-    ClientError from_protocol_error(const protocol::ProtocolError & error) const;
+    ClientError from_protocol_error(protocol::ProtocolError error) const;
 
     [[nodiscard]]
     asio::awaitable<std::expected<protocol::Frame, ClientError>> roundtrip(protocol::Frame frame);
@@ -65,3 +68,12 @@ private:
 };
 
 } // namespace litedb::client
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<::litedb::client::ClientErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Client;
+};
+} // namespace litedb::core::error

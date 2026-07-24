@@ -67,18 +67,18 @@ std::unique_ptr<database::DatabaseEngine> open_database(const std::filesystem::p
 {
     auto opened = database::DatabaseEngine::open(database::DatabaseConfig {.data_dir = data_dir});
     if (!opened.has_value()) {
-        throw std::runtime_error(opened.error().message);
+        throw std::runtime_error(opened.error().message());
     }
-    return std::move(opened.value());
+    return std::move(*opened);
 }
 
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 common::LogicalType type(common::LogicalTypeId id, std::optional<std::size_t> parameter = std::nullopt)
@@ -112,7 +112,7 @@ void test_truncated_database_manifest_is_rejected()
 
     auto reopened = manifest.ensure_initialized();
     require(!reopened.has_value(), "truncated manifest should be rejected");
-    require(reopened.error().code == database::ManifestErrorCode::InvalidFormat, "truncated manifest error code mismatch");
+    require(reopened.error().is(database::ManifestErrorCode::InvalidFormat), "truncated manifest error code mismatch");
 }
 
 void test_database_engine_open_propagates_manifest_error()
@@ -131,7 +131,7 @@ void test_database_engine_open_propagates_manifest_error()
     auto opened = database::DatabaseEngine::open(database::DatabaseConfig {.data_dir = dir});
     require(!opened.has_value(), "database engine should reject truncated manifest");
     require(
-        opened.error().code == database::DatabaseErrorCode::ManifestError,
+        opened.error().is(database::DatabaseErrorCode::ManifestError),
         "database engine manifest error code mismatch"
     );
 }

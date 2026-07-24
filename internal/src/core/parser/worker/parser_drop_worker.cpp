@@ -50,17 +50,17 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDropWorker
 {
     auto if_exists = schema_helper_.parse_if_exists();
     if (!if_exists.has_value()) [[unlikely]] {
-        return std::unexpected(if_exists.error());
+        return std::unexpected(std::move(if_exists.error()));
     }
 
     auto database = schema_helper_.parse_identifier_string("Expected database name");
     if (!database.has_value()) [[unlikely]] {
-        return std::unexpected(database.error());
+        return std::unexpected(std::move(database.error()));
     }
 
     return std::make_unique<ast::DropDatabaseStatement>(
-        std::move(database.value()),
-        if_exists.value(),
+        std::move(*database),
+        *if_exists,
         context_.ast_location(location)
     );
 }
@@ -69,17 +69,17 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDropWorker
 {
     auto if_exists = schema_helper_.parse_if_exists();
     if (!if_exists.has_value()) [[unlikely]] {
-        return std::unexpected(if_exists.error());
+        return std::unexpected(std::move(if_exists.error()));
     }
 
     auto collection = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     return std::make_unique<ast::DropCollectionStatement>(
-        std::move(collection.value()),
-        if_exists.value(),
+        std::move(*collection),
+        *if_exists,
         context_.ast_location(location)
     );
 }
@@ -88,28 +88,28 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDropWorker
 {
     auto if_exists = schema_helper_.parse_if_exists();
     if (!if_exists.has_value()) [[unlikely]] {
-        return std::unexpected(if_exists.error());
+        return std::unexpected(std::move(if_exists.error()));
     }
 
     auto index_name = schema_helper_.parse_identifier_string("Expected index name");
     if (!index_name.has_value()) [[unlikely]] {
-        return std::unexpected(index_name.error());
+        return std::unexpected(std::move(index_name.error()));
     }
 
     auto on = context_.consume(TokenType::On, "Expected ON after index name");
     if (!on.has_value()) [[unlikely]] {
-        return std::unexpected(on.error());
+        return std::unexpected(std::move(on.error()));
     }
 
     auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
-        return std::unexpected(collection_name.error());
+        return std::unexpected(std::move(collection_name.error()));
     }
 
     return std::make_unique<ast::DropIndexStatement>(
-        std::move(index_name.value()),
-        std::move(collection_name.value()),
-        if_exists.value(),
+        std::move(*index_name),
+        std::move(*collection_name),
+        *if_exists,
         context_.ast_location(location)
     );
 }
@@ -118,28 +118,28 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDropWorker
 {
     auto if_exists = schema_helper_.parse_if_exists();
     if (!if_exists.has_value()) [[unlikely]] {
-        return std::unexpected(if_exists.error());
+        return std::unexpected(std::move(if_exists.error()));
     }
 
     auto index_name = schema_helper_.parse_identifier_string("Expected vector index name");
     if (!index_name.has_value()) [[unlikely]] {
-        return std::unexpected(index_name.error());
+        return std::unexpected(std::move(index_name.error()));
     }
 
     auto on = context_.consume(TokenType::On, "Expected ON after vector index name");
     if (!on.has_value()) [[unlikely]] {
-        return std::unexpected(on.error());
+        return std::unexpected(std::move(on.error()));
     }
 
     auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
-        return std::unexpected(collection_name.error());
+        return std::unexpected(std::move(collection_name.error()));
     }
 
     return std::make_unique<ast::DropVectorIndexStatement>(
-        std::move(index_name.value()),
-        std::move(collection_name.value()),
-        if_exists.value(),
+        std::move(*index_name),
+        std::move(*collection_name),
+        *if_exists,
         context_.ast_location(location)
     );
 }

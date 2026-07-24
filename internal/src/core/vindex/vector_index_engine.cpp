@@ -142,7 +142,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
             if (!collection_schema) {
                 return std::unexpected(make_error(
                     VectorIndexErrorCode::InvalidMetadata,
-                    std::move(collection_schema.error().message)
+                    collection_schema.error().message()
                 ));
             }
             for (const auto * entry : catalog.list_vector_indexes(collection->id())) {
@@ -188,7 +188,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
     if (!collection_schema) {
         return std::unexpected(make_error(
             VectorIndexErrorCode::InvalidMetadata,
-            std::move(collection_schema.error().message)
+            collection_schema.error().message()
         ));
     }
 

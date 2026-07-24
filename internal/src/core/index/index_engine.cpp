@@ -54,16 +54,16 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_back
     if (!created.has_value()) {
         return std::unexpected(make_error(
             IndexErrorCode::StorageError,
-            std::move(created.error().message),
+            created.error().message(),
             {
                 .operation = IndexOperation::Create,
                 .index_id = index_entry.id(),
                 .path = index_path(index_entry.id()),
-                .source_code = static_cast<std::uint16_t>(created.error().code),
+                .source_code = created.error().encode_code(),
             }
         ));
     }
-    return std::make_unique<BTreeIndex>(std::move(created.value()));
+    return std::make_unique<BTreeIndex>(std::move(*created));
 }
 
 std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_backend(
@@ -78,16 +78,16 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_bac
     if (!opened.has_value()) {
         return std::unexpected(make_error(
             IndexErrorCode::StorageError,
-            std::move(opened.error().message),
+            opened.error().message(),
             {
                 .operation = IndexOperation::Open,
                 .index_id = index_entry.id(),
                 .path = index_path(index_entry.id()),
-                .source_code = static_cast<std::uint16_t>(opened.error().code),
+                .source_code = opened.error().encode_code(),
             }
         ));
     }
-    return std::make_unique<BTreeIndex>(std::move(opened.value()));
+    return std::make_unique<BTreeIndex>(std::move(*opened));
 }
 
 std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_from_record(
@@ -222,7 +222,7 @@ std::expected<void, IndexError> IndexEngine::create_index(
     if (!column_id.has_value()) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
     }
-    const auto * column = collection_schema.find_column(column_id.value());
+    const auto * column = collection_schema.find_column(*column_id);
     if (column == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is not in collection schema"));
     }
@@ -238,7 +238,7 @@ std::expected<void, IndexError> IndexEngine::create_index(
     auto store = std::make_unique<IndexStore>(IndexDescriptor {
         .index_id = index_entry.id(),
         .collection_id = index_entry.collection_id(),
-        .column_id = column_id.value(),
+        .column_id = *column_id,
         .column_ordinal = column->ordinal(),
         .key_type = column->type(),
         .kind = (*index)->kind(),
@@ -314,7 +314,7 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
                 indexes_by_collection_[descriptor.collection_id].push_back(index_id);
             } else {
                 message += "; failed to restore in-memory index after remove failure: ";
-                message += reopened.error().message;
+                message += reopened.error().message();
             }
             return std::unexpected(make_error(
                 IndexErrorCode::StorageError,
@@ -373,7 +373,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
             if (!collection_schema.has_value()) {
                 return std::unexpected(make_error(
                     IndexErrorCode::InvalidIndexColumn,
-                    collection_schema.error().message
+                    collection_schema.error().message()
                 ));
             }
 
@@ -386,7 +386,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                 if (!column_id.has_value()) {
                     return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
                 }
-                const auto * column = collection_schema->find_column(column_id.value());
+                const auto * column = collection_schema->find_column(*column_id);
                 if (column == nullptr || column->type().id == common::LogicalTypeId::Vector) {
                     return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid"));
                 }
@@ -399,7 +399,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                 IndexStore store {IndexDescriptor {
                     .index_id = index_entry->id(),
                     .collection_id = index_entry->collection_id(),
-                    .column_id = column_id.value(),
+                    .column_id = *column_id,
                     .column_ordinal = column->ordinal(),
                     .key_type = column->type(),
                     .kind = (*backend)->kind(),
@@ -428,7 +428,7 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
 
     auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message));
+        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message()));
     }
 
     IndexEngine restored {data_directory_, *filesystem_};

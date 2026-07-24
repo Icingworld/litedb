@@ -1,6 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
+
+#include "core/error/error.hpp"
 
 namespace litedb::core::storage
 {
@@ -8,7 +10,7 @@ namespace litedb::core::storage
 /**
  * @brief Schema 加载错误码
  */
-enum class SchemaLoadErrorCode
+enum class SchemaLoadErrorCode : std::uint8_t
 {
     DatabaseNotFound,
     CollectionNotFound,
@@ -17,10 +19,15 @@ enum class SchemaLoadErrorCode
 /**
  * @brief Schema 加载错误
  */
-struct SchemaLoadError
-{
-    SchemaLoadErrorCode code;
-    std::string message;
-};
+using SchemaLoadError = error::Error;
 
 } // namespace litedb::core::storage
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<storage::SchemaLoadErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Storage;
+};
+} // namespace litedb::core::error

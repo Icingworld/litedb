@@ -39,7 +39,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     // 解析语句
     auto statement = parse_statement();
     if (!statement.has_value()) [[unlikely]] {
-        return std::unexpected(statement.error());
+        return std::unexpected(std::move(statement.error()));
     }
 
     // 跳过分号

@@ -53,12 +53,12 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
 {
     BinderWorkerHelper helper(context_);
     
-    const auto database_id = helper.require_database(statement.location());
+    auto database_id = helper.require_database(statement.location());
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.meta().find_collection(database_id.value(), statement.collection_name());
+    const auto * collection = context_.meta().find_collection(*database_id, statement.collection_name());
     if (collection == nullptr && !statement.if_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
@@ -68,7 +68,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
     }
 
     return std::make_unique<BoundDropCollectionStatement>(
-        database_id.value(),
+        *database_id,
         collection == nullptr ? std::nullopt : std::optional<CollectionId>(collection->id()),
         statement.collection_name(),
         statement.if_exists(),

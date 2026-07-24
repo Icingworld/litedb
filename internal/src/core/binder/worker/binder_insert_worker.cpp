@@ -112,18 +112,18 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
         if (source_value_by_target[target_index].has_value()) {
             auto expression = helper.bind_expression(
                 *statement.values()[source_value_by_target[target_index].value()],
-                collection.value()
+                *collection
             );
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
-            value = std::move(expression.value());
+            value = std::move(*expression);
         } else if (column.default_expression().has_value()) {
             auto expression = helper.bind_default_expression(column.default_expression().value(), statement.location());
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
-            value = std::move(expression.value());
+            value = std::move(*expression);
         } else if (column.nullable()) [[likely]] {
             value = std::make_unique<BoundNullExpression>(column.type(), statement.location());
         } else [[unlikely]] {

@@ -71,7 +71,7 @@ struct DatabaseObservability
 /**
  * @brief 数据库错误码
  */
-enum class DatabaseErrorCode
+enum class DatabaseErrorCode : std::uint8_t
 {
     ManifestError,    ///< 数据库 manifest 错误
     MetaError,        ///< meta 引擎错误
@@ -84,11 +84,7 @@ enum class DatabaseErrorCode
 /**
  * @brief 数据库错误
  */
-struct DatabaseError
-{
-    DatabaseErrorCode code;    ///< 错误码
-    std::string message;       ///< 错误消息
-};
+using DatabaseError = error::Error;
 
 class Session;
 
@@ -334,3 +330,12 @@ private:
 };
 
 } // namespace litedb::core::database
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<database::DatabaseErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Database;
+};
+} // namespace litedb::core::error

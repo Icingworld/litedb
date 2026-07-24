@@ -52,9 +52,9 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 ParserError parse_error(std::string_view sql)
@@ -62,7 +62,14 @@ ParserError parse_error(std::string_view sql)
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     require(!result.has_value(), "statement should fail to parse");
-    return result.error();
+    return std::move(result.error());
+}
+
+TokenLocation error_location(const ParserError & error)
+{
+    const auto * context = error.context<ParserErrorContext>();
+    require(context != nullptr, "parser error should retain token location");
+    return context->location;
 }
 
 void test_parse_use_statement()
@@ -164,19 +171,19 @@ void test_parse_create_vector_index_statement()
     const auto * minimal_create = static_cast<const CreateVectorIndexStatement *>(minimal.get());
     require(minimal_create->options().metric == VectorIndexMetric::Default, "CREATE VINDEX default metric mismatch");
 
-    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding);").code == ParserErrorCode::ExpectedToken, "CREATE VINDEX missing USING error mismatch");
+    require(parse_error("CREATE VINDEX vidx_embedding ON users(embedding);").is(ParserErrorCode::ExpectedToken), "CREATE VINDEX missing USING error mismatch");
 
     auto bad_method = parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING IVF;");
-    require(bad_method.code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX method error mismatch");
-    require(bad_method.location.column == 56, "CREATE VINDEX method error location mismatch");
+    require(bad_method.is(ParserErrorCode::UnsupportedSyntax), "CREATE VINDEX method error mismatch");
+    require(error_location(bad_method).column == 56, "CREATE VINDEX method error location mismatch");
 
     auto bad_metric = parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = BAD);");
-    require(bad_metric.code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX metric error mismatch");
-    require(bad_metric.location.column == 76, "CREATE VINDEX metric error location mismatch");
+    require(bad_metric.is(ParserErrorCode::UnsupportedSyntax), "CREATE VINDEX metric error mismatch");
+    require(error_location(bad_metric).column == 76, "CREATE VINDEX metric error location mismatch");
 
     auto duplicate_option = parse_error("CREATE VINDEX vidx_embedding ON users(embedding) USING HNSW WITH (metric = L2, metric = COSINE);");
-    require(duplicate_option.code == ParserErrorCode::UnsupportedSyntax, "CREATE VINDEX duplicate option error mismatch");
-    require(duplicate_option.location.column == 80, "CREATE VINDEX duplicate option error location mismatch");
+    require(duplicate_option.is(ParserErrorCode::UnsupportedSyntax), "CREATE VINDEX duplicate option error mismatch");
+    require(error_location(duplicate_option).column == 80, "CREATE VINDEX duplicate option error location mismatch");
 }
 
 void test_parse_drop_show_describe_statements()
@@ -382,83 +389,83 @@ void test_parse_expression_shapes()
 void test_parse_failures()
 {
     auto empty = parse_error("");
-    require(empty.code == ParserErrorCode::EmptyStatement, "empty input error code mismatch");
-    require(empty.message == "Empty statement", "empty input error mismatch");
+    require(empty.is(ParserErrorCode::EmptyStatement), "empty input error code mismatch");
+    require(empty.message() == "Empty statement", "empty input error mismatch");
 
     auto trailing = parse_error("USE demo extra");
-    require(trailing.code == ParserErrorCode::UnexpectedToken, "trailing token error code mismatch");
-    require(trailing.location.column == 10, "trailing token location mismatch");
+    require(trailing.is(ParserErrorCode::UnexpectedToken), "trailing token error code mismatch");
+    require(error_location(trailing).column == 10, "trailing token location mismatch");
 
     auto multiple_semicolon = parse_error("USE demo;;");
-    require(multiple_semicolon.code == ParserErrorCode::UnexpectedToken, "multiple semicolon error code mismatch");
-    require(multiple_semicolon.location.column == 10, "multiple semicolon location mismatch");
+    require(multiple_semicolon.is(ParserErrorCode::UnexpectedToken), "multiple semicolon error code mismatch");
+    require(error_location(multiple_semicolon).column == 10, "multiple semicolon location mismatch");
 
     auto missing_name = parse_error("CREATE DATABASE;");
-    require(missing_name.code == ParserErrorCode::ExpectedIdentifier, "missing object name error code mismatch");
-    require(missing_name.message == "Expected database name", "missing object name error mismatch");
+    require(missing_name.is(ParserErrorCode::ExpectedIdentifier), "missing object name error code mismatch");
+    require(missing_name.message() == "Expected database name", "missing object name error mismatch");
 
     auto empty_columns = parse_error("CREATE COLLECTION users ();");
-    require(empty_columns.code == ParserErrorCode::EmptyList, "empty column list error code mismatch");
-    require(empty_columns.message == "Expected at least one column definition", "empty column list error mismatch");
+    require(empty_columns.is(ParserErrorCode::EmptyList), "empty column list error code mismatch");
+    require(empty_columns.message() == "Expected at least one column definition", "empty column list error mismatch");
 
     auto missing_varchar_length = parse_error("CREATE COLLECTION users (name VARCHAR());");
-    require(missing_varchar_length.code == ParserErrorCode::ExpectedToken, "VARCHAR missing length error code mismatch");
-    require(missing_varchar_length.message == "Expected VARCHAR length", "VARCHAR missing length error mismatch");
+    require(missing_varchar_length.is(ParserErrorCode::ExpectedToken), "VARCHAR missing length error code mismatch");
+    require(missing_varchar_length.message() == "Expected VARCHAR length", "VARCHAR missing length error mismatch");
 
     auto missing_vector_dimension = parse_error("CREATE COLLECTION users (embedding VECTOR());");
-    require(missing_vector_dimension.code == ParserErrorCode::ExpectedToken, "VECTOR missing dimension error code mismatch");
-    require(missing_vector_dimension.message == "Expected VECTOR dimension", "VECTOR missing dimension error mismatch");
+    require(missing_vector_dimension.is(ParserErrorCode::ExpectedToken), "VECTOR missing dimension error code mismatch");
+    require(missing_vector_dimension.message() == "Expected VECTOR dimension", "VECTOR missing dimension error mismatch");
 
     auto default_expression = parse_error("CREATE COLLECTION users (age INTEGER DEFAULT age);");
-    require(default_expression.code == ParserErrorCode::ExpectedLiteral, "DEFAULT expression error code mismatch");
-    require(default_expression.message == "Expected literal after DEFAULT", "DEFAULT expression error mismatch");
+    require(default_expression.is(ParserErrorCode::ExpectedLiteral), "DEFAULT expression error code mismatch");
+    require(default_expression.message() == "Expected literal after DEFAULT", "DEFAULT expression error mismatch");
 
     auto primary_constraint = parse_error("CREATE COLLECTION users (id BIGINT PRIMARY KEY);");
-    require(primary_constraint.code == ParserErrorCode::UnexpectedToken, "PRIMARY KEY constraint error code mismatch");
-    require(primary_constraint.message == "Unexpected column constraint", "PRIMARY KEY constraint error mismatch");
+    require(primary_constraint.is(ParserErrorCode::UnexpectedToken), "PRIMARY KEY constraint error code mismatch");
+    require(primary_constraint.message() == "Unexpected column constraint", "PRIMARY KEY constraint error mismatch");
 
     auto implicit_alias = parse_error("SELECT age + 1 next_age FROM users;");
-    require(implicit_alias.code == ParserErrorCode::ExpectedToken, "implicit alias error code mismatch");
-    require(implicit_alias.message == "Expected FROM after select list", "implicit alias error mismatch");
+    require(implicit_alias.is(ParserErrorCode::ExpectedToken), "implicit alias error code mismatch");
+    require(implicit_alias.message() == "Expected FROM after select list", "implicit alias error mismatch");
 
     auto missing_alias = parse_error("SELECT age + 1 AS FROM users;");
-    require(missing_alias.code == ParserErrorCode::ExpectedIdentifier, "missing alias error code mismatch");
-    require(missing_alias.message == "Expected alias after AS", "missing alias error mismatch");
+    require(missing_alias.is(ParserErrorCode::ExpectedIdentifier), "missing alias error code mismatch");
+    require(missing_alias.message() == "Expected alias after AS", "missing alias error mismatch");
 
     auto wildcard_alias = parse_error("SELECT * AS all_columns FROM users;");
-    require(wildcard_alias.code == ParserErrorCode::UnexpectedToken, "wildcard alias error code mismatch");
-    require(wildcard_alias.message == "Wildcard select item cannot have alias", "wildcard alias error mismatch");
+    require(wildcard_alias.is(ParserErrorCode::UnexpectedToken), "wildcard alias error code mismatch");
+    require(wildcard_alias.message() == "Wildcard select item cannot have alias", "wildcard alias error mismatch");
 
     auto qualified_wildcard_alias = parse_error("SELECT users.* AS all_user_columns FROM users;");
-    require(qualified_wildcard_alias.code == ParserErrorCode::UnexpectedToken, "qualified wildcard alias error code mismatch");
-    require(qualified_wildcard_alias.message == "Wildcard select item cannot have alias", "qualified wildcard alias error mismatch");
+    require(qualified_wildcard_alias.is(ParserErrorCode::UnexpectedToken), "qualified wildcard alias error code mismatch");
+    require(qualified_wildcard_alias.message() == "Wildcard select item cannot have alias", "qualified wildcard alias error mismatch");
 
     auto unsupported_group_by = parse_error("SELECT age FROM users GROUP BY age;");
-    require(unsupported_group_by.code == ParserErrorCode::UnexpectedToken, "GROUP BY unsupported error code mismatch");
-    require(unsupported_group_by.message == "Unexpected token", "GROUP BY unsupported error mismatch");
+    require(unsupported_group_by.is(ParserErrorCode::UnexpectedToken), "GROUP BY unsupported error code mismatch");
+    require(unsupported_group_by.message() == "Unexpected token", "GROUP BY unsupported error mismatch");
 
     auto unsupported_index_method = parse_error("CREATE INDEX idx_age ON users(age) USING gin;");
-    require(unsupported_index_method.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX method error code mismatch");
-    require(unsupported_index_method.message == "Expected BTREE after USING", "CREATE INDEX method error mismatch");
+    require(unsupported_index_method.is(ParserErrorCode::UnsupportedSyntax), "CREATE INDEX method error code mismatch");
+    require(unsupported_index_method.message() == "Expected BTREE after USING", "CREATE INDEX method error mismatch");
 
     auto unsupported_b_tree = parse_error("CREATE INDEX idx_age ON users(age) USING B_TREE;");
-    require(unsupported_b_tree.code == ParserErrorCode::UnsupportedSyntax, "CREATE INDEX B_TREE error code mismatch");
-    require(unsupported_b_tree.message == "Expected BTREE after USING", "CREATE INDEX B_TREE error mismatch");
+    require(unsupported_b_tree.is(ParserErrorCode::UnsupportedSyntax), "CREATE INDEX B_TREE error code mismatch");
+    require(unsupported_b_tree.message() == "Expected BTREE after USING", "CREATE INDEX B_TREE error mismatch");
 
     auto unsupported_method = parse_error("CREATE INDEX idx_age ON users(age) USING UNKNOWN;");
-    require(unsupported_method.code == ParserErrorCode::UnsupportedSyntax, "unsupported index method error code mismatch");
-    require(unsupported_method.message == "Expected BTREE after USING", "unsupported index method error mismatch");
+    require(unsupported_method.is(ParserErrorCode::UnsupportedSyntax), "unsupported index method error code mismatch");
+    require(unsupported_method.message() == "Expected BTREE after USING", "unsupported index method error mismatch");
 
     auto show_indexes_missing_from = parse_error("SHOW INDEXES;");
-    require(show_indexes_missing_from.code == ParserErrorCode::ExpectedToken, "SHOW INDEXES missing FROM error code mismatch");
-    require(show_indexes_missing_from.message == "Expected FROM after SHOW INDEXES", "SHOW INDEXES missing FROM error mismatch");
+    require(show_indexes_missing_from.is(ParserErrorCode::ExpectedToken), "SHOW INDEXES missing FROM error code mismatch");
+    require(show_indexes_missing_from.message() == "Expected FROM after SHOW INDEXES", "SHOW INDEXES missing FROM error mismatch");
 
     auto show_vindexes_missing_from = parse_error("SHOW VINDEXES;");
-    require(show_vindexes_missing_from.code == ParserErrorCode::ExpectedToken, "SHOW VINDEXES missing FROM error code mismatch");
-    require(show_vindexes_missing_from.message == "Expected FROM after SHOW VINDEXES", "SHOW VINDEXES missing FROM error mismatch");
+    require(show_vindexes_missing_from.is(ParserErrorCode::ExpectedToken), "SHOW VINDEXES missing FROM error code mismatch");
+    require(show_vindexes_missing_from.message() == "Expected FROM after SHOW VINDEXES", "SHOW VINDEXES missing FROM error mismatch");
 
     auto lexical_error = parse_error("SELECT ! FROM users;");
-    require(lexical_error.code == ParserErrorCode::LexicalError, "lexical error code mismatch");
+    require(lexical_error.is(ParserErrorCode::LexicalError), "lexical error code mismatch");
 }
 
 } // namespace

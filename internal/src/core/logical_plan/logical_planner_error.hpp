@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
 
+#include "core/error/error.hpp"
 #include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::planner
@@ -10,7 +11,7 @@ namespace litedb::core::planner
 /**
  * @brief 计划错误码
  */
-enum class PlannerErrorCode
+enum class PlannerErrorCode : std::uint8_t
 {
     InvalidArgument,                ///< 无效参数
     UnsupportedStatement,           ///< 不支持的语句
@@ -19,11 +20,20 @@ enum class PlannerErrorCode
 /**
  * @brief 计划错误
  */
-struct PlannerError
+struct PlannerErrorContext
 {
-    PlannerErrorCode code;                      ///< 错误码
     parser::ast::AstNodeLocation location;      ///< 错误位置
-    std::string message;                        ///< 错误消息
 };
 
+using PlannerError = error::Error;
+
 } // namespace litedb::core::planner
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<planner::PlannerErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Planner;
+};
+} // namespace litedb::core::error

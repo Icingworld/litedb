@@ -20,7 +20,7 @@ namespace litedb::core::index::btree_index
 /**
  * @brief B+ 树页存储错误码
  */
-enum class BTreePageStoreErrorCode
+enum class BTreePageStoreErrorCode : std::uint8_t
 {
     FileSystemError,      ///< 文件系统操作失败
     InvalidFormat,        ///< 文件格式或文件级元数据无效
@@ -35,12 +35,12 @@ enum class BTreePageStoreErrorCode
 /**
  * @brief B+ 树页存储错误
  */
-struct BTreePageStoreError
+struct BTreePageStoreErrorContext
 {
-    BTreePageStoreErrorCode code;                         ///< 错误码
-    std::string message;                                  ///< 错误信息
     std::optional<BTreePageCodecErrorCode> codec_code;    ///< 页编解码错误码
 };
+
+using BTreePageStoreError = error::Error;
 
 /**
  * @brief 单个 B+ 树索引文件的页面存储
@@ -303,3 +303,12 @@ private:
 };
 
 } // namespace litedb::core::index::btree_index
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<index::btree_index::BTreePageStoreErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Index;
+};
+} // namespace litedb::core::error

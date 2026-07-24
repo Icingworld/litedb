@@ -25,7 +25,7 @@ constexpr std::uint32_t MaxManifestStringBytes = 4 * 1024;
  */
 ManifestError make_error(ManifestErrorCode code, std::string message)
 {
-    return ManifestError {code, std::move(message)};
+    return ManifestError {code, message};
 }
 
 /**
@@ -35,10 +35,8 @@ ManifestError make_error(ManifestErrorCode code, std::string message)
  */
 ManifestError from_filesystem_error(error::Error error)
 {
-    return ManifestError {
-        .code = ManifestErrorCode::FileSystemError,
-        .message = error.message(),
-    };
+    auto message = error.message();
+    return ManifestError {ManifestErrorCode::FileSystemError, message, std::move(error)};
 }
 
 /**
@@ -48,11 +46,10 @@ ManifestError from_filesystem_error(error::Error error)
  */
 ManifestError from_io_error(io::IoError error)
 {
-    return ManifestError {
-        .code = error.category() == error::ErrorCategory::FileSystem
-            ? ManifestErrorCode::FileSystemError : ManifestErrorCode::InvalidFormat,
-        .message = error.message(),
-    };
+    const auto code = error.category() == error::ErrorCategory::FileSystem
+        ? ManifestErrorCode::FileSystemError : ManifestErrorCode::InvalidFormat;
+    auto message = error.message();
+    return ManifestError {code, message, std::move(error)};
 }
 
 /**

@@ -71,9 +71,9 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<PhysicalStatementPlan> plan_ok(
@@ -89,24 +89,24 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
     Binder binder {context};
     auto bound = binder.bind(*statement);
     if (!bound.has_value()) {
-        throw std::runtime_error(bound.error().message);
+        throw std::runtime_error(bound.error().message());
     }
 
     (void) index_engine;
     LogicalPlanner planner;
-    auto planned = planner.plan(std::move(bound.value()));
+    auto planned = planner.plan(std::move(*bound));
     if (!planned.has_value()) {
-        throw std::runtime_error(planned.error().message);
+        throw std::runtime_error(planned.error().message());
     }
 
     Optimizer optimizer {{}, catalog.view()};
-    auto optimized = optimizer.optimize(std::move(planned.value()));
+    auto optimized = optimizer.optimize(std::move(*planned));
     if (!optimized.has_value()) {
-        throw std::runtime_error(optimized.error().message);
+        throw std::runtime_error(optimized.error().message());
     }
 
     PhysicalPlanner physical_planner;
-    return physical_planner.plan(*optimized.value());
+    return physical_planner.plan(**optimized);
 }
 
 ExecutionResult execute_ok(
@@ -123,9 +123,9 @@ ExecutionResult execute_ok(
     Executor executor {catalog.view(), storage, index_engine, vector_index_engine, transaction_manager};
     auto result = executor.execute(*plan);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 ExecutionError execute_error(
@@ -186,7 +186,7 @@ struct Fixture
         require(collection != nullptr, "created collection missing");
         auto collection_schema = load_collection_schema(catalog.view(), users_id);
         require(collection_schema.has_value(), "fixture schema load failed");
-        require(storage.create_collection(std::move(collection_schema.value())).has_value(), "fixture storage creation failed");
+        require(storage.create_collection(std::move(*collection_schema)).has_value(), "fixture storage creation failed");
         require(storage.contains_collection(users_id), "created collection storage missing");
         auto opened_wal = litedb::core::wal::WalManager::open(storage_directory.path() / "wal", filesystem);
         require(opened_wal.has_value(), "fixture WAL creation failed");
@@ -221,7 +221,7 @@ IndexId create_index(
     auto schema = load_collection_schema(fixture.catalog.view(), fixture.users_id);
     require(schema.has_value(), "fixture index schema load failed");
     require(
-        fixture.index_engine.create_index(*entry, schema.value(), fixture.storage).has_value(),
+        fixture.index_engine.create_index(*entry, *schema, fixture.storage).has_value(),
         "fixture index create failed"
     );
     return *created;
@@ -563,11 +563,11 @@ void test_error_mapping()
     require(dropped_storage.has_value(), "fixture storage drop failed");
 
     auto missing_storage = execute_error(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SELECT * FROM users;", fixture.database_id);
-    require(missing_storage.code == ExecutionErrorCode::CollectionNotFound, "missing storage error mismatch");
+    require(missing_storage.is(ExecutionErrorCode::CollectionNotFound), "missing storage error mismatch");
 
     auto schema = load_collection_schema(fixture.catalog.view(), fixture.users_id);
     require(schema.has_value(), "schema reload failed");
-    auto recreated = fixture.storage.create_collection(std::move(schema.value()));
+    auto recreated = fixture.storage.create_collection(std::move(*schema));
     require(recreated.has_value(), "storage recreate failed");
 
     std::vector<BoundColumn> columns;
@@ -587,7 +587,7 @@ void test_error_mapping()
     };
     auto invalid_literal = executor.execute(bad_insert);
     require(!invalid_literal.has_value(), "invalid literal INSERT should fail");
-    require(invalid_literal.error().code == ExecutionErrorCode::EvaluationError, "evaluation error mapping mismatch");
+    require(invalid_literal.error().is(ExecutionErrorCode::EvaluationError), "evaluation error mapping mismatch");
 }
 
 void test_ddl_requires_database_engine()
@@ -604,7 +604,7 @@ void test_ddl_requires_database_engine()
     };
     auto result = executor.execute(*plan);
     require(!result.has_value(), "Executor should reject standalone DDL");
-    require(result.error().code == ExecutionErrorCode::UnsupportedStatement, "standalone DDL error mismatch");
+    require(result.error().is(ExecutionErrorCode::UnsupportedStatement), "standalone DDL error mismatch");
 }
 
 } // namespace

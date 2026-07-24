@@ -119,7 +119,7 @@ OptimizerError make_error(
     std::string message
 )
 {
-    return OptimizerError {code, location, std::move(message)};
+    return OptimizerError {code, message, OptimizerErrorContext {location}};
 }
 
 [[nodiscard]]
@@ -241,7 +241,7 @@ std::optional<std::unique_ptr<BoundExpression>> try_fold_constant(
         return std::nullopt;
     }
 
-    return value_to_expression(value.value(), expression);
+    return value_to_expression(*value, expression);
 }
 
 [[nodiscard]]
@@ -257,7 +257,7 @@ std::optional<index::ScalarIndexKey> expression_to_index_key(const BoundExpressi
         return std::nullopt;
     }
 
-    auto key = index::ScalarIndexKey::from_value(std::move(value.value()));
+    auto key = index::ScalarIndexKey::from_value(std::move(*value));
     if (!key.has_value()) {
         return std::nullopt;
     }
@@ -340,7 +340,7 @@ std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryE
         if (!inverted.has_value()) {
             return std::nullopt;
         }
-        op = inverted.value();
+        op = *inverted;
     }
 
     if (column == nullptr) {
@@ -352,7 +352,7 @@ std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryE
         return std::nullopt;
     }
 
-    auto lookup = lookup_from_comparison(op, std::move(key.value()));
+    auto lookup = lookup_from_comparison(op, std::move(*key));
     if (!lookup.has_value()) {
         return std::nullopt;
     }
@@ -360,7 +360,7 @@ std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryE
     return IndexCandidate {
         .collection_id = column->collection_id(),
         .column_id = column->column_id(),
-        .lookup = std::move(lookup.value()),
+        .lookup = std::move(*lookup),
     };
 }
 
@@ -383,8 +383,8 @@ std::optional<IndexCandidate> candidate_from_between_predicate(const BoundBetwee
         .column_id = column->column_id(),
         .lookup = LogicalIndexLookup {
             .kind = LogicalIndexLookupKind::Range,
-            .lower = LogicalIndexBound {.key = std::move(lower.value()), .inclusive = true},
-            .upper = LogicalIndexBound {.key = std::move(upper.value()), .inclusive = true},
+            .lower = LogicalIndexBound {.key = std::move(*lower), .inclusive = true},
+            .upper = LogicalIndexBound {.key = std::move(*upper), .inclusive = true},
         },
     };
 }
@@ -439,7 +439,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
         if (!column_id.has_value()) {
             continue;
         }
-        const auto * column = catalog->find_column(column_id.value());
+        const auto * column = catalog->find_column(*column_id);
         if (column == nullptr) {
             continue;
         }
@@ -448,7 +448,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
             .index_id = index_entry->id(),
             .index_name = index_entry->name(),
             .index_kind = index_entry->kind(),
-            .column_id = column_id.value(),
+            .column_id = *column_id,
             .column_name = column->name(),
             .lookup = std::move(candidate->lookup),
         };
@@ -552,10 +552,10 @@ ExpressionRewriteResult rewrite_expression(const BoundExpression & expression, c
             unary.location()
         );
         if (auto simplified = simplify_boolean_unary(*rebuilt, options); simplified.has_value()) {
-            return ExpressionRewriteResult {std::move(simplified.value()), true};
+            return ExpressionRewriteResult {std::move(*simplified), true};
         }
         if (auto folded = try_fold_constant(*rebuilt, options); folded.has_value()) {
-            return ExpressionRewriteResult {std::move(folded.value()), true};
+            return ExpressionRewriteResult {std::move(*folded), true};
         }
         return ExpressionRewriteResult {std::move(rebuilt), operand.changed};
     }
@@ -571,10 +571,10 @@ ExpressionRewriteResult rewrite_expression(const BoundExpression & expression, c
             binary.location()
         );
         if (auto simplified = simplify_boolean_binary(*rebuilt, options); simplified.has_value()) {
-            return ExpressionRewriteResult {std::move(simplified.value()), true};
+            return ExpressionRewriteResult {std::move(*simplified), true};
         }
         if (auto folded = try_fold_constant(*rebuilt, options); folded.has_value()) {
-            return ExpressionRewriteResult {std::move(folded.value()), true};
+            return ExpressionRewriteResult {std::move(*folded), true};
         }
         return ExpressionRewriteResult {std::move(rebuilt), left.changed || right.changed};
     }
@@ -635,7 +635,7 @@ ExpressionRewriteResult rewrite_expression(const BoundExpression & expression, c
             cast.location()
         );
         if (auto folded = try_fold_constant(*rebuilt, options); folded.has_value()) {
-            return ExpressionRewriteResult {std::move(folded.value()), true};
+            return ExpressionRewriteResult {std::move(*folded), true};
         }
         return ExpressionRewriteResult {std::move(rebuilt), inner.changed};
     }
@@ -864,7 +864,7 @@ LogicalRewriteResult rewrite_logical_once(
                     scan.database_id(),
                     scan.collection_id(),
                     scan.collection_name(),
-                    std::move(index_hint.value()),
+                    std::move(*index_hint),
                     scan.location()
                 );
                 return LogicalRewriteResult {
@@ -917,7 +917,7 @@ LogicalRewriteResult rewrite_logical_once(
     case LogicalPlanNodeKind::Limit: {
         const auto & limit = static_cast<const LogicalLimit &>(node);
         if (auto vector_search = try_rewrite_vector_top_k(limit, options, catalog); vector_search.has_value()) {
-            return LogicalRewriteResult {std::move(vector_search.value()), true};
+            return LogicalRewriteResult {std::move(*vector_search), true};
         }
         auto child = rewrite_logical_once(limit.child(), options, catalog);
         return LogicalRewriteResult {

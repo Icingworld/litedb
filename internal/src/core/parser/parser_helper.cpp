@@ -19,11 +19,7 @@ std::string lower_ascii(std::string_view value)
 
 ParserError make_parser_error(ParserErrorCode code, TokenLocation location, std::string_view message)
 {
-    return ParserError {
-        .code = code,
-        .location = location,
-        .message = std::string(message),
-    };
+    return ParserError {code, message, ParserErrorContext {location}};
 }
 
 } // namespace litedb::core::parser

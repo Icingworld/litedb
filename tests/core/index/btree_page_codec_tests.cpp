@@ -177,7 +177,7 @@ void test_page_capacity_uses_encoded_bytes()
     require(overflow_fits.has_value() && !*overflow_fits, "overflow page should not fit");
     auto overflow = BTreePageCodec::encode(overflow_page, type);
     require(!overflow.has_value(), "overflow page encode should fail");
-    require(overflow.error().code == BTreePageCodecErrorCode::PageTooLarge, "overflow error code mismatch");
+    require(overflow.error().is(BTreePageCodecErrorCode::PageTooLarge), "overflow error code mismatch");
 }
 
 void test_encode_rejects_invalid_page_and_key_contracts()
@@ -186,7 +186,7 @@ void test_encode_rejects_invalid_page_and_key_contracts()
     BTreePage invalid_id = BTreeLeafPage {InvalidBTreePageId};
     auto invalid_page = BTreePageCodec::encode(invalid_id, integer);
     require(!invalid_page.has_value(), "invalid page id should fail encode");
-    require(invalid_page.error().code == BTreePageCodecErrorCode::InvalidPage, "invalid page error code mismatch");
+    require(invalid_page.error().is(BTreePageCodecErrorCode::InvalidPage), "invalid page error code mismatch");
 
     BTreeLeafPage leaf {80};
     require(leaf.insert(entry(Value {std::int32_t {1}}, 1)), "type mismatch leaf insert failed");
@@ -194,12 +194,12 @@ void test_encode_rejects_invalid_page_and_key_contracts()
     const common::LogicalType bigint {common::LogicalTypeId::BigInt, std::nullopt};
     auto mismatch = BTreePageCodec::encode(page, bigint);
     require(!mismatch.has_value(), "key type mismatch should fail encode");
-    require(mismatch.error().code == BTreePageCodecErrorCode::KeyTypeMismatch, "key type mismatch error code mismatch");
+    require(mismatch.error().is(BTreePageCodecErrorCode::KeyTypeMismatch), "key type mismatch error code mismatch");
 
     const common::LogicalType vector {common::LogicalTypeId::Vector, 3};
     auto unsupported = BTreePageCodec::encode(page, vector);
     require(!unsupported.has_value(), "vector key type should fail encode");
-    require(unsupported.error().code == BTreePageCodecErrorCode::UnsupportedKeyType, "unsupported key error code mismatch");
+    require(unsupported.error().is(BTreePageCodecErrorCode::UnsupportedKeyType), "unsupported key error code mismatch");
 }
 
 void test_decode_rejects_invalid_headers_and_slots()
@@ -214,7 +214,7 @@ void test_decode_rejects_invalid_headers_and_slots()
     bad_checksum.back() ^= std::byte {1};
     auto checksum = BTreePageCodec::decode(bad_checksum, type, 90);
     require(!checksum.has_value()
-                && checksum.error().code == BTreePageCodecErrorCode::ChecksumMismatch,
+                && checksum.error().is(BTreePageCodecErrorCode::ChecksumMismatch),
             "payload bit flip should fail page checksum");
 
     auto legacy = *encoded;
@@ -228,37 +228,37 @@ void test_decode_rejects_invalid_headers_and_slots()
         type,
         90
     );
-    require(!truncated.has_value() && truncated.error().code == BTreePageCodecErrorCode::InvalidFormat,
+    require(!truncated.has_value() && truncated.error().is(BTreePageCodecErrorCode::InvalidFormat),
             "truncated page should fail");
 
     auto bad_magic = *encoded;
     bad_magic[0] = std::byte {0};
     auto magic = BTreePageCodec::decode(bad_magic, type, 90);
-    require(!magic.has_value() && magic.error().code == BTreePageCodecErrorCode::InvalidFormat,
+    require(!magic.has_value() && magic.error().is(BTreePageCodecErrorCode::InvalidFormat),
             "bad magic should fail");
 
     auto bad_version = *encoded;
     write_number<std::uint16_t>(bad_version.data() + 4, 3);
     auto version = BTreePageCodec::decode(bad_version, type, 90);
-    require(!version.has_value() && version.error().code == BTreePageCodecErrorCode::UnsupportedVersion,
+    require(!version.has_value() && version.error().is(BTreePageCodecErrorCode::UnsupportedVersion),
             "bad version should fail");
 
     auto bad_type = *encoded;
     bad_type[12] = std::byte {99};
     refresh_checksum(bad_type);
     auto page_type = BTreePageCodec::decode(bad_type, type, 90);
-    require(!page_type.has_value() && page_type.error().code == BTreePageCodecErrorCode::InvalidFormat,
+    require(!page_type.has_value() && page_type.error().is(BTreePageCodecErrorCode::InvalidFormat),
             "bad page type should fail");
 
     auto wrong_id = BTreePageCodec::decode(*encoded, type, 999);
-    require(!wrong_id.has_value() && wrong_id.error().code == BTreePageCodecErrorCode::InvalidFormat,
+    require(!wrong_id.has_value() && wrong_id.error().is(BTreePageCodecErrorCode::InvalidFormat),
             "unexpected page id should fail");
 
     auto bad_slot = *encoded;
     write_number<std::uint16_t>(bad_slot.data() + BTreePageCodec::HeaderSize, 0);
     refresh_checksum(bad_slot);
     auto slot = BTreePageCodec::decode(bad_slot, type, 90);
-    require(!slot.has_value() && slot.error().code == BTreePageCodecErrorCode::CorruptedPage,
+    require(!slot.has_value() && slot.error().is(BTreePageCodecErrorCode::CorruptedPage),
             "bad slot should fail");
 }
 
@@ -275,7 +275,7 @@ void test_decode_rejects_invalid_boolean_payload()
     refresh_checksum(*encoded);
     auto decoded = BTreePageCodec::decode(*encoded, type, 100);
     require(!decoded.has_value(), "invalid boolean payload should fail decode");
-    require(decoded.error().code == BTreePageCodecErrorCode::CorruptedPage, "invalid boolean error code mismatch");
+    require(decoded.error().is(BTreePageCodecErrorCode::CorruptedPage), "invalid boolean error code mismatch");
 }
 
 void test_decode_rejects_out_of_order_entries()
@@ -292,7 +292,7 @@ void test_decode_rejects_out_of_order_entries()
     refresh_checksum(*encoded);
     auto decoded = BTreePageCodec::decode(*encoded, type, 110);
     require(!decoded.has_value(), "out-of-order leaf entries should fail decode");
-    require(decoded.error().code == BTreePageCodecErrorCode::CorruptedPage, "out-of-order error code mismatch");
+    require(decoded.error().is(BTreePageCodecErrorCode::CorruptedPage), "out-of-order error code mismatch");
 }
 
 } // namespace

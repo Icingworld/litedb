@@ -34,12 +34,12 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDescribeWorker
         ));
     }
 
-    const auto database_id = helper.require_database(statement.location());
+    auto database_id = helper.require_database(statement.location());
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.meta().find_collection(database_id.value(), statement.name());
+    const auto * collection = context_.meta().find_collection(*database_id, statement.name());
     if (collection == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
@@ -49,7 +49,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDescribeWorker
     }
 
     return std::make_unique<BoundDescribeCollectionStatement>(
-        database_id.value(),
+        *database_id,
         collection->id(),
         collection->name(),
         statement.location()

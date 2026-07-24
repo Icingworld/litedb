@@ -178,9 +178,10 @@ void print_result(const litedb::core::executor::ExecutionResult & result)
 
 void print_client_error(const litedb::client::ClientError & error)
 {
-    std::cerr << "error: " << error.message;
-    if (error.server_code != 0) {
-        std::cerr << " (server code " << error.server_code << ')';
+    std::cerr << "error: " << error.message();
+    const auto * context = error.context<litedb::client::ClientErrorContext>();
+    if (context != nullptr && context->server_code != 0) {
+        std::cerr << " (server code " << context->server_code << ')';
     }
     std::cerr << '\n';
 }
@@ -243,7 +244,7 @@ asio::awaitable<void> run_repl(const Options options, int & exit_code)
             print_client_error(result.error());
             continue;
         }
-        print_result(result.value());
+        print_result(*result);
     }
 
     client.close();

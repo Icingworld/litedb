@@ -19,21 +19,21 @@ void require(bool condition, const char * message)
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
-    if (!result) throw std::runtime_error(result.error().message);
+    if (!result) throw std::runtime_error(result.error().message());
     return std::move(*result);
 }
 
 std::unique_ptr<database::DatabaseEngine> open_database(const std::filesystem::path & directory)
 {
     auto opened = database::DatabaseEngine::open({.data_dir = directory});
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
 std::unique_ptr<database::DatabaseEngine> open_database(database::DatabaseConfig config)
 {
     auto opened = database::DatabaseEngine::open(std::move(config));
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
@@ -94,7 +94,7 @@ void test_database_recovery_uses_configured_wal_limits()
             .max_record_count = 16,
         },
     });
-    require(!limited && limited.error().code == database::DatabaseErrorCode::WalError,
+    require(!limited && limited.error().is(database::DatabaseErrorCode::WalError),
             "Database recovery did not enforce configured WAL limits");
 }
 
