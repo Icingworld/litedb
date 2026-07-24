@@ -56,7 +56,7 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 
 struct Fixture
 {
-    MetaEngine catalog;
+    CatalogEditor catalog;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -64,9 +64,9 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         if (!database.has_value()) {
-            throw std::runtime_error(database.error().message);
+            throw std::runtime_error(database.error().message());
         }
-        database_id = database.value();
+        database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
@@ -96,9 +96,9 @@ struct Fixture
 
         auto collection = catalog.create_collection(users);
         if (!collection.has_value()) {
-            throw std::runtime_error(collection.error().message);
+            throw std::runtime_error(collection.error().message());
         }
-        users_id = collection.value();
+        users_id = *collection;
     }
 };
 
@@ -106,7 +106,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {

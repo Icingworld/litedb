@@ -19,7 +19,7 @@ namespace
 [[nodiscard]]
 WalError fs_error(filesystem::FileSystemError value)
 {
-    return make_error(WalErrorCode::FileSystemError, std::move(value.message));
+    return make_error(WalErrorCode::FileSystemError, value.message());
 }
 
 } // namespace

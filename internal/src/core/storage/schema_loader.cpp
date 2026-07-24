@@ -18,7 +18,7 @@ SchemaLoadError make_error(SchemaLoadErrorCode code, std::string message)
 } // namespace
 
 std::expected<schema::CollectionSchema, SchemaLoadError> load_collection_schema(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     common::CollectionId collection_id
 )
 {

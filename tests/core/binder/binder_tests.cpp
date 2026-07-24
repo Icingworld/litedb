@@ -58,7 +58,7 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
 
 struct Fixture
 {
-    MetaEngine catalog;
+    CatalogEditor catalog;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -66,9 +66,9 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         if (!database.has_value()) {
-            throw std::runtime_error(database.error().message);
+            throw std::runtime_error(database.error().message());
         }
-        database_id = database.value();
+        database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
@@ -98,9 +98,9 @@ struct Fixture
 
         auto collection = catalog.create_collection(users);
         if (!collection.has_value()) {
-            throw std::runtime_error(collection.error().message);
+            throw std::runtime_error(collection.error().message());
         }
-        users_id = collection.value();
+        users_id = *collection;
     }
 };
 
@@ -108,7 +108,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
@@ -121,7 +121,7 @@ BinderError bind_error(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     require(!result.has_value(), "statement should fail to bind");
@@ -138,7 +138,7 @@ void test_use_and_missing_database_context()
 
     auto select_ast = parse_ok("SELECT * FROM users;");
     SessionContext empty_session;
-    BinderContext context {fixture.catalog, empty_session};
+    BinderContext context {fixture.catalog.view(), empty_session};
     Binder binder {context};
     auto result = binder.bind(*select_ast);
     require(!result.has_value(), "SELECT without database should fail");
@@ -337,7 +337,7 @@ void test_index_binding()
     require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").code == BinderErrorCode::InvalidType, "vector index type error mismatch");
     require(bind_error(fixture, "CREATE INDEX idx_missing ON users (missing);").code == BinderErrorCode::ColumnNotFound, "missing index column error mismatch");
 
-    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    const auto * age_column = fixture.catalog.view().find_column(fixture.users_id, "age");
     require(age_column != nullptr, "age column lookup failed");
     auto created_index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
@@ -397,7 +397,7 @@ void test_vector_index_binding()
     require(bind_error(fixture, "CREATE VINDEX vidx_age ON users (age) USING HNSW;").code == BinderErrorCode::InvalidType, "vector index scalar column error mismatch");
     require(bind_error(fixture, "CREATE VINDEX vidx_missing ON users (missing) USING HNSW;").code == BinderErrorCode::ColumnNotFound, "missing vector index column error mismatch");
 
-    const auto * embedding_column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    const auto * embedding_column = fixture.catalog.view().find_column(fixture.users_id, "embedding");
     require(embedding_column != nullptr, "embedding column lookup failed");
     auto created_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,

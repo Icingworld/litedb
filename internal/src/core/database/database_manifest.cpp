@@ -33,7 +33,7 @@ ManifestError from_filesystem_error(filesystem::FileSystemError error)
 {
     return ManifestError {
         .code = ManifestErrorCode::FileSystemError,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -45,9 +45,9 @@ ManifestError from_filesystem_error(filesystem::FileSystemError error)
 ManifestError from_io_error(io::IoError error)
 {
     return ManifestError {
-        .code = error.code == io::IoErrorCode::FileSystemError
+        .code = error.is(io::IOErrorCode::FileSystemError)
             ? ManifestErrorCode::FileSystemError : ManifestErrorCode::InvalidFormat,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -89,7 +89,7 @@ std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, s
     if (!magic.has_value()) {
         return std::unexpected(from_io_error(std::move(magic.error())));
     }
-    if (magic.value() != expected_magic) {
+    if (*magic != expected_magic) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Invalid file magic"));
     }
 
@@ -97,7 +97,7 @@ std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, s
     if (!version.has_value()) {
         return std::unexpected(from_io_error(std::move(version.error())));
     }
-    if (version.value() != DatabaseFormatVersion) {
+    if (*version != DatabaseFormatVersion) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported storage format version"));
     }
 
@@ -105,7 +105,7 @@ std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, s
     if (!header_size.has_value()) {
         return std::unexpected(from_io_error(std::move(header_size.error())));
     }
-    if (header_size.value() < FileHeaderSize) {
+    if (*header_size < FileHeaderSize) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Invalid file header size"));
     }
 
@@ -132,7 +132,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!exists.has_value()) {
         return std::unexpected(from_filesystem_error(std::move(exists.error())));
     }
-    if (!exists.value()) {
+    if (!*exists) {
         auto file = filesystem_->open(
             path,
             filesystem::FileOpenOptions {
@@ -144,7 +144,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
             return std::unexpected(from_filesystem_error(std::move(file.error())));
         }
 
-        io::FileByteWriter byte_writer {file.value()};
+        io::FileByteWriter byte_writer {*file};
         io::BinaryWriter writer {byte_writer};
         auto header_written = write_file_header(writer, ManifestMagic);
         if (!header_written.has_value()) {
@@ -186,7 +186,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
         return std::unexpected(from_filesystem_error(std::move(file.error())));
     }
 
-    io::FileByteReader byte_reader {file.value()};
+    io::FileByteReader byte_reader {*file};
     io::BinaryReader reader {byte_reader};
     auto header_read = read_file_header(reader, ManifestMagic);
     if (!header_read.has_value()) {
@@ -197,7 +197,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!version.has_value()) {
         return std::unexpected(from_io_error(std::move(version.error())));
     }
-    if (version.value() != DatabaseFormatVersion) {
+    if (*version != DatabaseFormatVersion) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported manifest storage format version"));
     }
 
@@ -209,7 +209,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!collections_path.has_value()) {
         return std::unexpected(from_io_error(std::move(collections_path.error())));
     }
-    if (meta_path.value() != MetaFileName || collections_path.value() != CollectionsDirName) {
+    if (*meta_path != MetaFileName || *collections_path != CollectionsDirName) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported manifest paths"));
     }
 

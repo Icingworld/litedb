@@ -3,6 +3,7 @@ add_library(litedb_io
     binary_io.cpp
     buffer_byte_reader.cpp
     buffer_byte_writer.cpp
+    checksum.cpp
     file_byte_reader.cpp
     file_byte_writer.cpp
     io_helper.cpp

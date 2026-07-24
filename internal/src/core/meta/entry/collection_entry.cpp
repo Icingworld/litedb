@@ -100,9 +100,12 @@ void CollectionEntry::add_column(std::string_view column_key, common::ColumnId c
     column_ids_.push_back(column_id);
 }
 
-void CollectionEntry::remove_column(std::string_view column_key, common::ColumnId column_id)
+void CollectionEntry::remove_column(std::string_view column_key)
 {
-    columns_by_key_.erase(std::string(column_key));
+    const auto it = columns_by_key_.find(std::string(column_key));
+    if (it == columns_by_key_.end()) return;
+    const auto column_id = it->second;
+    columns_by_key_.erase(it);
     std::erase(column_ids_, column_id);
 }
 
@@ -114,9 +117,12 @@ void CollectionEntry::add_index(std::string_view index_key, common::IndexId inde
     }
 }
 
-void CollectionEntry::remove_index(std::string_view index_key, common::IndexId index_id)
+void CollectionEntry::remove_index(std::string_view index_key)
 {
-    indexes_by_key_.erase(std::string(index_key));
+    const auto it = indexes_by_key_.find(std::string(index_key));
+    if (it == indexes_by_key_.end()) return;
+    const auto index_id = it->second;
+    indexes_by_key_.erase(it);
     std::erase(index_ids_, index_id);
 }
 
@@ -128,9 +134,12 @@ void CollectionEntry::add_vector_index(std::string_view index_key, common::VInde
     }
 }
 
-void CollectionEntry::remove_vector_index(std::string_view index_key, common::VIndexId index_id)
+void CollectionEntry::remove_vector_index(std::string_view index_key)
 {
-    vector_indexes_by_key_.erase(std::string(index_key));
+    const auto it = vector_indexes_by_key_.find(std::string(index_key));
+    if (it == vector_indexes_by_key_.end()) return;
+    const auto index_id = it->second;
+    vector_indexes_by_key_.erase(it);
     std::erase(vector_index_ids_, index_id);
 }
 

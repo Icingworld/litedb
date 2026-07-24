@@ -44,7 +44,7 @@ std::expected<void, IoError> write_little_endian_integer(BinaryWriter & writer, 
     for (std::size_t index = 0; index < sizeof(T); ++index) {
         auto result = writer.write_u8(static_cast<std::uint8_t>((data >> (index * 8U)) & 0xffU));
         if (!result.has_value()) {
-            return std::unexpected(result.error());
+            return std::unexpected(std::move(result.error()));
         }
     }
     return {};
@@ -66,9 +66,9 @@ std::expected<T, IoError> read_little_endian_integer(BinaryReader & reader)
     for (std::size_t index = 0; index < sizeof(T); ++index) {
         auto byte = reader.read_u8();
         if (!byte.has_value()) {
-            return std::unexpected(byte.error());
+            return std::unexpected(std::move(byte.error()));
         }
-        result |= static_cast<Unsigned>(byte.value()) << (index * 8U);
+        result |= static_cast<Unsigned>(*byte) << (index * 8U);
     }
     return static_cast<T>(result);
 }
@@ -130,7 +130,7 @@ std::expected<T, IoError> read_little_endian_floating(
 
         auto bits = reader.read_u32();
         if (!bits) {
-            return std::unexpected(bits.error());
+            return std::unexpected(std::move(bits.error()));
         }
 
         return std::bit_cast<float>(*bits);
@@ -140,7 +140,7 @@ std::expected<T, IoError> read_little_endian_floating(
 
         auto bits = reader.read_u64();
         if (!bits) {
-            return std::unexpected(bits.error());
+            return std::unexpected(std::move(bits.error()));
         }
 
         return std::bit_cast<double>(*bits);
@@ -209,12 +209,12 @@ std::expected<void, IoError> BinaryWriter::write_string(const std::string & valu
     }
     auto result = write_u32(static_cast<std::uint32_t>(value.size()));
     if (!result.has_value()) {
-        return std::unexpected(result.error());
+        return std::unexpected(std::move(result.error()));
     }
     if (!value.empty()) {
         auto result = write_bytes(value.data(), value.size());
         if (!result.has_value()) {
-            return std::unexpected(result.error());
+            return std::unexpected(std::move(result.error()));
         }
     }
     return {};
@@ -231,42 +231,42 @@ std::expected<void, IoError> BinaryWriter::write_value(const common::Value & val
             if constexpr (std::is_same_v<T, bool>) {
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::Boolean));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 return write_u8(data ? 1U : 0U);
             }
             if constexpr (std::is_same_v<T, std::int32_t>) {
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::Integer));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 return write_i32(data);
             }
             if constexpr (std::is_same_v<T, std::int64_t>) {
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::BigInt));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 return write_i64(data);
             }
             if constexpr (std::is_same_v<T, float>) {
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::Float));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 return write_f32(data);
             }
             if constexpr (std::is_same_v<T, double>) {
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::Double));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 return write_f64(data);
             }
             if constexpr (std::is_same_v<T, std::string>) {
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::String));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 return write_string(data);
             }
@@ -278,19 +278,19 @@ std::expected<void, IoError> BinaryWriter::write_value(const common::Value & val
                 }
                 auto type_result = write_u8(static_cast<std::uint8_t>(EncodedValueKind::Vector));
                 if (!type_result.has_value()) {
-                    return std::unexpected(type_result.error());
+                    return std::unexpected(std::move(type_result.error()));
                 }
                 if (data.empty()) {
                     return write_u32(0);
                 }
                 auto size_result = write_u32(static_cast<std::uint32_t>(data.size()));
                 if (!size_result.has_value()) {
-                    return std::unexpected(size_result.error());
+                    return std::unexpected(std::move(size_result.error()));
                 }
                 for (std::size_t index = 0; index + 1 < data.size(); ++index) {
                     auto element_result = write_f64(data[index]);
                     if (!element_result.has_value()) {
-                        return std::unexpected(element_result.error());
+                        return std::unexpected(std::move(element_result.error()));
                     }
                 }
                 return write_f64(data.back());
@@ -320,7 +320,7 @@ std::expected<std::uint8_t, IoError> BinaryReader::read_u8()
     std::uint8_t value = 0;
     auto read = read_exact_bytes(&value, sizeof(value));
     if (!read.has_value()) {
-        return std::unexpected(read.error());
+        return std::unexpected(std::move(read.error()));
     }
     return value;
 }
@@ -360,20 +360,20 @@ std::expected<double, IoError> BinaryReader::read_f64()
     return read_little_endian_floating<double>(*this);
 }
 
-std::expected<std::string, IoError> BinaryReader::read_string()
+std::expected<std::string, IoError> BinaryReader::read_string(std::size_t max_size)
 {
-    const auto size = read_u32();
+    auto size = read_u32();
     if (!size.has_value()) {
-        return std::unexpected(size.error());
+        return std::unexpected(std::move(size.error()));
     }
-    if (size.value() > std::numeric_limits<std::uint32_t>::max()) {
+    if (*size > max_size) {
         return std::unexpected(make_io_error(IoErrorCode::ValueTooLarge, "string is too large to decode"));
     }
-    std::string value(size.value(), '\0');
-    if (size.value() != 0) {
+    std::string value(*size, '\0');
+    if (*size != 0) {
         auto read = read_exact_bytes(value.data(), value.size());
         if (!read.has_value()) {
-            return std::unexpected(read.error());
+            return std::unexpected(std::move(read.error()));
         }
     }
     return value;
@@ -381,72 +381,72 @@ std::expected<std::string, IoError> BinaryReader::read_string()
 
 std::expected<common::Value, IoError> BinaryReader::read_value()
 {
-    const auto kind_byte = read_u8();
+    auto kind_byte = read_u8();
     if (!kind_byte.has_value()) {
-        return std::unexpected(kind_byte.error());
+        return std::unexpected(std::move(kind_byte.error()));
     }
-    const auto kind = static_cast<EncodedValueKind>(kind_byte.value());
+    const auto kind = static_cast<EncodedValueKind>(*kind_byte);
     switch (kind) {
     case EncodedValueKind::Null:
         return common::Value::null();
     case EncodedValueKind::Boolean: {
         auto value = read_u8();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return common::Value {value.value() != 0};
+        return common::Value {*value != 0};
     }
     case EncodedValueKind::Integer: {
         auto value = read_i32();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return common::Value {value.value()};
+        return common::Value {*value};
     }
     case EncodedValueKind::BigInt: {
         auto value = read_i64();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return common::Value {value.value()};
+        return common::Value {*value};
     }
     case EncodedValueKind::Float: {
         auto value = read_f32();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return common::Value {value.value()};
+        return common::Value {*value};
     }
     case EncodedValueKind::Double: {
         auto value = read_f64();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return common::Value {value.value()};
+        return common::Value {*value};
     }
     case EncodedValueKind::String: {
         auto value = read_string();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return common::Value {std::move(value.value())};
+        return common::Value {std::move(*value)};
     }
     case EncodedValueKind::Vector: {
-        const auto count = read_u32();
+        auto count = read_u32();
         if (!count.has_value()) {
-            return std::unexpected(count.error());
+            return std::unexpected(std::move(count.error()));
         }
-        if (count.value() > std::numeric_limits<std::uint32_t>::max()) {
+        if (*count > std::numeric_limits<std::uint32_t>::max()) {
             return std::unexpected(make_io_error(IoErrorCode::ValueTooLarge, "vector is too large to decode"));
         }
         common::VectorValue values;
-        values.reserve(count.value());
-        for (std::uint32_t index = 0; index < count.value(); ++index) {
+        values.reserve(*count);
+        for (std::uint32_t index = 0; index < *count; ++index) {
             auto value = read_f64();
             if (!value.has_value()) {
-                return std::unexpected(value.error());
+                return std::unexpected(std::move(value.error()));
             }
-            values.push_back(value.value());
+            values.push_back(*value);
         }
         return common::Value {std::move(values)};
     }

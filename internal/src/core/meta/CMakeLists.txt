@@ -5,7 +5,7 @@ set(META_SOURCES
     entry/index_entry.cpp
     entry/meta_entry.cpp
     entry/vector_index_entry.cpp
-    meta_helper.cpp
+    meta_error.cpp
     meta_engine.cpp
     meta_store.cpp
 )

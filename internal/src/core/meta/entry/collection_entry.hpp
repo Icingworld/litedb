@@ -8,6 +8,11 @@
 
 #include "core/meta/entry/meta_entry.hpp"
 
+namespace litedb::core::meta
+{
+class CatalogState;
+}
+
 namespace litedb::core::meta::entry
 {
 
@@ -25,6 +30,7 @@ public:
     );
 
 public:
+
     /**
      * @brief 获取集合 ID
      * @return 集合 ID
@@ -115,6 +121,9 @@ public:
     [[nodiscard]]
     bool contains_vector_index(std::string_view index_key) const;
 
+private:
+    friend class litedb::core::meta::CatalogState;
+
     /**
      * @brief 添加列
      * @param column_key 列键
@@ -127,7 +136,7 @@ public:
      * @param column_key 列键
      * @param column_id 列 ID
      */
-    void remove_column(std::string_view column_key, common::ColumnId column_id);
+    void remove_column(std::string_view column_key);
 
     /**
      * @brief 添加索引
@@ -141,7 +150,7 @@ public:
      * @param index_key 索引键
      * @param index_id 索引 ID
      */
-    void remove_index(std::string_view index_key, common::IndexId index_id);
+    void remove_index(std::string_view index_key);
 
     /**
      * @brief 添加向量索引
@@ -155,7 +164,7 @@ public:
      * @param index_key 向量索引键
      * @param index_id 向量索引 ID
      */
-    void remove_vector_index(std::string_view index_key, common::VIndexId index_id);
+    void remove_vector_index(std::string_view index_key);
 
 private:
     common::DatabaseId database_id_;                                            ///< 数据库 ID

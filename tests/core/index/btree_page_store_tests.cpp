@@ -61,7 +61,7 @@ void test_create_allocate_write_and_reopen(const std::filesystem::path & directo
     {
         auto created = BTreePageStore::create(path, 42, type, filesystem);
         require(created.has_value(), "page store create failed");
-        auto store = std::move(created.value());
+        auto store = std::move(*created);
         require(store.index_id() == 42, "created store index id mismatch");
         require(store.root_page_id() == InvalidBTreePageId, "new store should have no root");
         require(store.page_count() == 0, "new store page count mismatch");

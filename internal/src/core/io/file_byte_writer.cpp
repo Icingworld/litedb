@@ -8,11 +8,13 @@ namespace litedb::core::io
 namespace
 {
 
-IoError from_filesystem_error(filesystem::FileSystemError error)
+IOError from_filesystem_error(error::Error source)
 {
-    return IoError {
-        .code = IoErrorCode::FileSystemError,
-        .message = std::move(error.message),
+    const auto source_code = source.encode_code();
+    return IOError {
+        IOErrorCode::FileSystemError,
+        source.message(),
+        IOErrorContext {.source_code = source_code},
     };
 }
 

@@ -43,7 +43,7 @@ Error error(ErrorCode code, std::string message)
 [[nodiscard]]
 Error filesystem_error(filesystem::FileSystemError value)
 {
-    return error(ErrorCode::FileSystemError, std::move(value.message));
+    return error(ErrorCode::FileSystemError, value.message());
 }
 
 [[nodiscard]]
@@ -179,7 +179,7 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::create(
     if (!opened.has_value()) {
         return std::unexpected(filesystem_error(std::move(opened.error())));
     }
-    BTreePageStore store {std::move(path), index_id, std::move(key_type), std::move(opened.value())};
+    BTreePageStore store {std::move(path), index_id, std::move(key_type), std::move(*opened)};
     auto initialized = store.initialize();
     if (!initialized.has_value()) {
         return std::unexpected(std::move(initialized.error()));
@@ -208,7 +208,7 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::open(
         std::move(path),
         expected_index_id,
         expected_key_type,
-        std::move(opened.value()),
+        std::move(*opened),
     };
     auto loaded = store.load(expected_index_id, expected_key_type);
     if (!loaded.has_value()) {
@@ -534,7 +534,7 @@ std::expected<void, BTreePageStoreError> BTreePageStore::append_page(const BTree
         --next_page_id_;
         auto rolled_back = file_.truncate(offset);
         if (!rolled_back.has_value()) {
-            header.error().message += "; failed to roll back appended page: " + rolled_back.error().message;
+            header.error().message += "; failed to roll back appended page: " + rolled_back.error().message();
         }
         return header;
     }

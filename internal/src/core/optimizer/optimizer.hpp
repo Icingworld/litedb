@@ -3,16 +3,11 @@
 #include <cstddef>
 #include <expected>
 #include <memory>
+#include <optional>
 
+#include "core/meta/meta_engine.hpp"
 #include "core/optimizer/optimizer_error.hpp"
 #include "core/logical_plan/statement/logical_statement_plan.hpp"
-
-namespace litedb::core::meta
-{
-
-class MetaEngine;
-
-} // namespace litedb::core::meta
 
 namespace litedb::core::optimizer
 {
@@ -36,7 +31,10 @@ struct OptimizerOptions
 class Optimizer
 {
 public:
-    explicit Optimizer(OptimizerOptions options = {}, const meta::MetaEngine * catalog = nullptr) noexcept;
+    explicit Optimizer(
+        OptimizerOptions options = {},
+        std::optional<meta::CatalogView> catalog = std::nullopt
+    ) noexcept;
 
     /**
      * @brief 优化 statement plan
@@ -50,7 +48,7 @@ public:
 
 private:
     OptimizerOptions options_;
-    const meta::MetaEngine * catalog_ {nullptr};
+    std::optional<meta::CatalogView> catalog_;
 };
 
 } // namespace litedb::core::optimizer

@@ -116,7 +116,7 @@ void test_insert_simple_duplicate_and_reopen(const std::filesystem::path & direc
         auto created = BTreeIndex::create(path, 43, type, filesystem);
         require(created.has_value(), "operation framework BTreeIndex create failed");
 
-        auto index = std::move(created.value());
+        auto index = std::move(*created);
         require(index.kind() == IndexKind::BTree, "BTreeIndex kind mismatch");
         require(index.size() == 0, "new BTreeIndex size mismatch");
 
@@ -298,7 +298,7 @@ void test_find_equal_routes_and_scans_duplicate_keys(const std::filesystem::path
     {
         auto created = btree_index::BTreePageStore::create(path, 45, type, filesystem);
         require(created.has_value(), "find-equal page store create failed");
-        auto store = std::move(created.value());
+        auto store = std::move(*created);
 
         auto first = store.allocate_leaf_page();
         require(first.has_value(), "first find-equal leaf allocation failed");
@@ -572,7 +572,7 @@ void test_ordered_interface_and_index_store_reopen(const std::filesystem::path &
                 "polymorphic IndexStore test should create multiple pages");
 
         std::unique_ptr<ScalarIndex> backend =
-            std::make_unique<BTreeIndex>(std::move(created.value()));
+            std::make_unique<BTreeIndex>(std::move(*created));
         IndexStore store {IndexDescriptor {
             .index_id = 52,
             .collection_id = 1,

@@ -62,7 +62,7 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
     if (!exists) {
         return std::unexpected(StorageError {
             StorageErrorCode::StoreError,
-            std::move(exists.error().message),
+            exists.error().message(),
             StorageStoreErrorCode::FileSystemError,
         });
     }
@@ -95,7 +95,7 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
     if (!exists) {
         return std::unexpected(StorageError {
             StorageErrorCode::StoreError,
-            std::move(exists.error().message),
+            exists.error().message(),
             StorageStoreErrorCode::FileSystemError,
         });
     }
@@ -139,7 +139,7 @@ std::expected<void, StorageError> StorageEngine::drop_collection(common::Collect
         if (!removed) {
             return std::unexpected(StorageError {
                 StorageErrorCode::StoreError,
-                std::move(removed.error().message),
+                removed.error().message(),
                 StorageStoreErrorCode::FileSystemError,
             });
         }

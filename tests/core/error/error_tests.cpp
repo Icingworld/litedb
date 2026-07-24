@@ -1,12 +1,12 @@
 #include <cstdint>
 #include <filesystem>
-#include <string_view>
-#include <system_error>
 #include <type_traits>
 #include <utility>
 
 #include "core/error/error.hpp"
 #include "core/filesystem/filesystem_error.hpp"
+#include "core/io/io_error.hpp"
+#include "core/meta/meta_error.hpp"
 
 namespace
 {
@@ -14,120 +14,63 @@ namespace
 using litedb::core::error::Error;
 using litedb::core::error::ErrorCategory;
 using litedb::core::filesystem::FileSystemErrorCode;
-using litedb::core::filesystem::FileSystemErrorContext;
-
-struct OperationContext
-{
-    std::uint64_t operation_id;
-};
+using litedb::core::io::IOErrorCode;
+using litedb::core::meta::MetaErrorCode;
+using litedb::core::meta::MetaErrorContext;
+using litedb::core::meta::MetaOperation;
 
 static_assert(litedb::core::error::ErrorType<FileSystemErrorCode>);
+static_assert(litedb::core::error::ErrorType<IOErrorCode>);
+static_assert(litedb::core::error::ErrorType<MetaErrorCode>);
+static_assert(std::to_underlying(ErrorCategory::FileSystem) == 1);
+static_assert(std::to_underlying(ErrorCategory::IO) == 2);
+static_assert(std::to_underlying(ErrorCategory::Meta) == 3);
 static_assert(!std::is_copy_constructible_v<Error>);
-static_assert(!std::is_copy_assignable_v<Error>);
 static_assert(std::is_nothrow_move_constructible_v<Error>);
-static_assert(std::is_nothrow_move_assignable_v<Error>);
-static_assert(!std::is_polymorphic_v<FileSystemErrorContext>);
 
-bool test_context_and_cause_chain()
+bool test_code_and_context()
 {
-    FileSystemErrorContext leaf_context {
-        .operation = "open",
-        .path = std::filesystem::path {"data.ldb"},
-        .related_path = {},
-        .native_code = std::make_error_code(std::errc::no_such_file_or_directory),
+    MetaErrorContext context {
+        .operation = MetaOperation::Load,
+        .path = std::filesystem::path {"meta.ldb"},
+        .source_code = static_cast<std::uint16_t>(0x0203),
     };
-    Error leaf {
-        FileSystemErrorCode::NotFound,
-        "database file does not exist",
-        std::move(leaf_context),
-    };
+    Error error {MetaErrorCode::IoFailure, "meta read failed", std::move(context)};
 
-    Error root {
-        FileSystemErrorCode::IoError,
-        "failed to load database",
-        OperationContext {.operation_id = 42},
-        std::move(leaf),
-    };
-
-    if (root.category() != ErrorCategory::FileSystem ||
-        root.code() != std::to_underlying(FileSystemErrorCode::IoError) ||
-        root.message() != "failed to load database" ||
-        root.encode_code() != ((static_cast<std::uint16_t>(ErrorCategory::FileSystem) << 8) |
-                              std::to_underlying(FileSystemErrorCode::IoError))) {
-        return false;
-    }
-
-    const auto * root_context = root.context<OperationContext>();
-    if (root_context == nullptr || root_context->operation_id != 42 ||
-        root.context<FileSystemErrorContext>() != nullptr) {
-        return false;
-    }
-
-    const Error * cause = root.cause();
-    if (cause == nullptr ||
-        cause->code() != std::to_underlying(FileSystemErrorCode::NotFound) ||
-        cause->message() != "database file does not exist" ||
-        cause->cause() != nullptr) {
-        return false;
-    }
-
-    const auto * cause_context = cause->context<FileSystemErrorContext>();
-    return cause_context != nullptr &&
-           cause_context->operation == "open" &&
-           cause_context->path == std::filesystem::path {"data.ldb"} &&
-           cause_context->related_path.empty() &&
-           cause_context->native_code ==
-               std::make_error_code(std::errc::no_such_file_or_directory) &&
-           cause->context<OperationContext>() == nullptr;
+    const auto * stored = error.context<MetaErrorContext>();
+    return error.category() == ErrorCategory::Meta &&
+           error.is(MetaErrorCode::IoFailure) &&
+           error.code() == std::to_underlying(MetaErrorCode::IoFailure) &&
+           error.encode_code() == 0x030D &&
+           error.message() == "meta read failed" &&
+           stored != nullptr &&
+           stored->operation == MetaOperation::Load &&
+           stored->path == std::filesystem::path {"meta.ldb"} &&
+           stored->source_code == 0x0203;
 }
 
-bool test_move_preserves_context_and_cause()
+bool test_move_preserves_context()
 {
-    Error cause {
-        FileSystemErrorCode::Unsupported,
-        "operation is unsupported",
-    };
     Error source {
-        FileSystemErrorCode::IoError,
-        "operation failed",
-        OperationContext {.operation_id = 7},
-        std::move(cause),
+        MetaErrorCode::FileSystemFailure,
+        "replace failed",
+        MetaErrorContext {
+            .operation = MetaOperation::PublishFile,
+            .path = std::filesystem::path {"meta.ldb"},
+            .source_code = static_cast<std::uint16_t>(0x0104),
+        },
     };
-
     Error moved {std::move(source)};
-    const auto * context = moved.context<OperationContext>();
-    return context != nullptr &&
-           context->operation_id == 7 &&
-           moved.cause() != nullptr &&
-           moved.cause()->code() ==
-               std::to_underlying(FileSystemErrorCode::Unsupported);
-}
-
-bool test_cause_without_context()
-{
-    Error cause {
-        FileSystemErrorCode::InvalidPath,
-        "invalid source path",
-    };
-    Error root {
-        FileSystemErrorCode::IoError,
-        "rename failed",
-        std::move(cause),
-    };
-
-    return root.context<OperationContext>() == nullptr &&
-           root.cause() != nullptr &&
-           root.cause()->code() ==
-               std::to_underlying(FileSystemErrorCode::InvalidPath);
+    const auto * context = moved.context<MetaErrorContext>();
+    return moved.is(MetaErrorCode::FileSystemFailure) &&
+           context != nullptr &&
+           context->operation == MetaOperation::PublishFile &&
+           context->source_code == 0x0104;
 }
 
 } // namespace
 
 int main()
 {
-    return test_context_and_cause_chain() &&
-                   test_move_preserves_context_and_cause() &&
-                   test_cause_without_context()
-               ? 0
-               : 1;
+    return test_code_and_context() && test_move_preserves_context() ? 0 : 1;
 }

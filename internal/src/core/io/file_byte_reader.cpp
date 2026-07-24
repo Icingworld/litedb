@@ -8,11 +8,13 @@ namespace litedb::core::io
 namespace
 {
 
-IoError from_filesystem_error(filesystem::FileSystemError error)
+IOError from_filesystem_error(error::Error source)
 {
-    return IoError {
-        .code = IoErrorCode::FileSystemError,
-        .message = std::move(error.message),
+    const auto source_code = source.encode_code();
+    return IOError {
+        IOErrorCode::FileSystemError,
+        source.message(),
+        IOErrorContext {.source_code = source_code},
     };
 }
 
@@ -30,8 +32,9 @@ std::expected<std::size_t, IoError> FileByteReader::read_some(std::span<std::byt
     if (!result.has_value()) {
         return std::unexpected(from_filesystem_error(std::move(result.error())));
     }
-    offset_ += result.value();
-    return result.value();
+    const auto count = *result;
+    offset_ += count;
+    return count;
 }
 
 std::uint64_t FileByteReader::offset() const noexcept

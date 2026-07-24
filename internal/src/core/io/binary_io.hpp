@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <limits>
 #include <string>
 
 #include "core/io/io_error.hpp"
@@ -165,7 +166,9 @@ public:
      * @brief 读取字符串
      * @return 读取结果
      */
-    std::expected<std::string, IoError> read_string();
+    std::expected<std::string, IoError> read_string(
+        std::size_t max_size = std::numeric_limits<std::uint32_t>::max()
+    );
 
     /**
      * @brief 读取值

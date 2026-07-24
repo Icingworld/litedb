@@ -77,7 +77,7 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
 }
 
 std::unique_ptr<PhysicalStatementPlan> plan_ok(
-    MetaEngine & catalog,
+    CatalogEditor & catalog,
     IndexEngine & index_engine,
     std::string_view sql,
     std::optional<DatabaseId> database_id = std::nullopt
@@ -85,7 +85,7 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = database_id};
-    BinderContext context {catalog, session};
+    BinderContext context {catalog.view(), session};
     Binder binder {context};
     auto bound = binder.bind(*statement);
     if (!bound.has_value()) {
@@ -99,7 +99,7 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
         throw std::runtime_error(planned.error().message);
     }
 
-    Optimizer optimizer {{}, &catalog};
+    Optimizer optimizer {{}, catalog.view()};
     auto optimized = optimizer.optimize(std::move(planned.value()));
     if (!optimized.has_value()) {
         throw std::runtime_error(optimized.error().message);
@@ -110,7 +110,7 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
 }
 
 ExecutionResult execute_ok(
-    MetaEngine & catalog,
+    CatalogEditor & catalog,
     StorageEngine & storage,
     IndexEngine & index_engine,
     litedb::core::vindex::VectorIndexEngine & vector_index_engine,
@@ -120,7 +120,7 @@ ExecutionResult execute_ok(
 )
 {
     auto plan = plan_ok(catalog, index_engine, sql, database_id);
-    Executor executor {catalog, storage, index_engine, vector_index_engine, transaction_manager};
+    Executor executor {catalog.view(), storage, index_engine, vector_index_engine, transaction_manager};
     auto result = executor.execute(*plan);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message);
@@ -129,7 +129,7 @@ ExecutionResult execute_ok(
 }
 
 ExecutionError execute_error(
-    MetaEngine & catalog,
+    CatalogEditor & catalog,
     StorageEngine & storage,
     IndexEngine & index_engine,
     litedb::core::vindex::VectorIndexEngine & vector_index_engine,
@@ -139,7 +139,7 @@ ExecutionError execute_error(
 )
 {
     auto plan = plan_ok(catalog, index_engine, sql, database_id);
-    Executor executor {catalog, storage, index_engine, vector_index_engine, transaction_manager};
+    Executor executor {catalog.view(), storage, index_engine, vector_index_engine, transaction_manager};
     auto result = executor.execute(*plan);
     require(!result.has_value(), "statement should fail to execute");
     return std::move(result.error());
@@ -149,7 +149,8 @@ struct Fixture
 {
     litedb::tests::TemporaryDirectory storage_directory {"litedb-executor-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
-    MetaEngine catalog;
+    CatalogEditor catalog;
+    CatalogPublisher publisher {storage_directory.path() / "meta.ldb", filesystem};
     StorageEngine storage {storage_directory.path(), filesystem};
     IndexEngine index_engine {storage_directory.path(), filesystem};
     litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
@@ -162,7 +163,7 @@ struct Fixture
     {
         auto created_database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         require(created_database.has_value(), "fixture database creation failed");
-        database_id = created_database.value();
+        database_id = *created_database;
 
         auto created_collection = catalog.create_collection(CreateCollectionRequest {
             .database_id = database_id,
@@ -175,19 +176,21 @@ struct Fixture
             },
         });
         require(created_collection.has_value(), "fixture collection creation failed");
-        users_id = created_collection.value();
+        users_id = *created_collection;
 
-        const auto * collection = catalog.find_collection(database_id, "users");
+        const auto * collection = catalog.view().find_collection(database_id, "users");
         require(collection != nullptr, "created collection missing");
-        auto collection_schema = load_collection_schema(catalog, users_id);
+        auto collection_schema = load_collection_schema(catalog.view(), users_id);
         require(collection_schema.has_value(), "fixture schema load failed");
         require(storage.create_collection(std::move(collection_schema.value())).has_value(), "fixture storage creation failed");
         require(storage.contains_collection(users_id), "created collection storage missing");
         auto opened_wal = litedb::core::wal::WalManager::open(storage_directory.path() / "wal", filesystem);
         require(opened_wal.has_value(), "fixture WAL creation failed");
         wal_store = std::move(*opened_wal);
+        require(publisher.open_or_initialize().has_value(), "fixture catalog publisher open failed");
+        require(publisher.publish_committed(catalog.snapshot()).has_value(), "fixture catalog publish failed");
         transaction_manager = std::make_unique<litedb::core::transaction::TransactionManager>(
-            storage_directory.path(), filesystem, catalog, storage, index_engine, vector_index_engine, *wal_store, 0
+            storage_directory.path(), filesystem, publisher, storage, index_engine, vector_index_engine, *wal_store, 0
         );
     }
 };
@@ -198,7 +201,7 @@ IndexId create_index(
     litedb::core::meta::entry::IndexKind kind = litedb::core::meta::entry::IndexKind::BTree
 )
 {
-    const auto * column = fixture.catalog.find_column(fixture.users_id, "age");
+    const auto * column = fixture.catalog.view().find_column(fixture.users_id, "age");
     require(column != nullptr, "age column missing");
     auto created = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
@@ -207,15 +210,17 @@ IndexId create_index(
         .kind = kind,
     });
     require(created.has_value(), "fixture index creation failed");
-    const auto * entry = fixture.catalog.find_index(created.value());
+    require(fixture.publisher.publish_committed(fixture.catalog.snapshot()).has_value(),
+            "fixture index catalog publish failed");
+    const auto * entry = fixture.catalog.view().find_index(*created);
     require(entry != nullptr, "fixture index metadata missing");
-    auto schema = load_collection_schema(fixture.catalog, fixture.users_id);
+    auto schema = load_collection_schema(fixture.catalog.view(), fixture.users_id);
     require(schema.has_value(), "fixture index schema load failed");
     require(
         fixture.index_engine.create_index(*entry, schema.value(), fixture.storage).has_value(),
         "fixture index create failed"
     );
-    return created.value();
+    return *created;
 }
 
 void insert_user(Fixture & fixture, std::int64_t id, std::string_view name, std::int32_t age)
@@ -283,7 +288,7 @@ void test_use_show_and_describe()
     require(get_value<std::string>(indexes.rows[0].values[2]) == "BTREE", "SHOW INDEXES type mismatch");
     require(!get_value<bool>(indexes.rows[0].values[3]), "SHOW INDEXES unique mismatch");
 
-    const auto * embedding = fixture.catalog.find_column(fixture.users_id, "embedding");
+    const auto * embedding = fixture.catalog.view().find_column(fixture.users_id, "embedding");
     require(embedding != nullptr, "embedding column missing");
     auto created_vector_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,
@@ -299,6 +304,8 @@ void test_use_show_and_describe()
         },
     });
     require(created_vector_index.has_value(), "fixture vector index creation failed");
+    require(fixture.publisher.publish_committed(fixture.catalog.snapshot()).has_value(),
+            "fixture vector index catalog publish failed");
 
     auto vector_indexes = execute_ok(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SHOW VINDEXES FROM users;", fixture.database_id);
     require(vector_indexes.kind == ExecutionResultKind::RowSet, "SHOW VINDEXES result kind mismatch");
@@ -529,6 +536,8 @@ void test_index_scan_execution_paths()
         .collection_id = fixture.users_id,
         .name = "idx_age_btree",
     }).has_value(), "fixture index metadata drop failed");
+    require(fixture.publisher.publish_committed(fixture.catalog.snapshot()).has_value(),
+            "fixture index drop catalog publish failed");
     require(fixture.index_engine.drop_index(btree_index_id).has_value(), "fixture runtime index drop failed");
 
     auto range_after_drop = execute_ok(
@@ -552,7 +561,7 @@ void test_error_mapping()
     auto missing_storage = execute_error(fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager, "SELECT * FROM users;", fixture.database_id);
     require(missing_storage.code == ExecutionErrorCode::CollectionNotFound, "missing storage error mismatch");
 
-    auto schema = load_collection_schema(fixture.catalog, fixture.users_id);
+    auto schema = load_collection_schema(fixture.catalog.view(), fixture.users_id);
     require(schema.has_value(), "schema reload failed");
     auto recreated = fixture.storage.create_collection(std::move(schema.value()));
     require(recreated.has_value(), "storage recreate failed");
@@ -570,7 +579,7 @@ void test_error_mapping()
     };
 
     Executor executor {
-        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
+        fixture.catalog.view(), fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
     };
     auto invalid_literal = executor.execute(bad_insert);
     require(!invalid_literal.has_value(), "invalid literal INSERT should fail");
@@ -587,7 +596,7 @@ void test_ddl_requires_database_engine()
         fixture.database_id
     );
     Executor executor {
-        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
+        fixture.catalog.view(), fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
     };
     auto result = executor.execute(*plan);
     require(!result.has_value(), "Executor should reject standalone DDL");

@@ -84,7 +84,7 @@ struct Fixture
 {
     litedb::tests::TemporaryDirectory storage_directory {"litedb-logical-planner-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
-    MetaEngine catalog;
+    CatalogEditor catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
     IndexEngine index_engine {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
@@ -94,9 +94,9 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         if (!database.has_value()) {
-            throw std::runtime_error(database.error().message);
+            throw std::runtime_error(database.error().message());
         }
-        database_id = database.value();
+        database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
@@ -125,11 +125,11 @@ struct Fixture
 
         auto collection = catalog.create_collection(users);
         if (!collection.has_value()) {
-            throw std::runtime_error(collection.error().message);
+            throw std::runtime_error(collection.error().message());
         }
-        users_id = collection.value();
+        users_id = *collection;
 
-        auto schema = litedb::core::storage::load_collection_schema(catalog, users_id);
+        auto schema = litedb::core::storage::load_collection_schema(catalog.view(), users_id);
         if (!schema.has_value()) {
             throw std::runtime_error(schema.error().message);
         }
@@ -144,7 +144,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
@@ -181,7 +181,7 @@ IndexId create_managed_index(
     litedb::core::meta::entry::IndexKind kind
 )
 {
-    const auto * column = fixture.catalog.find_column(fixture.users_id, std::string(column_name));
+    const auto * column = fixture.catalog.view().find_column(fixture.users_id, std::string(column_name));
     require(column != nullptr, "fixture index column missing");
 
     auto created = fixture.catalog.create_index(CreateIndexRequest {
@@ -191,13 +191,13 @@ IndexId create_managed_index(
         .kind = kind,
     });
     if (!created.has_value()) {
-        throw std::runtime_error(created.error().message);
+        throw std::runtime_error(std::string {created.error().message()});
     }
 
-    const auto * entry = fixture.catalog.find_index(created.value());
+    const auto * entry = fixture.catalog.view().find_index(*created);
     require(entry != nullptr, "fixture index entry missing");
 
-    auto schema = litedb::core::storage::load_collection_schema(fixture.catalog, fixture.users_id);
+    auto schema = litedb::core::storage::load_collection_schema(fixture.catalog.view(), fixture.users_id);
     if (!schema.has_value()) {
         throw std::runtime_error(schema.error().message);
     }
@@ -206,7 +206,7 @@ IndexId create_managed_index(
     if (!managed.has_value()) {
         throw std::runtime_error(managed.error().message);
     }
-    return created.value();
+    return *created;
 }
 
 void test_select_full_chain()
@@ -392,7 +392,7 @@ void test_admin_and_ddl_plans()
     require(drop_collection_node.database_id() == fixture.database_id, "DROP COLLECTION database id mismatch");
     require(drop_collection_node.if_exists(), "DROP COLLECTION if exists mismatch");
 
-    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    const auto * age_column = fixture.catalog.view().find_column(fixture.users_id, "age");
     require(age_column != nullptr, "age column lookup failed");
     auto created_index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
@@ -411,7 +411,7 @@ void test_admin_and_ddl_plans()
     require(drop_index_node.index_name() == "idx_age", "DROP INDEX index name mismatch");
     require(!drop_index_node.if_exists(), "DROP INDEX if exists mismatch");
 
-    const auto * embedding_column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    const auto * embedding_column = fixture.catalog.view().find_column(fixture.users_id, "embedding");
     require(embedding_column != nullptr, "embedding column lookup failed");
     auto created_vector_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,

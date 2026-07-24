@@ -79,7 +79,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::create_index(
 }
 
 std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage
 )
 {
@@ -132,7 +132,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
 }
 
 std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )
@@ -211,7 +211,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::drop_index(common::VInd
     if (descriptor.kind == VectorIndexKind::Hnsw) {
         auto removed = filesystem_->remove(index_path(index_id));
         if (!removed) {
-            return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, std::move(removed.error().message)));
+            return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, removed.error().message()));
         }
     }
     return {};
@@ -515,12 +515,12 @@ std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::create_stor
     if (descriptor.kind == VectorIndexKind::Hnsw) {
         auto exists = filesystem_->exists(index_path(descriptor.index_id));
         if (!exists) {
-            return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, std::move(exists.error().message)));
+            return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, exists.error().message()));
         }
         if (*exists) {
             auto removed = filesystem_->remove(index_path(descriptor.index_id));
             if (!removed) {
-                return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, std::move(removed.error().message)));
+                return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, removed.error().message()));
             }
         }
     }
@@ -546,7 +546,7 @@ std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::restore_sto
 {
     auto exists = filesystem_->exists(index_path(descriptor.index_id));
     if (!exists) {
-        return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, std::move(exists.error().message)));
+        return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, exists.error().message()));
     }
     if (!*exists) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexFileMissing, "Persisted vector index file is missing"));

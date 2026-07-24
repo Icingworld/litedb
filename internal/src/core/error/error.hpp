@@ -17,6 +17,8 @@ enum class ErrorCategory : std::uint8_t
 {
     Unknown = 0,                ///< 未知
     FileSystem = 1,             ///< 文件系统
+    IO = 2,                     ///< 二进制与字节 IO
+    Meta = 3,                   ///< 元数据目录
 };
 
 /**

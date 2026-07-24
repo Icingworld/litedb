@@ -42,9 +42,14 @@ void DatabaseEntry::add_collection(std::string_view collection_key, common::Coll
     }
 }
 
-void DatabaseEntry::remove_collection(std::string_view collection_key, common::CollectionId collection_id)
+void DatabaseEntry::remove_collection(std::string_view collection_key)
 {
-    collections_by_key_.erase(std::string(collection_key));
+    const auto it = collections_by_key_.find(std::string(collection_key));
+    if (it == collections_by_key_.end()) {
+        return;
+    }
+    const auto collection_id = it->second;
+    collections_by_key_.erase(it);
     std::erase(collection_ids_, collection_id);
 }
 

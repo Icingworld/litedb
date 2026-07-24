@@ -27,7 +27,7 @@ T require_value(std::expected<T, io::IoError> result, const char * message)
     if (!result.has_value()) {
         throw std::runtime_error(message);
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 void require_ok(std::expected<void, io::IoError> result, const char * message)

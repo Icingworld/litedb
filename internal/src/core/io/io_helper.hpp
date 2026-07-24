@@ -11,6 +11,6 @@ namespace litedb::core::io
  * @param message 错误消息
  * @return IO 错误
  */
-IoError make_io_error(IoErrorCode code, const std::string & message);
+IOError make_io_error(IOErrorCode code, const std::string & message);
 
 } // namespace litedb::core::io

@@ -80,7 +80,7 @@ public:
     TransactionManager(
         std::filesystem::path data_directory,
         filesystem::FileSystem & filesystem,
-        meta::MetaEngine & catalog,
+        meta::CatalogPublisher & catalog,
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine,
@@ -234,7 +234,7 @@ private:
 private:
     std::filesystem::path data_directory_;                       ///< 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};              ///< 文件系统
-    meta::MetaEngine * catalog_ {nullptr};                       ///< 元数据引擎
+    meta::CatalogPublisher * catalog_ {nullptr};                 ///< 在线 Catalog 发布者
     storage::StorageEngine * storage_ {nullptr};                 ///< 存储引擎
     index::IndexEngine * index_engine_ {nullptr};                ///< 标量索引引擎
     vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  ///< 向量索引引擎

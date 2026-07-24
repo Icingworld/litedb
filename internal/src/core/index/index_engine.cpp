@@ -252,7 +252,7 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
     if (descriptor.kind == IndexKind::BTree) {
         auto removed = filesystem_->remove(index_path(index_id));
         if (!removed.has_value()) {
-            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(removed.error().message)));
+            return std::unexpected(make_error(IndexErrorCode::StorageError, removed.error().message()));
         }
     }
     return {};
@@ -276,7 +276,7 @@ std::expected<void, IndexError> IndexEngine::drop_collection_indexes(common::Col
 }
 
 std::expected<void, IndexError> IndexEngine::restore_all(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage
 )
 {
@@ -344,7 +344,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
 }
 
 std::expected<void, IndexError> IndexEngine::reload_collection(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )

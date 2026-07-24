@@ -46,7 +46,7 @@ StorageStoreError error(StorageStoreErrorCode code, std::string message)
  */
 StorageStoreError fs_error(filesystem::FileSystemError value)
 {
-    return error(StorageStoreErrorCode::FileSystemError, std::move(value.message));
+    return error(StorageStoreErrorCode::FileSystemError, value.message());
 }
 
 /**
@@ -54,7 +54,10 @@ StorageStoreError fs_error(filesystem::FileSystemError value)
  * @param value IO 错误
  * @return 持久化存储器错误
  */
-StorageStoreError io_error(io::IoError value) { return error(StorageStoreErrorCode::IoError, std::move(value.message)); }
+StorageStoreError io_error(io::IOError value)
+{
+    return error(StorageStoreErrorCode::IoError, value.message());
+}
 
 /**
  * @brief 读取数字

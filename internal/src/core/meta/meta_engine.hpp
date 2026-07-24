@@ -12,7 +12,7 @@
 #include "core/meta/entry/database_entry.hpp"
 #include "core/meta/entry/index_entry.hpp"
 #include "core/meta/entry/vector_index_entry.hpp"
-#include "core/meta/meta_engine_error.hpp"
+#include "core/meta/meta_error.hpp"
 #include "core/meta/meta_request.hpp"
 #include "core/meta/meta_snapshot.hpp"
 #include "core/meta/meta_store.hpp"
@@ -24,39 +24,20 @@ namespace litedb::core::meta
  * @brief 元数据引擎
  * @note 查询接口返回的 entry 指针仅在下一次 mutation 或 restore 前有效。
  */
-class MetaEngine
+class CatalogState
 {
 public:
-    MetaEngine() = default;
+    CatalogState() = default;
 
-    explicit MetaEngine(MetaStore & store) noexcept;
+    CatalogState(const CatalogState &) = delete;
 
-    MetaEngine(const MetaEngine &) = delete;
+    CatalogState & operator=(const CatalogState &) = delete;
 
-    MetaEngine & operator=(const MetaEngine &) = delete;
+    CatalogState(CatalogState &&) noexcept = default;
 
-    MetaEngine(MetaEngine &&) noexcept = default;
-
-    MetaEngine & operator=(MetaEngine &&) noexcept = default;
+    CatalogState & operator=(CatalogState &&) noexcept = default;
 
 public:
-    /**
-     * @brief 加载元数据
-     * @return 结果
-     * @details 从磁盘中读取并加载元数据；未绑定存储时直接成功
-     */
-    [[nodiscard]]
-    std::expected<void, MetaEngineError> load();
-
-    /**
-     * @brief 提交元数据快照
-     * @param snapshot 元数据快照
-     * @return 结果
-     * @details 校验并替换当前状态，持久化失败时恢复提交前状态
-     */
-    [[nodiscard]]
-    std::expected<void, MetaEngineError> commit(const MetaSnapshot & snapshot);
-
     /**
      * @brief 获取元数据快照
      * @return 元数据快照
@@ -65,6 +46,12 @@ public:
     [[nodiscard]]
     MetaSnapshot snapshot() const;
 
+private:
+    friend class CatalogEditor;
+    friend class CatalogPublisher;
+    friend class CatalogView;
+    friend std::expected<CatalogState, MetaError> build_catalog_state(const MetaSnapshot & snapshot);
+
     /**
      * @brief 恢复元数据
      * @param snapshot 元数据快照
@@ -72,8 +59,9 @@ public:
      * @details 用快照替换当前内存状态，并校验快照结构与 ID 连续性
      */
     [[nodiscard]]
-    std::expected<void, MetaEngineError> restore(const MetaSnapshot & snapshot);
+    std::expected<void, MetaError> restore(const MetaSnapshot & snapshot);
 
+public:
     /**
      * @brief 按名称查找数据库
      * @param name 数据库名
@@ -197,13 +185,14 @@ public:
     [[nodiscard]]
     std::vector<const entry::VectorIndexEntry *> list_vector_indexes(common::CollectionId collection_id) const;
 
+private:
     /**
      * @brief 创建数据库
      * @param request 创建请求
      * @return 新数据库 ID
      */
     [[nodiscard]]
-    std::expected<common::DatabaseId, MetaEngineError> create_database(const CreateDatabaseRequest & request);
+    std::expected<common::DatabaseId, MetaError> create_database(const CreateDatabaseRequest & request);
 
     /**
      * @brief 删除数据库
@@ -212,7 +201,7 @@ public:
      * @details 会级联删除其下所有集合及相关元数据
      */
     [[nodiscard]]
-    std::expected<void, MetaEngineError> drop_database(const DropDatabaseRequest & request);
+    std::expected<void, MetaError> drop_database(const DropDatabaseRequest & request);
 
     /**
      * @brief 创建集合
@@ -220,7 +209,7 @@ public:
      * @return 新集合 ID
      */
     [[nodiscard]]
-    std::expected<common::CollectionId, MetaEngineError> create_collection(const CreateCollectionRequest & request);
+    std::expected<common::CollectionId, MetaError> create_collection(const CreateCollectionRequest & request);
 
     /**
      * @brief 删除集合
@@ -229,7 +218,7 @@ public:
      * @details 会级联删除其下所有列与索引
      */
     [[nodiscard]]
-    std::expected<void, MetaEngineError> drop_collection(const DropCollectionRequest & request);
+    std::expected<void, MetaError> drop_collection(const DropCollectionRequest & request);
 
     /**
      * @brief 创建标量索引
@@ -237,7 +226,7 @@ public:
      * @return 新索引 ID
      */
     [[nodiscard]]
-    std::expected<common::IndexId, MetaEngineError> create_index(const CreateIndexRequest & request);
+    std::expected<common::IndexId, MetaError> create_index(const CreateIndexRequest & request);
 
     /**
      * @brief 删除标量索引
@@ -245,7 +234,7 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, MetaEngineError> drop_index(const DropIndexRequest & request);
+    std::expected<void, MetaError> drop_index(const DropIndexRequest & request);
 
     /**
      * @brief 创建向量索引
@@ -253,7 +242,7 @@ public:
      * @return 新向量索引 ID
      */
     [[nodiscard]]
-    std::expected<common::VIndexId, MetaEngineError> create_vector_index(const CreateVectorIndexRequest & request);
+    std::expected<common::VIndexId, MetaError> create_vector_index(const CreateVectorIndexRequest & request);
 
     /**
      * @brief 删除向量索引
@@ -261,17 +250,9 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, MetaEngineError> drop_vector_index(const DropVectorIndexRequest & request);
+    std::expected<void, MetaError> drop_vector_index(const DropVectorIndexRequest & request);
 
 private:
-    /**
-     * @brief 持久化当前元数据
-     * @return 结果
-     * @note 未绑定存储时直接成功
-     */
-    [[nodiscard]]
-    std::expected<void, MetaEngineError> persist() const;
-
     /**
      * @brief 按 ID 查找可修改的数据库项
      * @param id 数据库 ID
@@ -307,7 +288,122 @@ private:
     std::unordered_map<common::ColumnId, std::unique_ptr<entry::ColumnEntry>> columns_;             ///< 列项
     std::unordered_map<common::IndexId, std::unique_ptr<entry::IndexEntry>> indexes_;               ///< 标量索引项
     std::unordered_map<common::VIndexId, std::unique_ptr<entry::VectorIndexEntry>> vector_indexes_;  ///< 向量索引项
-    MetaStore * store_ {nullptr};                                                       ///< 元数据存储，可为空
 };
+
+/**
+ * @brief 在线或离线 Catalog 的只读视图。
+ * @note Entry 指针仅在所属 Catalog 下一次编辑或发布前有效。
+ */
+class CatalogView
+{
+public:
+    [[nodiscard]] const entry::DatabaseEntry * find_database(std::string_view name) const;
+    [[nodiscard]] const entry::DatabaseEntry * find_database(common::DatabaseId id) const;
+    [[nodiscard]] const entry::CollectionEntry * find_collection(
+        common::DatabaseId database_id, std::string_view name
+    ) const;
+    [[nodiscard]] const entry::CollectionEntry * find_collection(common::CollectionId id) const;
+    [[nodiscard]] const entry::ColumnEntry * find_column(
+        common::CollectionId collection_id, std::string_view name
+    ) const;
+    [[nodiscard]] const entry::ColumnEntry * find_column(common::ColumnId id) const;
+    [[nodiscard]] const entry::IndexEntry * find_index(
+        common::CollectionId collection_id, std::string_view name
+    ) const;
+    [[nodiscard]] const entry::IndexEntry * find_index(common::IndexId id) const;
+    [[nodiscard]] const entry::VectorIndexEntry * find_vector_index(
+        common::CollectionId collection_id, std::string_view name
+    ) const;
+    [[nodiscard]] const entry::VectorIndexEntry * find_vector_index(common::VIndexId id) const;
+    [[nodiscard]] std::vector<const entry::DatabaseEntry *> list_databases() const;
+    [[nodiscard]] std::vector<const entry::CollectionEntry *> list_collections(
+        common::DatabaseId database_id
+    ) const;
+    [[nodiscard]] std::vector<const entry::ColumnEntry *> list_columns(
+        common::CollectionId collection_id
+    ) const;
+    [[nodiscard]] std::vector<const entry::IndexEntry *> list_indexes(
+        common::CollectionId collection_id
+    ) const;
+    [[nodiscard]] std::vector<const entry::VectorIndexEntry *> list_vector_indexes(
+        common::CollectionId collection_id
+    ) const;
+    [[nodiscard]] MetaSnapshot snapshot() const;
+
+private:
+    explicit CatalogView(const CatalogState & state) noexcept : state_(&state) {}
+    const CatalogState * state_;
+
+    friend class CatalogEditor;
+    friend class CatalogPublisher;
+};
+
+/**
+ * @brief Catalog 的离线编辑器；不执行文件 IO。
+ */
+class CatalogEditor
+{
+public:
+    CatalogEditor() = default;
+    CatalogEditor(CatalogEditor &&) noexcept = default;
+    CatalogEditor & operator=(CatalogEditor &&) noexcept = default;
+    CatalogEditor(const CatalogEditor &) = delete;
+    CatalogEditor & operator=(const CatalogEditor &) = delete;
+
+    [[nodiscard]] static std::expected<CatalogEditor, MetaError> from(CatalogView source);
+    [[nodiscard]] static std::expected<CatalogEditor, MetaError> from(const MetaSnapshot & source);
+
+    [[nodiscard]] CatalogView view() const noexcept { return CatalogView {state_}; }
+    [[nodiscard]] MetaSnapshot snapshot() const { return state_.snapshot(); }
+
+    [[nodiscard]] std::expected<common::DatabaseId, MetaError> create_database(
+        const CreateDatabaseRequest & request
+    );
+    [[nodiscard]] std::expected<void, MetaError> drop_database(const DropDatabaseRequest & request);
+    [[nodiscard]] std::expected<common::CollectionId, MetaError> create_collection(
+        const CreateCollectionRequest & request
+    );
+    [[nodiscard]] std::expected<void, MetaError> drop_collection(const DropCollectionRequest & request);
+    [[nodiscard]] std::expected<common::IndexId, MetaError> create_index(
+        const CreateIndexRequest & request
+    );
+    [[nodiscard]] std::expected<void, MetaError> drop_index(const DropIndexRequest & request);
+    [[nodiscard]] std::expected<common::VIndexId, MetaError> create_vector_index(
+        const CreateVectorIndexRequest & request
+    );
+    [[nodiscard]] std::expected<void, MetaError> drop_vector_index(
+        const DropVectorIndexRequest & request
+    );
+
+private:
+    CatalogState state_;
+};
+
+/**
+ * @brief 在线 Catalog 的唯一发布者。
+ */
+class CatalogPublisher
+{
+public:
+    CatalogPublisher(
+        std::filesystem::path path,
+        filesystem::FileSystem & filesystem
+    );
+
+    [[nodiscard]] std::expected<void, MetaError> open_or_initialize();
+    [[nodiscard]] std::expected<void, MetaError> publish_committed(const MetaSnapshot & snapshot);
+    [[nodiscard]] CatalogView view() const noexcept { return CatalogView {state_}; }
+    [[nodiscard]] MetaSnapshot snapshot() const { return state_.snapshot(); }
+
+private:
+    CatalogState state_;
+    MetaStore store_;
+};
+
+/**
+ * @brief 从快照构建并完整验证 Catalog 状态。
+ */
+[[nodiscard]]
+std::expected<CatalogState, MetaError> build_catalog_state(const MetaSnapshot & snapshot);
 
 } // namespace litedb::core::meta
