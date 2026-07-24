@@ -1,5 +1,6 @@
 #include "core/vindex/flat_index/flat_index.hpp"
 #include "core/vindex/hnsw_index/hnsw_index.hpp"
+#include "core/vindex/vector_distance.hpp"
 #include "core/vindex/vector_index_key.hpp"
 #include "core/vindex/vector_index_engine.hpp"
 
@@ -82,18 +83,18 @@ void require_records(
 std::vector<VectorSearchResult> results(std::expected<std::vector<VectorSearchResult>, VectorIndexError> result)
 {
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 VectorIndexKey vector_key(VectorValue vector)
 {
     auto result = VectorIndexKey::from_vector(std::move(vector));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 HnswIndexOptions hnsw_options()
@@ -202,7 +203,7 @@ void test_hnsw_store_rejects_corrupted_commit()
     }
     auto opened = HnswIndex::open(index_path, 12, 20, 31, hnsw_options(), filesystem);
     require(!opened.has_value(), "corrupted hnsw commit should be rejected");
-    require(opened.error().code == VectorIndexErrorCode::CorruptedIndex, "corrupted hnsw error code mismatch");
+    require(opened.error().is(VectorIndexErrorCode::ChecksumMismatch), "corrupted hnsw error code mismatch");
     std::filesystem::remove_all(directory);
 }
 
@@ -220,7 +221,7 @@ void test_hnsw_rejects_descriptor_mismatch()
     mismatched.metric = VectorDistanceMetric::Cosine;
     auto opened = HnswIndex::open(index_path, 13, 20, 31, mismatched, filesystem);
     require(!opened.has_value(), "HNSW descriptor mismatch should be rejected");
-    require(opened.error().code == VectorIndexErrorCode::CorruptedIndex, "descriptor mismatch error code mismatch");
+    require(opened.error().is(VectorIndexErrorCode::CorruptedIndex), "descriptor mismatch error code mismatch");
     std::filesystem::remove_all(directory);
 }
 
@@ -244,6 +245,11 @@ void test_hnsw_matches_brute_force_top_one()
         vectors.push_back({x, y});
         require(created->insert(vector_key({x, y}), index + 1).has_value(), "insert recall vector failed");
     }
+    const auto mutation_stats = created->stats();
+    require(
+        mutation_stats.last_commit_upsert_count < mutation_stats.physical_node_count / 2,
+        "HNSW insert should persist only touched nodes"
+    );
 
     std::size_t matches = 0;
     for (std::size_t query_index = 0; query_index < 32; ++query_index) {
@@ -339,11 +345,11 @@ void test_flat_index_validates_dimensions_and_storage()
 
         auto invalid = index.search(vector_key({1.0}), VectorSearchRequest {});
         require(!invalid.has_value(), "dimension mismatch should fail");
-        require(invalid.error().code == VectorIndexErrorCode::InvalidDimension, "dimension error code mismatch");
+        require(invalid.error().is(VectorIndexErrorCode::InvalidDimension), "dimension error code mismatch");
 
         auto missing_storage = index.search(vector_key({1.0, 0.0}), VectorSearchRequest {});
         require(!missing_storage.has_value(), "missing collection should fail");
-        require(missing_storage.error().code == VectorIndexErrorCode::StorageFailure, "storage error code mismatch");
+        require(missing_storage.error().is(VectorIndexErrorCode::StorageFailure), "storage error code mismatch");
 
         require(index.insert(vector_key({1.0, 0.0}), 1).has_value(), "flat insert hook should be a no-op");
         require(index.erase(1).has_value(), "flat erase hook should be a no-op");
@@ -398,7 +404,7 @@ void test_vector_index_engine_lifecycle()
         };
         auto invalid_created = engine.create_index(invalid, vectors_schema(), storage);
         require(!invalid_created.has_value(), "invalid vector metadata should be rejected");
-        require(invalid_created.error().code == VectorIndexErrorCode::InvalidMetadata, "invalid metadata error code mismatch");
+        require(invalid_created.error().is(VectorIndexErrorCode::InvalidMetadata), "invalid metadata error code mismatch");
 
         require(engine.drop_index(10).has_value(), "drop vector index failed");
         require(!engine.find_index(10).has_value(), "dropped vector index should be absent");
@@ -498,6 +504,72 @@ void test_vector_index_engine_restores_and_rebuilds_all()
     std::filesystem::remove_all(path);
 }
 
+void test_vector_index_checkpoint_compacts_tombstones()
+{
+    auto filesystem = filesystem::create_platform_filesystem();
+    const auto path = temporary_path();
+    {
+        storage::StorageEngine storage {
+            path / "storage",
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
+        require(storage.create_collection(vectors_schema()).has_value(), "create compaction collection failed");
+        constexpr std::size_t RecordCount = 1024;
+        for (std::size_t index = 0; index < RecordCount; ++index) {
+            require(
+                storage.insert(
+                    20,
+                    vector_record(
+                        std::to_string(index),
+                        Value {VectorValue {static_cast<double>(index), static_cast<double>(index % 17)}}
+                    )
+                ).has_value(),
+                "insert compaction vector failed"
+            );
+        }
+
+        meta::entry::VectorIndexEntry entry {
+            10, 20, 31, "vectors_embedding",
+            meta::entry::VectorIndexKind::Hnsw,
+            meta::entry::VectorDistanceMetric::L2,
+            2,
+            meta::entry::HnswOptions {
+                .max_neighbors = 4,
+                .ef_construction = 32,
+                .ef_search_default = 32,
+                .random_seed = 7,
+            },
+        };
+        VectorIndexEngine engine {path / "indexes", filesystem};
+        require(engine.create_index(entry, vectors_schema(), storage).has_value(), "create compaction index failed");
+
+        for (std::size_t index = 0; index < RecordCount; ++index) {
+            const auto data = vector_record(
+                std::to_string(index),
+                Value {VectorValue {static_cast<double>(index), static_cast<double>(index % 17)}}
+            );
+            auto bindings = engine.prepare_delete(20, data);
+            require(bindings.has_value(), "prepare compaction delete failed");
+            require(engine.on_delete(index + 1, *bindings).has_value(), "apply compaction delete failed");
+            require(storage.erase(20, index + 1).has_value(), "erase compaction storage record failed");
+        }
+
+        const auto before = engine.maintenance_stats();
+        require(before.tombstone_count == RecordCount, "compaction tombstone count mismatch");
+        auto checkpointed = engine.checkpoint(storage);
+        if (!checkpointed) {
+            throw std::runtime_error("vector index checkpoint failed: " + checkpointed.error().message());
+        }
+        const auto after = engine.maintenance_stats();
+        require(after.tombstone_count == 0, "checkpoint did not remove HNSW tombstones");
+        require(after.physical_node_count == 0 && after.active_count == 0, "checkpoint graph should be empty");
+        require(after.file_bytes < before.file_bytes, "checkpoint did not shrink HNSW file");
+        require(after.last_compaction_reclaimed_bytes > 0, "checkpoint reclaimed-byte metric mismatch");
+    }
+    std::filesystem::remove_all(path);
+}
+
 void test_vector_index_key()
 {
     auto key = VectorIndexKey::from_value(Value {VectorValue {1.0, 2.0}});
@@ -507,11 +579,54 @@ void test_vector_index_key()
 
     auto scalar = VectorIndexKey::from_value(Value {1.0});
     require(!scalar.has_value(), "scalar value should not become vector key");
-    require(scalar.error().code == VectorIndexErrorCode::InvalidDimension, "scalar key error code mismatch");
+    require(scalar.error().is(VectorIndexErrorCode::InvalidDimension), "scalar key error code mismatch");
 
     auto empty = VectorIndexKey::from_vector({});
     require(!empty.has_value(), "empty vector should not become vector key");
-    require(empty.error().code == VectorIndexErrorCode::EmptyQuery, "empty vector key error code mismatch");
+    require(empty.error().is(VectorIndexErrorCode::EmptyQuery), "empty vector key error code mismatch");
+
+    auto not_finite = VectorIndexKey::from_vector({
+        std::numeric_limits<double>::quiet_NaN(),
+        1.0,
+    });
+    require(!not_finite.has_value(), "non-finite vector key should fail");
+    require(
+        not_finite.error().is(VectorIndexErrorCode::InvalidVectorValue),
+        "non-finite vector key error code mismatch"
+    );
+}
+
+void test_vector_distance_numeric_limits()
+{
+    const auto maximum = std::numeric_limits<double>::max();
+    auto overflowing_l2 = vector_distance(
+        {maximum},
+        {-maximum},
+        VectorDistanceMetric::L2
+    );
+    require(!overflowing_l2, "overflowing L2 distance should fail");
+    require(
+        overflowing_l2.error().is(VectorIndexErrorCode::NumericOverflow),
+        "overflowing L2 error code mismatch"
+    );
+
+    auto overflowing_inner_product = vector_distance(
+        {maximum},
+        {maximum},
+        VectorDistanceMetric::InnerProduct
+    );
+    require(!overflowing_inner_product, "overflowing inner product should fail");
+    require(
+        overflowing_inner_product.error().is(VectorIndexErrorCode::NumericOverflow),
+        "overflowing inner product error code mismatch"
+    );
+
+    auto stable_cosine = vector_distance(
+        {maximum, maximum},
+        {maximum, maximum},
+        VectorDistanceMetric::Cosine
+    );
+    require(stable_cosine && std::abs(*stable_cosine) < 0.000001, "large cosine distance should remain finite");
 }
 
 } // namespace
@@ -528,7 +643,9 @@ int main()
         test_flat_index_validates_dimensions_and_storage();
         test_vector_index_engine_lifecycle();
         test_vector_index_engine_restores_and_rebuilds_all();
+        test_vector_index_checkpoint_compacts_tombstones();
         test_vector_index_key();
+        test_vector_distance_numeric_limits();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

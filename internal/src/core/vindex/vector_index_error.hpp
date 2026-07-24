@@ -1,6 +1,11 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+
+#include "core/common/ids.hpp"
+#include "core/error/error.hpp"
 
 namespace litedb::core::vindex
 {
@@ -8,31 +13,84 @@ namespace litedb::core::vindex
 /**
  * @brief 向量索引错误码
  */
-enum class VectorIndexErrorCode
+enum class VectorIndexErrorCode : std::uint8_t
 {
-    UnsupportedMetric,      ///< 不支持的距离度量
-    UnsupportedIndexKind,   ///< 不支持的向量索引类型
-    InvalidDimension,       ///< 向量维度无效
-    EmptyQuery,             ///< 查询向量为空
-    RecordAlreadyExists,    ///< 记录已存在
-    RecordNotFound,         ///< 记录不存在
-    IndexAlreadyExists,     ///< 索引已存在
-    IndexNotFound,          ///< 索引不存在
-    InvalidMetadata,        ///< 索引元数据或目标列无效
-    IndexFileMissing,       ///< 持久化索引文件不存在
-    CorruptedIndex,         ///< 持久化索引内容损坏或不兼容
-    StaleIndex,             ///< 持久化索引与集合数据不一致
-    FileSystemFailure,      ///< 文件系统操作失败
-    StorageFailure,         ///< 存储扫描失败
+    UnsupportedMetric = 0,
+    UnsupportedIndexKind = 1,
+    InvalidDimension = 2,
+    EmptyQuery = 3,
+    RecordAlreadyExists = 4,
+    RecordNotFound = 5,
+    IndexAlreadyExists = 6,
+    IndexNotFound = 7,
+    InvalidMetadata = 8,
+    IndexFileMissing = 9,
+    CorruptedIndex = 10,
+    StaleIndex = 11,
+    FileSystemFailure = 12,
+    StorageFailure = 13,
+    InvalidVectorValue = 14,
+    NumericOverflow = 15,
+    InvalidMutation = 16,
+    ResourceLimitExceeded = 17,
+    DurabilityUnknown = 18,
+    RecoveryRequired = 19,
+    UnsupportedVersion = 20,
+    ChecksumMismatch = 21,
+    CorruptedGraph = 22,
 };
 
-/**
- * @brief 向量索引错误
- */
-struct VectorIndexError
+enum class VectorIndexOperation : std::uint8_t
 {
-    VectorIndexErrorCode code;  ///< 错误码
-    std::string message;        ///< 错误信息
+    ValidateKey,
+    ComputeDistance,
+    Create,
+    Open,
+    Build,
+    Restore,
+    Reload,
+    Insert,
+    Erase,
+    Search,
+    Commit,
+    EncodeHeader,
+    DecodeHeader,
+    EncodeFrame,
+    DecodeFrame,
+    Read,
+    Append,
+    Truncate,
+    Sync,
+    Compact,
+    Publish,
+    Drop,
+    Verify,
 };
+
+struct VectorIndexErrorContext
+{
+    VectorIndexOperation operation {VectorIndexOperation::Search};
+    common::VIndexId index_id {0};
+    common::CollectionId collection_id {0};
+    common::ColumnId column_id {0};
+    common::RecordId record_id {0};
+    std::optional<std::uint64_t> node_id;
+    std::optional<std::uint64_t> frame_sequence;
+    std::filesystem::path path;
+    std::optional<std::uint16_t> source_code;
+};
+
+using VectorIndexError = error::Error;
 
 } // namespace litedb::core::vindex
+
+namespace litedb::core::error
+{
+
+template <>
+struct ErrorTraits<vindex::VectorIndexErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::VectorIndex;
+};
+
+} // namespace litedb::core::error

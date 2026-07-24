@@ -1,6 +1,8 @@
 #include "core/vindex/vector_index_engine.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -20,7 +22,41 @@ namespace
 [[nodiscard]]
 VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 {
-    return VectorIndexError {code, std::move(message)};
+    return VectorIndexError {code, message};
+}
+
+[[nodiscard]]
+VectorIndexError source_error(
+    VectorIndexErrorCode code,
+    error::Error source,
+    VectorIndexOperation operation,
+    common::VIndexId index_id = 0,
+    common::CollectionId collection_id = 0,
+    const std::filesystem::path & path = {}
+)
+{
+    return VectorIndexError {
+        code,
+        source.message(),
+        VectorIndexErrorContext {
+            .operation = operation,
+            .index_id = index_id,
+            .collection_id = collection_id,
+            .path = path,
+            .source_code = source.encode_code(),
+        },
+    };
+}
+
+[[nodiscard]]
+bool is_rebuildable_error(const VectorIndexError & error) noexcept
+{
+    return error.is(VectorIndexErrorCode::IndexFileMissing) ||
+        error.is(VectorIndexErrorCode::CorruptedIndex) ||
+        error.is(VectorIndexErrorCode::UnsupportedVersion) ||
+        error.is(VectorIndexErrorCode::ChecksumMismatch) ||
+        error.is(VectorIndexErrorCode::CorruptedGraph) ||
+        error.is(VectorIndexErrorCode::StaleIndex);
 }
 
 [[nodiscard]]
@@ -83,6 +119,10 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
     const storage::StorageEngine & storage
 )
 {
+    auto cleaned = cleanup_stale_temporary_files();
+    if (!cleaned) {
+        return std::unexpected(std::move(cleaned.error()));
+    }
     VectorIndexEngine restored {data_directory_, *filesystem_};
     for (const auto * database : catalog.list_databases()) {
         if (database == nullptr) {
@@ -114,9 +154,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
                     return std::unexpected(std::move(descriptor.error()));
                 }
                 auto store = restored.restore_store(*descriptor, storage);
-                if (!store && (store.error().code == VectorIndexErrorCode::IndexFileMissing ||
-                               store.error().code == VectorIndexErrorCode::CorruptedIndex ||
-                               store.error().code == VectorIndexErrorCode::StaleIndex)) {
+                if (!store && is_rebuildable_error(store.error())) {
                     store = restored.rebuild_store(*descriptor, storage);
                 }
                 if (!store) {
@@ -128,6 +166,9 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
     }
     indexes_by_id_ = std::move(restored.indexes_by_id_);
     indexes_by_collection_ = std::move(restored.indexes_by_collection_);
+    dirty_collections_.clear();
+    last_compaction_reclaimed_bytes_ = 0;
+    last_compaction_duration_us_ = 0;
     return {};
 }
 
@@ -167,9 +208,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
         };
         auto store = load_store();
         if (!store && descriptor->kind == VectorIndexKind::Hnsw &&
-            (store.error().code == VectorIndexErrorCode::IndexFileMissing ||
-             store.error().code == VectorIndexErrorCode::CorruptedIndex ||
-             store.error().code == VectorIndexErrorCode::StaleIndex)) {
+            is_rebuildable_error(store.error())) {
             store = restored.rebuild_store(*descriptor, storage);
         }
         if (!store) return std::unexpected(std::move(store.error()));
@@ -187,6 +226,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
         ids != restored.indexes_by_collection_.end()) {
         indexes_by_collection_.emplace(collection_id, std::move(ids->second));
     }
+    dirty_collections_.erase(collection_id);
     return {};
 }
 
@@ -198,6 +238,20 @@ std::expected<void, VectorIndexError> VectorIndexEngine::drop_index(common::VInd
     }
 
     const auto descriptor = found->second.descriptor();
+    if (descriptor.kind == VectorIndexKind::Hnsw) {
+        auto removed = filesystem_->remove(index_path(index_id));
+        if (!removed) {
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::FileSystemFailure,
+                std::move(removed.error()),
+                VectorIndexOperation::Drop,
+                index_id,
+                descriptor.collection_id,
+                index_path(index_id)
+            ));
+        }
+    }
+
     auto collection = indexes_by_collection_.find(descriptor.collection_id);
     if (collection != indexes_by_collection_.end()) {
         auto & ids = collection->second;
@@ -206,14 +260,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::drop_index(common::VInd
             indexes_by_collection_.erase(collection);
         }
     }
-
     indexes_by_id_.erase(found);
-    if (descriptor.kind == VectorIndexKind::Hnsw) {
-        auto removed = filesystem_->remove(index_path(index_id));
-        if (!removed) {
-            return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, removed.error().message()));
-        }
-    }
     return {};
 }
 
@@ -229,6 +276,138 @@ std::expected<void, VectorIndexError> VectorIndexEngine::drop_collection_indexes
         auto dropped = drop_index(index_id);
         if (!dropped) {
             return dropped;
+        }
+    }
+    return {};
+}
+
+std::expected<void, VectorIndexError> VectorIndexEngine::checkpoint(
+    const storage::StorageEngine & storage
+)
+{
+    constexpr std::size_t MinimumTombstones = 1024;
+    constexpr std::uint64_t MinimumFileBytes = 64ULL << 20U;
+
+    for (auto & [index_id, store] : indexes_by_id_) {
+        if (store.descriptor().kind != VectorIndexKind::Hnsw) {
+            continue;
+        }
+        auto & hnsw = static_cast<HnswIndex &>(store.backend());
+        const auto before = hnsw.stats();
+        const auto tombstone_threshold =
+            before.tombstone_count >= MinimumTombstones &&
+            before.tombstone_count >= (before.physical_node_count + 3) / 4;
+        const auto size_threshold =
+            before.file_bytes >= MinimumFileBytes &&
+            before.estimated_compact_bytes <= std::numeric_limits<std::uint64_t>::max() / 2 &&
+            before.file_bytes >= before.estimated_compact_bytes * 2;
+        if (!tombstone_threshold && !size_threshold) {
+            continue;
+        }
+
+        const auto started = std::chrono::steady_clock::now();
+        const auto descriptor = store.descriptor();
+        const auto final_path = index_path(index_id);
+        auto temporary_path = final_path;
+        temporary_path += ".compact";
+        auto temporary_exists = filesystem_->exists(temporary_path);
+        if (!temporary_exists) {
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::FileSystemFailure,
+                std::move(temporary_exists.error()),
+                VectorIndexOperation::Compact,
+                index_id,
+                descriptor.collection_id,
+                temporary_path
+            ));
+        }
+        if (*temporary_exists) {
+            auto removed = filesystem_->remove(temporary_path);
+            if (!removed) {
+                return std::unexpected(source_error(
+                    VectorIndexErrorCode::FileSystemFailure,
+                    std::move(removed.error()),
+                    VectorIndexOperation::Compact,
+                    index_id,
+                    descriptor.collection_id,
+                    temporary_path
+                ));
+            }
+        }
+
+        auto compacted_backend = make_backend(descriptor, storage, false, temporary_path);
+        if (!compacted_backend) {
+            return std::unexpected(std::move(compacted_backend.error()));
+        }
+        auto built = build_from_storage(**compacted_backend, descriptor, storage);
+        if (!built) {
+            compacted_backend->reset();
+            (void) filesystem_->remove(temporary_path);
+            return std::unexpected(std::move(built.error()));
+        }
+        compacted_backend->reset();
+
+        auto closed = hnsw.close();
+        if (!closed) {
+            (void) filesystem_->remove(temporary_path);
+            return std::unexpected(std::move(closed.error()));
+        }
+        auto replaced = filesystem_->replace_file_atomic(temporary_path, final_path);
+        if (!replaced) {
+            auto reopened = make_backend(descriptor, storage, true, final_path);
+            if (reopened) {
+                store = VectorIndexStore {descriptor, std::move(*reopened)};
+            } else {
+                dirty_collections_.insert(descriptor.collection_id);
+                return std::unexpected(make_error(
+                    VectorIndexErrorCode::RecoveryRequired,
+                    "HNSW compaction publication failed and the previous store could not be reopened"
+                ));
+            }
+            (void) filesystem_->remove(temporary_path);
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::FileSystemFailure,
+                std::move(replaced.error()),
+                VectorIndexOperation::Publish,
+                index_id,
+                descriptor.collection_id,
+                final_path
+            ));
+        }
+
+        std::optional<VectorIndexError> directory_error;
+        const auto parent = final_path.parent_path();
+        if (!parent.empty()) {
+            auto synced = filesystem_->sync_directory(parent);
+            if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
+                directory_error.emplace(source_error(
+                    VectorIndexErrorCode::DurabilityUnknown,
+                    std::move(synced.error()),
+                    VectorIndexOperation::Sync,
+                    index_id,
+                    descriptor.collection_id,
+                    parent
+                ));
+            }
+        }
+
+        auto reopened = make_backend(descriptor, storage, true, final_path);
+        if (!reopened) {
+            dirty_collections_.insert(descriptor.collection_id);
+            return std::unexpected(std::move(reopened.error()));
+        }
+        const auto & rebuilt_hnsw = static_cast<const HnswIndex &>(**reopened);
+        const auto after = rebuilt_hnsw.stats();
+        store = VectorIndexStore {descriptor, std::move(*reopened)};
+        last_compaction_reclaimed_bytes_ =
+            before.file_bytes > after.file_bytes ? before.file_bytes - after.file_bytes : 0;
+        last_compaction_duration_us_ = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started
+            ).count()
+        );
+        if (directory_error) {
+            return std::unexpected(std::move(*directory_error));
         }
     }
     return {};
@@ -262,6 +441,12 @@ std::expected<VectorIndexKeyBindings, VectorIndexError> VectorIndexEngine::prepa
 ) const
 {
     VectorIndexKeyBindings bindings;
+    if (dirty_collections_.contains(collection_id)) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::RecoveryRequired,
+            "Vector indexes for the collection require reload"
+        ));
+    }
     const auto found = indexes_by_collection_.find(collection_id);
     if (found == indexes_by_collection_.end()) {
         return bindings;
@@ -293,10 +478,19 @@ std::expected<void, VectorIndexError> VectorIndexEngine::on_insert(
     for (const auto & binding : bindings) {
         auto inserted = insert(binding.index_id, binding.key, record_id);
         if (!inserted) {
+            bool rollback_failed = false;
             for (auto it = applied.rbegin(); it != applied.rend(); ++it) {
-                (void) erase(it->index_id, record_id);
+                auto rolled_back = erase(it->index_id, record_id);
+                rollback_failed = rollback_failed || !rolled_back;
             }
-            return inserted;
+            if (rollback_failed) {
+                mark_recovery_required(binding.index_id);
+                return std::unexpected(make_error(
+                    VectorIndexErrorCode::RecoveryRequired,
+                    "Vector index insert rollback failed; collection reload is required"
+                ));
+            }
+            return std::unexpected(std::move(inserted.error()));
         }
         applied.push_back(binding);
     }
@@ -310,6 +504,12 @@ std::expected<VectorIndexUpdateBindings, VectorIndexError> VectorIndexEngine::pr
 ) const
 {
     VectorIndexUpdateBindings bindings;
+    if (dirty_collections_.contains(collection_id)) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::RecoveryRequired,
+            "Vector indexes for the collection require reload"
+        ));
+    }
     const auto found = indexes_by_collection_.find(collection_id);
     if (found == indexes_by_collection_.end()) {
         return bindings;
@@ -356,28 +556,53 @@ std::expected<void, VectorIndexError> VectorIndexEngine::on_update(
         if (binding.old_key) {
             auto erased = erase(binding.index_id, record_id);
             if (!erased) {
+                bool rollback_failed = false;
                 for (auto it = applied.rbegin(); it != applied.rend(); ++it) {
-                    (void) erase((*it)->index_id, record_id);
+                    if ((*it)->new_key) {
+                        auto removed = erase((*it)->index_id, record_id);
+                        rollback_failed = rollback_failed || !removed;
+                    }
                     if ((*it)->old_key) {
-                        (void) insert((*it)->index_id, *(*it)->old_key, record_id);
+                        auto restored = insert((*it)->index_id, *(*it)->old_key, record_id);
+                        rollback_failed = rollback_failed || !restored;
                     }
                 }
-                return erased;
+                if (rollback_failed) {
+                    mark_recovery_required(binding.index_id);
+                    return std::unexpected(make_error(
+                        VectorIndexErrorCode::RecoveryRequired,
+                        "Vector index update rollback failed; collection reload is required"
+                    ));
+                }
+                return std::unexpected(std::move(erased.error()));
             }
         }
         if (binding.new_key) {
             auto inserted = insert(binding.index_id, *binding.new_key, record_id);
             if (!inserted) {
+                bool rollback_failed = false;
                 if (binding.old_key) {
-                    (void) insert(binding.index_id, *binding.old_key, record_id);
+                    auto restored = insert(binding.index_id, *binding.old_key, record_id);
+                    rollback_failed = rollback_failed || !restored;
                 }
                 for (auto it = applied.rbegin(); it != applied.rend(); ++it) {
-                    (void) erase((*it)->index_id, record_id);
+                    if ((*it)->new_key) {
+                        auto removed = erase((*it)->index_id, record_id);
+                        rollback_failed = rollback_failed || !removed;
+                    }
                     if ((*it)->old_key) {
-                        (void) insert((*it)->index_id, *(*it)->old_key, record_id);
+                        auto restored = insert((*it)->index_id, *(*it)->old_key, record_id);
+                        rollback_failed = rollback_failed || !restored;
                     }
                 }
-                return inserted;
+                if (rollback_failed) {
+                    mark_recovery_required(binding.index_id);
+                    return std::unexpected(make_error(
+                        VectorIndexErrorCode::RecoveryRequired,
+                        "Vector index update rollback failed; collection reload is required"
+                    ));
+                }
+                return std::unexpected(std::move(inserted.error()));
             }
         }
         applied.push_back(&binding);
@@ -403,10 +628,19 @@ std::expected<void, VectorIndexError> VectorIndexEngine::on_delete(
     for (const auto & binding : bindings) {
         auto erased = erase(binding.index_id, record_id);
         if (!erased) {
+            bool rollback_failed = false;
             for (auto it = applied.rbegin(); it != applied.rend(); ++it) {
-                (void) insert(it->index_id, it->key, record_id);
+                auto restored = insert(it->index_id, it->key, record_id);
+                rollback_failed = rollback_failed || !restored;
             }
-            return erased;
+            if (rollback_failed) {
+                mark_recovery_required(binding.index_id);
+                return std::unexpected(make_error(
+                    VectorIndexErrorCode::RecoveryRequired,
+                    "Vector index delete rollback failed; collection reload is required"
+                ));
+            }
+            return std::unexpected(std::move(erased.error()));
         }
         applied.push_back(binding);
     }
@@ -422,6 +656,12 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> VectorIndexEngi
     const auto * index = find_store(index_id);
     if (index == nullptr) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexNotFound, "Vector index not found"));
+    }
+    if (dirty_collections_.contains(index->descriptor().collection_id)) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::RecoveryRequired,
+            "Vector indexes for the collection require reload"
+        ));
     }
     return index->search(query, request);
 }
@@ -453,10 +693,34 @@ std::vector<ManagedVectorIndexView> VectorIndexEngine::list_indexes(common::Coll
     return views;
 }
 
+VectorIndexMaintenanceStats VectorIndexEngine::maintenance_stats() const noexcept
+{
+    VectorIndexMaintenanceStats result {
+        .last_compaction_reclaimed_bytes = last_compaction_reclaimed_bytes_,
+        .last_compaction_duration_us = last_compaction_duration_us_,
+    };
+    for (const auto & [index_id, store] : indexes_by_id_) {
+        if (store.descriptor().kind != VectorIndexKind::Hnsw) {
+            continue;
+        }
+        const auto & hnsw = static_cast<const HnswIndex &>(store.backend());
+        const auto stats = hnsw.stats();
+        result.frame_count += stats.frame_count;
+        result.physical_node_count += stats.physical_node_count;
+        result.active_count += stats.active_count;
+        result.tombstone_count += stats.tombstone_count;
+        result.file_bytes += stats.file_bytes;
+    }
+    return result;
+}
+
 void VectorIndexEngine::clear() noexcept
 {
     indexes_by_id_.clear();
     indexes_by_collection_.clear();
+    dirty_collections_.clear();
+    last_compaction_reclaimed_bytes_ = 0;
+    last_compaction_duration_us_ = 0;
 }
 
 std::expected<VectorIndexDescriptor, VectorIndexError> VectorIndexEngine::make_descriptor(
@@ -474,6 +738,17 @@ std::expected<VectorIndexDescriptor, VectorIndexError> VectorIndexEngine::make_d
     }
     if (index_entry.dimension() == 0) {
         return std::unexpected(make_error(VectorIndexErrorCode::InvalidMetadata, "Vector index dimension must be greater than zero"));
+    }
+    if (index_entry.dimension() > (1U << 20U) ||
+        index_entry.max_neighbors() == 0 || index_entry.max_neighbors() > (1U << 20U) ||
+        index_entry.ef_construction() < index_entry.max_neighbors() ||
+        index_entry.ef_construction() > (1U << 24U) ||
+        index_entry.ef_search_default() == 0 ||
+        index_entry.ef_search_default() > (1U << 24U)) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::InvalidMetadata,
+            "HNSW metadata parameters are outside the supported range"
+        ));
     }
 
     VectorDistanceMetric metric;
@@ -512,31 +787,86 @@ std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::create_stor
     const storage::StorageEngine & storage
 ) const
 {
-    if (descriptor.kind == VectorIndexKind::Hnsw) {
-        auto exists = filesystem_->exists(index_path(descriptor.index_id));
-        if (!exists) {
-            return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, exists.error().message()));
+    if (descriptor.kind != VectorIndexKind::Hnsw) {
+        auto backend = make_backend(descriptor, storage, false);
+        if (!backend) {
+            return std::unexpected(std::move(backend.error()));
         }
-        if (*exists) {
-            auto removed = filesystem_->remove(index_path(descriptor.index_id));
-            if (!removed) {
-                return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, removed.error().message()));
-            }
+        return VectorIndexStore {descriptor, std::move(*backend)};
+    }
+
+    const auto final_path = index_path(descriptor.index_id);
+    auto temporary_path = final_path;
+    temporary_path += ".building";
+    auto temporary_exists = filesystem_->exists(temporary_path);
+    if (!temporary_exists) {
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::FileSystemFailure,
+            std::move(temporary_exists.error()),
+            VectorIndexOperation::Create,
+            descriptor.index_id,
+            descriptor.collection_id,
+            temporary_path
+        ));
+    }
+    if (*temporary_exists) {
+        auto removed = filesystem_->remove(temporary_path);
+        if (!removed) {
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::FileSystemFailure,
+                std::move(removed.error()),
+                VectorIndexOperation::Drop,
+                descriptor.index_id,
+                descriptor.collection_id,
+                temporary_path
+            ));
         }
     }
-    auto backend = make_backend(descriptor, storage, false);
+
+    auto backend = make_backend(descriptor, storage, false, temporary_path);
     if (!backend) {
         return std::unexpected(std::move(backend.error()));
     }
-    if (descriptor.kind == VectorIndexKind::Hnsw) {
-        auto built = build_from_storage(**backend, descriptor, storage);
-        if (!built) {
-            backend->reset();
-            (void) filesystem_->remove(index_path(descriptor.index_id));
-            return std::unexpected(std::move(built.error()));
+    auto built = build_from_storage(**backend, descriptor, storage);
+    if (!built) {
+        backend->reset();
+        (void) filesystem_->remove(temporary_path);
+        return std::unexpected(std::move(built.error()));
+    }
+    backend->reset();
+
+    auto replaced = filesystem_->replace_file_atomic(temporary_path, final_path);
+    if (!replaced) {
+        (void) filesystem_->remove(temporary_path);
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::FileSystemFailure,
+            std::move(replaced.error()),
+            VectorIndexOperation::Publish,
+            descriptor.index_id,
+            descriptor.collection_id,
+            final_path
+        ));
+    }
+    const auto parent = final_path.parent_path();
+    if (!parent.empty()) {
+        auto synced = filesystem_->sync_directory(parent);
+        if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::DurabilityUnknown,
+                std::move(synced.error()),
+                VectorIndexOperation::Sync,
+                descriptor.index_id,
+                descriptor.collection_id,
+                parent
+            ));
         }
     }
-    return VectorIndexStore {descriptor, std::move(*backend)};
+
+    auto opened = make_backend(descriptor, storage, true, final_path);
+    if (!opened) {
+        return std::unexpected(std::move(opened.error()));
+    }
+    return VectorIndexStore {descriptor, std::move(*opened)};
 }
 
 std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::restore_store(
@@ -546,7 +876,14 @@ std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::restore_sto
 {
     auto exists = filesystem_->exists(index_path(descriptor.index_id));
     if (!exists) {
-        return std::unexpected(make_error(VectorIndexErrorCode::FileSystemFailure, exists.error().message()));
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::FileSystemFailure,
+            std::move(exists.error()),
+            VectorIndexOperation::Open,
+            descriptor.index_id,
+            descriptor.collection_id,
+            index_path(descriptor.index_id)
+        ));
     }
     if (!*exists) {
         return std::unexpected(make_error(VectorIndexErrorCode::IndexFileMissing, "Persisted vector index file is missing"));
@@ -577,7 +914,8 @@ std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::rebuild_sto
 std::expected<std::unique_ptr<VectorIndex>, VectorIndexError> VectorIndexEngine::make_backend(
     const VectorIndexDescriptor & descriptor,
     const storage::StorageEngine & storage,
-    bool restore
+    bool restore,
+    std::filesystem::path path
 ) const
 {
     switch (descriptor.kind) {
@@ -589,6 +927,9 @@ std::expected<std::unique_ptr<VectorIndex>, VectorIndexError> VectorIndexEngine:
             .metric = descriptor.metric,
         }, storage)};
     case VectorIndexKind::Hnsw: {
+        if (path.empty()) {
+            path = index_path(descriptor.index_id);
+        }
         HnswIndexOptions options {
             .dimension = descriptor.dimension,
             .metric = descriptor.metric,
@@ -598,9 +939,9 @@ std::expected<std::unique_ptr<VectorIndex>, VectorIndexError> VectorIndexEngine:
             .random_seed = descriptor.random_seed,
         };
         auto index = restore
-            ? HnswIndex::open(index_path(descriptor.index_id), descriptor.index_id, descriptor.collection_id,
+            ? HnswIndex::open(path, descriptor.index_id, descriptor.collection_id,
                               descriptor.column_id, options, *filesystem_)
-            : HnswIndex::create(index_path(descriptor.index_id), descriptor.index_id, descriptor.collection_id,
+            : HnswIndex::create(path, descriptor.index_id, descriptor.collection_id,
                                 descriptor.column_id, options, *filesystem_);
         if (!index) {
             return std::unexpected(std::move(index.error()));
@@ -619,12 +960,24 @@ std::expected<void, VectorIndexError> VectorIndexEngine::build_from_storage(
 {
     auto cursor = storage.scan(descriptor.collection_id);
     if (!cursor) {
-        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message()));
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::StorageFailure,
+            std::move(cursor.error()),
+            VectorIndexOperation::Build,
+            descriptor.index_id,
+            descriptor.collection_id
+        ));
     }
     while (true) {
         auto next = cursor->next();
         if (!next) {
-            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message()));
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::StorageFailure,
+                std::move(next.error()),
+                VectorIndexOperation::Build,
+                descriptor.index_id,
+                descriptor.collection_id
+            ));
         }
         if (!*next) {
             break;
@@ -657,13 +1010,25 @@ std::expected<void, VectorIndexError> VectorIndexEngine::verify_against_storage(
 {
     auto cursor = storage.scan(descriptor.collection_id);
     if (!cursor) {
-        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message()));
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::StorageFailure,
+            std::move(cursor.error()),
+            VectorIndexOperation::Verify,
+            descriptor.index_id,
+            descriptor.collection_id
+        ));
     }
     std::size_t expected_size = 0;
     while (true) {
         auto next = cursor->next();
         if (!next) {
-            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message()));
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::StorageFailure,
+                std::move(next.error()),
+                VectorIndexOperation::Verify,
+                descriptor.index_id,
+                descriptor.collection_id
+            ));
         }
         if (!*next) {
             break;
@@ -696,6 +1061,53 @@ std::expected<void, VectorIndexError> VectorIndexEngine::verify_against_storage(
 std::filesystem::path VectorIndexEngine::index_path(common::VIndexId index_id) const
 {
     return data_directory_ / ("vindex_" + std::to_string(index_id) + ".lhnsw");
+}
+
+std::expected<void, VectorIndexError> VectorIndexEngine::cleanup_stale_temporary_files() const
+{
+    auto exists = filesystem_->exists(data_directory_);
+    if (!exists) {
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::FileSystemFailure,
+            std::move(exists.error()),
+            VectorIndexOperation::Restore,
+            0,
+            0,
+            data_directory_
+        ));
+    }
+    if (!*exists) {
+        return {};
+    }
+    auto entries = filesystem_->list_dir(data_directory_);
+    if (!entries) {
+        return std::unexpected(source_error(
+            VectorIndexErrorCode::FileSystemFailure,
+            std::move(entries.error()),
+            VectorIndexOperation::Restore,
+            0,
+            0,
+            data_directory_
+        ));
+    }
+    for (const auto & entry : *entries) {
+        const auto name = entry.filename().string();
+        if (!name.ends_with(".building") && !name.ends_with(".compact")) {
+            continue;
+        }
+        auto removed = filesystem_->remove(entry);
+        if (!removed) {
+            return std::unexpected(source_error(
+                VectorIndexErrorCode::FileSystemFailure,
+                std::move(removed.error()),
+                VectorIndexOperation::Drop,
+                0,
+                0,
+                entry
+            ));
+        }
+    }
+    return {};
 }
 
 ManagedVectorIndexView VectorIndexEngine::make_view(const VectorIndexStore & store) noexcept
@@ -736,6 +1148,14 @@ void VectorIndexEngine::publish(VectorIndexStore store)
     const auto descriptor = store.descriptor();
     indexes_by_id_.emplace(descriptor.index_id, std::move(store));
     indexes_by_collection_[descriptor.collection_id].push_back(descriptor.index_id);
+}
+
+void VectorIndexEngine::mark_recovery_required(common::VIndexId index_id) noexcept
+{
+    const auto * store = find_store(index_id);
+    if (store != nullptr) {
+        dirty_collections_.insert(store->descriptor().collection_id);
+    }
 }
 
 } // namespace litedb::core::vindex

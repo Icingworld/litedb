@@ -18,13 +18,17 @@ constexpr std::uint16_t FormatVersion = 1;
 constexpr std::size_t HeaderChecksumOffset = 80;
 constexpr std::uint64_t MaximumNeighborCount = 1ULL << 20U;
 
-using Error = HnswStoreCodecError;
-using ErrorCode = HnswStoreCodecErrorCode;
+using Error = VectorIndexError;
+using ErrorCode = VectorIndexErrorCode;
 
 [[nodiscard]]
-Error error(ErrorCode code, std::string message)
+Error error(
+    ErrorCode code,
+    std::string message,
+    VectorIndexOperation operation = VectorIndexOperation::DecodeFrame
+)
 {
-    return Error {code, std::move(message)};
+    return Error {code, message, VectorIndexErrorContext {.operation = operation}};
 }
 
 class Writer
@@ -163,7 +167,7 @@ std::expected<HnswStoreDescriptor, Error> decode_descriptor(Reader & reader)
     auto dimension = reader.number<std::uint64_t>();
     auto metric_value = reader.number<std::uint8_t>();
     if (!reader.skip(7)) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Truncated HNSW store header"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Truncated HNSW store header"));
     }
     auto max_neighbors = reader.number<std::uint64_t>();
     auto ef_construction = reader.number<std::uint64_t>();
@@ -171,13 +175,13 @@ std::expected<HnswStoreDescriptor, Error> decode_descriptor(Reader & reader)
     auto random_seed = reader.number<std::uint64_t>();
     if (!index_id || !collection_id || !column_id || !dimension || !metric_value ||
         !max_neighbors || !ef_construction || !ef_search_default || !random_seed) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Truncated HNSW store descriptor"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Truncated HNSW store descriptor"));
     }
     const auto metric = decode_metric(*metric_value);
     if (!metric || !fits_size_t(*dimension) || !fits_size_t(*max_neighbors) ||
         !fits_size_t(*ef_construction) || !fits_size_t(*ef_search_default) ||
         !fits_size_t(*random_seed) || *max_neighbors > MaximumNeighborCount) {
-        return std::unexpected(error(ErrorCode::ValueOutOfRange, "Invalid HNSW store descriptor value"));
+        return std::unexpected(error(ErrorCode::ResourceLimitExceeded, "Invalid HNSW store descriptor value"));
     }
     return HnswStoreDescriptor {
         .index_id = *index_id,
@@ -194,7 +198,7 @@ std::expected<HnswStoreDescriptor, Error> decode_descriptor(Reader & reader)
 
 } // namespace
 
-std::expected<HnswStoreCodec::HeaderBuffer, HnswStoreCodecError> HnswStoreCodec::encode_header(
+std::expected<HnswStoreCodec::HeaderBuffer, VectorIndexError> HnswStoreCodec::encode_header(
     const HnswStoreDescriptor & descriptor
 )
 {
@@ -203,7 +207,7 @@ std::expected<HnswStoreCodec::HeaderBuffer, HnswStoreCodecError> HnswStoreCodec:
         descriptor.column_id == 0 || descriptor.dimension == 0 || descriptor.max_neighbors == 0 ||
         descriptor.max_neighbors > MaximumNeighborCount ||
         descriptor.ef_construction < descriptor.max_neighbors || descriptor.ef_search_default == 0) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW store descriptor"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Invalid HNSW store descriptor"));
     }
 
     Writer writer(HeaderSize);
@@ -230,19 +234,19 @@ std::expected<HnswStoreCodec::HeaderBuffer, HnswStoreCodecError> HnswStoreCodec:
     return result;
 }
 
-std::expected<HnswStoreDescriptor, HnswStoreCodecError> HnswStoreCodec::decode_header(
+std::expected<HnswStoreDescriptor, VectorIndexError> HnswStoreCodec::decode_header(
     std::span<const std::byte> bytes
 )
 {
     if (bytes.size() != HeaderSize) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW store header size"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Invalid HNSW store header size"));
     }
     std::vector<std::byte> checked(bytes.begin(), bytes.end());
     Reader checksum_reader(bytes.subspan(HeaderChecksumOffset, sizeof(std::uint32_t)));
     const auto stored_checksum = checksum_reader.number<std::uint32_t>();
     write_at<std::uint32_t>(checked, HeaderChecksumOffset, 0);
     if (!stored_checksum || *stored_checksum != crc32(checked)) {
-        return std::unexpected(error(ErrorCode::CorruptedData, "HNSW store header checksum mismatch"));
+        return std::unexpected(error(ErrorCode::ChecksumMismatch, "HNSW store header checksum mismatch"));
     }
 
     Reader reader(bytes);
@@ -250,7 +254,7 @@ std::expected<HnswStoreDescriptor, HnswStoreCodecError> HnswStoreCodec::decode_h
     const auto version = reader.number<std::uint16_t>();
     const auto header_size = reader.number<std::uint16_t>();
     if (!magic || *magic != HeaderMagic || !header_size || *header_size != HeaderSize) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW store header"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Invalid HNSW store header"));
     }
     if (!version || *version != FormatVersion) {
         return std::unexpected(error(ErrorCode::UnsupportedVersion, "Unsupported HNSW store version"));
@@ -258,13 +262,13 @@ std::expected<HnswStoreDescriptor, HnswStoreCodecError> HnswStoreCodec::decode_h
     return decode_descriptor(reader);
 }
 
-std::expected<std::vector<std::byte>, HnswStoreCodecError> HnswStoreCodec::encode_frame(
+std::expected<std::vector<std::byte>, VectorIndexError> HnswStoreCodec::encode_frame(
     const HnswCommitFrame & frame,
     std::size_t dimension
 )
 {
     if (dimension == 0 || frame.metadata.frame_sequence == 0 || frame.metadata.next_node_id == 0) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW commit metadata"));
+        return std::unexpected(error(ErrorCode::InvalidMutation, "Invalid HNSW commit metadata"));
     }
     Writer payload;
     payload.number(frame.metadata.next_node_id);
@@ -275,7 +279,7 @@ std::expected<std::vector<std::byte>, HnswStoreCodecError> HnswStoreCodec::encod
     for (const auto & node : frame.upserts) {
         if (node.node_id == InvalidHnswNodeId || node.record_id == 0 || node.vector.size() != dimension ||
             node.neighbors.size() != node.level + 1) {
-            return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW node in commit"));
+            return std::unexpected(error(ErrorCode::InvalidMutation, "Invalid HNSW node in commit"));
         }
         payload.number(node.node_id);
         payload.number(node.record_id);
@@ -295,7 +299,7 @@ std::expected<std::vector<std::byte>, HnswStoreCodecError> HnswStoreCodec::encod
     }
     auto body = std::move(payload).take();
     if (body.size() > MaximumFrameSize - FramePrefixSize) {
-        return std::unexpected(error(ErrorCode::ValueOutOfRange, "HNSW commit frame is too large"));
+        return std::unexpected(error(ErrorCode::ResourceLimitExceeded, "HNSW commit frame is too large"));
     }
 
     Writer writer(FramePrefixSize + body.size());
@@ -311,12 +315,12 @@ std::expected<std::vector<std::byte>, HnswStoreCodecError> HnswStoreCodec::encod
     return prefix;
 }
 
-std::expected<std::uint64_t, HnswStoreCodecError> HnswStoreCodec::decode_frame_size(
+std::expected<std::uint64_t, VectorIndexError> HnswStoreCodec::decode_frame_size(
     std::span<const std::byte> prefix
 )
 {
     if (prefix.size() != FramePrefixSize) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW frame prefix size"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Invalid HNSW frame prefix size"));
     }
     Reader reader(prefix);
     const auto magic = reader.number<std::uint32_t>();
@@ -325,7 +329,7 @@ std::expected<std::uint64_t, HnswStoreCodecError> HnswStoreCodec::decode_frame_s
     const auto size = reader.number<std::uint64_t>();
     if (!magic || *magic != FrameMagic || !reserved || *reserved != 0 || !size ||
         *size < FramePrefixSize || *size > MaximumFrameSize) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid HNSW commit frame prefix"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Invalid HNSW commit frame prefix"));
     }
     if (!version || *version != FormatVersion) {
         return std::unexpected(error(ErrorCode::UnsupportedVersion, "Unsupported HNSW commit frame version"));
@@ -333,17 +337,17 @@ std::expected<std::uint64_t, HnswStoreCodecError> HnswStoreCodec::decode_frame_s
     return *size;
 }
 
-std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame(
+std::expected<HnswCommitFrame, VectorIndexError> HnswStoreCodec::decode_frame(
     std::span<const std::byte> bytes,
     std::size_t dimension
 )
 {
     if (bytes.size() < FramePrefixSize) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Truncated HNSW commit frame"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Truncated HNSW commit frame"));
     }
     auto frame_size = decode_frame_size(bytes.first(FramePrefixSize));
     if (!frame_size || *frame_size != bytes.size()) {
-        return std::unexpected(frame_size ? error(ErrorCode::InvalidFormat, "HNSW frame size mismatch") : frame_size.error());
+        return std::unexpected(frame_size ? error(ErrorCode::CorruptedIndex, "HNSW frame size mismatch") : std::move(frame_size.error()));
     }
     Reader prefix(bytes.first(FramePrefixSize));
     (void) prefix.skip(16);
@@ -352,7 +356,7 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
     const auto reserved = prefix.number<std::uint32_t>();
     const auto payload = bytes.subspan(FramePrefixSize);
     if (!frame_sequence || !stored_checksum || !reserved || *reserved != 0 || *stored_checksum != crc32(payload)) {
-        return std::unexpected(error(ErrorCode::CorruptedData, "HNSW commit frame checksum mismatch"));
+        return std::unexpected(error(ErrorCode::ChecksumMismatch, "HNSW commit frame checksum mismatch"));
     }
 
     Reader reader(payload);
@@ -363,14 +367,14 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
     auto upsert_count = reader.number<std::uint64_t>();
     if (!next_node_id || !entry_point || !max_level || !active_count || !upsert_count ||
         !fits_size_t(*max_level) || !fits_size_t(*active_count) || !fits_size_t(*upsert_count)) {
-        return std::unexpected(error(ErrorCode::ValueOutOfRange, "Invalid HNSW commit metadata"));
+        return std::unexpected(error(ErrorCode::ResourceLimitExceeded, "Invalid HNSW commit metadata"));
     }
     if (dimension > reader.remaining() / sizeof(double)) {
-        return std::unexpected(error(ErrorCode::CorruptedData, "HNSW vector dimension exceeds the commit payload"));
+        return std::unexpected(error(ErrorCode::CorruptedGraph, "HNSW vector dimension exceeds the commit payload"));
     }
     const auto minimum_node_size = 48U + dimension * sizeof(double);
     if (minimum_node_size == 0 || *upsert_count > reader.remaining() / minimum_node_size) {
-        return std::unexpected(error(ErrorCode::CorruptedData, "HNSW node count exceeds the commit payload"));
+        return std::unexpected(error(ErrorCode::CorruptedGraph, "HNSW node count exceeds the commit payload"));
     }
 
     HnswCommitFrame frame;
@@ -389,7 +393,7 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
         auto deleted = reader.number<std::uint8_t>();
         if (!reader.skip(7) || !node_id || !record_id || !level || !deleted || *deleted > 1 ||
             !fits_size_t(*level) || *level > 63) {
-            return std::unexpected(error(ErrorCode::CorruptedData, "Invalid HNSW node header"));
+            return std::unexpected(error(ErrorCode::CorruptedGraph, "Invalid HNSW node header"));
         }
         HnswNode node {
             .node_id = *node_id,
@@ -401,26 +405,26 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
         for (std::size_t value_index = 0; value_index < dimension; ++value_index) {
             auto value = reader.floating();
             if (!value) {
-                return std::unexpected(error(ErrorCode::CorruptedData, "Truncated HNSW node vector"));
+                return std::unexpected(error(ErrorCode::CorruptedGraph, "Truncated HNSW node vector"));
             }
             node.vector.push_back(*value);
         }
         auto layer_count = reader.number<std::uint64_t>();
         if (!layer_count || *layer_count != node.level + 1) {
-            return std::unexpected(error(ErrorCode::CorruptedData, "Invalid HNSW node layer count"));
+            return std::unexpected(error(ErrorCode::CorruptedGraph, "Invalid HNSW node layer count"));
         }
         node.neighbors.resize(static_cast<std::size_t>(*layer_count));
         for (auto & layer : node.neighbors) {
             auto neighbor_count = reader.number<std::uint64_t>();
             if (!neighbor_count || !fits_size_t(*neighbor_count) || *neighbor_count > (1ULL << 20U) ||
                 *neighbor_count > reader.remaining() / sizeof(HnswNodeId)) {
-                return std::unexpected(error(ErrorCode::CorruptedData, "Invalid HNSW neighbor count"));
+                return std::unexpected(error(ErrorCode::CorruptedGraph, "Invalid HNSW neighbor count"));
             }
             layer.reserve(static_cast<std::size_t>(*neighbor_count));
             for (std::size_t neighbor_index = 0; neighbor_index < *neighbor_count; ++neighbor_index) {
                 auto neighbor = reader.number<HnswNodeId>();
                 if (!neighbor) {
-                    return std::unexpected(error(ErrorCode::CorruptedData, "Truncated HNSW neighbor list"));
+                    return std::unexpected(error(ErrorCode::CorruptedGraph, "Truncated HNSW neighbor list"));
                 }
                 layer.push_back(*neighbor);
             }
@@ -428,7 +432,7 @@ std::expected<HnswCommitFrame, HnswStoreCodecError> HnswStoreCodec::decode_frame
         frame.upserts.push_back(std::move(node));
     }
     if (reader.remaining() != 0) {
-        return std::unexpected(error(ErrorCode::InvalidFormat, "Unexpected bytes after HNSW commit frame"));
+        return std::unexpected(error(ErrorCode::CorruptedIndex, "Unexpected bytes after HNSW commit frame"));
     }
     return frame;
 }

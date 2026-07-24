@@ -1,5 +1,6 @@
 #include "core/vindex/vector_index_key.hpp"
 
+#include <cmath>
 #include <string>
 #include <utility>
 
@@ -18,7 +19,7 @@ namespace
 [[nodiscard]]
 VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 {
-    return VectorIndexError {code, std::move(message)};
+    return VectorIndexError {code, message};
 }
 
 } // namespace
@@ -41,6 +42,14 @@ std::expected<VectorIndexKey, VectorIndexError> VectorIndexKey::from_vector(comm
 {
     if (vector.empty()) {
         return std::unexpected(make_error(VectorIndexErrorCode::EmptyQuery, "Vector index key must not be empty"));
+    }
+    for (const auto value : vector) {
+        if (!std::isfinite(value)) {
+            return std::unexpected(make_error(
+                VectorIndexErrorCode::InvalidVectorValue,
+                "Vector index key must contain only finite values"
+            ));
+        }
     }
     return VectorIndexKey {std::move(vector)};
 }

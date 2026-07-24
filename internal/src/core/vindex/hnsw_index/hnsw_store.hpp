@@ -14,19 +14,15 @@
 namespace litedb::core::vindex::hnsw_index
 {
 
-enum class HnswStoreErrorCode
+struct HnswStoreStats
 {
-    FileSystemError,
-    InvalidFormat,
-    UnsupportedVersion,
-    CorruptedGraph,
-    InvalidMutation,
-};
-
-struct HnswStoreError
-{
-    HnswStoreErrorCode code;
-    std::string message;
+    std::uint64_t frame_count {0};
+    std::size_t physical_node_count {0};
+    std::size_t active_count {0};
+    std::size_t tombstone_count {0};
+    std::uint64_t file_bytes {0};
+    std::uint64_t estimated_compact_bytes {0};
+    std::size_t last_commit_upsert_count {0};
 };
 
 class HnswStore final
@@ -48,14 +44,14 @@ private:
 
 public:
     [[nodiscard]]
-    static std::expected<HnswStore, HnswStoreError> create(
+    static std::expected<HnswStore, VectorIndexError> create(
         std::filesystem::path path,
         HnswStoreDescriptor descriptor,
         filesystem::FileSystem & filesystem
     );
 
     [[nodiscard]]
-    static std::expected<HnswStore, HnswStoreError> open(
+    static std::expected<HnswStore, VectorIndexError> open(
         std::filesystem::path path,
         const HnswStoreDescriptor & expected,
         filesystem::FileSystem & filesystem
@@ -80,19 +76,31 @@ public:
     std::optional<HnswNodeId> find_active_node(common::RecordId record_id) const noexcept;
 
     [[nodiscard]]
-    std::expected<void, HnswStoreError> commit(
+    HnswStoreStats stats() const noexcept;
+
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> close();
+
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> commit(
         HnswGraphMetadata metadata,
         std::vector<HnswNode> upserts
     );
 
 private:
     [[nodiscard]]
-    std::expected<void, HnswStoreError> load();
+    std::expected<void, VectorIndexError> load();
 
     [[nodiscard]]
-    std::expected<void, HnswStoreError> validate_graph(
+    std::expected<void, VectorIndexError> validate_graph(
         const NodeMap & nodes,
         const HnswGraphMetadata & metadata
+    ) const;
+
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> validate_mutation(
+        const HnswGraphMetadata & metadata,
+        const std::vector<HnswNode> & upserts
     ) const;
 
     [[nodiscard]]
@@ -108,6 +116,8 @@ private:
     HnswGraphMetadata metadata_;
     NodeMap nodes_;
     std::unordered_map<common::RecordId, HnswNodeId> active_nodes_;
+    std::uint64_t file_size_bytes_ {HnswStoreCodec::HeaderSize};
+    std::size_t last_commit_upsert_count_ {0};
 };
 
 } // namespace litedb::core::vindex::hnsw_index

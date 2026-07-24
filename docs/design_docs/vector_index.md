@@ -1,6 +1,23 @@
-# litedb 向量索引设计与实现顺序
+# litedb 向量索引设计、历史路线与当前保证
 
-> 状态说明：第 1～8 节记录向量索引最初的接入路线，其中部分目标已经完成；第 9 节描述 HNSW 与持久化完成后的当前 `VectorIndexEngine` 重构目标，并作为本轮实现的执行依据。
+> 状态说明：第 0 节是当前实现保证；第 1～8 节仅保留为历史接入路线；第 9 节记录已完成的 `VectorIndexEngine` 分层重构。判断当前能力时应以第 0 节和代码测试为准。
+
+## 0. 当前实现保证与边界
+
+当前运行时分层为 `VectorIndexEngine -> VectorIndexStore -> HnswIndex/FlatIndex -> HnswStore`。Catalog 保存索引定义，Storage 是权威数据源，HNSW 文件属于可验证、可重建的派生数据。
+
+当前保证：
+
+- Vindex 全链使用 move-only `error::Error`，具有稳定的 `VectorIndex` category、错误码和结构化上下文；filesystem/storage 来源通过 encoded source code 保留。
+- `VectorIndexKey` 拒绝空向量和 NaN/Infinity。L2、Inner Product、Cosine 使用扩展精度及溢出检查，无法表示的距离显式失败。
+- HNSW 使用分层图搜索、确定性 level、邻居裁剪和 tombstone 删除。增量提交只复制和持久化 touched nodes，不复制完整图。
+- HNSW header 与 commit frame 保持版本兼容；frame 具有大小上限与 CRC。启动可截断未完成尾部，损坏、缺失或与 Storage 不一致时从 Storage 重建。
+- create/rebuild 先写同目录临时文件，经同步、关闭和原子替换后发布。启动会清理遗留的 `.building` 和 `.compact` 文件。
+- DML/DDL 仍通过 TransactionManager 的单写者 staging、WAL 和 runtime reload 协调。Vindex 自身不宣称线程安全，查询并发仍受 DatabaseEngine 全局串行化约束。
+- checkpoint 在 WAL flush 后检查 HNSW：tombstone 至少 1024 且达到 25%，或文件至少 64 MiB 且达到紧凑估值两倍时，从已提交 Storage 原子重建。
+- compaction 是同步 checkpoint 工作，不提供后台 compaction、物理 tombstone 清理、MVCC 或并行查询。
+
+可观测统计包括 frame、物理节点、active 节点、tombstone、文件字节，以及最近一次 compaction 的回收字节和耗时。补偿失败会将 collection 标记为 `RecoveryRequired`，在成功 reload 前拒绝继续维护或搜索，避免返回已知不一致结果。
 
 ## 1. 设计目标
 

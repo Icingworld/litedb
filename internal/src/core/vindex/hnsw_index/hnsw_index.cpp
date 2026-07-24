@@ -19,12 +19,55 @@ namespace
 using Node = hnsw_index::HnswNode;
 using NodeId = hnsw_index::HnswNodeId;
 using NodeMap = hnsw_index::HnswStore::NodeMap;
+constexpr std::size_t MaximumDimension = 1U << 20U;
+constexpr std::size_t MaximumNeighbors = 1U << 20U;
+constexpr std::size_t MaximumEf = 1U << 24U;
 
 struct Candidate
 {
     NodeId node_id;
     double distance;
 };
+
+class GraphView
+{
+public:
+    explicit GraphView(const NodeMap & base, const NodeMap * overlay = nullptr) noexcept
+        : base_(&base), overlay_(overlay)
+    {
+    }
+
+    [[nodiscard]] const Node * find(NodeId node_id) const noexcept
+    {
+        if (overlay_ != nullptr) {
+            const auto found = overlay_->find(node_id);
+            if (found != overlay_->end()) {
+                return &found->second;
+            }
+        }
+        const auto found = base_->find(node_id);
+        return found == base_->end() ? nullptr : &found->second;
+    }
+
+    [[nodiscard]] const Node & at(NodeId node_id) const
+    {
+        return *find(node_id);
+    }
+
+private:
+    const NodeMap * base_;
+    const NodeMap * overlay_;
+};
+
+[[nodiscard]]
+Node & mutable_node(NodeMap & overlay, const NodeMap & base, NodeId node_id)
+{
+    const auto found = overlay.find(node_id);
+    if (found != overlay.end()) {
+        return found->second;
+    }
+    return overlay.emplace(node_id, base.at(node_id)).first->second;
+}
 
 [[nodiscard]]
 bool candidate_less(const Candidate & left, const Candidate & right) noexcept
@@ -54,27 +97,27 @@ struct CandidateGreater
 [[nodiscard]]
 VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 {
-    return VectorIndexError {code, std::move(message)};
+    return VectorIndexError {code, message};
 }
 
 [[nodiscard]]
-VectorIndexError store_error(hnsw_index::HnswStoreError value)
+std::expected<void, VectorIndexError> validate_options(const HnswIndexOptions & options)
 {
-    using hnsw_index::HnswStoreErrorCode;
-    auto code = VectorIndexErrorCode::StorageFailure;
-    switch (value.code) {
-    case HnswStoreErrorCode::FileSystemError:
-        code = VectorIndexErrorCode::FileSystemFailure;
-        break;
-    case HnswStoreErrorCode::InvalidFormat:
-    case HnswStoreErrorCode::UnsupportedVersion:
-    case HnswStoreErrorCode::CorruptedGraph:
-        code = VectorIndexErrorCode::CorruptedIndex;
-        break;
-    case HnswStoreErrorCode::InvalidMutation:
-        break;
+    if (options.dimension == 0 || options.dimension > MaximumDimension) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::InvalidDimension,
+            "HNSW dimension is outside the supported range"
+        ));
     }
-    return make_error(code, "HNSW store error: " + std::move(value.message));
+    if (options.max_neighbors == 0 || options.max_neighbors > MaximumNeighbors ||
+        options.ef_construction < options.max_neighbors || options.ef_construction > MaximumEf ||
+        options.ef_search_default == 0 || options.ef_search_default > MaximumEf) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::ResourceLimitExceeded,
+            "HNSW construction or search parameters are outside the supported range"
+        ));
+    }
+    return {};
 }
 
 [[nodiscard]]
@@ -110,18 +153,18 @@ std::expected<double, VectorIndexError> distance_to(
 
 [[nodiscard]]
 std::expected<Candidate, VectorIndexError> greedy_search(
-    const NodeMap & nodes,
+    const GraphView & nodes,
     const common::VectorValue & query,
     NodeId entry_id,
     std::size_t layer,
     VectorDistanceMetric metric
 )
 {
-    auto found = nodes.find(entry_id);
-    if (found == nodes.end() || found->second.level < layer) {
+    const auto * found = nodes.find(entry_id);
+    if (found == nullptr || found->level < layer) {
         return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, "HNSW entry node is missing a search layer"));
     }
-    auto current_distance = distance_to(query, found->second, metric);
+    auto current_distance = distance_to(query, *found, metric);
     if (!current_distance) {
         return std::unexpected(std::move(current_distance.error()));
     }
@@ -131,11 +174,11 @@ std::expected<Candidate, VectorIndexError> greedy_search(
         improved = false;
         const auto & node = nodes.at(current.node_id);
         for (const auto neighbor_id : node.neighbors[layer]) {
-            const auto neighbor = nodes.find(neighbor_id);
-            if (neighbor == nodes.end()) {
+            const auto * neighbor = nodes.find(neighbor_id);
+            if (neighbor == nullptr) {
                 return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, "HNSW neighbor node is missing"));
             }
-            auto neighbor_distance = distance_to(query, neighbor->second, metric);
+            auto neighbor_distance = distance_to(query, *neighbor, metric);
             if (!neighbor_distance) {
                 return std::unexpected(std::move(neighbor_distance.error()));
             }
@@ -151,7 +194,7 @@ std::expected<Candidate, VectorIndexError> greedy_search(
 
 [[nodiscard]]
 std::expected<std::vector<Candidate>, VectorIndexError> search_layer(
-    const NodeMap & nodes,
+    const GraphView & nodes,
     const common::VectorValue & query,
     NodeId entry_id,
     std::size_t ef,
@@ -159,11 +202,11 @@ std::expected<std::vector<Candidate>, VectorIndexError> search_layer(
     VectorDistanceMetric metric
 )
 {
-    const auto entry = nodes.find(entry_id);
-    if (entry == nodes.end() || entry->second.level < layer || ef == 0) {
+    const auto * entry = nodes.find(entry_id);
+    if (entry == nullptr || entry->level < layer || ef == 0) {
         return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, "Invalid HNSW layer search entry"));
     }
-    auto entry_distance = distance_to(query, entry->second, metric);
+    auto entry_distance = distance_to(query, *entry, metric);
     if (!entry_distance) {
         return std::unexpected(std::move(entry_distance.error()));
     }
@@ -187,11 +230,11 @@ std::expected<std::vector<Candidate>, VectorIndexError> search_layer(
             if (!visited.insert(neighbor_id).second) {
                 continue;
             }
-            const auto neighbor = nodes.find(neighbor_id);
-            if (neighbor == nodes.end()) {
+            const auto * neighbor = nodes.find(neighbor_id);
+            if (neighbor == nullptr) {
                 return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, "HNSW neighbor node is missing"));
             }
-            auto neighbor_distance = distance_to(query, neighbor->second, metric);
+            auto neighbor_distance = distance_to(query, *neighbor, metric);
             if (!neighbor_distance) {
                 return std::unexpected(std::move(neighbor_distance.error()));
             }
@@ -218,7 +261,7 @@ std::expected<std::vector<Candidate>, VectorIndexError> search_layer(
 
 [[nodiscard]]
 std::expected<void, VectorIndexError> prune_neighbors(
-    NodeMap & nodes,
+    const GraphView & nodes,
     Node & node,
     std::size_t layer,
     std::size_t limit,
@@ -229,11 +272,11 @@ std::expected<void, VectorIndexError> prune_neighbors(
     std::vector<Candidate> ranked;
     ranked.reserve(neighbors.size());
     for (const auto neighbor_id : neighbors) {
-        const auto neighbor = nodes.find(neighbor_id);
-        if (neighbor == nodes.end()) {
+        const auto * neighbor = nodes.find(neighbor_id);
+        if (neighbor == nullptr) {
             return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, "Cannot prune a missing HNSW neighbor"));
         }
-        auto distance = vector_distance(node.vector, neighbor->second.vector, metric);
+        auto distance = vector_distance(node.vector, neighbor->vector, metric);
         if (!distance) {
             return std::unexpected(std::move(distance.error()));
         }
@@ -275,15 +318,15 @@ std::expected<HnswIndex, VectorIndexError> HnswIndex::create(
     filesystem::FileSystem & filesystem
 )
 {
-    if (options.dimension == 0 || options.max_neighbors == 0 ||
-        options.ef_construction < options.max_neighbors || options.ef_search_default == 0) {
-        return std::unexpected(make_error(VectorIndexErrorCode::InvalidDimension, "Invalid HNSW index options"));
+    auto validation = validate_options(options);
+    if (!validation) {
+        return std::unexpected(std::move(validation.error()));
     }
     auto store = hnsw_index::HnswStore::create(
         std::move(path), descriptor(index_id, collection_id, column_id, options), filesystem
     );
     if (!store) {
-        return std::unexpected(store_error(std::move(store.error())));
+        return std::unexpected(std::move(store.error()));
     }
     return HnswIndex {std::move(*store)};
 }
@@ -297,13 +340,17 @@ std::expected<HnswIndex, VectorIndexError> HnswIndex::open(
     filesystem::FileSystem & filesystem
 )
 {
+    auto validation = validate_options(expected_options);
+    if (!validation) {
+        return std::unexpected(std::move(validation.error()));
+    }
     auto store = hnsw_index::HnswStore::open(
         std::move(path),
         descriptor(expected_index_id, expected_collection_id, expected_column_id, expected_options),
         filesystem
     );
     if (!store) {
-        return std::unexpected(store_error(std::move(store.error())));
+        return std::unexpected(std::move(store.error()));
     }
     return HnswIndex {std::move(*store)};
 }
@@ -343,8 +390,7 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
         return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, "HNSW node id is exhausted"));
     }
 
-    NodeMap working = store_.nodes();
-    std::unordered_set<NodeId> touched;
+    NodeMap mutations;
     const auto node_id = current_metadata.next_node_id;
     const auto level = random_level(node_id);
     Node new_node {
@@ -355,8 +401,8 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
         .deleted = false,
         .neighbors = std::vector<std::vector<NodeId>>(level + 1),
     };
-    working.emplace(node_id, new_node);
-    touched.insert(node_id);
+    mutations.emplace(node_id, std::move(new_node));
+    GraphView working {store_.nodes(), &mutations};
 
     auto next_metadata = current_metadata;
     next_metadata.next_node_id = node_id + 1;
@@ -383,7 +429,7 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
                 return std::unexpected(std::move(candidates.error()));
             }
             const auto limit = layer == 0 ? options_.max_neighbors * 2 : options_.max_neighbors;
-            auto & new_neighbors = working.at(node_id).neighbors[layer];
+            auto & new_neighbors = mutations.at(node_id).neighbors[layer];
             for (const auto & candidate : *candidates) {
                 if (candidate.node_id == node_id) {
                     continue;
@@ -394,7 +440,7 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
                 }
             }
             for (const auto neighbor_id : new_neighbors) {
-                auto & neighbor = working.at(neighbor_id);
+                auto & neighbor = mutable_node(mutations, store_.nodes(), neighbor_id);
                 auto & reverse = neighbor.neighbors[layer];
                 if (std::find(reverse.begin(), reverse.end(), node_id) == reverse.end()) {
                     reverse.push_back(node_id);
@@ -402,7 +448,6 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
                     if (!pruned) {
                         return pruned;
                     }
-                    touched.insert(neighbor_id);
                 }
             }
             if (!candidates->empty()) {
@@ -420,13 +465,13 @@ std::expected<void, VectorIndexError> HnswIndex::insert(
     }
 
     std::vector<Node> upserts;
-    upserts.reserve(touched.size());
-    for (const auto touched_id : touched) {
-        upserts.push_back(working.at(touched_id));
+    upserts.reserve(mutations.size());
+    for (auto & [touched_id, node] : mutations) {
+        upserts.push_back(std::move(node));
     }
     auto committed = store_.commit(next_metadata, std::move(upserts));
     if (!committed) {
-        return std::unexpected(store_error(std::move(committed.error())));
+        return std::unexpected(std::move(committed.error()));
     }
     return {};
 }
@@ -443,7 +488,7 @@ std::expected<void, VectorIndexError> HnswIndex::erase(common::RecordId record_i
     --metadata.active_count;
     auto committed = store_.commit(metadata, {std::move(node)});
     if (!committed) {
-        return std::unexpected(store_error(std::move(committed.error())));
+        return std::unexpected(std::move(committed.error()));
     }
     return {};
 }
@@ -461,9 +506,10 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> HnswIndex::sear
         return std::vector<VectorSearchResult> {};
     }
 
+    const GraphView graph {store_.nodes()};
     auto current = store_.metadata().entry_point;
     for (std::size_t layer = store_.metadata().max_level; layer > 0; --layer) {
-        auto greedy = greedy_search(store_.nodes(), query.value(), current, layer, options_.metric);
+        auto greedy = greedy_search(graph, query.value(), current, layer, options_.metric);
         if (!greedy) {
             return std::unexpected(std::move(greedy.error()));
         }
@@ -474,7 +520,7 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> HnswIndex::sear
     ef = std::min(store_.nodes().size(), ef > store_.nodes().size() - std::min(tombstones, store_.nodes().size())
         ? store_.nodes().size()
         : ef + tombstones);
-    auto candidates = search_layer(store_.nodes(), query.value(), current, ef, 0, options_.metric);
+    auto candidates = search_layer(graph, query.value(), current, ef, 0, options_.metric);
     if (!candidates) {
         return std::unexpected(std::move(candidates.error()));
     }
@@ -510,6 +556,16 @@ const std::filesystem::path & HnswIndex::path() const noexcept
 const HnswIndexOptions & HnswIndex::options() const noexcept
 {
     return options_;
+}
+
+hnsw_index::HnswStoreStats HnswIndex::stats() const noexcept
+{
+    return store_.stats();
+}
+
+std::expected<void, VectorIndexError> HnswIndex::close()
+{
+    return store_.close();
 }
 
 std::expected<void, VectorIndexError> HnswIndex::validate_key(const VectorIndexKey & key) const

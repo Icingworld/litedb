@@ -17,7 +17,20 @@ namespace
 [[nodiscard]]
 VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 {
-    return VectorIndexError {code, std::move(message)};
+    return VectorIndexError {code, message};
+}
+
+[[nodiscard]]
+VectorIndexError storage_error(error::Error source)
+{
+    return VectorIndexError {
+        VectorIndexErrorCode::StorageFailure,
+        source.message(),
+        VectorIndexErrorContext {
+            .operation = VectorIndexOperation::Search,
+            .source_code = source.encode_code(),
+        },
+    };
 }
 
 [[nodiscard]]
@@ -89,14 +102,14 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> FlatIndex::sear
 
     auto cursor = storage_->scan(options_.collection_id);
     if (!cursor.has_value()) {
-        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message()));
+        return std::unexpected(storage_error(std::move(cursor.error())));
     }
 
     std::priority_queue<VectorSearchResult, std::vector<VectorSearchResult>, ResultLess> nearest;
     while (true) {
         auto next = cursor->next();
         if (!next.has_value()) {
-            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message()));
+            return std::unexpected(storage_error(std::move(next.error())));
         }
         if (!next->has_value()) {
             break;

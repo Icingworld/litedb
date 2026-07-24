@@ -126,7 +126,7 @@ ExecutionError from_index_error(index::IndexError error, AstNodeLocation locatio
 [[nodiscard]]
 ExecutionError from_vector_index_error(vindex::VectorIndexError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
+    return make_error(ExecutionErrorCode::IndexError, location, error.message());
 }
 
 [[nodiscard]]
@@ -628,7 +628,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
 
     while (true) {
         auto matches = vector_index_engine.search(
-            search.index_id(), query_key.value(), vindex::VectorSearchRequest {.top_k = candidate_count}
+            search.index_id(), *query_key, vindex::VectorSearchRequest {.top_k = candidate_count}
         );
         if (!matches.has_value()) {
             return std::unexpected(from_vector_index_error(std::move(matches.error()), search.location()));
@@ -637,7 +637,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         PipelineResult result;
         append_scan_columns(result, collection_schema.value());
         result.rows.reserve(matches->size());
-        for (const auto & match : matches.value()) {
+        for (const auto & match : *matches) {
             auto record = storage.get(search.collection_id(), match.record_id);
             if (!record.has_value()) {
                 return std::unexpected(from_storage_error(std::move(record.error()), search.location()));

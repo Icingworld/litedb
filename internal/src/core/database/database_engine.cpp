@@ -71,11 +71,11 @@ DatabaseError to_database_error(index::IndexError error)
     };
 }
 
-DatabaseError to_database_error(vindex::VectorIndexError error)
+DatabaseError vector_error_to_database(vindex::VectorIndexError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::IndexError,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -286,7 +286,7 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     auto vector_indexes_restored = vector_index_engine_.restore_all(meta(), storage_);
     if (!vector_indexes_restored.has_value()) {
-        return std::unexpected(to_database_error(std::move(vector_indexes_restored.error())));
+        return std::unexpected(vector_error_to_database(std::move(vector_indexes_restored.error())));
     }
 
     transaction_manager_ = std::make_unique<transaction::TransactionManager>(
@@ -673,7 +673,7 @@ executor::ExecutionError DatabaseEngine::from_vector_index_error(
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::IndexError,
         .location = location,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 

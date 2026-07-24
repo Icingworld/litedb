@@ -9,6 +9,7 @@
 #include "core/io/io_error.hpp"
 #include "core/meta/meta_error.hpp"
 #include "core/storage/storage_error.hpp"
+#include "core/vindex/vector_index_error.hpp"
 
 namespace
 {
@@ -24,15 +25,20 @@ using litedb::core::meta::MetaOperation;
 using litedb::core::storage::StorageErrorCode;
 using litedb::core::storage::StorageErrorContext;
 using litedb::core::storage::StorageOperation;
+using litedb::core::vindex::VectorIndexErrorCode;
+using litedb::core::vindex::VectorIndexErrorContext;
+using litedb::core::vindex::VectorIndexOperation;
 
 static_assert(litedb::core::error::ErrorType<FileSystemErrorCode>);
 static_assert(litedb::core::error::ErrorType<IoErrorCode>);
 static_assert(litedb::core::error::ErrorType<MetaErrorCode>);
 static_assert(litedb::core::error::ErrorType<StorageErrorCode>);
+static_assert(litedb::core::error::ErrorType<VectorIndexErrorCode>);
 static_assert(std::to_underlying(ErrorCategory::FileSystem) == 1);
 static_assert(std::to_underlying(ErrorCategory::Io) == 2);
 static_assert(std::to_underlying(ErrorCategory::Meta) == 3);
 static_assert(std::to_underlying(ErrorCategory::Storage) == 4);
+static_assert(std::to_underlying(ErrorCategory::VectorIndex) == 6);
 static_assert(!std::is_copy_constructible_v<Error>);
 static_assert(!std::is_copy_assignable_v<Error>);
 static_assert(std::is_nothrow_move_constructible_v<Error>);
@@ -136,6 +142,32 @@ bool test_storage_code_and_context()
            context->source_code == 0x0203;
 }
 
+bool test_vector_index_code_and_context()
+{
+    Error error {
+        VectorIndexErrorCode::ChecksumMismatch,
+        "HNSW frame checksum mismatch",
+        VectorIndexErrorContext {
+            .operation = VectorIndexOperation::DecodeFrame,
+            .index_id = 7,
+            .collection_id = 9,
+            .frame_sequence = 11,
+            .path = std::filesystem::path {"vindexes/vindex_7.lhnsw"},
+            .source_code = 0x010C,
+        },
+    };
+    const auto * context = error.context<VectorIndexErrorContext>();
+    return error.category() == ErrorCategory::VectorIndex &&
+           error.is(VectorIndexErrorCode::ChecksumMismatch) &&
+           error.encode_code() == 0x0615 &&
+           context != nullptr &&
+           context->operation == VectorIndexOperation::DecodeFrame &&
+           context->index_id == 7 &&
+           context->collection_id == 9 &&
+           context->frame_sequence == 11 &&
+           context->source_code == 0x010C;
+}
+
 } // namespace
 
 int main()
@@ -143,7 +175,8 @@ int main()
     return test_filesystem_context() &&
            test_code_and_context() &&
            test_move_preserves_context() &&
-           test_storage_code_and_context()
+           test_storage_code_and_context() &&
+           test_vector_index_code_and_context()
         ? 0
         : 1;
 }

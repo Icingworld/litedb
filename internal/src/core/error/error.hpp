@@ -21,6 +21,7 @@ enum class ErrorCategory : std::uint8_t
     Meta = 3,                   ///< 元数据目录
     Storage = 4,                ///< 记录存储
     Index = 5,                  ///< 标量索引
+    VectorIndex = 6,            ///< 向量索引
 };
 
 /**
