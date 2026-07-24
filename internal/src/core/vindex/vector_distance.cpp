@@ -1,6 +1,8 @@
 #include "core/vindex/vector_distance.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -13,7 +15,7 @@ namespace
 [[nodiscard]]
 VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
 {
-    return VectorIndexError {code, std::move(message)};
+    return VectorIndexError {code, message};
 }
 
 /**
@@ -24,8 +26,8 @@ VectorIndexError make_error(VectorIndexErrorCode code, std::string message)
  */
 [[nodiscard]]
 std::expected<void, VectorIndexError> validate_same_dimension(
-    const schema::VectorValue & left,
-    const schema::VectorValue & right
+    const common::VectorValue & left,
+    const common::VectorValue & right
 )
 {
     if (left.empty() || right.empty()) {
@@ -44,14 +46,50 @@ std::expected<void, VectorIndexError> validate_same_dimension(
  * @return 两个向量之间的 L2 距离
  */
 [[nodiscard]]
-double l2_distance(const schema::VectorValue & left, const schema::VectorValue & right)
+std::expected<double, VectorIndexError> checked_distance(long double value)
 {
-    double sum = 0.0;
-    for (std::size_t index = 0; index < left.size(); ++index) {
-        const double diff = left[index] - right[index];
-        sum += diff * diff;
+    if (!std::isfinite(value) || value > static_cast<long double>(std::numeric_limits<double>::max()) ||
+        value < -static_cast<long double>(std::numeric_limits<double>::max())) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::NumericOverflow,
+            "Vector distance is outside the finite double range"
+        ));
     }
-    return std::sqrt(sum);
+    const auto result = static_cast<double>(value);
+    if (!std::isfinite(result)) {
+        return std::unexpected(make_error(
+            VectorIndexErrorCode::NumericOverflow,
+            "Vector distance is outside the finite double range"
+        ));
+    }
+    return result;
+}
+
+[[nodiscard]]
+std::expected<double, VectorIndexError> l2_distance(
+    const common::VectorValue & left,
+    const common::VectorValue & right
+)
+{
+    long double scale = 0.0L;
+    long double sum = 1.0L;
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        const auto difference = std::fabs(
+            static_cast<long double>(left[index]) - static_cast<long double>(right[index])
+        );
+        if (difference == 0.0L) {
+            continue;
+        }
+        if (scale < difference) {
+            const auto ratio = scale / difference;
+            sum = 1.0L + sum * ratio * ratio;
+            scale = difference;
+        } else {
+            const auto ratio = difference / scale;
+            sum += ratio * ratio;
+        }
+    }
+    return checked_distance(scale == 0.0L ? 0.0L : scale * std::sqrt(sum));
 }
 
 /**
@@ -61,13 +99,16 @@ double l2_distance(const schema::VectorValue & left, const schema::VectorValue &
  * @return 两个向量之间的负内积
  */
 [[nodiscard]]
-double negative_inner_product(const schema::VectorValue & left, const schema::VectorValue & right)
+std::expected<double, VectorIndexError> negative_inner_product(
+    const common::VectorValue & left,
+    const common::VectorValue & right
+)
 {
-    double result = 0.0;
+    long double result = 0.0L;
     for (std::size_t index = 0; index < left.size(); ++index) {
-        result += left[index] * right[index];
+        result += static_cast<long double>(left[index]) * static_cast<long double>(right[index]);
     }
-    return -result;
+    return checked_distance(-result);
 }
 
 /**
@@ -77,27 +118,37 @@ double negative_inner_product(const schema::VectorValue & left, const schema::Ve
  * @return 两个向量之间的余弦距离
  */
 [[nodiscard]]
-double cosine_distance(const schema::VectorValue & left, const schema::VectorValue & right)
+std::expected<double, VectorIndexError> cosine_distance(
+    const common::VectorValue & left,
+    const common::VectorValue & right
+)
 {
-    double dot = 0.0;
-    double left_norm = 0.0;
-    double right_norm = 0.0;
+    long double dot = 0.0L;
+    long double left_norm = 0.0L;
+    long double right_norm = 0.0L;
     for (std::size_t index = 0; index < left.size(); ++index) {
-        dot += left[index] * right[index];
-        left_norm += left[index] * left[index];
-        right_norm += right[index] * right[index];
+        const auto left_value = static_cast<long double>(left[index]);
+        const auto right_value = static_cast<long double>(right[index]);
+        dot += left_value * right_value;
+        left_norm += left_value * left_value;
+        right_norm += right_value * right_value;
     }
-    if (left_norm == 0.0 || right_norm == 0.0) {
+    if (left_norm == 0.0L || right_norm == 0.0L) {
         return 1.0;
     }
-    return 1.0 - (dot / (std::sqrt(left_norm) * std::sqrt(right_norm)));
+    const auto similarity = std::clamp(
+        dot / (std::sqrt(left_norm) * std::sqrt(right_norm)),
+        -1.0L,
+        1.0L
+    );
+    return checked_distance(1.0L - similarity);
 }
 
 } // namespace
 
 std::expected<double, VectorIndexError> vector_distance(
-    const schema::VectorValue & left,
-    const schema::VectorValue & right,
+    const common::VectorValue & left,
+    const common::VectorValue & right,
     VectorDistanceMetric metric
 )
 {

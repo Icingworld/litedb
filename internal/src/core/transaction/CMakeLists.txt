@@ -1,5 +1,6 @@
 add_library(litedb_transaction
     transaction_context.cpp
+    transaction_file_overlay.cpp
     transaction_manager.cpp
     transaction_state.cpp
 )

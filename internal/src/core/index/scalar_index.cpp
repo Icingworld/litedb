@@ -5,6 +5,42 @@
 namespace litedb::core::index
 {
 
+std::expected<std::vector<common::RecordId>, IndexError> ScalarIndex::scan_range(
+    const IndexRange &
+) const
+{
+    return std::unexpected(IndexError {
+        IndexErrorCode::UnsupportedRangeScan,
+        "Index does not support range scans",
+    });
+}
+
+std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError>
+ScalarIndex::scan_range_cursor(const IndexRange &) const
+{
+    return std::unexpected(IndexError {
+        IndexErrorCode::UnsupportedRangeScan,
+        "Index does not support range scan cursors",
+    });
+}
+
+std::expected<void, IndexError> ScalarIndex::bulk_load(std::vector<ScalarIndexEntry> entries)
+{
+    if (size() != 0) {
+        return std::unexpected(IndexError {
+            IndexErrorCode::InvalidKeyValue,
+            "Bulk load requires an empty index",
+        });
+    }
+    for (const auto & entry : entries) {
+        auto inserted = insert(entry.key, entry.record_id);
+        if (!inserted.has_value()) {
+            return std::unexpected(std::move(inserted.error()));
+        }
+    }
+    return {};
+}
+
 IndexRange::IndexRange(std::optional<IndexBound> lower, std::optional<IndexBound> upper)
     : lower_(std::move(lower))
     , upper_(std::move(upper))

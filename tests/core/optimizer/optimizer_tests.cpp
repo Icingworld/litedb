@@ -21,7 +21,7 @@
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
 #include "core/logical_plan/logical_planner.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
@@ -67,8 +67,13 @@ struct Fixture
 {
     litedb::tests::TemporaryDirectory storage_directory {"litedb-optimizer-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
-    MetaEngine catalog;
-    StorageEngine storage {storage_directory.path(), filesystem};
+    CatalogEditor catalog;
+    CatalogPublisher publisher {storage_directory.path() / "meta.ldb", filesystem};
+    StorageEngine storage {
+        storage_directory.path(),
+        filesystem,
+        litedb::core::storage::StorageOpenMode::TransactionalStaging,
+    };
     litedb::core::index::IndexEngine index_engine {storage_directory.path(), filesystem};
     litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
     std::optional<litedb::core::wal::WalManager> wal_store;
@@ -80,7 +85,7 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         require(database.has_value(), "fixture database create failed");
-        database_id = database.value();
+        database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
@@ -95,17 +100,19 @@ struct Fixture
 
         auto collection = catalog.create_collection(users);
         require(collection.has_value(), "fixture collection create failed");
-        users_id = collection.value();
+        users_id = *collection;
 
-        auto schema = litedb::core::schema::load_collection_schema(catalog, users_id);
+        auto schema = litedb::core::storage::load_collection_schema(catalog.view(), users_id);
         require(schema.has_value(), "fixture schema load failed");
-        auto storage_created = storage.create_collection(std::move(schema.value()));
+        auto storage_created = storage.create_collection(std::move(*schema));
         require(storage_created.has_value(), "fixture storage create failed");
         auto opened_wal = litedb::core::wal::WalManager::open(storage_directory.path() / "wal", filesystem);
         require(opened_wal.has_value(), "fixture WAL create failed");
         wal_store = std::move(*opened_wal);
+        require(publisher.open_or_initialize().has_value(), "fixture catalog publisher open failed");
+        require(publisher.publish_committed(catalog.snapshot()).has_value(), "fixture catalog publish failed");
         transaction_manager = std::make_unique<litedb::core::transaction::TransactionManager>(
-            storage_directory.path(), filesystem, catalog, storage, index_engine, vector_index_engine, *wal_store, 0
+            storage_directory.path(), filesystem, publisher, storage, index_engine, vector_index_engine, *wal_store, 0
         );
     }
 };
@@ -115,22 +122,22 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<LogicalStatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
@@ -138,9 +145,9 @@ std::unique_ptr<LogicalStatementPlan> plan_ok(Fixture & fixture, std::string_vie
     LogicalPlanner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<LogicalStatementPlan> optimize_ok(std::unique_ptr<LogicalStatementPlan> plan, OptimizerOptions options = {})
@@ -148,9 +155,9 @@ std::unique_ptr<LogicalStatementPlan> optimize_ok(std::unique_ptr<LogicalStateme
     Optimizer optimizer {options};
     auto result = optimizer.optimize(std::move(plan));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<LogicalStatementPlan> optimize_ok(
@@ -159,12 +166,12 @@ std::unique_ptr<LogicalStatementPlan> optimize_ok(
     OptimizerOptions options = {}
 )
 {
-    Optimizer optimizer {options, &fixture.catalog};
+    Optimizer optimizer {options, fixture.catalog.view()};
     auto result = optimizer.optimize(std::move(plan));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::ExecutionError> execute_plan(
@@ -173,7 +180,7 @@ std::expected<litedb::core::executor::ExecutionResult, litedb::core::executor::E
 )
 {
     litedb::core::executor::Executor executor {
-        fixture.catalog, fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
+        fixture.catalog.view(), fixture.storage, fixture.index_engine, fixture.vector_index_engine, *fixture.transaction_manager
     };
     litedb::core::physical_plan::PhysicalPlanner physical_planner;
     auto physical = physical_planner.plan(plan);
@@ -314,7 +321,7 @@ void test_enabled_and_disabled_select_results_match()
 
 void create_catalog_index(Fixture & fixture, std::string name, std::string_view column_name, IndexKind kind)
 {
-    const auto * column = fixture.catalog.find_column(fixture.users_id, column_name);
+    const auto * column = fixture.catalog.view().find_column(fixture.users_id, column_name);
     require(column != nullptr, "fixture index column missing");
     auto created = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
@@ -368,7 +375,7 @@ VIndexId create_catalog_vector_index(
     VectorDistanceMetric metric
 )
 {
-    const auto * column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    const auto * column = fixture.catalog.view().find_column(fixture.users_id, "embedding");
     require(column != nullptr, "fixture vector column missing");
     auto created = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,
@@ -378,7 +385,7 @@ VIndexId create_catalog_vector_index(
         .metric = metric,
     });
     require(created.has_value(), "fixture vector index create failed");
-    return created.value();
+    return *created;
 }
 
 const LogicalVectorSearch * find_vector_search(const LogicalStatementPlan & plan)
@@ -478,7 +485,7 @@ void test_vector_search_reports_missing_runtime_index()
     auto executed = execute_plan(fixture, *plan);
     require(!executed.has_value(), "missing runtime vector index should fail execution");
     require(
-        executed.error().code == litedb::core::executor::ExecutionErrorCode::IndexError,
+        executed.error().is(litedb::core::executor::ExecutionErrorCode::IndexError),
         "missing runtime vector index should report IndexError"
     );
 }

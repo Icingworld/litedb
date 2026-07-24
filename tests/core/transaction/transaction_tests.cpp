@@ -35,8 +35,13 @@ int main()
     std::filesystem::remove_all(directory);
     std::filesystem::create_directories(directory);
     auto filesystem = litedb::core::filesystem::create_platform_filesystem();
-    litedb::core::meta::MetaEngine catalog;
-    litedb::core::storage::StorageEngine storage {directory, filesystem};
+    litedb::core::meta::CatalogPublisher catalog {directory / "meta.ldb", filesystem};
+    require(catalog.open_or_initialize().has_value(), "single-writer catalog open failed");
+    litedb::core::storage::StorageEngine storage {
+        directory,
+        filesystem,
+        litedb::core::storage::StorageOpenMode::TransactionalStaging,
+    };
     litedb::core::index::IndexEngine indexes {directory, filesystem};
     litedb::core::vindex::VectorIndexEngine vectors {directory / "vindexes", filesystem};
     auto wal = litedb::core::wal::WalManager::open(directory / "wal", filesystem);

@@ -32,29 +32,25 @@ FunctionError make_error(
     std::string message
 )
 {
-    return FunctionError {
-        .code = code,
-        .location = location,
-        .message = std::move(message),
-    };
+    return FunctionError {code, message, FunctionErrorContext {location}};
 }
 
 [[nodiscard]]
-std::expected<schema::Value, FunctionError> vector_binary_distance(
-    const std::vector<schema::Value> & arguments,
+std::expected<common::Value, FunctionError> vector_binary_distance(
+    const std::vector<common::Value> & arguments,
     parser::ast::AstNodeLocation location,
-    double (*distance)(const schema::VectorValue &, const schema::VectorValue &)
+    double (*distance)(const common::VectorValue &, const common::VectorValue &)
 )
 {
     if (arguments.size() != 2) {
         return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, location, "Vector distance expects 2 arguments"));
     }
     if (arguments[0].is_null() || arguments[1].is_null()) {
-        return schema::Value::null();
+        return common::Value::null();
     }
 
-    const auto * left = std::get_if<schema::VectorValue>(&arguments[0].data());
-    const auto * right = std::get_if<schema::VectorValue>(&arguments[1].data());
+    const auto * left = std::get_if<common::VectorValue>(&arguments[0].data());
+    const auto * right = std::get_if<common::VectorValue>(&arguments[1].data());
     if (left == nullptr || right == nullptr) {
         return std::unexpected(make_error(FunctionErrorCode::InvalidType, location, "Vector distance expects VECTOR arguments"));
     }
@@ -62,11 +58,11 @@ std::expected<schema::Value, FunctionError> vector_binary_distance(
         return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, location, "Vector dimensions must match"));
     }
 
-    return schema::Value {distance(*left, *right)};
+    return common::Value {distance(*left, *right)};
 }
 
 [[nodiscard]]
-double l2_distance_impl(const schema::VectorValue & left, const schema::VectorValue & right)
+double l2_distance_impl(const common::VectorValue & left, const common::VectorValue & right)
 {
     double sum = 0.0;
     for (std::size_t index = 0; index < left.size(); ++index) {
@@ -77,7 +73,7 @@ double l2_distance_impl(const schema::VectorValue & left, const schema::VectorVa
 }
 
 [[nodiscard]]
-double inner_product_impl(const schema::VectorValue & left, const schema::VectorValue & right)
+double inner_product_impl(const common::VectorValue & left, const common::VectorValue & right)
 {
     double result = 0.0;
     for (std::size_t index = 0; index < left.size(); ++index) {
@@ -87,7 +83,7 @@ double inner_product_impl(const schema::VectorValue & left, const schema::Vector
 }
 
 [[nodiscard]]
-double cosine_distance_impl(const schema::VectorValue & left, const schema::VectorValue & right)
+double cosine_distance_impl(const common::VectorValue & left, const common::VectorValue & right)
 {
     double dot = 0.0;
     double left_norm = 0.0;
@@ -122,7 +118,7 @@ void register_vector_functions(FunctionRegistry & registry)
     registry.register_function(std::make_shared<ScalarFunction>(
         "l2_distance",
         vector_distance_signatures("l2_distance"),
-        [](const std::vector<schema::Value> & arguments,
+        [](const std::vector<common::Value> & arguments,
            const ScalarFunctionContext &,
            parser::ast::AstNodeLocation location) {
             return vector_binary_distance(arguments, location, l2_distance_impl);
@@ -131,7 +127,7 @@ void register_vector_functions(FunctionRegistry & registry)
     registry.register_function(std::make_shared<ScalarFunction>(
         "inner_product",
         vector_distance_signatures("inner_product"),
-        [](const std::vector<schema::Value> & arguments,
+        [](const std::vector<common::Value> & arguments,
            const ScalarFunctionContext &,
            parser::ast::AstNodeLocation location) {
             return vector_binary_distance(arguments, location, inner_product_impl);
@@ -140,7 +136,7 @@ void register_vector_functions(FunctionRegistry & registry)
     registry.register_function(std::make_shared<ScalarFunction>(
         "cosine_distance",
         vector_distance_signatures("cosine_distance"),
-        [](const std::vector<schema::Value> & arguments,
+        [](const std::vector<common::Value> & arguments,
            const ScalarFunctionContext &,
            parser::ast::AstNodeLocation location) {
             return vector_binary_distance(arguments, location, cosine_distance_impl);

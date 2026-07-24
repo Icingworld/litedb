@@ -4,6 +4,7 @@
 
 #include "core/database/database_format.hpp"
 #include "core/io/binary_io.hpp"
+#include "core/io/buffer_byte_writer.hpp"
 #include "core/io/file_byte_reader.hpp"
 #include "core/io/file_byte_writer.hpp"
 
@@ -13,6 +14,9 @@ namespace litedb::core::database
 namespace
 {
 
+constexpr std::size_t MaxManifestBytes = 64 * 1024;
+constexpr std::uint32_t MaxManifestStringBytes = 4 * 1024;
+
 /**
  * @brief 创建 manifest 错误
  * @param code 错误码
@@ -21,7 +25,7 @@ namespace
  */
 ManifestError make_error(ManifestErrorCode code, std::string message)
 {
-    return ManifestError {code, std::move(message)};
+    return ManifestError {code, message};
 }
 
 /**
@@ -29,12 +33,10 @@ ManifestError make_error(ManifestErrorCode code, std::string message)
  * @param error 文件系统错误
  * @return 错误
  */
-ManifestError from_filesystem_error(filesystem::FileSystemError error)
+ManifestError from_filesystem_error(error::Error error)
 {
-    return ManifestError {
-        .code = ManifestErrorCode::FileSystemError,
-        .message = std::move(error.message),
-    };
+    auto message = error.message();
+    return ManifestError {ManifestErrorCode::FileSystemError, message, std::move(error)};
 }
 
 /**
@@ -44,11 +46,10 @@ ManifestError from_filesystem_error(filesystem::FileSystemError error)
  */
 ManifestError from_io_error(io::IoError error)
 {
-    return ManifestError {
-        .code = error.code == io::IoErrorCode::FileSystemError
-            ? ManifestErrorCode::FileSystemError : ManifestErrorCode::InvalidFormat,
-        .message = std::move(error.message),
-    };
+    const auto code = error.category() == error::ErrorCategory::FileSystem
+        ? ManifestErrorCode::FileSystemError : ManifestErrorCode::InvalidFormat;
+    auto message = error.message();
+    return ManifestError {code, message, std::move(error)};
 }
 
 /**
@@ -89,7 +90,7 @@ std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, s
     if (!magic.has_value()) {
         return std::unexpected(from_io_error(std::move(magic.error())));
     }
-    if (magic.value() != expected_magic) {
+    if (*magic != expected_magic) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Invalid file magic"));
     }
 
@@ -97,7 +98,7 @@ std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, s
     if (!version.has_value()) {
         return std::unexpected(from_io_error(std::move(version.error())));
     }
-    if (version.value() != DatabaseFormatVersion) {
+    if (*version != DatabaseFormatVersion) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported storage format version"));
     }
 
@@ -105,7 +106,7 @@ std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, s
     if (!header_size.has_value()) {
         return std::unexpected(from_io_error(std::move(header_size.error())));
     }
-    if (header_size.value() < FileHeaderSize) {
+    if (*header_size < FileHeaderSize) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Invalid file header size"));
     }
 
@@ -132,20 +133,20 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!exists.has_value()) {
         return std::unexpected(from_filesystem_error(std::move(exists.error())));
     }
-    if (!exists.value()) {
+    if (!*exists) {
         auto file = filesystem_->open(
             path,
-            filesystem::backend::FileOpenOptions {
-                .access = filesystem::backend::FileAccess::ReadWrite,
-                .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+            filesystem::FileOpenOptions {
+                .access = filesystem::FileAccess::ReadWrite,
+                .create_mode = filesystem::FileCreateMode::CreateOrTruncate,
             }
         );
         if (!file.has_value()) {
             return std::unexpected(from_filesystem_error(std::move(file.error())));
         }
 
-        io::FileByteWriter byte_writer {file.value()};
-        io::BinaryWriter writer {byte_writer};
+        io::BufferByteWriter encoded {MaxManifestBytes};
+        io::BinaryWriter writer {encoded};
         auto header_written = write_file_header(writer, ManifestMagic);
         if (!header_written.has_value()) {
             return std::unexpected(std::move(header_written.error()));
@@ -164,6 +165,10 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
             return std::unexpected(from_io_error(std::move(collections_path_written.error())));
         }
 
+        io::FileByteWriter byte_writer {*file};
+        if (auto written = byte_writer.write_bytes(encoded.bytes()); !written) {
+            return std::unexpected(from_io_error(std::move(written.error())));
+        }
         auto synced = file->sync_all();
         if (!synced.has_value()) {
             return std::unexpected(from_filesystem_error(std::move(synced.error())));
@@ -177,17 +182,33 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
 
     auto file = filesystem_->open(
         path,
-        filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadOnly,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadOnly,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         }
     );
     if (!file.has_value()) {
         return std::unexpected(from_filesystem_error(std::move(file.error())));
     }
+    auto file_size = file->size();
+    if (!file_size) {
+        return std::unexpected(from_filesystem_error(std::move(file_size.error())));
+    }
+    if (*file_size > MaxManifestBytes) {
+        return std::unexpected(make_error(
+            ManifestErrorCode::InvalidFormat,
+            "Manifest exceeds the configured size limit"
+        ));
+    }
 
-    io::FileByteReader byte_reader {file.value()};
-    io::BinaryReader reader {byte_reader};
+    io::FileByteReader byte_reader {*file};
+    io::BinaryReader reader {
+        byte_reader,
+        io::BinaryDecodeLimits {
+            .max_total_bytes = *file_size,
+            .max_string_bytes = MaxManifestStringBytes,
+        },
+    };
     auto header_read = read_file_header(reader, ManifestMagic);
     if (!header_read.has_value()) {
         return std::unexpected(std::move(header_read.error()));
@@ -197,7 +218,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!version.has_value()) {
         return std::unexpected(from_io_error(std::move(version.error())));
     }
-    if (version.value() != DatabaseFormatVersion) {
+    if (*version != DatabaseFormatVersion) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported manifest storage format version"));
     }
 
@@ -209,7 +230,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     if (!collections_path.has_value()) {
         return std::unexpected(from_io_error(std::move(collections_path.error())));
     }
-    if (meta_path.value() != MetaFileName || collections_path.value() != CollectionsDirName) {
+    if (*meta_path != MetaFileName || *collections_path != CollectionsDirName) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported manifest paths"));
     }
 

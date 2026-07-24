@@ -15,7 +15,7 @@
 #include "core/index/index_store.hpp"
 #include "core/meta/meta.hpp"
 #include "core/schema/collection.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 
 namespace litedb::core::storage
 {
@@ -108,7 +108,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> restore_all(
-        const meta::MetaEngine & catalog,
+        const meta::CatalogView & catalog,
         const storage::StorageEngine & storage
     );
 
@@ -117,7 +117,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> reload_collection(
-        const meta::MetaEngine & catalog,
+        const meta::CatalogView & catalog,
         const storage::StorageEngine & storage,
         common::CollectionId collection_id
     );
@@ -128,7 +128,7 @@ public:
     [[nodiscard]]
     std::expected<IndexKeyBindings, IndexError> prepare_insert(
         common::CollectionId collection_id,
-        const schema::RecordData & record_data
+        const common::RecordData & record_data
     ) const;
 
     /**
@@ -143,8 +143,8 @@ public:
     [[nodiscard]]
     std::expected<IndexUpdateBindings, IndexError> prepare_update(
         common::CollectionId collection_id,
-        const schema::RecordData & old_record_data,
-        const schema::RecordData & new_record_data
+        const common::RecordData & old_record_data,
+        const common::RecordData & new_record_data
     ) const;
 
     /**
@@ -162,7 +162,7 @@ public:
     [[nodiscard]]
     std::expected<IndexKeyBindings, IndexError> prepare_delete(
         common::CollectionId collection_id,
-        const schema::RecordData & old_record_data
+        const common::RecordData & old_record_data
     ) const;
 
     /**
@@ -210,6 +210,12 @@ public:
         const IndexRange & range
     ) const;
 
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError> scan_range_cursor(
+        common::IndexId index_id,
+        const IndexRange & range
+    ) const;
+
     /**
      * @brief 清空所有索引
      */
@@ -245,7 +251,7 @@ private:
      */
     [[nodiscard]]
     static std::expected<std::optional<ScalarIndexKey>, IndexError> make_key_from_record(
-        const schema::RecordData & record_data,
+        const common::RecordData & record_data,
         std::size_t column_ordinal,
         const common::LogicalType & key_type
     );

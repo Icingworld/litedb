@@ -8,6 +8,11 @@
 
 #include "core/meta/entry/meta_entry.hpp"
 
+namespace litedb::core::meta
+{
+class CatalogState;
+}
+
 namespace litedb::core::meta::entry
 {
     
@@ -20,6 +25,7 @@ public:
     DatabaseEntry(common::DatabaseId id, std::string name);
 
 public:
+
     /**
      * @brief 获取数据库 ID
      * @return 数据库 ID
@@ -50,6 +56,9 @@ public:
     [[nodiscard]]
     bool contains_collection(std::string_view collection_key) const;
 
+private:
+    friend class litedb::core::meta::CatalogState;
+
     /**
      * @brief 添加集合
      * @param collection_key 集合键
@@ -62,7 +71,7 @@ public:
      * @param collection_key 集合键
      * @param collection_id 集合 ID
      */
-    void remove_collection(std::string_view collection_key, common::CollectionId collection_id);
+    void remove_collection(std::string_view collection_key);
 
 private:
     std::vector<common::CollectionId> collection_ids_;  ///< 数据库包含的集合 ID 列表

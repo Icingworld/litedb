@@ -3,6 +3,7 @@
 #include <expected>
 #include <filesystem>
 #include <functional>
+#include <span>
 
 #include "core/filesystem/filesystem.hpp"
 #include "core/wal/wal_store.hpp"
@@ -39,7 +40,8 @@ private:
         std::filesystem::path directory,
         filesystem::FileSystem & filesystem,
         WalStore active,
-        std::size_t retained_segments
+        std::size_t retained_segments,
+        WalDecodeLimits limits
     ) noexcept;
 
 public:
@@ -51,8 +53,17 @@ public:
     [[nodiscard]]
     static std::expected<WalManager, WalError> open(
         std::filesystem::path directory,
-        filesystem::FileSystem & filesystem
+        filesystem::FileSystem & filesystem,
+        WalDecodeLimits limits = {}
     );
+
+    /**
+     * @brief 在追加 Begin/FileWrite/Commit 前验证整个事务是否仍可由相同预算恢复
+     */
+    [[nodiscard]]
+    std::expected<void, WalError> validate_transaction(
+        std::span<const FileWrite> writes
+    ) const;
 
     [[nodiscard]]
     std::expected<transaction::Lsn, WalError> append_begin(transaction::TransactionId transaction_id);
@@ -73,7 +84,10 @@ public:
     std::expected<void, WalError> flush_all();
 
     [[nodiscard]]
-    std::expected<WalScanResult, WalError> scan(bool truncate_incomplete_tail = true);
+    std::expected<WalScanResult, WalError> scan(
+        bool truncate_incomplete_tail = true,
+        const WalDecodeLimits & limits = {}
+    );
 
     /**
      * @brief 发布下一代空 WAL，并清理旧的正式段
@@ -99,6 +113,8 @@ private:
     filesystem::FileSystem * filesystem_ {nullptr};
     WalStore active_;
     std::size_t retained_segments_ {1};
+    WalDecodeLimits limits_;
+    std::size_t record_count_ {0};
 };
 
 } // namespace litedb::core::wal

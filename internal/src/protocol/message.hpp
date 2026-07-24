@@ -7,6 +7,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/error/error.hpp"
 #include "core/executor/execution_result.hpp"
 
 namespace litedb::protocol
@@ -25,7 +26,7 @@ enum class MessageKind : std::uint16_t
     PongResponse = 5,
 };
 
-enum class ProtocolErrorCode
+enum class ProtocolErrorCode : std::uint8_t
 {
     InvalidFrame,
     InvalidVersion,
@@ -35,11 +36,7 @@ enum class ProtocolErrorCode
     FrameTooLarge,
 };
 
-struct ProtocolError
-{
-    ProtocolErrorCode code;
-    std::string message;
-};
+using ProtocolError = core::error::Error;
 
 struct FrameHeader
 {
@@ -96,3 +93,12 @@ std::vector<std::uint8_t> encode_error_response(const ErrorResponse & response);
 std::expected<ErrorResponse, ProtocolError> decode_error_response(const std::vector<std::uint8_t> & payload);
 
 } // namespace litedb::protocol
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<::litedb::protocol::ProtocolErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Protocol;
+};
+} // namespace litedb::core::error

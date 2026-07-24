@@ -12,10 +12,11 @@ namespace litedb::core::wal
 std::expected<RecoveryResult, WalError> RecoveryManager::recover(
     const std::filesystem::path & data_directory,
     filesystem::FileSystem & filesystem,
-    WalManager & wal
+    WalManager & wal,
+    const WalDecodeLimits & limits
 )
 {
-    auto scanned = wal.scan(true);
+    auto scanned = wal.scan(true, limits);
     if (!scanned) {
         return std::unexpected(std::move(scanned.error()));
     }
@@ -37,7 +38,12 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
             if (state.began || state.committed || !record.payload.empty()) {
                 return std::unexpected(make_error(
                     WalErrorCode::CorruptedRecord,
-                    "Invalid WAL transaction begin sequence"
+                    "Invalid WAL transaction begin sequence",
+                    {
+                        .operation = WalOperation::Recover,
+                        .transaction_id = record.transaction_id,
+                        .lsn = record.lsn,
+                    }
                 ));
             }
             state.began = true;
@@ -46,7 +52,12 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
             if (!state.began || state.committed) {
                 return std::unexpected(make_error(
                     WalErrorCode::CorruptedRecord,
-                    "WAL write is outside an active transaction"
+                    "WAL write is outside an active transaction",
+                    {
+                        .operation = WalOperation::Recover,
+                        .transaction_id = record.transaction_id,
+                        .lsn = record.lsn,
+                    }
                 ));
             }
             break;
@@ -54,7 +65,12 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
             if (!state.began || state.committed || !record.payload.empty()) {
                 return std::unexpected(make_error(
                     WalErrorCode::CorruptedRecord,
-                    "Invalid WAL transaction commit sequence"
+                    "Invalid WAL transaction commit sequence",
+                    {
+                        .operation = WalOperation::Recover,
+                        .transaction_id = record.transaction_id,
+                        .lsn = record.lsn,
+                    }
                 ));
             }
             state.committed = true;
@@ -74,23 +90,28 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
         }
     }
 
-    FileWriteBatch batch;
-    for (const auto & record : scanned->records) {
-        if (record.type != WalRecordType::FileWrite || !states[record.transaction_id].committed) {
+    std::unordered_map<transaction::TransactionId, FileWriteBatch> batches;
+    for (auto & record : scanned->records) {
+        if (!states[record.transaction_id].committed) {
             continue;
         }
-
-        auto write = WalCodec::decode_file_write(record.payload);
-        if (!write) {
-            return std::unexpected(std::move(write.error()));
+        if (record.type == WalRecordType::FileWrite) {
+            auto write = WalCodec::decode_file_write(std::move(record.payload));
+            if (!write) {
+                return std::unexpected(std::move(write.error()));
+            }
+            batches[record.transaction_id].add(std::move(*write));
+            ++result.replayed_writes;
+        } else if (record.type == WalRecordType::Commit) {
+            auto batch = batches.find(record.transaction_id);
+            if (batch != batches.end()) {
+                auto applied = batch->second.apply(data_directory, filesystem, true);
+                if (!applied) {
+                    return std::unexpected(std::move(applied.error()));
+                }
+                batches.erase(batch);
+            }
         }
-        batch.add(std::move(*write));
-        ++result.replayed_writes;
-    }
-
-    auto applied = batch.apply(data_directory, filesystem, true);
-    if (!applied) {
-        return std::unexpected(std::move(applied.error()));
     }
     return result;
 }

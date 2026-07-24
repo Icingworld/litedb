@@ -5,19 +5,6 @@
 namespace litedb::core::io
 {
 
-namespace
-{
-
-IoError from_filesystem_error(filesystem::FileSystemError error)
-{
-    return IoError {
-        .code = IoErrorCode::FileSystemError,
-        .message = std::move(error.message),
-    };
-}
-
-} // namespace
-
 FileByteWriter::FileByteWriter(filesystem::FileHandle & file, std::uint64_t offset) noexcept
     : file_(&file)
     , offset_(offset)
@@ -27,8 +14,8 @@ FileByteWriter::FileByteWriter(filesystem::FileHandle & file, std::uint64_t offs
 std::expected<void, IoError> FileByteWriter::write_bytes(std::span<const std::byte> data)
 {
     auto written = file_->write_at(offset_, data);
-    if (!written.has_value()) {
-        return std::unexpected(from_filesystem_error(std::move(written.error())));
+    if (!written) {
+        return std::unexpected(std::move(written.error()));
     }
     offset_ += data.size();
     return {};
@@ -47,8 +34,8 @@ FileByteAppender::FileByteAppender(filesystem::FileHandle & file) noexcept
 std::expected<void, IoError> FileByteAppender::write_bytes(std::span<const std::byte> data)
 {
     auto written = file_->append(data);
-    if (!written.has_value()) {
-        return std::unexpected(from_filesystem_error(std::move(written.error())));
+    if (!written) {
+        return std::unexpected(std::move(written.error()));
     }
     return {};
 }

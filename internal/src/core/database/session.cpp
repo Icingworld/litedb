@@ -31,51 +31,53 @@ parser::ast::AstNodeLocation location_from_token(parser::TokenLocation location)
 [[nodiscard]]
 SessionError from_parser_error(parser::ParserError error)
 {
+    const auto * context = error.context<parser::ParserErrorContext>();
+    const auto location = context == nullptr
+        ? parser::ast::AstNodeLocation {}
+        : location_from_token(context->location);
+    auto message = error.message();
     return SessionError {
-        .code = SessionErrorCode::ParserError,
-        .location = location_from_token(error.location),
-        .message = std::move(error.message),
+        SessionErrorCode::ParserError,
+        message,
+        SessionErrorContext {location},
+        std::move(error),
     };
 }
 
 [[nodiscard]]
 SessionError from_binder_error(binder::BinderError error)
 {
-    return SessionError {
-        .code = SessionErrorCode::BinderError,
-        .location = error.location,
-        .message = std::move(error.message),
-    };
+    const auto * context = error.context<binder::BinderErrorContext>();
+    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
+    auto message = error.message();
+    return SessionError {SessionErrorCode::BinderError, message, SessionErrorContext {location}, std::move(error)};
 }
 
 [[nodiscard]]
 SessionError from_planner_error(planner::PlannerError error)
 {
-    return SessionError {
-        .code = SessionErrorCode::PlannerError,
-        .location = error.location,
-        .message = std::move(error.message),
-    };
+    const auto * context = error.context<planner::PlannerErrorContext>();
+    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
+    auto message = error.message();
+    return SessionError {SessionErrorCode::PlannerError, message, SessionErrorContext {location}, std::move(error)};
 }
 
 [[nodiscard]]
 SessionError from_optimizer_error(optimizer::OptimizerError error)
 {
-    return SessionError {
-        .code = SessionErrorCode::OptimizerError,
-        .location = error.location,
-        .message = std::move(error.message),
-    };
+    const auto * context = error.context<optimizer::OptimizerErrorContext>();
+    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
+    auto message = error.message();
+    return SessionError {SessionErrorCode::OptimizerError, message, SessionErrorContext {location}, std::move(error)};
 }
 
 [[nodiscard]]
 SessionError from_execution_error(executor::ExecutionError error)
 {
-    return SessionError {
-        .code = SessionErrorCode::ExecutionError,
-        .location = error.location,
-        .message = std::move(error.message),
-    };
+    const auto * context = error.context<executor::ExecutionErrorContext>();
+    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
+    auto message = error.message();
+    return SessionError {SessionErrorCode::ExecutionError, message, SessionErrorContext {location}, std::move(error)};
 }
 
 } // namespace
@@ -95,27 +97,27 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
         return std::unexpected(from_parser_error(std::move(parsed.error())));
     }
 
-    binder::BinderContext context {engine_->meta_, session_};
+    binder::BinderContext context {engine_->meta(), session_};
     binder::Binder binder {context};
-    auto bound = binder.bind(*parsed.value());
+    auto bound = binder.bind(**parsed);
     if (!bound.has_value()) {
         return std::unexpected(from_binder_error(std::move(bound.error())));
     }
 
     planner::logical::LogicalPlanner planner;
-    auto planned = planner.plan(std::move(bound.value()));
+    auto planned = planner.plan(std::move(*bound));
     if (!planned.has_value()) {
         return std::unexpected(from_planner_error(std::move(planned.error())));
     }
 
-    optimizer::Optimizer optimizer {{}, &engine_->meta_};
-    auto optimized = optimizer.optimize(std::move(planned.value()));
+    optimizer::Optimizer optimizer {{}, engine_->meta()};
+    auto optimized = optimizer.optimize(std::move(*planned));
     if (!optimized.has_value()) {
         return std::unexpected(from_optimizer_error(std::move(optimized.error())));
     }
 
     physical_plan::PhysicalPlanner physical_planner;
-    auto physical = physical_planner.plan(*optimized.value());
+    auto physical = physical_planner.plan(**optimized);
 
     auto executed = engine_->execute(*physical);
     if (!executed.has_value()) {
@@ -126,7 +128,7 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
         session_.current_database_id = executed->selected_database_id;
     }
 
-    return std::move(executed.value());
+    return std::move(*executed);
 }
 
 std::optional<common::DatabaseId> Session::current_database_id() const noexcept

@@ -47,6 +47,39 @@ int main()
     auto scanned = store->scan();
     require(scanned && scanned->records.size() == 3, "scan WAL failed");
     require(scanned->maximum_transaction_id == 1, "maximum transaction id mismatch");
+    wal::WalDecodeLimits strict_limits {
+        .max_record_size_bytes = wal::WalCodec::RecordHeaderSize,
+        .max_scan_size_bytes = 1024 * 1024,
+        .max_record_count = 16,
+    };
+    auto limited = store->scan(false, strict_limits);
+    require(!limited && limited.error().category() == error::ErrorCategory::Wal &&
+                limited.error().is(wal::WalErrorCode::ResourceLimitExceeded),
+            "oversized WAL record should be rejected by the decode budget");
+    const auto * limit_context = limited.error().context<wal::WalErrorContext>();
+    require(limit_context != nullptr && limit_context->operation == wal::WalOperation::Scan &&
+                limit_context->path == store->path() && limit_context->lsn.has_value(),
+            "WAL resource-limit error context mismatch");
+    auto size_limits = wal::WalDecodeLimits {};
+    size_limits.max_scan_size_bytes = std::filesystem::file_size(store->path()) - 1;
+    auto scan_size_limited = store->scan(false, size_limits);
+    require(!scan_size_limited &&
+                scan_size_limited.error().is(wal::WalErrorCode::ResourceLimitExceeded),
+            "oversized WAL scan should be rejected by the decode budget");
+    auto count_limits = wal::WalDecodeLimits {};
+    count_limits.max_record_count = 1;
+    auto count_limited = store->scan(false, count_limits);
+    require(!count_limited && count_limited.error().is(wal::WalErrorCode::ResourceLimitExceeded),
+            "excessive WAL record count should be rejected by the decode budget");
+
+    auto missing = wal::WalStore::open(directory / "missing" / "absent.wal", filesystem);
+    require(!missing && missing.error().is(wal::WalErrorCode::FileSystemError),
+            "missing WAL should preserve a filesystem failure");
+    const auto * filesystem_context = missing.error().context<wal::WalErrorContext>();
+    require(filesystem_context != nullptr && filesystem_context->operation == wal::WalOperation::Open &&
+                filesystem_context->source_code.has_value(),
+            "WAL filesystem error lost its source context");
+
     auto decoded = wal::WalCodec::decode_file_write(scanned->records[1].payload);
     require(decoded && decoded->target == write.target && decoded->offset == write.offset,
             "decode file write failed");
@@ -87,9 +120,9 @@ int main()
 
     const auto committed_size = std::filesystem::file_size(store->path());
     {
-        auto file = filesystem.open(store->path(), filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        auto file = filesystem.open(store->path(), filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open WAL for truncation failed");
         const std::array garbage {std::byte {4}, std::byte {5}};
@@ -100,9 +133,9 @@ int main()
     require(std::filesystem::file_size(store->path()) == committed_size, "incomplete tail not truncated");
 
     {
-        auto file = filesystem.open(store->path(), filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        auto file = filesystem.open(store->path(), filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open WAL for checksum corruption failed");
         std::array<std::byte, 1> checksum_byte {};
@@ -111,7 +144,7 @@ int main()
         require(file->write_at(*mutation + 40, checksum_byte).has_value(), "corrupt checksum failed");
     }
     auto corrupted = store->scan(false);
-    require(!corrupted && corrupted.error().code == wal::WalErrorCode::CorruptedRecord,
+    require(!corrupted && corrupted.error().is(wal::WalErrorCode::CorruptedRecord),
             "complete checksum corruption should be rejected");
 
     const auto segmented_directory = directory / "segmented";
@@ -131,9 +164,9 @@ int main()
 
     const auto temporary = segmented_directory / "00000000000000000003.wal.tmp";
     {
-        auto file = filesystem.open(temporary, filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate,
+        auto file = filesystem.open(temporary, filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::CreateOrTruncate,
         });
         require(file.has_value(), "create stale WAL temporary file failed");
         const std::array garbage {std::byte {1}};
@@ -152,9 +185,9 @@ int main()
     }
     const auto highest_path = segmented_directory / "00000000000000000002.wal";
     {
-        auto file = filesystem.open(highest_path, filesystem::backend::FileOpenOptions {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        auto file = filesystem.open(highest_path, filesystem::FileOpenOptions {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open highest WAL generation failed");
         std::array<std::byte, 1> checksum_byte {};
@@ -163,7 +196,7 @@ int main()
         require(file->write_at(24, checksum_byte).has_value(), "corrupt WAL header failed");
     }
     auto refused_fallback = wal::WalManager::open(segmented_directory, filesystem);
-    require(!refused_fallback && refused_fallback.error().code == wal::WalErrorCode::InvalidFormat,
+    require(!refused_fallback && refused_fallback.error().is(wal::WalErrorCode::InvalidFormat),
             "WAL manager fell back from a corrupted highest generation");
     return 0;
 }

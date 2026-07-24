@@ -10,7 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
+#include "core/io/checksum.hpp"
 
 namespace litedb::core::index::btree_index
 {
@@ -19,7 +20,8 @@ namespace
 {
 
 constexpr std::uint32_t PageMagic = 0x31505442; // BTP1
-constexpr std::uint16_t PageVersion = 1;
+constexpr std::uint16_t LegacyPageVersion = 1;
+constexpr std::uint16_t PageVersion = 2;
 constexpr std::uint8_t EncodedInternalPage = 1;
 constexpr std::uint8_t EncodedLeafPage = 2;
 
@@ -35,7 +37,7 @@ constexpr std::size_t FirstLinkOffset = 24;
 constexpr std::size_t SecondLinkOffset = 32;
 constexpr std::size_t FreeStartOffset = 40;
 constexpr std::size_t FreeEndOffset = 42;
-constexpr std::size_t ReservedWordOffset = 44;
+constexpr std::size_t ChecksumOffset = 44;
 
 [[nodiscard]]
 BTreePageCodecError make_codec_error(BTreePageCodecErrorCode code, std::string message)
@@ -71,6 +73,15 @@ T read_number(const std::byte * source) noexcept
         value |= static_cast<Unsigned>(std::to_integer<unsigned int>(source[index])) << (index * 8U);
     }
     return static_cast<T>(value);
+}
+
+[[nodiscard]]
+std::uint32_t checksum_with_zeroed_field(std::span<const std::byte> bytes)
+{
+    BTreePageCodec::PageBuffer checked {};
+    std::copy(bytes.begin(), bytes.end(), checked.begin());
+    write_number(checked.data() + ChecksumOffset, std::uint32_t {0});
+    return io::crc32(checked);
 }
 
 /**
@@ -212,43 +223,43 @@ std::expected<ScalarIndexKey, BTreePageCodecError> decode_key(
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::UnsupportedKeyType, "Unsupported B+ tree key type"));
     }
 
-    schema::Value value;
+    common::Value value;
     switch (key_type.id) {
     case common::LogicalTypeId::Boolean:
         if (bytes.size() != 1 || std::to_integer<std::uint8_t>(bytes[0]) > 1) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Boolean index key"));
         }
-        value = schema::Value {std::to_integer<std::uint8_t>(bytes[0]) == 1};
+        value = common::Value {std::to_integer<std::uint8_t>(bytes[0]) == 1};
         break;
     case common::LogicalTypeId::Integer:
         if (bytes.size() != sizeof(std::int32_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Integer index key"));
         }
-        value = schema::Value {read_number<std::int32_t>(bytes.data())};
+        value = common::Value {read_number<std::int32_t>(bytes.data())};
         break;
     case common::LogicalTypeId::BigInt:
         if (bytes.size() != sizeof(std::int64_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded BigInt index key"));
         }
-        value = schema::Value {read_number<std::int64_t>(bytes.data())};
+        value = common::Value {read_number<std::int64_t>(bytes.data())};
         break;
     case common::LogicalTypeId::Float:
         if (bytes.size() != sizeof(std::uint32_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Float index key"));
         }
-        value = schema::Value {std::bit_cast<float>(read_number<std::uint32_t>(bytes.data()))};
+        value = common::Value {std::bit_cast<float>(read_number<std::uint32_t>(bytes.data()))};
         break;
     case common::LogicalTypeId::Double:
         if (bytes.size() != sizeof(std::uint64_t)) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Invalid encoded Double index key"));
         }
-        value = schema::Value {std::bit_cast<double>(read_number<std::uint64_t>(bytes.data()))};
+        value = common::Value {std::bit_cast<double>(read_number<std::uint64_t>(bytes.data()))};
         break;
     case common::LogicalTypeId::Varchar:
         if (key_type.parameter.has_value() && bytes.size() > *key_type.parameter) {
             return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Encoded Varchar index key exceeds declared length"));
         }
-        value = schema::Value {bytes.empty()
+        value = common::Value {bytes.empty()
             ? std::string {}
             : std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size())};
         break;
@@ -261,7 +272,7 @@ std::expected<ScalarIndexKey, BTreePageCodecError> decode_key(
     if (!key.has_value()) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Encoded index key is invalid"));
     }
-    return std::move(key.value());
+    return std::move(*key);
 }
 
 /**
@@ -329,7 +340,7 @@ std::expected<DecodedEntry, BTreePageCodecError> decode_entry(
     }
     return DecodedEntry {
         .key = BTreeEntryKey {
-            .key = std::move(key.value()),
+            .key = std::move(*key),
             .record_id = record_id,
         },
         .right_child_id = child,
@@ -390,7 +401,7 @@ std::expected<std::vector<std::vector<std::byte>>, BTreePageCodecError> encode_e
             if (!bytes.has_value()) {
                 return std::unexpected(std::move(bytes.error()));
             }
-            encoded.push_back(std::move(bytes.value()));
+            encoded.push_back(std::move(*bytes));
         }
     } else {
         const auto & internal = std::get<BTreeInternalPage>(page);
@@ -400,7 +411,7 @@ std::expected<std::vector<std::vector<std::byte>>, BTreePageCodecError> encode_e
             if (!bytes.has_value()) {
                 return std::unexpected(std::move(bytes.error()));
             }
-            encoded.push_back(std::move(bytes.value()));
+            encoded.push_back(std::move(*bytes));
         }
     }
     return encoded;
@@ -459,7 +470,7 @@ void write_header(
     }
     write_number(buffer.data() + FreeStartOffset, free_start);
     write_number(buffer.data() + FreeEndOffset, free_end);
-    write_number(buffer.data() + ReservedWordOffset, static_cast<std::uint32_t>(0));
+    write_number(buffer.data() + ChecksumOffset, static_cast<std::uint32_t>(0));
 }
 
 } // namespace
@@ -523,6 +534,7 @@ std::expected<BTreePageCodec::PageBuffer, BTreePageCodecError> BTreePageCodec::e
         free_start,
         free_end
     );
+    write_number(buffer.data() + ChecksumOffset, io::crc32(buffer));
     return buffer;
 }
 
@@ -541,14 +553,22 @@ std::expected<BTreePage, BTreePageCodecError> BTreePageCodec::decode(
     if (read_number<std::uint32_t>(bytes.data() + MagicOffset) != PageMagic) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::InvalidFormat, "Invalid B+ tree page magic"));
     }
-    if (read_number<std::uint16_t>(bytes.data() + VersionOffset) != PageVersion) {
+    const auto version = read_number<std::uint16_t>(bytes.data() + VersionOffset);
+    if (version != LegacyPageVersion && version != PageVersion) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::UnsupportedVersion, "Unsupported B+ tree page version"));
     }
     if (read_number<std::uint16_t>(bytes.data() + HeaderSizeOffset) != HeaderSize ||
         read_number<std::uint32_t>(bytes.data() + PageSizeOffset) != PageSize ||
-        read_number<std::uint8_t>(bytes.data() + ReservedByteOffset) != 0 ||
-        read_number<std::uint32_t>(bytes.data() + ReservedWordOffset) != 0) {
+        read_number<std::uint8_t>(bytes.data() + ReservedByteOffset) != 0) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::InvalidFormat, "Invalid B+ tree page header"));
+    }
+    if (version == LegacyPageVersion) {
+        if (read_number<std::uint32_t>(bytes.data() + ChecksumOffset) != 0) {
+            return std::unexpected(make_codec_error(BTreePageCodecErrorCode::InvalidFormat, "Invalid legacy B+ tree page header"));
+        }
+    } else if (read_number<std::uint32_t>(bytes.data() + ChecksumOffset)
+               != checksum_with_zeroed_field(bytes)) {
+        return std::unexpected(make_codec_error(BTreePageCodecErrorCode::ChecksumMismatch, "B+ tree page checksum mismatch"));
     }
 
     const auto page_id = read_number<BTreePageId>(bytes.data() + PageIdOffset);

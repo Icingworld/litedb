@@ -1,15 +1,21 @@
 #include "core/meta/meta_store.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <utility>
+#include <vector>
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
 #include "core/io/binary_io.hpp"
+#include "core/io/buffer_byte_reader.hpp"
+#include "core/io/buffer_byte_writer.hpp"
+#include "core/io/checksum.hpp"
 #include "core/io/file_byte_reader.hpp"
 #include "core/io/file_byte_writer.hpp"
 #include "core/io/io_helper.hpp"
-#include "core/meta/meta_helper.hpp"
 
 namespace litedb::core::meta
 {
@@ -18,8 +24,36 @@ namespace
 {
 
 constexpr std::uint32_t MetaMagic = 0x544d444c;         // LDMT
-constexpr std::uint16_t MetaFormatVersion = 1;          // 元数据格式版本
-constexpr std::uint16_t MetaHeaderSize = 8;             // 元数据头大小
+constexpr std::uint16_t MetaFormatVersion = 2;
+constexpr std::uint16_t MetaHeaderSize = 24;
+constexpr std::uint64_t MaxPayloadSize = 64ULL * 1024ULL * 1024ULL;
+constexpr std::size_t MaxStringSize = 1024ULL * 1024ULL;
+constexpr std::uint32_t MaxEntryCount = 1'000'000U;
+constexpr std::size_t MaxExpressionDepth = 64;
+std::atomic<std::uint64_t> TempSequence {1};
+
+class TempFileCleanup
+{
+public:
+    TempFileCleanup(filesystem::FileSystem & filesystem, std::filesystem::path path)
+        : filesystem_(&filesystem), path_(std::move(path))
+    {
+    }
+
+    ~TempFileCleanup()
+    {
+        if (active_) {
+            (void) filesystem_->remove(path_);
+        }
+    }
+
+    void release() noexcept { active_ = false; }
+
+private:
+    filesystem::FileSystem * filesystem_;
+    std::filesystem::path path_;
+    bool active_ {true};
+};
 
 /**
  * @brief 从文件系统错误创建元数据存储错误
@@ -27,9 +61,19 @@ constexpr std::uint16_t MetaHeaderSize = 8;             // 元数据头大小
  * @return 元数据存储错误
  */
 [[nodiscard]]
-MetaStoreError from_filesystem_error(filesystem::FileSystemError error)
+MetaError from_filesystem_error(
+    error::Error source,
+    MetaOperation operation,
+    const std::filesystem::path & path,
+    MetaErrorCode code = MetaErrorCode::FileSystemFailure
+)
 {
-    return make_error(MetaStoreErrorCode::FileSystemError, std::move(error.message));
+    const auto source_code = source.encode_code();
+    return make_error(code, source.message(), {
+        .operation = operation,
+        .path = path,
+        .source_code = source_code,
+    });
 }
 
 /**
@@ -38,19 +82,24 @@ MetaStoreError from_filesystem_error(filesystem::FileSystemError error)
  * @return 元数据存储错误
  */
 [[nodiscard]]
-MetaStoreError from_io_error(io::IoError error)
+MetaError from_io_error(
+    io::IoError source,
+    MetaOperation operation,
+    const std::filesystem::path & path = {}
+)
 {
-    switch (error.code) {
-    case io::IoErrorCode::UnexpectedEof:
-        return make_error(MetaStoreErrorCode::UnexpectedEof, std::move(error.message));
-    case io::IoErrorCode::InvalidData:
-        return make_error(MetaStoreErrorCode::InvalidFormat, std::move(error.message));
-    case io::IoErrorCode::ValueTooLarge:
-        return make_error(MetaStoreErrorCode::ValueTooLarge, std::move(error.message));
-    case io::IoErrorCode::FileSystemError:
-        return make_error(MetaStoreErrorCode::FileSystemError, std::move(error.message));
-    }
-    return make_error(MetaStoreErrorCode::InvalidFormat, std::move(error.message));
+    auto code = source.category() == error::ErrorCategory::FileSystem
+        ? MetaErrorCode::FileSystemFailure
+        : MetaErrorCode::IoFailure;
+    if (source.is(io::IoErrorCode::UnexpectedEof)) code = MetaErrorCode::UnexpectedEof;
+    else if (source.is(io::IoErrorCode::InvalidData)) code = MetaErrorCode::InvalidFormat;
+    else if (source.is(io::IoErrorCode::ValueTooLarge)) code = MetaErrorCode::ValueTooLarge;
+    const auto source_code = source.encode_code();
+    return make_error(code, source.message(), {
+        .operation = operation,
+        .path = path,
+        .source_code = source_code,
+    });
 }
 
 /**
@@ -72,7 +121,7 @@ io::IoError invalid_data(std::string message)
 [[nodiscard]]
 std::expected<std::uint32_t, io::IoError> checked_count(std::size_t count)
 {
-    if (count > std::numeric_limits<std::uint32_t>::max()) {
+    if (count > MaxEntryCount) {
         return std::unexpected(io::make_io_error(io::IoErrorCode::ValueTooLarge, "meta collection is too large"));
     }
     return static_cast<std::uint32_t>(count);
@@ -133,6 +182,12 @@ public:
      */
     void write_string(const std::string & value)
     {
+        if (value.size() > MaxStringSize) {
+            if (!error_) {
+                error_ = io::make_io_error(io::IoErrorCode::ValueTooLarge, "meta string exceeds limit");
+            }
+            return;
+        }
         write(writer_->write_string(value));
     }
 
@@ -158,10 +213,10 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, io::IoError> result() const
+    std::expected<void, io::IoError> take_result()
     {
         if (error_) {
-            return std::unexpected(*error_);
+            return std::unexpected(std::move(*error_));
         }
         return {};
     }
@@ -232,6 +287,16 @@ public:
         return read(reader_->read_u64());
     }
 
+    std::size_t read_size()
+    {
+        const auto value = read_u64();
+        if (value > std::numeric_limits<std::size_t>::max()) {
+            fail("encoded size does not fit this platform");
+            return 0;
+        }
+        return static_cast<std::size_t>(value);
+    }
+
     /**
      * @brief 读取字符串
      * @return 值
@@ -239,6 +304,16 @@ public:
     std::string read_string()
     {
         return read(reader_->read_string());
+    }
+
+    std::uint32_t read_count()
+    {
+        const auto value = read_u32();
+        if (value > MaxEntryCount) {
+            fail(io::IoErrorCode::ValueTooLarge, "meta entry count exceeds limit");
+            return 0;
+        }
+        return value;
     }
 
     /**
@@ -249,6 +324,13 @@ public:
     {
         if (!error_) {
             error_ = invalid_data(std::move(message));
+        }
+    }
+
+    void fail(io::IoErrorCode code, std::string message)
+    {
+        if (!error_) {
+            error_ = io::make_io_error(code, std::move(message));
         }
     }
 
@@ -264,10 +346,10 @@ public:
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, io::IoError> result() const
+    std::expected<void, io::IoError> take_result()
     {
         if (error_) {
-            return std::unexpected(*error_);
+            return std::unexpected(std::move(*error_));
         }
         return {};
     }
@@ -326,7 +408,7 @@ std::optional<std::size_t> read_optional_size(CodecReader & reader)
         return std::nullopt;
     }
     return present == 0 ? std::nullopt
-                        : std::optional<std::size_t> {static_cast<std::size_t>(reader.read_u64())};
+                        : std::optional<std::size_t> {reader.read_size()};
 }
 
 /**
@@ -365,7 +447,7 @@ std::optional<std::string> read_optional_string(CodecReader & reader)
  * @param writer 编码器写入器
  * @param expression 表达式
  */
-void write_default_expression(CodecWriter & writer, const entry::DefaultExpression & expression)
+void write_default_expression(CodecWriter & writer, const schema::DefaultExpression & expression)
 {
     writer.write_u8(static_cast<std::uint8_t>(expression.kind));
     writer.write_u8(static_cast<std::uint8_t>(expression.literal_kind));
@@ -381,27 +463,31 @@ void write_default_expression(CodecWriter & writer, const entry::DefaultExpressi
  * @param reader 编码器读取器
  * @return 表达式
  */
-entry::DefaultExpression read_default_expression(CodecReader & reader)
+schema::DefaultExpression read_default_expression(CodecReader & reader, std::size_t depth = 0)
 {
-    entry::DefaultExpression expression;
+    schema::DefaultExpression expression;
+    if (depth >= MaxExpressionDepth) {
+        reader.fail("default expression nesting exceeds limit");
+        return expression;
+    }
     const auto expression_kind = reader.read_u8();
     const auto literal_kind = reader.read_u8();
-    if (expression_kind > static_cast<std::uint8_t>(entry::DefaultExpressionKind::Vector)) {
+    if (expression_kind > static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector)) {
         reader.fail("invalid default expression kind");
     }
-    if (literal_kind > static_cast<std::uint8_t>(entry::DefaultLiteralKind::String)) {
+    if (literal_kind > static_cast<std::uint8_t>(schema::DefaultLiteralKind::String)) {
         reader.fail("invalid default literal kind");
     }
-    expression.kind = static_cast<entry::DefaultExpressionKind>(expression_kind);
-    expression.literal_kind = static_cast<entry::DefaultLiteralKind>(literal_kind);
+    expression.kind = static_cast<schema::DefaultExpressionKind>(expression_kind);
+    expression.literal_kind = static_cast<schema::DefaultLiteralKind>(literal_kind);
     expression.value = reader.read_string();
-    const auto count = reader.read_u32();
+    const auto count = reader.read_count();
     if (!reader.ok()) {
         return expression;
     }
     expression.elements.reserve(count);
     for (std::uint32_t i = 0; i < count && reader.ok(); ++i) {
-        expression.elements.push_back(read_default_expression(reader));
+        expression.elements.push_back(read_default_expression(reader, depth + 1));
     }
     return expression;
 }
@@ -411,7 +497,7 @@ entry::DefaultExpression read_default_expression(CodecReader & reader)
  * @param writer 编码器写入器
  * @param value 值
  */
-void write_optional_expression(CodecWriter & writer, const std::optional<entry::DefaultExpression> & value)
+void write_optional_expression(CodecWriter & writer, const std::optional<schema::DefaultExpression> & value)
 {
     writer.write_u8(value ? 1U : 0U);
     if (value) {
@@ -424,7 +510,7 @@ void write_optional_expression(CodecWriter & writer, const std::optional<entry::
  * @param reader 编码器读取器
  * @return 表达式
  */
-std::optional<entry::DefaultExpression> read_optional_expression(CodecReader & reader)
+std::optional<schema::DefaultExpression> read_optional_expression(CodecReader & reader)
 {
     const auto present = reader.read_u8();
     if (!reader.ok()) {
@@ -434,7 +520,7 @@ std::optional<entry::DefaultExpression> read_optional_expression(CodecReader & r
         reader.fail("invalid optional expression marker");
         return std::nullopt;
     }
-    return present == 0 ? std::nullopt : std::optional<entry::DefaultExpression> {read_default_expression(reader)};
+    return present == 0 ? std::nullopt : std::optional<schema::DefaultExpression> {read_default_expression(reader)};
 }
 
 /**
@@ -460,9 +546,6 @@ bool read_bool(CodecReader & reader)
 std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer, const MetaSnapshot & snapshot)
 {
     CodecWriter writer {binary_writer};
-    writer.write_u32(MetaMagic);
-    writer.write_u16(MetaFormatVersion);
-    writer.write_u16(MetaHeaderSize);
     writer.write_u64(snapshot.next_database_id);
     writer.write_u64(snapshot.next_collection_id);
     writer.write_u64(snapshot.next_column_id);
@@ -515,7 +598,7 @@ std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer
             }
         }
     }
-    return writer.result();
+    return writer.take_result();
 }
 
 /**
@@ -523,36 +606,29 @@ std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer
  * @param reader 二进制读取器
  * @return 元数据快照
  */
-std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & binary_reader)
+std::expected<MetaSnapshot, MetaError> read_snapshot(
+    io::BinaryReader & binary_reader,
+    const std::filesystem::path & path
+)
 {
     CodecReader reader {binary_reader};
-    if (reader.read_u32() != MetaMagic) {
-        reader.fail("invalid meta file magic");
-    }
-    const auto version = reader.read_u16();
-    if (reader.ok() && version != MetaFormatVersion) {
-        return std::unexpected(make_error(MetaStoreErrorCode::UnsupportedVersion, "unsupported meta format version"));
-    }
-    if (reader.read_u16() < MetaHeaderSize) {
-        reader.fail("invalid meta file header size");
-    }
-
     MetaSnapshot snapshot;
     snapshot.next_database_id = reader.read_u64();
     snapshot.next_collection_id = reader.read_u64();
     snapshot.next_column_id = reader.read_u64();
     snapshot.next_index_id = reader.read_u64();
     snapshot.next_vector_index_id = reader.read_u64();
-    const auto database_count = reader.read_u32();
+    const auto database_count = reader.read_count();
     if (!reader.ok()) {
-        return std::unexpected(from_io_error(reader.result().error()));
+        auto failed = reader.take_result();
+        return std::unexpected(from_io_error(std::move(failed.error()), MetaOperation::Decode, path));
     }
     snapshot.databases.reserve(database_count);
     for (std::uint32_t d = 0; d < database_count && reader.ok(); ++d) {
         MetaSnapshotDatabase database;
         database.id = reader.read_u64();
         database.name = reader.read_string();
-        const auto collection_count = reader.read_u32();
+        const auto collection_count = reader.read_count();
         database.collections.reserve(collection_count);
         for (std::uint32_t c = 0; c < collection_count && reader.ok(); ++c) {
             MetaSnapshotCollection collection;
@@ -560,7 +636,7 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
             collection.database_id = reader.read_u64();
             collection.name = reader.read_string();
             collection.comment = read_optional_string(reader);
-            const auto column_count = reader.read_u32();
+            const auto column_count = reader.read_count();
             collection.columns.reserve(column_count);
             for (std::uint32_t n = 0; n < column_count && reader.ok(); ++n) {
                 MetaSnapshotColumn column;
@@ -578,12 +654,12 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
                 column.comment = read_optional_string(reader);
                 collection.columns.push_back(std::move(column));
             }
-            const auto index_count = reader.read_u32();
+            const auto index_count = reader.read_count();
             collection.indexes.reserve(index_count);
             for (std::uint32_t n = 0; n < index_count && reader.ok(); ++n) {
                 MetaSnapshotIndex index;
                 index.id = reader.read_u64();
-                const auto index_column_count = reader.read_u32();
+                const auto index_column_count = reader.read_count();
                 index.column_ids.reserve(index_column_count);
                 for (std::uint32_t k = 0; k < index_column_count && reader.ok(); ++k) {
                     index.column_ids.push_back(reader.read_u64());
@@ -597,7 +673,7 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
                 index.unique = read_bool(reader);
                 collection.indexes.push_back(std::move(index));
             }
-            const auto vector_index_count = reader.read_u32();
+            const auto vector_index_count = reader.read_count();
             collection.vector_indexes.reserve(vector_index_count);
             for (std::uint32_t n = 0; n < vector_index_count && reader.ok(); ++n) {
                 MetaSnapshotVectorIndex index;
@@ -614,19 +690,19 @@ std::expected<MetaSnapshot, MetaStoreError> read_snapshot(io::BinaryReader & bin
                 }
                 index.index_kind = static_cast<entry::VectorIndexKind>(index_kind);
                 index.metric = static_cast<entry::VectorDistanceMetric>(metric);
-                index.dimension = static_cast<std::size_t>(reader.read_u64());
-                index.max_neighbors = static_cast<std::size_t>(reader.read_u64());
-                index.ef_construction = static_cast<std::size_t>(reader.read_u64());
-                index.ef_search_default = static_cast<std::size_t>(reader.read_u64());
-                index.random_seed = static_cast<std::size_t>(reader.read_u64());
+                index.dimension = reader.read_size();
+                index.max_neighbors = reader.read_size();
+                index.ef_construction = reader.read_size();
+                index.ef_search_default = reader.read_size();
+                index.random_seed = reader.read_size();
                 collection.vector_indexes.push_back(std::move(index));
             }
             database.collections.push_back(std::move(collection));
         }
         snapshot.databases.push_back(std::move(database));
     }
-    if (auto result = reader.result(); !result) {
-        return std::unexpected(from_io_error(std::move(result.error())));
+    if (auto result = reader.take_result(); !result) {
+        return std::unexpected(from_io_error(std::move(result.error()), MetaOperation::Decode, path));
     }
     return snapshot;
 }
@@ -639,72 +715,185 @@ MetaStore::MetaStore(std::filesystem::path path, filesystem::FileSystem & filesy
 {
 }
 
-std::expected<MetaSnapshot, MetaStoreError> MetaStore::load() const
+std::expected<std::optional<MetaSnapshot>, MetaError> MetaStore::load() const
 {
     auto exists = filesystem_->exists(path_);
     if (!exists) {
-        return std::unexpected(from_filesystem_error(std::move(exists.error())));
+        return std::unexpected(from_filesystem_error(std::move(exists.error()), MetaOperation::Load, path_));
     }
     if (!*exists) {
-        return MetaSnapshot {};
+        return std::optional<MetaSnapshot> {};
     }
 
-    auto file = filesystem_->open(path_, {.access = filesystem::backend::FileAccess::ReadOnly,
-                                         .create_mode = filesystem::backend::FileCreateMode::OpenExisting});
+    auto file = filesystem_->open(path_, {.access = filesystem::FileAccess::ReadOnly,
+                                          .create_mode = filesystem::FileCreateMode::OpenExisting});
     if (!file) {
-        return std::unexpected(from_filesystem_error(std::move(file.error())));
+        return std::unexpected(from_filesystem_error(std::move(file.error()), MetaOperation::Load, path_));
     }
-    io::FileByteReader byte_reader {*file};
-    io::BinaryReader reader {byte_reader};
-    return read_snapshot(reader);
+    auto file_size = file->size();
+    if (!file_size) {
+        return std::unexpected(from_filesystem_error(std::move(file_size.error()), MetaOperation::Load, path_));
+    }
+    if (*file_size < MetaHeaderSize) {
+        return std::unexpected(make_error(MetaErrorCode::UnexpectedEof, "meta file header is truncated", {
+            .operation = MetaOperation::Decode,
+            .path = path_,
+        }));
+    }
+    if (*file_size > MaxPayloadSize + MetaHeaderSize) {
+        return std::unexpected(make_error(MetaErrorCode::ResourceLimitExceeded, "meta file exceeds size limit", {
+            .operation = MetaOperation::Decode,
+            .path = path_,
+        }));
+    }
+
+    std::vector<std::byte> bytes(static_cast<std::size_t>(*file_size));
+    io::FileByteReader file_reader {*file};
+    if (auto read = file_reader.read_exact(bytes); !read) {
+        return std::unexpected(from_io_error(std::move(read.error()), MetaOperation::Load, path_));
+    }
+
+    io::BufferByteReader header_source {std::span<const std::byte> {bytes}.first(MetaHeaderSize)};
+    io::BinaryReader header {
+        header_source,
+        {.max_total_bytes = MetaHeaderSize, .max_string_bytes = 0},
+    };
+    auto magic = header.read_u32();
+    auto version = header.read_u16();
+    auto header_size = header.read_u16();
+    auto payload_size = header.read_u64();
+    auto payload_checksum = header.read_u32();
+    auto flags = header.read_u32();
+    if (!magic || !version || !header_size || !payload_size || !payload_checksum || !flags) {
+        auto * failure = !magic ? &magic.error()
+                        : !version ? &version.error()
+                        : !header_size ? &header_size.error()
+                        : !payload_size ? &payload_size.error()
+                        : !payload_checksum ? &payload_checksum.error()
+                        : &flags.error();
+        return std::unexpected(from_io_error(std::move(*failure), MetaOperation::Decode, path_));
+    }
+    if (*magic != MetaMagic) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidFormat, "invalid meta file magic", {
+            .operation = MetaOperation::Decode, .path = path_,
+        }));
+    }
+    if (*version != MetaFormatVersion) {
+        return std::unexpected(make_error(MetaErrorCode::UnsupportedVersion, "unsupported meta format version", {
+            .operation = MetaOperation::Decode, .path = path_,
+        }));
+    }
+    if (*header_size != MetaHeaderSize || *flags != 0) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidFormat, "invalid meta V2 header", {
+            .operation = MetaOperation::Decode, .path = path_,
+        }));
+    }
+    if (*payload_size > MaxPayloadSize || *payload_size != *file_size - MetaHeaderSize) {
+        return std::unexpected(make_error(
+            *payload_size > MaxPayloadSize ? MetaErrorCode::ResourceLimitExceeded : MetaErrorCode::InvalidFormat,
+            "invalid meta payload size",
+            {.operation = MetaOperation::Decode, .path = path_}
+        ));
+    }
+    const auto payload = std::span<const std::byte> {bytes}.subspan(MetaHeaderSize);
+    if (io::crc32(payload) != *payload_checksum) {
+        return std::unexpected(make_error(MetaErrorCode::ChecksumMismatch, "meta payload checksum mismatch", {
+            .operation = MetaOperation::Decode, .path = path_,
+        }));
+    }
+    io::BufferByteReader payload_source {payload};
+    io::BinaryReader reader {
+        payload_source,
+        {.max_total_bytes = *payload_size, .max_string_bytes = MaxStringSize},
+    };
+    auto snapshot = read_snapshot(reader, path_);
+    if (!snapshot) {
+        return std::unexpected(std::move(snapshot.error()));
+    }
+    return std::optional<MetaSnapshot> {std::move(*snapshot)};
 }
 
-std::expected<void, MetaStoreError> MetaStore::save(const MetaSnapshot & snapshot) const
+std::expected<void, MetaError> MetaStore::save(const MetaSnapshot & snapshot) const
 {
+    io::BufferByteWriter payload_bytes {MaxPayloadSize};
+    io::BinaryWriter payload_writer {payload_bytes};
+    if (auto encoded = write_snapshot(payload_writer, snapshot); !encoded) {
+        return std::unexpected(from_io_error(std::move(encoded.error()), MetaOperation::Encode, path_));
+    }
+    if (payload_bytes.bytes().size() > MaxPayloadSize) {
+        return std::unexpected(make_error(MetaErrorCode::ResourceLimitExceeded, "meta payload exceeds size limit", {
+            .operation = MetaOperation::Encode, .path = path_,
+        }));
+    }
+
+    io::BufferByteWriter encoded_bytes {MaxPayloadSize + MetaHeaderSize};
+    io::BinaryWriter encoded_writer {encoded_bytes};
+    const auto checksum = io::crc32(payload_bytes.bytes());
+    auto write_header = [&]() -> std::expected<void, io::IoError> {
+        if (auto result = encoded_writer.write_u32(MetaMagic); !result) return result;
+        if (auto result = encoded_writer.write_u16(MetaFormatVersion); !result) return result;
+        if (auto result = encoded_writer.write_u16(MetaHeaderSize); !result) return result;
+        if (auto result = encoded_writer.write_u64(payload_bytes.bytes().size()); !result) return result;
+        if (auto result = encoded_writer.write_u32(checksum); !result) return result;
+        if (auto result = encoded_writer.write_u32(0); !result) return result;
+        return encoded_bytes.write_bytes(payload_bytes.bytes());
+    };
+    if (auto encoded = write_header(); !encoded) {
+        return std::unexpected(from_io_error(std::move(encoded.error()), MetaOperation::Encode, path_));
+    }
+
     const auto parent = path_.parent_path();
     if (!parent.empty()) {
         auto created = filesystem_->create_dir_all(parent);
         if (!created) {
-            return std::unexpected(from_filesystem_error(std::move(created.error())));
+            return std::unexpected(from_filesystem_error(
+                std::move(created.error()), MetaOperation::SaveTemporary, path_
+            ));
         }
     }
     auto temp_path = path_;
-    temp_path += ".tmp";
-    auto file = filesystem_->open(temp_path, {.access = filesystem::backend::FileAccess::ReadWrite,
-                                              .create_mode = filesystem::backend::FileCreateMode::CreateOrTruncate});
+    const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    temp_path += ".tmp." + std::to_string(timestamp) + "."
+               + std::to_string(TempSequence.fetch_add(1, std::memory_order_relaxed));
+    TempFileCleanup cleanup {*filesystem_, temp_path};
+    auto file = filesystem_->open(temp_path, {.access = filesystem::FileAccess::ReadWrite,
+                                               .create_mode = filesystem::FileCreateMode::CreateNew});
     if (!file) {
-        return std::unexpected(from_filesystem_error(std::move(file.error())));
+        return std::unexpected(from_filesystem_error(
+            std::move(file.error()), MetaOperation::SaveTemporary, temp_path
+        ));
     }
 
     io::FileByteWriter byte_writer {*file};
-    io::BinaryWriter writer {byte_writer};
-    if (auto written = write_snapshot(writer, snapshot); !written) {
-        return std::unexpected(from_io_error(std::move(written.error())));
+    if (auto written = byte_writer.write_bytes(encoded_bytes.bytes()); !written) {
+        return std::unexpected(from_io_error(std::move(written.error()), MetaOperation::SaveTemporary, temp_path));
     }
     if (auto synced = file->sync_all(); !synced) {
-        return std::unexpected(from_filesystem_error(std::move(synced.error())));
+        return std::unexpected(from_filesystem_error(
+            std::move(synced.error()), MetaOperation::SyncTemporary, temp_path
+        ));
     }
     if (auto closed = file->close(); !closed) {
-        return std::unexpected(from_filesystem_error(std::move(closed.error())));
+        return std::unexpected(from_filesystem_error(
+            std::move(closed.error()), MetaOperation::SyncTemporary, temp_path
+        ));
     }
 
-    auto exists = filesystem_->exists(path_);
-    if (!exists) {
-        return std::unexpected(from_filesystem_error(std::move(exists.error())));
+    if (auto renamed = filesystem_->replace_file_atomic(temp_path, path_); !renamed) {
+        return std::unexpected(from_filesystem_error(
+            std::move(renamed.error()), MetaOperation::PublishFile, path_
+        ));
     }
-    if (*exists) {
-        auto removed = filesystem_->remove(path_);
-        if (!removed) {
-            return std::unexpected(from_filesystem_error(std::move(removed.error())));
-        }
-    }
-    if (auto renamed = filesystem_->rename(temp_path, path_); !renamed) {
-        return std::unexpected(from_filesystem_error(std::move(renamed.error())));
-    }
+    cleanup.release();
     if (!parent.empty()) {
         auto synced = filesystem_->sync_directory(parent);
-        if (!synced && synced.error().code != filesystem::FileSystemErrorCode::Unsupported) {
-            return std::unexpected(from_filesystem_error(std::move(synced.error())));
+        if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
+            return std::unexpected(from_filesystem_error(
+                std::move(synced.error()),
+                MetaOperation::SyncDirectory,
+                parent,
+                MetaErrorCode::DurabilityUnknown
+            ));
         }
     }
     return {};

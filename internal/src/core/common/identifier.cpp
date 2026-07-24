@@ -1,8 +1,8 @@
-#include "core/meta/meta_helper.hpp"
+#include "core/common/identifier.hpp"
 
 #include <cctype>
 
-namespace litedb::core::meta
+namespace litedb::core::common
 {
 
 std::string normalize_identifier(std::string_view name)
@@ -15,9 +15,4 @@ std::string normalize_identifier(std::string_view name)
     return key;
 }
 
-MetaStoreError make_error(MetaStoreErrorCode code, std::string message)
-{
-    return MetaStoreError {code, std::move(message)};
-}
-
-} // namespace litedb::core::meta
+} // namespace litedb::core::common

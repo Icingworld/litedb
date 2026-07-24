@@ -23,6 +23,7 @@ public:
      * @param data 字节数据
      * @return 结果
      */
+    [[nodiscard]]
     virtual std::expected<void, IoError> write_bytes(std::span<const std::byte> data) = 0;
 };
 

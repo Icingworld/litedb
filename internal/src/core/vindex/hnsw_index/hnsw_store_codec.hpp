@@ -11,6 +11,7 @@
 #include "core/common/ids.hpp"
 #include "core/vindex/hnsw_index/hnsw_node.hpp"
 #include "core/vindex/vector_index.hpp"
+#include "core/vindex/vector_index_error.hpp"
 
 namespace litedb::core::vindex::hnsw_index
 {
@@ -26,20 +27,6 @@ struct HnswStoreDescriptor
     std::size_t ef_construction {200};
     std::size_t ef_search_default {64};
     std::size_t random_seed {0};
-};
-
-enum class HnswStoreCodecErrorCode
-{
-    InvalidFormat,
-    UnsupportedVersion,
-    ValueOutOfRange,
-    CorruptedData,
-};
-
-struct HnswStoreCodecError
-{
-    HnswStoreCodecErrorCode code;
-    std::string message;
 };
 
 struct HnswCommitFrame
@@ -58,28 +45,28 @@ public:
     using HeaderBuffer = std::array<std::byte, HeaderSize>;
 
     [[nodiscard]]
-    static std::expected<HeaderBuffer, HnswStoreCodecError> encode_header(
+    static std::expected<HeaderBuffer, VectorIndexError> encode_header(
         const HnswStoreDescriptor & descriptor
     );
 
     [[nodiscard]]
-    static std::expected<HnswStoreDescriptor, HnswStoreCodecError> decode_header(
+    static std::expected<HnswStoreDescriptor, VectorIndexError> decode_header(
         std::span<const std::byte> bytes
     );
 
     [[nodiscard]]
-    static std::expected<std::vector<std::byte>, HnswStoreCodecError> encode_frame(
+    static std::expected<std::vector<std::byte>, VectorIndexError> encode_frame(
         const HnswCommitFrame & frame,
         std::size_t dimension
     );
 
     [[nodiscard]]
-    static std::expected<std::uint64_t, HnswStoreCodecError> decode_frame_size(
+    static std::expected<std::uint64_t, VectorIndexError> decode_frame_size(
         std::span<const std::byte> prefix
     );
 
     [[nodiscard]]
-    static std::expected<HnswCommitFrame, HnswStoreCodecError> decode_frame(
+    static std::expected<HnswCommitFrame, VectorIndexError> decode_frame(
         std::span<const std::byte> bytes,
         std::size_t dimension
     );

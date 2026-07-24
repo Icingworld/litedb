@@ -121,7 +121,7 @@ void LogicalDebugPrinter::write_optional_field(const char * name, std::optional<
         write_field(name, "null");
         return;
     }
-    write_field(name, value.value());
+    write_field(name, *value);
 }
 
 void LogicalDebugPrinter::write_bound_expression_field(

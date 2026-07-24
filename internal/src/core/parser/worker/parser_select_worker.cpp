@@ -31,9 +31,9 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
     while (true) {
         auto item = parse_select_item();
         if (!item.has_value()) [[unlikely]] {
-            return std::unexpected(item.error());
+            return std::unexpected(std::move(item.error()));
         }
-        select_list.push_back(std::move(item.value()));
+        select_list.push_back(std::move(*item));
 
         if (!context_.match(TokenType::Comma)) {
             break;
@@ -42,34 +42,34 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
 
     auto from = context_.consume(TokenType::From, "Expected FROM after select list");
     if (!from.has_value()) [[unlikely]] {
-        return std::unexpected(from.error());
+        return std::unexpected(std::move(from.error()));
     }
 
     auto collection = schema_worker.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     std::unique_ptr<ast::ExpressionNode> where;
     if (context_.match(TokenType::Where)) {
         auto expression = expression_worker.parse_expression();
         if (!expression.has_value()) [[unlikely]] {
-            return std::unexpected(expression.error());
+            return std::unexpected(std::move(expression.error()));
         }
-        where = std::move(expression.value());
+        where = std::move(*expression);
     }
 
     ast::SelectStatement::OrderByList order_by;
     if (context_.match(TokenType::Order)) {
         auto by = context_.consume(TokenType::By, "Expected BY after ORDER");
         if (!by.has_value()) [[unlikely]] {
-            return std::unexpected(by.error());
+            return std::unexpected(std::move(by.error()));
         }
 
         while (true) {
             auto expression = expression_worker.parse_expression();
             if (!expression.has_value()) [[unlikely]] {
-                return std::unexpected(expression.error());
+                return std::unexpected(std::move(expression.error()));
             }
 
             bool ascending = true;
@@ -79,7 +79,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
                 ascending = false;
             }
 
-            order_by.push_back(ast::OrderByItem {std::move(expression.value()), ascending});
+            order_by.push_back(ast::OrderByItem {std::move(*expression), ascending});
 
             if (!context_.match(TokenType::Comma)) {
                 break;
@@ -91,23 +91,23 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserSelectWork
     if (context_.match(TokenType::Limit)) {
         auto value = schema_worker.parse_integer_value("Expected LIMIT value");
         if (!value.has_value()) [[unlikely]] {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        limit = value.value();
+        limit = *value;
     }
 
     std::optional<std::size_t> offset;
     if (context_.match(TokenType::Offset)) {
         auto value = schema_worker.parse_integer_value("Expected OFFSET value");
         if (!value.has_value()) [[unlikely]] {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        offset = value.value();
+        offset = *value;
     }
 
     return std::make_unique<ast::SelectStatement>(
         std::move(select_list),
-        std::move(collection.value()),
+        std::move(*collection),
         std::move(where),
         std::move(order_by),
         limit,
@@ -150,7 +150,7 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserSelectWor
     ParserExpressionWorker expression_worker(context_);
     auto expression = expression_worker.parse_expression();
     if (!expression.has_value()) [[unlikely]] {
-        return std::unexpected(expression.error());
+        return std::unexpected(std::move(expression.error()));
     }
 
     if (!context_.match(TokenType::As)) {
@@ -163,12 +163,12 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserSelectWor
         ParserErrorCode::ExpectedIdentifier
     );
     if (!alias.has_value()) [[unlikely]] {
-        return std::unexpected(alias.error());
+        return std::unexpected(std::move(alias.error()));
     }
 
-    const auto location = expression.value()->location();
+    const auto location = (*expression)->location();
     return std::make_unique<ast::AliasExpression>(
-        std::move(expression.value()),
+        std::move(*expression),
         std::string(alias->value()),
         location
     );

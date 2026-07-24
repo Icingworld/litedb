@@ -17,7 +17,7 @@
 #include "core/index/index_engine.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/meta/meta_store.hpp"
-#include "core/schema/schema_error.hpp"
+#include "core/storage/schema_load_error.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
@@ -55,6 +55,7 @@ struct DatabaseConfig
     std::filesystem::path data_dir;                         ///< 数据目录
     transaction::TransactionOptions transaction_options;   ///< 事务测试与观测配置
     AutomaticCheckpointOptions automatic_checkpoint;       ///< WAL size based checkpoint policy
+    wal::WalDecodeLimits wal_decode_limits;                 ///< WAL 扫描与恢复资源预算
 };
 
 struct DatabaseObservability
@@ -70,7 +71,7 @@ struct DatabaseObservability
 /**
  * @brief 数据库错误码
  */
-enum class DatabaseErrorCode
+enum class DatabaseErrorCode : std::uint8_t
 {
     ManifestError,    ///< 数据库 manifest 错误
     MetaError,        ///< meta 引擎错误
@@ -83,11 +84,7 @@ enum class DatabaseErrorCode
 /**
  * @brief 数据库错误
  */
-struct DatabaseError
-{
-    DatabaseErrorCode code;    ///< 错误码
-    std::string message;       ///< 错误消息
-};
+using DatabaseError = error::Error;
 
 class Session;
 
@@ -115,7 +112,7 @@ public:
      * @return meta 引擎
      */
     [[nodiscard]]
-    const meta::MetaEngine & meta() const noexcept;
+    meta::CatalogView meta() const noexcept;
 
     /**
      * @brief 获取标量索引引擎
@@ -265,7 +262,7 @@ private:
      */
     [[nodiscard]]
     static executor::ExecutionError from_meta_error(
-        meta::MetaEngineError error,
+        meta::MetaError error,
         parser::ast::AstNodeLocation location
     );
 
@@ -277,7 +274,7 @@ private:
      */
     [[nodiscard]]
     static executor::ExecutionError from_schema_error(
-        schema::SchemaError error,
+        storage::SchemaLoadError error,
         parser::ast::AstNodeLocation location
     );
 
@@ -315,8 +312,7 @@ private:
     std::filesystem::path data_directory_; ///< 数据目录
     filesystem::FileSystem filesystem_;    ///< 文件系统
     DatabaseManifest manifest_;            ///< 数据库 manifest
-    meta::MetaStore meta_store_;           ///< meta 存储
-    meta::MetaEngine meta_;                ///< meta 引擎
+    meta::CatalogPublisher meta_;          ///< 在线 Catalog 发布者
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
     vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎
@@ -324,12 +320,22 @@ private:
     std::unique_ptr<transaction::TransactionManager> transaction_manager_; ///< 事务管理器
     transaction::TransactionOptions transaction_options_; ///< 事务配置
     AutomaticCheckpointOptions automatic_checkpoint_;     ///< WAL size based checkpoint policy
+    wal::WalDecodeLimits wal_decode_limits_;               ///< WAL 扫描与恢复资源预算
     std::size_t recovered_committed_transactions_ {0}; ///< 启动发现的已提交事务数
     std::size_t replayed_writes_ {0};                ///< 启动 redo 写入数
     std::atomic_uint64_t automatic_checkpoint_attempts_ {0};
     std::atomic_uint64_t completed_automatic_checkpoints_ {0};
     std::atomic_uint64_t failed_automatic_checkpoints_ {0};
-    std::mutex mutex_;                     ///< 互斥锁
+    mutable std::mutex mutex_;             ///< SQL、checkpoint 与观测的串行化边界
 };
 
 } // namespace litedb::core::database
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<database::DatabaseErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Database;
+};
+} // namespace litedb::core::error

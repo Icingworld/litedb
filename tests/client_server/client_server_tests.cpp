@@ -19,7 +19,7 @@ namespace
 using namespace litedb::client;
 using namespace litedb::core::database;
 using namespace litedb::core::executor;
-using namespace litedb::core::schema;
+using namespace litedb::core::common;
 using namespace litedb::server;
 
 void require(bool condition, const char * message)
@@ -39,9 +39,9 @@ std::shared_ptr<DatabaseEngine> open_database(const std::filesystem::path & data
 {
     auto opened = DatabaseEngine::open(DatabaseConfig {.data_dir = data_dir});
     if (!opened.has_value()) {
-        throw std::runtime_error(opened.error().message);
+        throw std::runtime_error(opened.error().message());
     }
-    return std::shared_ptr<DatabaseEngine> {std::move(opened.value())};
+    return std::shared_ptr<DatabaseEngine> {std::move(*opened)};
 }
 
 asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::string & failure)
@@ -52,29 +52,29 @@ asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::strin
         Client client {io};
 
         auto connected = co_await client.connect("127.0.0.1", server.port());
-        require(connected.has_value(), connected.has_value() ? "" : connected.error().message.c_str());
+        require(connected.has_value(), connected.has_value() ? "" : connected.error().message().c_str());
 
         auto ping = co_await client.ping();
-        require(ping.has_value(), ping.has_value() ? "" : ping.error().message.c_str());
+        require(ping.has_value(), ping.has_value() ? "" : ping.error().message().c_str());
 
         auto create_database = co_await client.execute_sql("CREATE DATABASE demo;");
-        require(create_database.has_value(), create_database.has_value() ? "" : create_database.error().message.c_str());
+        require(create_database.has_value(), create_database.has_value() ? "" : create_database.error().message().c_str());
 
         auto use_database = co_await client.execute_sql("USE demo;");
-        require(use_database.has_value(), use_database.has_value() ? "" : use_database.error().message.c_str());
+        require(use_database.has_value(), use_database.has_value() ? "" : use_database.error().message().c_str());
         require(use_database->kind == ExecutionResultKind::UseDatabase, "USE result kind mismatch");
 
         auto create_collection = co_await client.execute_sql(
             "CREATE COLLECTION users (id BIGINT NOT NULL, name VARCHAR(64), age INTEGER);"
         );
-        require(create_collection.has_value(), create_collection.has_value() ? "" : create_collection.error().message.c_str());
+        require(create_collection.has_value(), create_collection.has_value() ? "" : create_collection.error().message().c_str());
 
         auto insert = co_await client.execute_sql("INSERT INTO users VALUES (1, 'alice', 18);");
-        require(insert.has_value(), insert.has_value() ? "" : insert.error().message.c_str());
+        require(insert.has_value(), insert.has_value() ? "" : insert.error().message().c_str());
         require(insert->affected_rows == 1, "INSERT affected rows mismatch");
 
         auto selected = co_await client.execute_sql("SELECT name, age FROM users WHERE id = 1;");
-        require(selected.has_value(), selected.has_value() ? "" : selected.error().message.c_str());
+        require(selected.has_value(), selected.has_value() ? "" : selected.error().message().c_str());
         require(selected->kind == ExecutionResultKind::RowSet, "SELECT result kind mismatch");
         require(selected->rows.size() == 1, "SELECT row count mismatch");
         require(get_value<std::string>(selected->rows[0].values[0]) == "alice", "SELECT name mismatch");
@@ -82,7 +82,7 @@ asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::strin
 
         auto bad_sql = co_await client.execute_sql("SELECT FROM;");
         require(!bad_sql.has_value(), "bad SQL should fail");
-        require(bad_sql.error().code == ClientErrorCode::ServerError, "bad SQL error code mismatch");
+        require(bad_sql.error().is(ClientErrorCode::ServerError), "bad SQL error code mismatch");
 
         client.close();
         server.close();
@@ -101,7 +101,7 @@ asio::awaitable<void> run_persistent_write_flow(Server & server, bool & passed, 
         Client client {io};
 
         auto connected = co_await client.connect("127.0.0.1", server.port());
-        require(connected.has_value(), connected.has_value() ? "" : connected.error().message.c_str());
+        require(connected.has_value(), connected.has_value() ? "" : connected.error().message().c_str());
         require((co_await client.execute_sql("CREATE DATABASE demo;")).has_value(), "CREATE DATABASE should succeed");
         require((co_await client.execute_sql("USE demo;")).has_value(), "USE should succeed");
         require((co_await client.execute_sql("CREATE COLLECTION users (id BIGINT NOT NULL, name VARCHAR(64));")).has_value(), "CREATE COLLECTION should succeed");
@@ -124,10 +124,10 @@ asio::awaitable<void> run_persistent_read_flow(Server & server, bool & passed, s
         Client client {io};
 
         auto connected = co_await client.connect("127.0.0.1", server.port());
-        require(connected.has_value(), connected.has_value() ? "" : connected.error().message.c_str());
+        require(connected.has_value(), connected.has_value() ? "" : connected.error().message().c_str());
         require((co_await client.execute_sql("USE demo;")).has_value(), "USE after reopen should succeed");
         auto selected = co_await client.execute_sql("SELECT name FROM users WHERE id = 1;");
-        require(selected.has_value(), selected.has_value() ? "" : selected.error().message.c_str());
+        require(selected.has_value(), selected.has_value() ? "" : selected.error().message().c_str());
         require(selected->rows.size() == 1, "persistent server row count mismatch");
         require(get_value<std::string>(selected->rows[0].values[0]) == "persisted", "persistent server value mismatch");
 

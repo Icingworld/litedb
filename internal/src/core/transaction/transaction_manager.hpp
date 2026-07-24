@@ -28,6 +28,8 @@ enum class CommitStage
     AfterWalWrites,
     AfterWalCommitAppend,
     AfterWalCommitFlush,
+    AfterDeltaApply,
+    AfterTruncate,
     AfterApply,
     AfterRuntimeReload,
 };
@@ -80,7 +82,7 @@ public:
     TransactionManager(
         std::filesystem::path data_directory,
         filesystem::FileSystem & filesystem,
-        meta::MetaEngine & catalog,
+        meta::CatalogPublisher & catalog,
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine,
@@ -108,7 +110,7 @@ public:
     std::expected<void, TransactionError> stage_insert(
         TransactionContext & transaction,
         common::CollectionId collection_id,
-        schema::RecordData after
+        common::RecordData after
     );
 
     /**
@@ -125,8 +127,8 @@ public:
         TransactionContext & transaction,
         common::CollectionId collection_id,
         common::RecordId record_id,
-        schema::RecordData before,
-        schema::RecordData after
+        common::RecordData before,
+        common::RecordData after
     );
 
     /**
@@ -142,7 +144,7 @@ public:
         TransactionContext & transaction,
         common::CollectionId collection_id,
         common::RecordId record_id,
-        schema::RecordData before
+        common::RecordData before
     );
 
     /**
@@ -221,7 +223,21 @@ private:
      * @return 事务错误
      */
     [[nodiscard]]
-    TransactionError error(TransactionErrorCode code, TransactionId id, std::string message) const;
+    TransactionError error(
+        TransactionErrorCode code,
+        TransactionId id,
+        std::string message,
+        TransactionOperation operation = TransactionOperation::Begin
+    ) const;
+
+    [[nodiscard]]
+    TransactionError source_error(
+        TransactionErrorCode code,
+        TransactionId id,
+        TransactionOperation operation,
+        std::string subsystem,
+        error::Error source
+    ) const;
 
     [[nodiscard]]
     bool failpoint(CommitStage stage, TransactionContext & transaction, bool durable);
@@ -234,7 +250,7 @@ private:
 private:
     std::filesystem::path data_directory_;                       ///< 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};              ///< 文件系统
-    meta::MetaEngine * catalog_ {nullptr};                       ///< 元数据引擎
+    meta::CatalogPublisher * catalog_ {nullptr};                 ///< 在线 Catalog 发布者
     storage::StorageEngine * storage_ {nullptr};                 ///< 存储引擎
     index::IndexEngine * index_engine_ {nullptr};                ///< 标量索引引擎
     vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  ///< 向量索引引擎

@@ -5,46 +5,31 @@
 #include <optional>
 #include <vector>
 
-#include "core/common/ids.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 #include "core/storage/storage_error.hpp"
 
 namespace litedb::core::storage
 {
 
-class StorageStore;
-
 /**
- * @brief 持久化存储扫描游标
+ * @brief 拥有扫描快照的存储游标
  */
 class StorageCursor
 {
 public:
+    explicit StorageCursor(std::vector<common::Record> records) noexcept;
+
     StorageCursor(StorageCursor &&) noexcept = default;
-
     StorageCursor & operator=(StorageCursor &&) noexcept = default;
-
     StorageCursor(const StorageCursor &) = delete;
-
     StorageCursor & operator=(const StorageCursor &) = delete;
 
-public:
-    /**
-     * @brief 获取下一个记录
-     * @return 下一个记录
-     */
     [[nodiscard]]
-    std::expected<std::optional<schema::Record>, StorageError> next();
+    std::expected<std::optional<common::Record>, StorageError> next();
 
 private:
-    StorageCursor(const StorageStore & store, std::vector<common::RecordId> record_ids) noexcept;
-
-private:
-    const StorageStore * store_;                   ///< 持久化存储器
-    std::vector<common::RecordId> record_ids_;     ///< 记录 ID 列表
-    std::size_t position_;                         ///< 当前位置
-
-    friend class StorageStore;
+    std::vector<common::Record> records_;
+    std::size_t position_ {0};
 };
 
 } // namespace litedb::core::storage

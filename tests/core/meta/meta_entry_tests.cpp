@@ -2,7 +2,7 @@
 #include "core/meta/entry/collection_entry.hpp"
 #include "core/meta/entry/column_entry.hpp"
 #include "core/meta/entry/database_entry.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/entry/index_entry.hpp"
 #include "core/meta/entry/meta_entry.hpp"
 #include "core/meta/entry/vector_index_entry.hpp"
@@ -39,17 +39,9 @@ void test_database_entry_tracks_collections()
     require(database.name() == "Demo", "database name mismatch");
     require(database.key() == "demo", "database key mismatch");
 
-    const auto users_key = meta::normalize_identifier("Users");
-    database.add_collection(users_key, 10);
-    database.add_collection(users_key, 10);
-
-    require(database.contains_collection("users"), "database collection contains failed");
-    require(database.find_collection_id("users").value() == 10, "database collection lookup mismatch");
-    require(database.collection_ids().size() == 1, "database duplicate collection append mismatch");
-
-    database.remove_collection("users", 10);
-    require(!database.contains_collection("users"), "database collection remove failed");
-    require(database.collection_ids().empty(), "database collection ids after remove mismatch");
+    require(!database.contains_collection("users"), "new database should have no collections");
+    require(!database.find_collection_id("users").has_value(), "new database collection lookup mismatch");
+    require(database.collection_ids().empty(), "new database collection ids mismatch");
 }
 
 void test_collection_entry_tracks_children()
@@ -60,29 +52,16 @@ void test_collection_entry_tracks_children()
     require(collection.database_id() == 1, "collection database id mismatch");
     require(collection.comment().value() == "user collection", "collection comment mismatch");
 
-    collection.add_column("id", 100);
-    collection.add_column("name", 101);
-    collection.add_column("id", 100);
-    collection.add_index("idx_users_name", 200);
-    collection.add_vector_index("vidx_embedding", 300);
-
-    require(collection.column_ids().size() == 2, "collection column order size mismatch");
-    require(collection.find_column_id("id").value() == 100, "collection column lookup mismatch");
-    require(collection.find_index_id("idx_users_name").value() == 200, "collection index lookup mismatch");
-    require(collection.find_vector_index_id("vidx_embedding").value() == 300, "collection vector index lookup mismatch");
-
-    collection.remove_column("id", 100);
-    collection.remove_index("idx_users_name", 200);
-    collection.remove_vector_index("vidx_embedding", 300);
-
-    require(!collection.contains_column("id"), "collection column remove failed");
-    require(collection.index_ids().empty(), "collection index remove mismatch");
-    require(collection.vector_index_ids().empty(), "collection vector index remove mismatch");
+    require(collection.column_ids().empty(), "new collection column ids mismatch");
+    require(!collection.find_column_id("id").has_value(), "new collection column lookup mismatch");
+    require(!collection.find_index_id("idx_users_name").has_value(), "new collection index lookup mismatch");
+    require(!collection.find_vector_index_id("vidx_embedding").has_value(),
+            "new collection vector index lookup mismatch");
 }
 
 void test_column_entry_constraints_and_defaults()
 {
-    auto default_value = DefaultExpression::literal(DefaultLiteralKind::String, "unknown");
+    auto default_value = litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::String, "unknown");
     ColumnEntry id {
         100,
         10,
@@ -166,14 +145,14 @@ void test_vector_index_entry()
 
 void test_default_expression_vector()
 {
-    auto expression = DefaultExpression::vector({
-        DefaultExpression::literal(DefaultLiteralKind::Float, "0.1"),
-        DefaultExpression::literal(DefaultLiteralKind::Float, "0.2"),
+    auto expression = litedb::core::schema::DefaultExpression::vector({
+        litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::Float, "0.1"),
+        litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::Float, "0.2"),
     });
 
-    require(expression.kind == DefaultExpressionKind::Vector, "default vector kind mismatch");
+    require(expression.kind == litedb::core::schema::DefaultExpressionKind::Vector, "default vector kind mismatch");
     require(expression.elements.size() == 2, "default vector size mismatch");
-    require(expression.elements[0].literal_kind == DefaultLiteralKind::Float, "default vector literal mismatch");
+    require(expression.elements[0].literal_kind == litedb::core::schema::DefaultLiteralKind::Float, "default vector literal mismatch");
     require(expression.elements[1].value == "0.2", "default vector value mismatch");
 }
 

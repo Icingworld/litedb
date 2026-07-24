@@ -2,7 +2,7 @@
 
 #include <expected>
 
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 #include "core/vindex/vector_index.hpp"
 
 namespace litedb::core::vindex
@@ -17,8 +17,8 @@ namespace litedb::core::vindex
  */
 [[nodiscard]]
 std::expected<double, VectorIndexError> vector_distance(
-    const schema::VectorValue & left,
-    const schema::VectorValue & right,
+    const common::VectorValue & left,
+    const common::VectorValue & right,
     VectorDistanceMetric metric
 );
 

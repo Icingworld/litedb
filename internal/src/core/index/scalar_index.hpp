@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -105,6 +106,21 @@ private:
     std::optional<IndexBound> upper_;    ///< 上界
 };
 
+struct ScalarIndexEntry
+{
+    ScalarIndexKey key;
+    common::RecordId record_id;
+};
+
+class ScalarIndexCursor
+{
+public:
+    virtual ~ScalarIndexCursor() noexcept = default;
+
+    [[nodiscard]]
+    virtual std::expected<std::optional<common::RecordId>, IndexError> next() = 0;
+};
+
 /**
  * @brief 标量索引的最小能力接口
  * @details 只要求精确键查询，不假设键有序。当前正式后端只有 B+Tree；保留该层是为了以后接入
@@ -161,6 +177,26 @@ public:
      */
     [[nodiscard]]
     virtual std::size_t size() const noexcept = 0;
+
+    /**
+     * @brief 扫描 range 范围内的记录 ID
+     * @details 不支持有序范围扫描的后端返回 UnsupportedRangeScan。
+     */
+    [[nodiscard]]
+    virtual std::expected<std::vector<common::RecordId>, IndexError> scan_range(
+        const IndexRange & range
+    ) const;
+
+    [[nodiscard]]
+    virtual std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError> scan_range_cursor(
+        const IndexRange & range
+    ) const;
+
+    /**
+     * @brief 在空索引上批量构建条目
+     * @details 默认实现逐条插入；持久化有序后端可以覆盖为线性构建。
+     */
+    virtual std::expected<void, IndexError> bulk_load(std::vector<ScalarIndexEntry> entries);
 };
 
 /**
@@ -180,6 +216,11 @@ public:
      */
     [[nodiscard]]
     virtual std::expected<std::vector<common::RecordId>, IndexError> scan_range(
+        const IndexRange & range
+    ) const = 0;
+
+    [[nodiscard]]
+    virtual std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError> scan_range_cursor(
         const IndexRange & range
     ) const = 0;
 };

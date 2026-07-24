@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
 
+#include "core/error/error.hpp"
 #include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::executor
@@ -10,7 +11,7 @@ namespace litedb::core::executor
 /**
  * @brief 执行错误码
  */
-enum class ExecutionErrorCode
+enum class ExecutionErrorCode : std::uint8_t
 {
     UnsupportedStatement,          ///< 不支持的语句
     InvalidPlan,                   ///< 无效计划
@@ -26,11 +27,20 @@ enum class ExecutionErrorCode
 /**
  * @brief 执行错误
  */
-struct ExecutionError
+struct ExecutionErrorContext
 {
-    ExecutionErrorCode code;                       ///< 错误码
     parser::ast::AstNodeLocation location;         ///< 错误位置
-    std::string message;                           ///< 错误消息
 };
 
+using ExecutionError = error::Error;
+
 } // namespace litedb::core::executor
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<executor::ExecutionErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Execution;
+};
+} // namespace litedb::core::error

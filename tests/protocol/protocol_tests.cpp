@@ -11,7 +11,6 @@ namespace
 
 using namespace litedb::core::common;
 using namespace litedb::core::executor;
-using namespace litedb::core::schema;
 using namespace litedb::protocol;
 
 void require(bool condition, const char * message)
@@ -104,7 +103,7 @@ void test_truncated_payload_fails()
     std::vector<std::uint8_t> payload {0, 0, 0, 8, 'S'};
     auto decoded = decode_execute_sql_request(payload);
     require(!decoded.has_value(), "truncated payload should fail");
-    require(decoded.error().code == ProtocolErrorCode::UnexpectedEnd, "truncated error code mismatch");
+    require(decoded.error().is(ProtocolErrorCode::UnexpectedEnd), "truncated error code mismatch");
 }
 
 } // namespace

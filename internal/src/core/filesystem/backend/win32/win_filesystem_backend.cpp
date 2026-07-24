@@ -58,14 +58,41 @@ FileSystemErrorCode map_error_code(const std::error_code & error)
     return FileSystemErrorCode::IoError;
 }
 
-FileSystemError make_error(const std::error_code & error, std::string operation)
+error::Error make_error(
+    const std::error_code & error,
+    std::string operation,
+    const std::filesystem::path & path,
+    const std::filesystem::path & related_path = {}
+)
 {
-    return FileSystemError {map_error_code(error), std::move(operation) + " failed: " + error.message()};
+    auto message = operation + " failed: " + error.message();
+    FileSystemErrorContext context {
+        std::move(operation),
+        path,
+        related_path,
+        error,
+    };
+
+    return error::Error (
+        map_error_code(error),
+        std::move(message),
+        std::move(context)
+    );
 }
 
-FileSystemError make_win32_error(DWORD error, std::string operation)
+error::Error make_win32_error(
+    DWORD error,
+    std::string operation,
+    const std::filesystem::path & path,
+    const std::filesystem::path & related_path = {}
+)
 {
-    return make_error(std::error_code(static_cast<int>(error), std::system_category()), std::move(operation));
+    return make_error(
+        std::error_code(static_cast<int>(error), std::system_category()),
+        std::move(operation),
+        path,
+        related_path
+    );
 }
 
 DWORD to_desired_access(FileAccess access)
@@ -98,15 +125,6 @@ DWORD to_creation_disposition(FileCreateMode mode)
     return OPEN_EXISTING;
 }
 
-std::expected<std::wstring, FileSystemError> to_native_path(const std::filesystem::path & path)
-{
-    try {
-        return path.native();
-    } catch (const std::exception & error) {
-        return std::unexpected(FileSystemError {FileSystemErrorCode::InvalidPath, error.what()});
-    }
-}
-
 } // namespace
 
 std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend()
@@ -114,18 +132,13 @@ std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend()
     return std::make_unique<Win32FileSystemBackend>();
 }
 
-std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> Win32FileSystemBackend::open(
+std::expected<std::unique_ptr<FileHandleBackend>, error::Error> Win32FileSystemBackend::open(
     const std::filesystem::path & path,
     const FileOpenOptions & options
 )
 {
-    auto native_path = to_native_path(path);
-    if (!native_path) {
-        return std::unexpected(std::move(native_path.error()));
-    }
-
     const HANDLE handle = CreateFileW(
-        native_path->c_str(),
+        path.c_str(),
         to_desired_access(options.access),
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         nullptr,
@@ -134,91 +147,115 @@ std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError> Win32FileSyst
         nullptr
     );
     if (handle == INVALID_HANDLE_VALUE) {
-        return std::unexpected(make_win32_error(GetLastError(), "CreateFileW"));
+        return std::unexpected(make_win32_error(GetLastError(), "CreateFileW", path));
     }
 
-    std::unique_ptr<FileHandleBackend> backend = std::make_unique<Win32FileHandleBackend>(handle);
+    std::unique_ptr<FileHandleBackend> backend = std::make_unique<Win32FileHandleBackend>(handle, path);
     return backend;
 }
 
-std::expected<std::vector<std::filesystem::path>, FileSystemError> Win32FileSystemBackend::list_dir(
+std::expected<std::vector<std::filesystem::path>, error::Error> Win32FileSystemBackend::list_dir(
     const std::filesystem::path & path
 )
 {
     std::error_code error;
     if (!std::filesystem::is_directory(path, error)) {
         if (error) {
-            return std::unexpected(make_error(error, "is_directory"));
+            return std::unexpected(make_error(error, "is_directory", path));
         }
-        return std::unexpected(FileSystemError {FileSystemErrorCode::NotADirectory, "path is not a directory"});
+
+        FileSystemErrorContext context {
+            "is_directory",
+            path,
+            std::filesystem::path(),
+            std::error_code(),
+        };
+        return std::unexpected(error::Error (
+            FileSystemErrorCode::NotADirectory,
+            "path is not a directory",
+            std::move(context)
+        ));
     }
 
     std::vector<std::filesystem::path> entries;
     for (std::filesystem::directory_iterator it {path, error}, end; it != end; it.increment(error)) {
         if (error) {
-            return std::unexpected(make_error(error, "directory_iterator"));
+            return std::unexpected(make_error(error, "directory_iterator", path));
         }
         entries.push_back(it->path().filename());
     }
     return entries;
 }
 
-std::expected<bool, FileSystemError> Win32FileSystemBackend::exists(const std::filesystem::path & path)
+std::expected<bool, error::Error> Win32FileSystemBackend::exists(const std::filesystem::path & path)
 {
     std::error_code error;
     const bool result = std::filesystem::exists(path, error);
     if (error) {
-        return std::unexpected(make_error(error, "exists"));
+        return std::unexpected(make_error(error, "exists", path));
     }
     return result;
 }
 
-std::expected<void, FileSystemError> Win32FileSystemBackend::create_dir_all(
+std::expected<void, error::Error> Win32FileSystemBackend::create_dir_all(
     const std::filesystem::path & path
 )
 {
     std::error_code error;
     std::filesystem::create_directories(path, error);
     if (error) {
-        return std::unexpected(make_error(error, "create_directories"));
+        return std::unexpected(make_error(error, "create_directories", path));
     }
     return {};
 }
 
-std::expected<void, FileSystemError> Win32FileSystemBackend::rename(
+std::expected<void, error::Error> Win32FileSystemBackend::rename(
     const std::filesystem::path & from,
     const std::filesystem::path & to
 )
 {
-    std::error_code error;
-    std::filesystem::rename(from, to, error);
-    if (error) {
-        return std::unexpected(make_error(error, "rename"));
+    if (!MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH)) {
+        return std::unexpected(make_win32_error(GetLastError(), "MoveFileExW", from, to));
     }
     return {};
 }
 
-std::expected<void, FileSystemError> Win32FileSystemBackend::remove(const std::filesystem::path & path)
+std::expected<void, error::Error> Win32FileSystemBackend::replace_file_atomic(
+    const std::filesystem::path & from,
+    const std::filesystem::path & to
+)
+{
+    if (!MoveFileExW(
+            from.c_str(),
+            to.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+        )) {
+        return std::unexpected(make_win32_error(
+            GetLastError(),
+            "MoveFileExW",
+            from,
+            to
+        ));
+    }
+    return {};
+}
+
+std::expected<void, error::Error> Win32FileSystemBackend::remove(const std::filesystem::path & path)
 {
     std::error_code error;
     std::filesystem::remove(path, error);
     if (error) {
-        return std::unexpected(make_error(error, "remove"));
+        return std::unexpected(make_error(error, "remove", path));
     }
     return {};
 }
 
-std::expected<void, FileSystemError> Win32FileSystemBackend::sync_directory(
+std::expected<void, error::Error> Win32FileSystemBackend::sync_directory(
     const std::filesystem::path & path
 )
 {
-    auto native_path = to_native_path(path);
-    if (!native_path) {
-        return std::unexpected(std::move(native_path.error()));
-    }
-
     const HANDLE handle = CreateFileW(
-        native_path->c_str(),
+        path.c_str(),
         FILE_LIST_DIRECTORY,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         nullptr,
@@ -227,7 +264,7 @@ std::expected<void, FileSystemError> Win32FileSystemBackend::sync_directory(
         nullptr
     );
     if (handle == INVALID_HANDLE_VALUE) {
-        return std::unexpected(make_win32_error(GetLastError(), "CreateFileW"));
+        return std::unexpected(make_win32_error(GetLastError(), "CreateFileW", path));
     }
 
     const bool ok = FlushFileBuffers(handle);
@@ -235,12 +272,19 @@ std::expected<void, FileSystemError> Win32FileSystemBackend::sync_directory(
     CloseHandle(handle);
     if (!ok) {
         if (error == ERROR_INVALID_FUNCTION || error == ERROR_ACCESS_DENIED) {
-            return std::unexpected(FileSystemError {
+            FileSystemErrorContext context {
+                "FlushFileBuffers",
+                path,
+                {},
+                std::error_code(static_cast<int>(error), std::system_category()),
+            };
+            return std::unexpected(error::Error (
                 FileSystemErrorCode::Unsupported,
                 "directory sync is not supported by this Windows filesystem",
-            });
+                std::move(context)
+            ));
         }
-        return std::unexpected(make_win32_error(error, "FlushFileBuffers"));
+        return std::unexpected(make_win32_error(error, "FlushFileBuffers", path));
     }
     return {};
 }

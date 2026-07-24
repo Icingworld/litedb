@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "core/common/logical_type.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::protocol
 {
@@ -151,16 +151,16 @@ public:
     {
         auto size = read_u32();
         if (!size.has_value()) {
-            return std::unexpected(size.error());
+            return std::unexpected(std::move(size.error()));
         }
-        if (!can_read(size.value())) {
+        if (!can_read(*size)) {
             return unexpected_end();
         }
         std::string value {
             reinterpret_cast<const char *>(bytes_.data() + offset_),
-            static_cast<std::size_t>(size.value())
+            static_cast<std::size_t>(*size)
         };
-        offset_ += size.value();
+        offset_ += *size;
         return value;
     }
 
@@ -169,9 +169,9 @@ public:
     {
         auto bits = read_u32();
         if (!bits.has_value()) {
-            return std::unexpected(bits.error());
+            return std::unexpected(std::move(bits.error()));
         }
-        return std::bit_cast<float>(bits.value());
+        return std::bit_cast<float>(*bits);
     }
 
     [[nodiscard]]
@@ -179,9 +179,9 @@ public:
     {
         auto bits = read_u64();
         if (!bits.has_value()) {
-            return std::unexpected(bits.error());
+            return std::unexpected(std::move(bits.error()));
         }
-        return std::bit_cast<double>(bits.value());
+        return std::bit_cast<double>(*bits);
     }
 
 private:
@@ -233,37 +233,37 @@ std::expected<core::common::LogicalType, ProtocolError> read_logical_type(Reader
 {
     auto type_id = reader.read_u8();
     if (!type_id.has_value()) {
-        return std::unexpected(type_id.error());
+        return std::unexpected(std::move(type_id.error()));
     }
 
     auto has_parameter = reader.read_u8();
     if (!has_parameter.has_value()) {
-        return std::unexpected(has_parameter.error());
+        return std::unexpected(std::move(has_parameter.error()));
     }
 
     std::optional<std::size_t> parameter;
-    if (has_parameter.value() != 0) {
+    if (*has_parameter != 0) {
         auto value = reader.read_u64();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        parameter = static_cast<std::size_t>(value.value());
+        parameter = static_cast<std::size_t>(*value);
     }
 
-    if (type_id.value() > static_cast<std::uint8_t>(core::common::LogicalTypeId::Vector)) {
+    if (*type_id > static_cast<std::uint8_t>(core::common::LogicalTypeId::Vector)) {
         return invalid_payload("invalid logical type id");
     }
 
     return core::common::LogicalType {
-        static_cast<core::common::LogicalTypeId>(type_id.value()),
+        static_cast<core::common::LogicalTypeId>(*type_id),
         parameter,
     };
 }
 
-void write_value(Writer & writer, const core::schema::Value & value)
+void write_value(Writer & writer, const core::common::Value & value)
 {
-    using core::schema::NullValue;
-    using core::schema::VectorValue;
+    using core::common::NullValue;
+    using core::common::VectorValue;
 
     std::visit(
         [&](const auto & data) {
@@ -301,74 +301,74 @@ void write_value(Writer & writer, const core::schema::Value & value)
 }
 
 [[nodiscard]]
-std::expected<core::schema::Value, ProtocolError> read_value(Reader & reader)
+std::expected<core::common::Value, ProtocolError> read_value(Reader & reader)
 {
     auto tag = reader.read_u8();
     if (!tag.has_value()) {
-        return std::unexpected(tag.error());
+        return std::unexpected(std::move(tag.error()));
     }
 
-    const auto type = static_cast<core::common::LogicalTypeId>(tag.value());
+    const auto type = static_cast<core::common::LogicalTypeId>(*tag);
     switch (type) {
     case core::common::LogicalTypeId::Null:
-        return core::schema::Value::null();
+        return core::common::Value::null();
     case core::common::LogicalTypeId::Boolean: {
         auto value = reader.read_u8();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return core::schema::Value {value.value() != 0};
+        return core::common::Value {*value != 0};
     }
     case core::common::LogicalTypeId::Integer: {
         auto value = reader.read_u32();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return core::schema::Value {std::bit_cast<std::int32_t>(value.value())};
+        return core::common::Value {std::bit_cast<std::int32_t>(*value)};
     }
     case core::common::LogicalTypeId::BigInt: {
         auto value = reader.read_u64();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return core::schema::Value {std::bit_cast<std::int64_t>(value.value())};
+        return core::common::Value {std::bit_cast<std::int64_t>(*value)};
     }
     case core::common::LogicalTypeId::Float: {
         auto value = reader.read_float();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return core::schema::Value {value.value()};
+        return core::common::Value {*value};
     }
     case core::common::LogicalTypeId::Double: {
         auto value = reader.read_double();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return core::schema::Value {value.value()};
+        return core::common::Value {*value};
     }
     case core::common::LogicalTypeId::Varchar: {
         auto value = reader.read_string();
         if (!value.has_value()) {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        return core::schema::Value {std::move(value.value())};
+        return core::common::Value {std::move(*value)};
     }
     case core::common::LogicalTypeId::Vector: {
         auto count = reader.read_u32();
         if (!count.has_value()) {
-            return std::unexpected(count.error());
+            return std::unexpected(std::move(count.error()));
         }
-        core::schema::VectorValue values;
-        values.reserve(count.value());
-        for (std::uint32_t index = 0; index < count.value(); ++index) {
+        core::common::VectorValue values;
+        values.reserve(*count);
+        for (std::uint32_t index = 0; index < *count; ++index) {
             auto value = reader.read_double();
             if (!value.has_value()) {
-                return std::unexpected(value.error());
+                return std::unexpected(std::move(value.error()));
             }
-            values.push_back(value.value());
+            values.push_back(*value);
         }
-        return core::schema::Value {std::move(values)};
+        return core::common::Value {std::move(values)};
     }
     }
 
@@ -402,19 +402,19 @@ std::expected<FrameHeader, ProtocolError> decode_frame_header(const std::uint8_t
     if (!payload_size.has_value() || !version.has_value() || !kind.has_value() || !request_id.has_value()) {
         return std::unexpected(ProtocolError {ProtocolErrorCode::InvalidFrame, "frame header is invalid"});
     }
-    if (version.value() != ProtocolVersion) {
+    if (*version != ProtocolVersion) {
         return std::unexpected(ProtocolError {ProtocolErrorCode::InvalidVersion, "unsupported protocol version"});
     }
-    if (kind.value() < static_cast<std::uint16_t>(MessageKind::ExecuteSqlRequest)
-        || kind.value() > static_cast<std::uint16_t>(MessageKind::PongResponse)) {
+    if (*kind < static_cast<std::uint16_t>(MessageKind::ExecuteSqlRequest)
+        || *kind > static_cast<std::uint16_t>(MessageKind::PongResponse)) {
         return std::unexpected(ProtocolError {ProtocolErrorCode::InvalidMessageKind, "invalid message kind"});
     }
 
     return FrameHeader {
-        .payload_size = payload_size.value(),
-        .version = version.value(),
-        .kind = static_cast<MessageKind>(kind.value()),
-        .request_id = request_id.value(),
+        .payload_size = *payload_size,
+        .version = *version,
+        .kind = static_cast<MessageKind>(*kind),
+        .request_id = *request_id,
     };
 }
 
@@ -422,7 +422,7 @@ std::expected<Frame, ProtocolError> decode_frame(const std::uint8_t * data, std:
 {
     auto header = decode_frame_header(data, size);
     if (!header.has_value()) {
-        return std::unexpected(header.error());
+        return std::unexpected(std::move(header.error()));
     }
     if (size < FrameHeaderSize + header->payload_size) {
         return std::unexpected(ProtocolError {ProtocolErrorCode::UnexpectedEnd, "frame payload is too short"});
@@ -432,7 +432,7 @@ std::expected<Frame, ProtocolError> decode_frame(const std::uint8_t * data, std:
         data + FrameHeaderSize,
         data + FrameHeaderSize + header->payload_size,
     };
-    return Frame {.header = header.value(), .payload = std::move(payload)};
+    return Frame {.header = *header, .payload = std::move(payload)};
 }
 
 std::vector<std::uint8_t> encode_execute_sql_request(std::string_view sql)
@@ -447,12 +447,12 @@ std::expected<ExecuteSqlRequest, ProtocolError> decode_execute_sql_request(const
     Reader reader {payload};
     auto sql = reader.read_string();
     if (!sql.has_value()) {
-        return std::unexpected(sql.error());
+        return std::unexpected(std::move(sql.error()));
     }
     if (!reader.done()) {
         return invalid_payload("execute SQL request has trailing bytes");
     }
-    return ExecuteSqlRequest {std::move(sql.value())};
+    return ExecuteSqlRequest {std::move(*sql)};
 }
 
 std::vector<std::uint8_t> encode_execute_sql_response(const core::executor::ExecutionResult & result)
@@ -491,69 +491,69 @@ std::expected<core::executor::ExecutionResult, ProtocolError> decode_execute_sql
 
     auto kind = reader.read_u8();
     if (!kind.has_value()) {
-        return std::unexpected(kind.error());
+        return std::unexpected(std::move(kind.error()));
     }
-    if (kind.value() > static_cast<std::uint8_t>(core::executor::ExecutionResultKind::UseDatabase)) {
+    if (*kind > static_cast<std::uint8_t>(core::executor::ExecutionResultKind::UseDatabase)) {
         return invalid_payload("invalid execution result kind");
     }
-    result.kind = static_cast<core::executor::ExecutionResultKind>(kind.value());
+    result.kind = static_cast<core::executor::ExecutionResultKind>(*kind);
 
     auto affected_rows = reader.read_u64();
     if (!affected_rows.has_value()) {
-        return std::unexpected(affected_rows.error());
+        return std::unexpected(std::move(affected_rows.error()));
     }
-    result.affected_rows = static_cast<std::size_t>(affected_rows.value());
+    result.affected_rows = static_cast<std::size_t>(*affected_rows);
 
     auto has_selected_database_name = reader.read_u8();
     if (!has_selected_database_name.has_value()) {
-        return std::unexpected(has_selected_database_name.error());
+        return std::unexpected(std::move(has_selected_database_name.error()));
     }
-    if (has_selected_database_name.value() != 0) {
+    if (*has_selected_database_name != 0) {
         auto selected_database_name = reader.read_string();
         if (!selected_database_name.has_value()) {
-            return std::unexpected(selected_database_name.error());
+            return std::unexpected(std::move(selected_database_name.error()));
         }
-        result.selected_database_name = std::move(selected_database_name.value());
+        result.selected_database_name = std::move(*selected_database_name);
     }
 
     auto column_count = reader.read_u32();
     if (!column_count.has_value()) {
-        return std::unexpected(column_count.error());
+        return std::unexpected(std::move(column_count.error()));
     }
-    result.columns.reserve(column_count.value());
-    for (std::uint32_t index = 0; index < column_count.value(); ++index) {
+    result.columns.reserve(*column_count);
+    for (std::uint32_t index = 0; index < *column_count; ++index) {
         auto name = reader.read_string();
         if (!name.has_value()) {
-            return std::unexpected(name.error());
+            return std::unexpected(std::move(name.error()));
         }
         auto type = read_logical_type(reader);
         if (!type.has_value()) {
-            return std::unexpected(type.error());
+            return std::unexpected(std::move(type.error()));
         }
         result.columns.push_back(core::executor::ExecutionColumn {
-            .name = std::move(name.value()),
-            .type = type.value(),
+            .name = std::move(*name),
+            .type = *type,
         });
     }
 
     auto row_count = reader.read_u32();
     if (!row_count.has_value()) {
-        return std::unexpected(row_count.error());
+        return std::unexpected(std::move(row_count.error()));
     }
-    result.rows.reserve(row_count.value());
-    for (std::uint32_t row_index = 0; row_index < row_count.value(); ++row_index) {
+    result.rows.reserve(*row_count);
+    for (std::uint32_t row_index = 0; row_index < *row_count; ++row_index) {
         auto value_count = reader.read_u32();
         if (!value_count.has_value()) {
-            return std::unexpected(value_count.error());
+            return std::unexpected(std::move(value_count.error()));
         }
         core::executor::ExecutionRow row;
-        row.values.reserve(value_count.value());
-        for (std::uint32_t value_index = 0; value_index < value_count.value(); ++value_index) {
+        row.values.reserve(*value_count);
+        for (std::uint32_t value_index = 0; value_index < *value_count; ++value_index) {
             auto value = read_value(reader);
             if (!value.has_value()) {
-                return std::unexpected(value.error());
+                return std::unexpected(std::move(value.error()));
             }
-            row.values.push_back(std::move(value.value()));
+            row.values.push_back(std::move(*value));
         }
         result.rows.push_back(std::move(row));
     }
@@ -578,18 +578,18 @@ std::expected<ErrorResponse, ProtocolError> decode_error_response(const std::vec
     Reader reader {payload};
     auto code = reader.read_u16();
     if (!code.has_value()) {
-        return std::unexpected(code.error());
+        return std::unexpected(std::move(code.error()));
     }
     auto message = reader.read_string();
     if (!message.has_value()) {
-        return std::unexpected(message.error());
+        return std::unexpected(std::move(message.error()));
     }
     if (!reader.done()) {
         return invalid_payload("error response has trailing bytes");
     }
     return ErrorResponse {
-        .code = code.value(),
-        .message = std::move(message.value()),
+        .code = *code,
+        .message = std::move(*message),
     };
 }
 

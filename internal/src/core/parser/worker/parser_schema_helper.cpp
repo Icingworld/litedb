@@ -24,7 +24,7 @@ std::expected<std::string, ParserError> ParserSchemaHelper::parse_identifier_str
 {
     auto token = context_.consume(TokenType::Identifier, message, ParserErrorCode::ExpectedIdentifier);
     if (!token.has_value()) [[unlikely]] {
-        return std::unexpected(token.error());
+        return std::unexpected(std::move(token.error()));
     }
 
     return std::string(token->value());
@@ -34,7 +34,7 @@ std::expected<std::size_t, ParserError> ParserSchemaHelper::parse_integer_value(
 {
     auto token = context_.consume(TokenType::IntegerLiteral, message);
     if (!token.has_value()) [[unlikely]] {
-        return std::unexpected(token.error());
+        return std::unexpected(std::move(token.error()));
     }
 
     std::size_t value = 0;
@@ -69,32 +69,32 @@ std::expected<ast::DataType, ParserError> ParserSchemaHelper::parse_data_type()
     if (context_.match(TokenType::Varchar)) {
         auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after VARCHAR");
         if (!left_paren.has_value()) [[unlikely]] {
-            return std::unexpected(left_paren.error());
+            return std::unexpected(std::move(left_paren.error()));
         }
         auto parameter = parse_integer_value("Expected VARCHAR length");
         if (!parameter.has_value()) [[unlikely]] {
-            return std::unexpected(parameter.error());
+            return std::unexpected(std::move(parameter.error()));
         }
         auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after VARCHAR length");
         if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
+            return std::unexpected(std::move(right_paren.error()));
         }
-        return ast::DataType {ast::DataTypeKind::Varchar, parameter.value()};
+        return ast::DataType {ast::DataTypeKind::Varchar, *parameter};
     }
     if (context_.match(TokenType::Vector)) {
         auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after VECTOR");
         if (!left_paren.has_value()) [[unlikely]] {
-            return std::unexpected(left_paren.error());
+            return std::unexpected(std::move(left_paren.error()));
         }
         auto parameter = parse_integer_value("Expected VECTOR dimension");
         if (!parameter.has_value()) [[unlikely]] {
-            return std::unexpected(parameter.error());
+            return std::unexpected(std::move(parameter.error()));
         }
         auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after VECTOR dimension");
         if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
+            return std::unexpected(std::move(right_paren.error()));
         }
-        return ast::DataType {ast::DataTypeKind::Vector, parameter.value()};
+        return ast::DataType {ast::DataTypeKind::Vector, *parameter};
     }
 
     return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedDataType, "Expected data type"));
@@ -104,17 +104,17 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
 {
     auto name = parse_identifier_string("Expected column name");
     if (!name.has_value()) [[unlikely]] {
-        return std::unexpected(name.error());
+        return std::unexpected(std::move(name.error()));
     }
 
     auto type = parse_data_type();
     if (!type.has_value()) [[unlikely]] {
-        return std::unexpected(type.error());
+        return std::unexpected(std::move(type.error()));
     }
 
     ast::ColumnDefinition column;
-    column.name = std::move(name.value());
-    column.type = type.value();
+    column.name = std::move(*name);
+    column.type = *type;
 
     while (!context_.check(TokenType::Comma) && !context_.check(TokenType::RightParen) && !context_.check(TokenType::EoF)) {
         if (context_.match(TokenType::Unique)) {
@@ -124,11 +124,11 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
             if (!default_value.has_value()) [[unlikely]] {
                 return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedLiteral, "Expected literal after DEFAULT"));
             }
-            column.default_value = std::move(default_value.value());
+            column.default_value = std::move(*default_value);
         } else if (context_.match(TokenType::Not)) {
             auto null_token = context_.consume(TokenType::Null, "Expected NULL after NOT");
             if (!null_token.has_value()) [[unlikely]] {
-                return std::unexpected(null_token.error());
+                return std::unexpected(std::move(null_token.error()));
             }
             column.nullable = false;
         } else if (context_.match(TokenType::Null)) {
@@ -137,7 +137,7 @@ std::expected<ast::ColumnDefinition, ParserError> ParserSchemaHelper::parse_colu
         } else if (context_.match(TokenType::Comment)) {
             auto comment = context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
             if (!comment.has_value()) [[unlikely]] {
-                return std::unexpected(comment.error());
+                return std::unexpected(std::move(comment.error()));
             }
             column.comment = std::string(comment->value());
         } else {
@@ -156,11 +156,11 @@ std::expected<bool, ParserError> ParserSchemaHelper::parse_if_not_exists()
 
     auto not_token = context_.consume(TokenType::Not, "Expected NOT after IF");
     if (!not_token.has_value()) [[unlikely]] {
-        return std::unexpected(not_token.error());
+        return std::unexpected(std::move(not_token.error()));
     }
     auto exists_token = context_.consume(TokenType::Exists, "Expected EXISTS after IF NOT");
     if (!exists_token.has_value()) [[unlikely]] {
-        return std::unexpected(exists_token.error());
+        return std::unexpected(std::move(exists_token.error()));
     }
 
     return true;
@@ -174,7 +174,7 @@ std::expected<bool, ParserError> ParserSchemaHelper::parse_if_exists()
 
     auto exists_token = context_.consume(TokenType::Exists, "Expected EXISTS after IF");
     if (!exists_token.has_value()) [[unlikely]] {
-        return std::unexpected(exists_token.error());
+        return std::unexpected(std::move(exists_token.error()));
     }
 
     return true;

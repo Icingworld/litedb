@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
 
+#include "core/error/error.hpp"
 #include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::evaluator
@@ -10,7 +11,7 @@ namespace litedb::core::evaluator
 /**
  * @brief 评估错误代码
  */
-enum class EvaluationErrorCode
+enum class EvaluationErrorCode : std::uint8_t
 {
     UnsupportedExpression,                      ///< 不支持的表达式
     InvalidType,                                ///< 无效的类型
@@ -23,11 +24,20 @@ enum class EvaluationErrorCode
 /**
  * @brief 评估错误
  */
-struct EvaluationError
+struct EvaluationErrorContext
 {
-    EvaluationErrorCode code;                   ///< 评估错误代码
     parser::ast::AstNodeLocation location;      ///< 评估错误位置
-    std::string message;                        ///< 评估错误消息
 };
 
+using EvaluationError = error::Error;
+
 } // namespace litedb::core::evaluator
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<evaluator::EvaluationErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Evaluation;
+};
+} // namespace litedb::core::error

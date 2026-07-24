@@ -6,7 +6,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/entry/meta_entry.hpp"
 
 namespace litedb::core::meta::entry
@@ -26,7 +26,7 @@ public:
         common::LogicalType type,
         bool unique,
         bool nullable,
-        std::optional<DefaultExpression> default_expression = std::nullopt,
+        std::optional<schema::DefaultExpression> default_expression = std::nullopt,
         std::optional<std::string> comment = std::nullopt
     );
 
@@ -78,7 +78,7 @@ public:
      * @return 默认值表达式
      */
     [[nodiscard]]
-    const std::optional<DefaultExpression> & default_expression() const noexcept;
+    const std::optional<schema::DefaultExpression> & default_expression() const noexcept;
 
     /**
      * @brief 获取列注释
@@ -93,7 +93,7 @@ private:
     common::LogicalType type_;                              ///< 列类型
     bool unique_;                                           ///< 是否唯一
     bool nullable_;                                         ///< 是否可为空
-    std::optional<DefaultExpression> default_expression_;   ///< 默认值表达式
+    std::optional<schema::DefaultExpression> default_expression_;   ///< 默认值表达式
     std::optional<std::string> comment_;                    ///< 列注释
 };
 

@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
 
+#include "core/error/error.hpp"
 #include "core/parser/token.hpp"
 
 namespace litedb::core::parser
@@ -10,7 +11,7 @@ namespace litedb::core::parser
 /**
  * @brief 解析器错误码
  */
-enum class ParserErrorCode
+enum class ParserErrorCode : std::uint8_t
 {
     EmptyStatement,        ///< 空输入
     LexicalError,          ///< 词法错误
@@ -29,11 +30,20 @@ enum class ParserErrorCode
 /**
  * @brief 解析器错误
  */
-struct ParserError
+struct ParserErrorContext
 {
-    ParserErrorCode code;       ///< 错误码
     TokenLocation location;     ///< 错误位置
-    std::string message;        ///< 错误消息
 };
 
+using ParserError = error::Error;
+
 } // namespace litedb::core::parser
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<parser::ParserErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Parser;
+};
+} // namespace litedb::core::error

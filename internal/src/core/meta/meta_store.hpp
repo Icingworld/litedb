@@ -2,10 +2,11 @@
 
 #include <expected>
 #include <filesystem>
+#include <optional>
 
-#include "core/meta/meta_snapshot.hpp"
-#include "core/meta/meta_store_error.hpp"
 #include "core/filesystem/filesystem.hpp"
+#include "core/meta/meta_error.hpp"
+#include "core/meta/meta_snapshot.hpp"
 
 namespace litedb::core::meta
 {
@@ -21,11 +22,10 @@ public:
 public:
     /**
      * @brief 加载元数据快照
-     * @return 元数据快照
-     * @note 文件不存在时返回空快照
+     * @return 元数据快照；文件不存在时返回 std::nullopt
      */
     [[nodiscard]]
-    std::expected<MetaSnapshot, MetaStoreError> load() const;
+    std::expected<std::optional<MetaSnapshot>, MetaError> load() const;
 
     /**
      * @brief 原子保存元数据快照
@@ -33,7 +33,7 @@ public:
      * @return 是否成功
      */
     [[nodiscard]]
-    std::expected<void, MetaStoreError> save(const MetaSnapshot & snapshot) const;
+    std::expected<void, MetaError> save(const MetaSnapshot & snapshot) const;
 
 private:
     std::filesystem::path path_;            ///< 元数据文件路径

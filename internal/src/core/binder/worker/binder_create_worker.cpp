@@ -43,7 +43,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
 {
     BinderWorkerHelper helper(context_);
 
-    const auto database_id = helper.require_database(statement.location());
+    auto database_id = helper.require_database(statement.location());
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
@@ -54,10 +54,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
     }
 
     return std::make_unique<BoundCreateCollectionStatement>(
-        database_id.value(),
+        *database_id,
         statement.collection(),
         statement.if_not_exists(),
-        std::move(columns.value()),
+        std::move(*columns),
         statement.comment(),
         statement.location()
     );

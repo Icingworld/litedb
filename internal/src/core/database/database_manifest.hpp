@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <string>
 
+#include "core/error/error.hpp"
 #include "core/filesystem/filesystem.hpp"
 
 namespace litedb::core::database
@@ -12,7 +13,7 @@ namespace litedb::core::database
 /**
  * @brief 数据库 manifest 错误码
  */
-enum class ManifestErrorCode
+enum class ManifestErrorCode : std::uint8_t
 {
     FileSystemError,            ///< 文件系统错误
     InvalidFormat,              ///< 格式无效
@@ -21,11 +22,7 @@ enum class ManifestErrorCode
 /**
  * @brief 数据库 manifest 错误
  */
-struct ManifestError
-{
-    ManifestErrorCode code;     ///< 错误码
-    std::string message;        ///< 错误消息
-};
+using ManifestError = error::Error;
 
 /**
  * @brief 数据库 manifest
@@ -70,3 +67,12 @@ private:
 };
 
 } // namespace litedb::core::database
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<database::ManifestErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Database;
+};
+} // namespace litedb::core::error

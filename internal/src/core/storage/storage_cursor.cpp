@@ -2,32 +2,20 @@
 
 #include <utility>
 
-#include "core/storage/storage_store.hpp"
-
 namespace litedb::core::storage
 {
 
-StorageCursor::StorageCursor(
-    const StorageStore & store,
-    std::vector<common::RecordId> record_ids
-) noexcept
-    : store_(&store)
-    , record_ids_(std::move(record_ids))
-    , position_(0)
+StorageCursor::StorageCursor(std::vector<common::Record> records) noexcept
+    : records_(std::move(records))
 {
 }
 
-std::expected<std::optional<schema::Record>, StorageError> StorageCursor::next()
+std::expected<std::optional<common::Record>, StorageError> StorageCursor::next()
 {
-    if (position_ == record_ids_.size()) {
-        return std::optional<schema::Record> {};
+    if (position_ == records_.size()) {
+        return std::optional<common::Record> {};
     }
-
-    auto record = store_->get(record_ids_[position_++]);
-    if (!record.has_value()) {
-        return std::unexpected(from_storage_store_error(std::move(record.error())));
-    }
-    return std::optional<schema::Record> {std::move(record.value())};
+    return std::optional<common::Record> {std::move(records_[position_++])};
 }
 
 } // namespace litedb::core::storage

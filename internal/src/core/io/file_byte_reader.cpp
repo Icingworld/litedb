@@ -1,22 +1,7 @@
 #include "core/io/file_byte_reader.hpp"
 
-#include <utility>
-
 namespace litedb::core::io
 {
-
-namespace
-{
-
-IoError from_filesystem_error(filesystem::FileSystemError error)
-{
-    return IoError {
-        .code = IoErrorCode::FileSystemError,
-        .message = std::move(error.message),
-    };
-}
-
-} // namespace
 
 FileByteReader::FileByteReader(filesystem::FileHandle & file) noexcept
     : file_(&file)
@@ -27,11 +12,12 @@ FileByteReader::FileByteReader(filesystem::FileHandle & file) noexcept
 std::expected<std::size_t, IoError> FileByteReader::read_some(std::span<std::byte> data)
 {
     auto result = file_->read_at(offset_, data);
-    if (!result.has_value()) {
-        return std::unexpected(from_filesystem_error(std::move(result.error())));
+    if (!result) {
+        return std::unexpected(std::move(result.error()));
     }
-    offset_ += result.value();
-    return result.value();
+    const auto read = *result;
+    offset_ += read;
+    return read;
 }
 
 std::uint64_t FileByteReader::offset() const noexcept

@@ -30,7 +30,7 @@
 #include "core/logical_plan/statement/logical_statement_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/command/use_plan.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 #include "../storage/temporary_directory.hpp"
@@ -75,17 +75,21 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(std::string(result.error().message).append(": ").append(sql));
+        throw std::runtime_error(std::string(result.error().message()).append(": ").append(sql));
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 struct Fixture
 {
     litedb::tests::TemporaryDirectory storage_directory {"litedb-logical-planner-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
-    MetaEngine catalog;
-    StorageEngine storage {storage_directory.path(), filesystem};
+    CatalogEditor catalog;
+    StorageEngine storage {
+        storage_directory.path(),
+        filesystem,
+        litedb::core::storage::StorageOpenMode::TransactionalStaging,
+    };
     IndexEngine index_engine {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -94,9 +98,9 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         if (!database.has_value()) {
-            throw std::runtime_error(database.error().message);
+            throw std::runtime_error(database.error().message());
         }
-        database_id = database.value();
+        database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
@@ -109,7 +113,7 @@ struct Fixture
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
+                .default_expression = litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",
@@ -125,17 +129,17 @@ struct Fixture
 
         auto collection = catalog.create_collection(users);
         if (!collection.has_value()) {
-            throw std::runtime_error(collection.error().message);
+            throw std::runtime_error(collection.error().message());
         }
-        users_id = collection.value();
+        users_id = *collection;
 
-        auto schema = litedb::core::schema::load_collection_schema(catalog, users_id);
+        auto schema = litedb::core::storage::load_collection_schema(catalog.view(), users_id);
         if (!schema.has_value()) {
-            throw std::runtime_error(schema.error().message);
+            throw std::runtime_error(schema.error().message());
         }
-        auto storage_created = storage.create_collection(std::move(schema.value()));
+        auto storage_created = storage.create_collection(std::move(*schema));
         if (!storage_created.has_value()) {
-            throw std::runtime_error(storage_created.error().message);
+            throw std::runtime_error(storage_created.error().message());
         }
     }
 };
@@ -144,13 +148,13 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::unique_ptr<LogicalStatementPlan> plan_ok(
@@ -163,9 +167,9 @@ std::unique_ptr<LogicalStatementPlan> plan_ok(
     LogicalPlanner planner;
     auto result = planner.plan(bind_ok(fixture, sql));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 const LogicalPlanNode & query_root(const LogicalStatementPlan & plan)
@@ -181,7 +185,7 @@ IndexId create_managed_index(
     litedb::core::meta::entry::IndexKind kind
 )
 {
-    const auto * column = fixture.catalog.find_column(fixture.users_id, std::string(column_name));
+    const auto * column = fixture.catalog.view().find_column(fixture.users_id, std::string(column_name));
     require(column != nullptr, "fixture index column missing");
 
     auto created = fixture.catalog.create_index(CreateIndexRequest {
@@ -191,22 +195,22 @@ IndexId create_managed_index(
         .kind = kind,
     });
     if (!created.has_value()) {
-        throw std::runtime_error(created.error().message);
+        throw std::runtime_error(std::string {created.error().message()});
     }
 
-    const auto * entry = fixture.catalog.find_index(created.value());
+    const auto * entry = fixture.catalog.view().find_index(*created);
     require(entry != nullptr, "fixture index entry missing");
 
-    auto schema = litedb::core::schema::load_collection_schema(fixture.catalog, fixture.users_id);
+    auto schema = litedb::core::storage::load_collection_schema(fixture.catalog.view(), fixture.users_id);
     if (!schema.has_value()) {
-        throw std::runtime_error(schema.error().message);
+        throw std::runtime_error(schema.error().message());
     }
     require(fixture.storage.contains_collection(fixture.users_id), "fixture collection storage missing");
-    auto managed = fixture.index_engine.create_index(*entry, schema.value(), fixture.storage);
+    auto managed = fixture.index_engine.create_index(*entry, *schema, fixture.storage);
     if (!managed.has_value()) {
-        throw std::runtime_error(managed.error().message);
+        throw std::runtime_error(managed.error().message());
     }
-    return created.value();
+    return *created;
 }
 
 void test_select_full_chain()
@@ -392,7 +396,7 @@ void test_admin_and_ddl_plans()
     require(drop_collection_node.database_id() == fixture.database_id, "DROP COLLECTION database id mismatch");
     require(drop_collection_node.if_exists(), "DROP COLLECTION if exists mismatch");
 
-    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    const auto * age_column = fixture.catalog.view().find_column(fixture.users_id, "age");
     require(age_column != nullptr, "age column lookup failed");
     auto created_index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
@@ -411,7 +415,7 @@ void test_admin_and_ddl_plans()
     require(drop_index_node.index_name() == "idx_age", "DROP INDEX index name mismatch");
     require(!drop_index_node.if_exists(), "DROP INDEX if exists mismatch");
 
-    const auto * embedding_column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    const auto * embedding_column = fixture.catalog.view().find_column(fixture.users_id, "embedding");
     require(embedding_column != nullptr, "embedding column lookup failed");
     auto created_vector_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,
@@ -461,7 +465,7 @@ void test_null_statement_error()
     LogicalPlanner planner;
     auto result = planner.plan(nullptr);
     require(!result.has_value(), "null statement should fail");
-    require(result.error().code == PlannerErrorCode::InvalidArgument, "null statement error code mismatch");
+    require(result.error().is(PlannerErrorCode::InvalidArgument), "null statement error code mismatch");
 }
 
 } // namespace

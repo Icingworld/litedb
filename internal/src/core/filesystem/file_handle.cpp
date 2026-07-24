@@ -20,57 +20,49 @@ FileHandle & FileHandle::operator=(FileHandle &&) noexcept = default;
 
 FileHandle::~FileHandle() = default;
 
-std::expected<void, FileSystemError> FileHandle::close()
+std::expected<void, error::Error> FileHandle::close()
 {
-    assert(backend_);
     return backend_->close();
 }
 
-std::expected<std::size_t, FileSystemError> FileHandle::read_at(
+std::expected<std::size_t, error::Error> FileHandle::read_at(
     std::uint64_t offset,
     std::span<std::byte> buffer
 )
 {
-    assert(backend_);
     return backend_->read_at(offset, buffer);
 }
 
-std::expected<void, FileSystemError> FileHandle::write_at(
+std::expected<void, error::Error> FileHandle::write_at(
     std::uint64_t offset,
     std::span<const std::byte> data
 )
 {
-    assert(backend_);
     return backend_->write_at(offset, data);
 }
 
-std::expected<void, FileSystemError> FileHandle::append(std::span<const std::byte> data)
+std::expected<void, error::Error> FileHandle::append(std::span<const std::byte> data)
 {
-    assert(backend_);
     return backend_->append(data);
 }
 
-std::expected<std::uint64_t, FileSystemError> FileHandle::size()
+std::expected<std::uint64_t, error::Error> FileHandle::size()
 {
-    assert(backend_);
     return backend_->size();
 }
 
-std::expected<void, FileSystemError> FileHandle::truncate(std::uint64_t size)
+std::expected<void, error::Error> FileHandle::truncate(std::uint64_t size)
 {
-    assert(backend_);
     return backend_->truncate(size);
 }
 
-std::expected<void, FileSystemError> FileHandle::sync_data()
+std::expected<void, error::Error> FileHandle::sync_data()
 {
-    assert(backend_);
     return backend_->sync_data();
 }
 
-std::expected<void, FileSystemError> FileHandle::sync_all()
+std::expected<void, error::Error> FileHandle::sync_all()
 {
-    assert(backend_);
     return backend_->sync_all();
 }
 

@@ -1,11 +1,15 @@
 #include "core/index/btree_index/btree_page_store.hpp"
 
+#include <algorithm>
 #include <array>
 #include <limits>
+#include <span>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
+#include "core/io/checksum.hpp"
 
 namespace litedb::core::index::btree_index
 {
@@ -14,7 +18,8 @@ namespace
 {
 
 constexpr std::uint32_t StoreMagic = 0x3149424c; // LBI1
-constexpr std::uint16_t StoreVersion = 1;
+constexpr std::uint16_t LegacyStoreVersion = 1;
+constexpr std::uint16_t StoreVersion = 2;
 
 constexpr std::size_t MagicOffset = 0;
 constexpr std::size_t VersionOffset = 4;
@@ -28,8 +33,19 @@ constexpr std::size_t KeyParameterOffset = 24;
 constexpr std::size_t RootPageIdOffset = 32;
 constexpr std::size_t NextPageIdOffset = 40;
 constexpr std::size_t EntryCountOffset = 48;
+constexpr std::size_t HeaderChecksumOffset = 56;
+constexpr std::size_t FreePageHeadOffset = 64;
+constexpr std::size_t FreePageCountOffset = 72;
 
 constexpr std::uint8_t HasKeyParameter = 0x01;
+
+constexpr std::uint32_t FreePageMagic = 0x31465242; // BRF1
+constexpr std::uint16_t FreePageVersion = 1;
+constexpr std::size_t FreePageVersionOffset = 4;
+constexpr std::size_t FreePageReservedOffset = 6;
+constexpr std::size_t FreePageIdOffset = 8;
+constexpr std::size_t FreePageNextOffset = 16;
+constexpr std::size_t FreePageChecksumOffset = 24;
 
 using Error = BTreePageStoreError;
 using ErrorCode = BTreePageStoreErrorCode;
@@ -37,24 +53,32 @@ using ErrorCode = BTreePageStoreErrorCode;
 [[nodiscard]]
 Error error(ErrorCode code, std::string message)
 {
-    return Error {code, std::move(message), std::nullopt};
+    return Error {code, message, BTreePageStoreErrorContext {}};
 }
 
 [[nodiscard]]
-Error filesystem_error(filesystem::FileSystemError value)
+Error filesystem_error(litedb::core::error::Error value)
 {
-    return error(ErrorCode::FileSystemError, std::move(value.message));
+    return error(ErrorCode::FileSystemError, value.message());
 }
 
 [[nodiscard]]
 Error codec_error(BTreePageCodecError value)
 {
-    const auto code = value.code == BTreePageCodecErrorCode::CorruptedPage ||
-                      value.code == BTreePageCodecErrorCode::InvalidFormat ||
-                      value.code == BTreePageCodecErrorCode::UnsupportedVersion
+    const auto code = value.is(BTreePageCodecErrorCode::ChecksumMismatch)
+        ? ErrorCode::ChecksumMismatch
+        : value.is(BTreePageCodecErrorCode::CorruptedPage) ||
+                      value.is(BTreePageCodecErrorCode::InvalidFormat) ||
+                      value.is(BTreePageCodecErrorCode::UnsupportedVersion)
         ? ErrorCode::CorruptedPage
         : ErrorCode::PageCodecError;
-    return Error {code, std::move(value.message), value.code};
+    auto message = value.message();
+    return Error {
+        code,
+        message,
+        BTreePageStoreErrorContext {static_cast<BTreePageCodecErrorCode>(value.code())},
+        std::move(value),
+    };
 }
 
 template <typename T>
@@ -79,6 +103,24 @@ T read_number(const std::byte * source) noexcept
         value |= static_cast<Unsigned>(std::to_integer<unsigned int>(source[index])) << (index * 8U);
     }
     return static_cast<T>(value);
+}
+
+[[nodiscard]]
+std::uint32_t header_checksum_with_zeroed_field(std::span<const std::byte> bytes)
+{
+    std::array<std::byte, BTreePageStore::HeaderSize> checked {};
+    std::copy(bytes.begin(), bytes.end(), checked.begin());
+    write_number(checked.data() + HeaderChecksumOffset, std::uint32_t {0});
+    return io::crc32(checked);
+}
+
+[[nodiscard]]
+std::uint32_t free_page_checksum_with_zeroed_field(std::span<const std::byte> bytes)
+{
+    BTreePageCodec::PageBuffer checked {};
+    std::copy(bytes.begin(), bytes.end(), checked.begin());
+    write_number(checked.data() + FreePageChecksumOffset, std::uint32_t {0});
+    return io::crc32(checked);
 }
 
 [[nodiscard]]
@@ -173,13 +215,13 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::create(
         }
     }
     auto opened = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::CreateNew,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::CreateNew,
     });
     if (!opened.has_value()) {
         return std::unexpected(filesystem_error(std::move(opened.error())));
     }
-    BTreePageStore store {std::move(path), index_id, std::move(key_type), std::move(opened.value())};
+    BTreePageStore store {std::move(path), index_id, std::move(key_type), std::move(*opened)};
     auto initialized = store.initialize();
     if (!initialized.has_value()) {
         return std::unexpected(std::move(initialized.error()));
@@ -198,8 +240,8 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::open(
         return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid expected B+ tree key type"));
     }
     auto opened = filesystem.open(path, {
-        .access = filesystem::backend::FileAccess::ReadWrite,
-        .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+        .access = filesystem::FileAccess::ReadWrite,
+        .create_mode = filesystem::FileCreateMode::OpenExisting,
     });
     if (!opened.has_value()) {
         return std::unexpected(filesystem_error(std::move(opened.error())));
@@ -208,7 +250,7 @@ std::expected<BTreePageStore, BTreePageStoreError> BTreePageStore::open(
         std::move(path),
         expected_index_id,
         expected_key_type,
-        std::move(opened.value()),
+        std::move(*opened),
     };
     auto loaded = store.load(expected_index_id, expected_key_type);
     if (!loaded.has_value()) {
@@ -242,6 +284,11 @@ std::uint64_t BTreePageStore::page_count() const noexcept
     return next_page_id_ - 1;
 }
 
+std::uint64_t BTreePageStore::free_page_count() const noexcept
+{
+    return free_page_count_;
+}
+
 std::uint64_t BTreePageStore::entry_count() const noexcept
 {
     return entry_count_;
@@ -256,6 +303,19 @@ std::expected<BTreeLeafPage, BTreePageStoreError> BTreePageStore::allocate_leaf_
         (next_page_id != InvalidBTreePageId && next_page_id >= next_page_id_)) {
         return std::unexpected(error(ErrorCode::PageNotFound, "Leaf page link references an unknown page"));
     }
+    auto free_page = acquire_free_page();
+    if (!free_page.has_value()) {
+        return std::unexpected(std::move(free_page.error()));
+    }
+    if (free_page->has_value()) {
+        BTreeLeafPage page {**free_page, previous_page_id, next_page_id};
+        auto written = write_page(BTreePage {page});
+        if (!written.has_value()) {
+            return std::unexpected(std::move(written.error()));
+        }
+        return page;
+    }
+
     BTreeLeafPage page {next_page_id_, previous_page_id, next_page_id};
     auto appended = append_page(BTreePage {page});
     if (!appended.has_value()) {
@@ -271,6 +331,19 @@ std::expected<BTreeInternalPage, BTreePageStoreError> BTreePageStore::allocate_i
     if (first_child_id == InvalidBTreePageId || first_child_id >= next_page_id_) {
         return std::unexpected(error(ErrorCode::PageNotFound, "Internal page first child does not exist"));
     }
+    auto free_page = acquire_free_page();
+    if (!free_page.has_value()) {
+        return std::unexpected(std::move(free_page.error()));
+    }
+    if (free_page->has_value()) {
+        BTreeInternalPage page {**free_page, first_child_id};
+        auto written = write_page(BTreePage {page});
+        if (!written.has_value()) {
+            return std::unexpected(std::move(written.error()));
+        }
+        return page;
+    }
+
     BTreeInternalPage page {next_page_id_, first_child_id};
     auto appended = append_page(BTreePage {page});
     if (!appended.has_value()) {
@@ -300,7 +373,7 @@ std::expected<BTreePage, BTreePageStoreError> BTreePageStore::read_page(BTreePag
     if (!valid.has_value()) {
         return std::unexpected(std::move(valid.error()));
     }
-    return std::move(decoded.value());
+    return std::move(*decoded);
 }
 
 std::expected<void, BTreePageStoreError> BTreePageStore::write_page(const BTreePage & page)
@@ -351,6 +424,69 @@ std::expected<void, BTreePageStoreError> BTreePageStore::set_entry_count(std::ui
     return {};
 }
 
+std::expected<void, BTreePageStoreError> BTreePageStore::publish_tree(
+    BTreePageId root_page_id,
+    std::uint64_t entry_count
+)
+{
+    if (root_page_id == InvalidBTreePageId || root_page_id >= next_page_id_) {
+        return std::unexpected(error(ErrorCode::PageNotFound, "Published root page does not exist"));
+    }
+    if (root_page_id_ != InvalidBTreePageId || entry_count_ != 0) {
+        return std::unexpected(error(ErrorCode::InvalidPage, "Only an empty tree can publish a built root"));
+    }
+    const auto previous_root = root_page_id_;
+    const auto previous_count = entry_count_;
+    root_page_id_ = root_page_id;
+    entry_count_ = entry_count;
+    auto written = write_header();
+    if (!written.has_value()) {
+        root_page_id_ = previous_root;
+        entry_count_ = previous_count;
+        return written;
+    }
+    return {};
+}
+
+std::expected<void, BTreePageStoreError> BTreePageStore::release_page(BTreePageId page_id)
+{
+    if (page_id == InvalidBTreePageId || page_id >= next_page_id_ || page_id == root_page_id_) {
+        return std::unexpected(error(ErrorCode::InvalidPage, "Cannot release an active or unknown B+ tree page"));
+    }
+    if (free_page_count_ == std::numeric_limits<std::uint64_t>::max()) {
+        return std::unexpected(error(ErrorCode::InvalidPage, "B+ tree free page count is exhausted"));
+    }
+
+    BTreePageCodec::PageBuffer current {};
+    auto read = file_.read_at(page_offset(page_id), current);
+    if (!read.has_value()) {
+        return std::unexpected(filesystem_error(std::move(read.error())));
+    }
+    if (*read != current.size()) {
+        return std::unexpected(error(ErrorCode::CorruptedPage, "B+ tree page is truncated"));
+    }
+    if (read_number<std::uint32_t>(current.data()) == FreePageMagic) {
+        return std::unexpected(error(ErrorCode::InvalidPage, "B+ tree page is already free"));
+    }
+
+    auto written = write_free_page(page_id, free_page_head_);
+    if (!written.has_value()) {
+        return written;
+    }
+
+    const auto previous_head = free_page_head_;
+    const auto previous_count = free_page_count_;
+    free_page_head_ = page_id;
+    ++free_page_count_;
+    auto header = write_header();
+    if (!header.has_value()) {
+        free_page_head_ = previous_head;
+        free_page_count_ = previous_count;
+        return header;
+    }
+    return {};
+}
+
 std::expected<void, BTreePageStoreError> BTreePageStore::sync_data()
 {
     auto synced = file_.sync_data();
@@ -374,6 +510,8 @@ std::expected<void, BTreePageStoreError> BTreePageStore::initialize()
     root_page_id_ = InvalidBTreePageId;
     next_page_id_ = 1;
     entry_count_ = 0;
+    free_page_head_ = InvalidBTreePageId;
+    free_page_count_ = 0;
     return write_header();
 }
 
@@ -398,13 +536,22 @@ std::expected<void, BTreePageStoreError> BTreePageStore::load(
     if (*read != header.size() || read_number<std::uint32_t>(header.data() + MagicOffset) != StoreMagic) {
         return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid B+ tree store magic"));
     }
-    if (read_number<std::uint16_t>(header.data() + VersionOffset) != StoreVersion) {
+    const auto version = read_number<std::uint16_t>(header.data() + VersionOffset);
+    if (version != LegacyStoreVersion && version != StoreVersion) {
         return std::unexpected(error(ErrorCode::UnsupportedVersion, "Unsupported B+ tree store version"));
     }
     if (read_number<std::uint16_t>(header.data() + HeaderSizeOffset) != HeaderSize ||
         read_number<std::uint32_t>(header.data() + PageSizeOffset) != BTreePageCodec::PageSize ||
         read_number<std::uint16_t>(header.data() + ReservedOffset) != 0) {
         return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid B+ tree store header"));
+    }
+    if (version == LegacyStoreVersion) {
+        if (read_number<std::uint32_t>(header.data() + HeaderChecksumOffset) != 0) {
+            return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid legacy B+ tree store header"));
+        }
+    } else if (read_number<std::uint32_t>(header.data() + HeaderChecksumOffset)
+               != header_checksum_with_zeroed_field(header)) {
+        return std::unexpected(error(ErrorCode::ChecksumMismatch, "B+ tree store header checksum mismatch"));
     }
 
     const auto decoded_type_id = decode_key_type(read_number<std::uint8_t>(header.data() + KeyTypeOffset));
@@ -432,8 +579,15 @@ std::expected<void, BTreePageStoreError> BTreePageStore::load(
     const auto root_page_id = read_number<BTreePageId>(header.data() + RootPageIdOffset);
     const auto next_page_id = read_number<BTreePageId>(header.data() + NextPageIdOffset);
     const auto entry_count = read_number<std::uint64_t>(header.data() + EntryCountOffset);
+    const auto free_page_head = version == LegacyStoreVersion
+        ? InvalidBTreePageId
+        : read_number<BTreePageId>(header.data() + FreePageHeadOffset);
+    const auto free_page_count = version == LegacyStoreVersion
+        ? std::uint64_t {0}
+        : read_number<std::uint64_t>(header.data() + FreePageCountOffset);
     if (next_page_id == InvalidBTreePageId ||
-        (root_page_id != InvalidBTreePageId && root_page_id >= next_page_id)) {
+        (root_page_id != InvalidBTreePageId && root_page_id >= next_page_id) ||
+        (free_page_head != InvalidBTreePageId && free_page_head >= next_page_id)) {
         return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid B+ tree store page counters"));
     }
     const auto page_count = next_page_id - 1;
@@ -447,6 +601,26 @@ std::expected<void, BTreePageStoreError> BTreePageStore::load(
     root_page_id_ = root_page_id;
     next_page_id_ = next_page_id;
     entry_count_ = entry_count;
+    free_page_head_ = free_page_head;
+    free_page_count_ = free_page_count;
+    if (free_page_count_ > next_page_id_ - 1) {
+        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid B+ tree free page count"));
+    }
+    std::unordered_set<BTreePageId> visited_free_pages;
+    auto free_page_id = free_page_head_;
+    for (std::uint64_t index = 0; index < free_page_count_; ++index) {
+        if (free_page_id == InvalidBTreePageId || !visited_free_pages.insert(free_page_id).second) {
+            return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid B+ tree free page chain"));
+        }
+        auto next = read_free_page_next(free_page_id);
+        if (!next.has_value()) {
+            return std::unexpected(std::move(next.error()));
+        }
+        free_page_id = *next;
+    }
+    if (free_page_id != InvalidBTreePageId) {
+        return std::unexpected(error(ErrorCode::InvalidFormat, "B+ tree free page chain exceeds its count"));
+    }
     return {};
 }
 
@@ -473,6 +647,10 @@ std::expected<void, BTreePageStoreError> BTreePageStore::write_header()
     write_number(header.data() + RootPageIdOffset, root_page_id_);
     write_number(header.data() + NextPageIdOffset, next_page_id_);
     write_number(header.data() + EntryCountOffset, entry_count_);
+    write_number(header.data() + FreePageHeadOffset, free_page_head_);
+    write_number(header.data() + FreePageCountOffset, free_page_count_);
+    write_number(header.data() + HeaderChecksumOffset, std::uint32_t {0});
+    write_number(header.data() + HeaderChecksumOffset, io::crc32(header));
     auto written = file_.write_at(0, header);
     if (!written.has_value()) {
         return std::unexpected(filesystem_error(std::move(written.error())));
@@ -534,9 +712,97 @@ std::expected<void, BTreePageStoreError> BTreePageStore::append_page(const BTree
         --next_page_id_;
         auto rolled_back = file_.truncate(offset);
         if (!rolled_back.has_value()) {
-            header.error().message += "; failed to roll back appended page: " + rolled_back.error().message;
+            auto failure = std::move(header.error());
+            auto message = failure.message() + "; failed to roll back appended page: " + rolled_back.error().message();
+            return std::unexpected(Error {
+                static_cast<ErrorCode>(failure.code()),
+                message,
+                std::move(failure),
+            });
         }
         return header;
+    }
+    return {};
+}
+
+std::expected<std::optional<BTreePageId>, BTreePageStoreError>
+BTreePageStore::acquire_free_page()
+{
+    if (free_page_head_ == InvalidBTreePageId) {
+        if (free_page_count_ != 0) {
+            return std::unexpected(error(ErrorCode::InvalidFormat, "B+ tree free page count has no head"));
+        }
+        return std::nullopt;
+    }
+    if (free_page_count_ == 0) {
+        return std::unexpected(error(ErrorCode::InvalidFormat, "B+ tree free page head has zero count"));
+    }
+
+    const auto page_id = free_page_head_;
+    auto next = read_free_page_next(page_id);
+    if (!next.has_value()) {
+        return std::unexpected(std::move(next.error()));
+    }
+    const auto previous_head = free_page_head_;
+    const auto previous_count = free_page_count_;
+    free_page_head_ = *next;
+    --free_page_count_;
+    auto header = write_header();
+    if (!header.has_value()) {
+        free_page_head_ = previous_head;
+        free_page_count_ = previous_count;
+        return std::unexpected(std::move(header.error()));
+    }
+    return std::optional<BTreePageId> {page_id};
+}
+
+std::expected<BTreePageId, BTreePageStoreError>
+BTreePageStore::read_free_page_next(BTreePageId page_id) const
+{
+    if (page_id == InvalidBTreePageId || page_id >= next_page_id_) {
+        return std::unexpected(error(ErrorCode::PageNotFound, "Free B+ tree page does not exist"));
+    }
+    BTreePageCodec::PageBuffer buffer {};
+    auto read = file_.read_at(page_offset(page_id), buffer);
+    if (!read.has_value()) {
+        return std::unexpected(filesystem_error(std::move(read.error())));
+    }
+    if (*read != buffer.size()) {
+        return std::unexpected(error(ErrorCode::CorruptedPage, "Free B+ tree page is truncated"));
+    }
+    if (read_number<std::uint32_t>(buffer.data()) != FreePageMagic
+        || read_number<std::uint16_t>(buffer.data() + FreePageVersionOffset) != FreePageVersion
+        || read_number<std::uint16_t>(buffer.data() + FreePageReservedOffset) != 0
+        || read_number<BTreePageId>(buffer.data() + FreePageIdOffset) != page_id) {
+        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid free B+ tree page"));
+    }
+    if (read_number<std::uint32_t>(buffer.data() + FreePageChecksumOffset)
+        != free_page_checksum_with_zeroed_field(buffer)) {
+        return std::unexpected(error(ErrorCode::ChecksumMismatch, "Free B+ tree page checksum mismatch"));
+    }
+    const auto next = read_number<BTreePageId>(buffer.data() + FreePageNextOffset);
+    if (next == page_id || (next != InvalidBTreePageId && next >= next_page_id_)) {
+        return std::unexpected(error(ErrorCode::InvalidFormat, "Invalid free B+ tree page link"));
+    }
+    return next;
+}
+
+std::expected<void, BTreePageStoreError> BTreePageStore::write_free_page(
+    BTreePageId page_id,
+    BTreePageId next_free_page_id
+)
+{
+    BTreePageCodec::PageBuffer buffer {};
+    write_number(buffer.data(), FreePageMagic);
+    write_number(buffer.data() + FreePageVersionOffset, FreePageVersion);
+    write_number(buffer.data() + FreePageReservedOffset, std::uint16_t {0});
+    write_number(buffer.data() + FreePageIdOffset, page_id);
+    write_number(buffer.data() + FreePageNextOffset, next_free_page_id);
+    write_number(buffer.data() + FreePageChecksumOffset, std::uint32_t {0});
+    write_number(buffer.data() + FreePageChecksumOffset, io::crc32(buffer));
+    auto written = file_.write_at(page_offset(page_id), buffer);
+    if (!written.has_value()) {
+        return std::unexpected(filesystem_error(std::move(written.error())));
     }
     return {};
 }

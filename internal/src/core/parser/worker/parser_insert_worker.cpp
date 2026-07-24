@@ -23,13 +23,13 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
 
     auto into = context_.consume(TokenType::Into, "Expected INTO after INSERT");
     if (!into.has_value()) [[unlikely]] {
-        return std::unexpected(into.error());
+        return std::unexpected(std::move(into.error()));
     }
 
     ParserSchemaHelper schema_helper(context_);
     auto collection = schema_helper.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     ast::InsertStatement::ColumnList columns;
@@ -42,9 +42,9 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
         while (true) {
             auto column = schema_helper.parse_identifier_string("Expected column name");
             if (!column.has_value()) [[unlikely]] {
-                return std::unexpected(column.error());
+                return std::unexpected(std::move(column.error()));
             }
-            columns.push_back(std::move(column.value()));
+            columns.push_back(std::move(*column));
 
             if (!context_.match(TokenType::Comma)) {
                 break;
@@ -53,17 +53,17 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
 
         auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after column list");
         if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(right_paren.error());
+            return std::unexpected(std::move(right_paren.error()));
         }
     }
 
     auto values = context_.consume(TokenType::Values, "Expected VALUES after INSERT target");
     if (!values.has_value()) [[unlikely]] {
-        return std::unexpected(values.error());
+        return std::unexpected(std::move(values.error()));
     }
     auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before values");
     if (!left_paren.has_value()) [[unlikely]] {
-        return std::unexpected(left_paren.error());
+        return std::unexpected(std::move(left_paren.error()));
     }
     if (context_.check(TokenType::RightParen)) [[unlikely]] {
         return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one value"));
@@ -74,9 +74,9 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
     while (true) {
         auto value = expression_worker.parse_expression();
         if (!value.has_value()) [[unlikely]] {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
-        value_list.push_back(std::move(value.value()));
+        value_list.push_back(std::move(*value));
 
         if (!context_.match(TokenType::Comma)) {
             break;
@@ -85,11 +85,11 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
 
     auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after values");
     if (!right_paren.has_value()) [[unlikely]] {
-        return std::unexpected(right_paren.error());
+        return std::unexpected(std::move(right_paren.error()));
     }
 
     return std::make_unique<ast::InsertStatement>(
-        std::move(collection.value()),
+        std::move(*collection),
         std::move(columns),
         std::move(value_list),
         context_.ast_location(location)

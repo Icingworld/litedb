@@ -126,7 +126,11 @@ std::expected<std::vector<std::byte>, WalError> WalCodec::encode_record(
     if (!valid_type(static_cast<std::uint8_t>(type)) ||
         transaction_id == transaction::InvalidTransactionId ||
         payload.size() > std::numeric_limits<std::uint32_t>::max()) {
-        return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Invalid WAL record"));
+        return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Invalid WAL record", {
+            .operation = WalOperation::Encode,
+            .transaction_id = transaction_id,
+            .lsn = lsn,
+        }));
     }
 
     const auto total_size = RecordHeaderSize + payload.size();
@@ -147,15 +151,21 @@ std::expected<std::vector<std::byte>, WalError> WalCodec::encode_record(
 }
 
 std::expected<WalRecord, WalError> WalCodec::decode_record(
-    std::span<const std::byte> bytes,
+    std::vector<std::byte> bytes,
     transaction::Lsn expected_lsn
 )
 {
     if (bytes.size() < RecordHeaderSize || read_number<std::uint32_t>(bytes.data()) != RecordMagic) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record header"));
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record header", {
+            .operation = WalOperation::Decode,
+            .lsn = expected_lsn,
+        }));
     }
     if (read_number<std::uint16_t>(bytes.data() + 4) != Version) {
-        return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL record version"));
+        return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL record version", {
+            .operation = WalOperation::Decode,
+            .lsn = expected_lsn,
+        }));
     }
 
     const auto type_value = read_number<std::uint8_t>(bytes.data() + 6);
@@ -167,26 +177,36 @@ std::expected<WalRecord, WalError> WalCodec::decode_record(
         total_size != bytes.size() ||
         payload_size != bytes.size() - RecordHeaderSize ||
         read_number<transaction::Lsn>(bytes.data() + 16) != expected_lsn) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record fields"));
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record fields", {
+            .operation = WalOperation::Decode,
+            .lsn = expected_lsn,
+        }));
     }
 
-    auto checked = std::vector<std::byte>(bytes.begin(), bytes.end());
-    const auto stored_checksum = read_number<std::uint32_t>(checked.data() + 40);
-    write_number(checked.data() + 40, static_cast<std::uint32_t>(0));
-    if (stored_checksum != crc32(checked)) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record checksum mismatch"));
+    const auto stored_checksum = read_number<std::uint32_t>(bytes.data() + 40);
+    write_number(bytes.data() + 40, static_cast<std::uint32_t>(0));
+    if (stored_checksum != crc32(bytes)) {
+        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record checksum mismatch", {
+            .operation = WalOperation::Decode,
+            .lsn = expected_lsn,
+        }));
     }
 
     const auto transaction_id = read_number<transaction::TransactionId>(bytes.data() + 24);
     if (transaction_id == transaction::InvalidTransactionId) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record has invalid transaction ID"));
+        return std::unexpected(make_error(
+            WalErrorCode::CorruptedRecord,
+            "WAL record has invalid transaction ID",
+            {.operation = WalOperation::Decode, .lsn = expected_lsn}
+        ));
     }
 
+    bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(RecordHeaderSize));
     return WalRecord {
         .type = static_cast<WalRecordType>(type_value),
         .lsn = expected_lsn,
         .transaction_id = transaction_id,
-        .payload = std::vector<std::byte>(bytes.begin() + RecordHeaderSize, bytes.end()),
+        .payload = std::move(bytes),
     };
 }
 
@@ -201,7 +221,7 @@ std::vector<std::byte> WalCodec::encode_file_write(const FileWrite & write)
     return payload;
 }
 
-std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const std::byte> payload)
+std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::vector<std::byte> payload)
 {
     if (payload.size() < 24 ||
         std::any_of(payload.begin() + 2, payload.begin() + 8, [](std::byte value) {
@@ -216,7 +236,7 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const s
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
     }
     const auto mode_value = read_number<std::uint8_t>(payload.data() + 1);
-    if (mode_value > static_cast<std::uint8_t>(FileWriteMode::Delete)) {
+    if (mode_value > static_cast<std::uint8_t>(FileWriteMode::Truncate)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file-write mode"));
     }
     const auto mode = static_cast<FileWriteMode>(mode_value);
@@ -224,18 +244,20 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const s
     const auto object_id = read_number<std::uint64_t>(payload.data() + 8);
     if ((mode == FileWriteMode::Replace && offset != 0) ||
         (mode == FileWriteMode::Delete && (offset != 0 || payload.size() != 24)) ||
+        (mode == FileWriteMode::Truncate && payload.size() != 24) ||
         (kind_value == static_cast<std::uint8_t>(FileKind::MetaStore) && object_id != 0) ||
         (kind_value != static_cast<std::uint8_t>(FileKind::MetaStore) && object_id == 0)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation"));
     }
 
+    payload.erase(payload.begin(), payload.begin() + 24);
     return FileWrite {
         .target = FileTarget {
             .kind = static_cast<FileKind>(kind_value),
             .object_id = object_id,
         },
         .offset = offset,
-        .after_image = std::vector<std::byte>(payload.begin() + 24, payload.end()),
+        .after_image = std::move(payload),
         .mode = mode,
     };
 }

@@ -54,18 +54,25 @@ EvaluationError make_error(
     std::string message
 )
 {
-    return EvaluationError {code, location, std::move(message)};
+    return EvaluationError {code, message, EvaluationErrorContext {location}};
 }
 
 [[nodiscard]]
 EvaluationError from_function_error(function::FunctionError error)
 {
+    const auto code = error.is(function::FunctionErrorCode::InvalidType)
+        ? EvaluationErrorCode::InvalidType
+        : EvaluationErrorCode::UnsupportedExpression;
+    const auto * context = error.context<function::FunctionErrorContext>();
+    const auto location = context == nullptr
+        ? parser::ast::AstNodeLocation {}
+        : context->location;
+    auto message = error.message();
     return EvaluationError {
-        .code = error.code == function::FunctionErrorCode::InvalidType
-            ? EvaluationErrorCode::InvalidType
-            : EvaluationErrorCode::UnsupportedExpression,
-        .location = error.location,
-        .message = std::move(error.message),
+        code,
+        message,
+        EvaluationErrorContext {location},
+        std::move(error),
     };
 }
 
@@ -87,7 +94,7 @@ bool is_numeric_type(LogicalTypeId type) noexcept
  * @return 是否为数值
  */
 [[nodiscard]]
-bool is_numeric_value(const schema::Value & value) noexcept
+bool is_numeric_value(const common::Value & value) noexcept
 {
     return std::holds_alternative<std::int32_t>(value.data())
         || std::holds_alternative<std::int64_t>(value.data())
@@ -103,7 +110,7 @@ bool is_numeric_value(const schema::Value & value) noexcept
  */
 [[nodiscard]]
 std::expected<double, EvaluationError> as_double(
-    const schema::Value & value,
+    const common::Value & value,
     parser::ast::AstNodeLocation location
 )
 {
@@ -129,7 +136,7 @@ std::expected<double, EvaluationError> as_double(
  */
 [[nodiscard]]
 std::expected<std::int64_t, EvaluationError> as_int64(
-    const schema::Value & value,
+    const common::Value & value,
     parser::ast::AstNodeLocation location
 )
 {
@@ -152,7 +159,7 @@ std::expected<std::int64_t, EvaluationError> as_int64(
  * @return 转换结果
  */
 [[nodiscard]]
-std::optional<bool> as_optional_bool(const schema::Value & value)
+std::optional<bool> as_optional_bool(const common::Value & value)
 {
     if (value.is_null()) {
         return std::nullopt;
@@ -171,7 +178,7 @@ std::optional<bool> as_optional_bool(const schema::Value & value)
  */
 [[nodiscard]]
 std::expected<bool, EvaluationError> require_bool(
-    const schema::Value & value,
+    const common::Value & value,
     parser::ast::AstNodeLocation location
 )
 {
@@ -244,7 +251,7 @@ std::expected<T, EvaluationError> parse_literal(
  * @return 解析结果
  */
 [[nodiscard]]
-std::expected<schema::Value, EvaluationError> parse_literal_value(const BoundLiteralExpression & expression)
+std::expected<common::Value, EvaluationError> parse_literal_value(const BoundLiteralExpression & expression)
 {
     const auto & value = expression.value();
     const auto location = expression.location();
@@ -255,40 +262,40 @@ std::expected<schema::Value, EvaluationError> parse_literal_value(const BoundLit
         if (!parsed.has_value()) {
             return std::unexpected(std::move(parsed.error()));
         }
-        return schema::Value {*parsed};
+        return common::Value {*parsed};
     }
     case LogicalTypeId::Integer: {
         auto parsed = parse_literal<std::int32_t>(value, location);
         if (!parsed.has_value()) {
             return std::unexpected(std::move(parsed.error()));
         }
-        return schema::Value {*parsed};
+        return common::Value {*parsed};
     }
     case LogicalTypeId::BigInt: {
         auto parsed = parse_literal<std::int64_t>(value, location);
         if (!parsed.has_value()) {
             return std::unexpected(std::move(parsed.error()));
         }
-        return schema::Value {*parsed};
+        return common::Value {*parsed};
     }
     case LogicalTypeId::Float: {
         auto parsed = parse_literal<float>(value, location);
         if (!parsed.has_value()) {
             return std::unexpected(std::move(parsed.error()));
         }
-        return schema::Value {*parsed};
+        return common::Value {*parsed};
     }
     case LogicalTypeId::Double: {
         auto parsed = parse_literal<double>(value, location);
         if (!parsed.has_value()) {
             return std::unexpected(std::move(parsed.error()));
         }
-        return schema::Value {*parsed};
+        return common::Value {*parsed};
     }
     case LogicalTypeId::Varchar:
-        return schema::Value {value};
+        return common::Value {value};
     case LogicalTypeId::Null:
-        return schema::Value::null();
+        return common::Value::null();
     case LogicalTypeId::Vector:
         return std::unexpected(make_error(EvaluationErrorCode::InvalidLiteral, location, "Vector literal must use vector expression"));
     }
@@ -303,7 +310,7 @@ std::expected<schema::Value, EvaluationError> parse_literal_value(const BoundLit
  * @return 是否相等
  */
 [[nodiscard]]
-bool values_equal(const schema::Value & left, const schema::Value & right)
+bool values_equal(const common::Value & left, const common::Value & right)
 {
     if (left.data().index() == right.data().index()) {
         return left.data() == right.data();
@@ -325,20 +332,20 @@ bool values_equal(const schema::Value & left, const schema::Value & right)
  * @return 比较结果
  */
 [[nodiscard]]
-std::expected<schema::Value, EvaluationError> compare_values(
-    const schema::Value & left,
+std::expected<common::Value, EvaluationError> compare_values(
+    const common::Value & left,
     TokenType op,
-    const schema::Value & right,
+    const common::Value & right,
     parser::ast::AstNodeLocation location
 )
 {
     if (left.is_null() || right.is_null()) {
-        return schema::Value::null();
+        return common::Value::null();
     }
 
     if (op == TokenType::Equal || op == TokenType::NotEqual) {
         const auto equal = values_equal(left, right);
-        return schema::Value {op == TokenType::Equal ? equal : !equal};
+        return common::Value {op == TokenType::Equal ? equal : !equal};
     }
 
     if (is_numeric_value(left) && is_numeric_value(right)) {
@@ -353,13 +360,13 @@ std::expected<schema::Value, EvaluationError> compare_values(
 
         switch (op) {
         case TokenType::LessThan:
-            return schema::Value {*left_number < *right_number};
+            return common::Value {*left_number < *right_number};
         case TokenType::LessEqual:
-            return schema::Value {*left_number <= *right_number};
+            return common::Value {*left_number <= *right_number};
         case TokenType::GreaterThan:
-            return schema::Value {*left_number > *right_number};
+            return common::Value {*left_number > *right_number};
         case TokenType::GreaterEqual:
-            return schema::Value {*left_number >= *right_number};
+            return common::Value {*left_number >= *right_number};
         default:
             break;
         }
@@ -369,13 +376,13 @@ std::expected<schema::Value, EvaluationError> compare_values(
         if (const auto * right_string = std::get_if<std::string>(&right.data())) {
             switch (op) {
             case TokenType::LessThan:
-                return schema::Value {*left_string < *right_string};
+                return common::Value {*left_string < *right_string};
             case TokenType::LessEqual:
-                return schema::Value {*left_string <= *right_string};
+                return common::Value {*left_string <= *right_string};
             case TokenType::GreaterThan:
-                return schema::Value {*left_string > *right_string};
+                return common::Value {*left_string > *right_string};
             case TokenType::GreaterEqual:
-                return schema::Value {*left_string >= *right_string};
+                return common::Value {*left_string >= *right_string};
             default:
                 break;
             }
@@ -395,16 +402,16 @@ std::expected<schema::Value, EvaluationError> compare_values(
  * @return 计算结果
  */
 [[nodiscard]]
-std::expected<schema::Value, EvaluationError> calculate_numeric(
-    const schema::Value & left,
+std::expected<common::Value, EvaluationError> calculate_numeric(
+    const common::Value & left,
     TokenType op,
-    const schema::Value & right,
+    const common::Value & right,
     const LogicalType & result_type,
     parser::ast::AstNodeLocation location
 )
 {
     if (left.is_null() || right.is_null()) {
-        return schema::Value::null();
+        return common::Value::null();
     }
 
     if (result_type.id == LogicalTypeId::Integer || result_type.id == LogicalTypeId::BigInt) {
@@ -443,9 +450,9 @@ std::expected<schema::Value, EvaluationError> calculate_numeric(
         }
 
         if (result_type.id == LogicalTypeId::Integer) {
-            return schema::Value {static_cast<std::int32_t>(result)};
+            return common::Value {static_cast<std::int32_t>(result)};
         }
-        return schema::Value {result};
+        return common::Value {result};
     }
 
     auto left_number = as_double(left, location);
@@ -483,9 +490,9 @@ std::expected<schema::Value, EvaluationError> calculate_numeric(
     }
 
     if (result_type.id == LogicalTypeId::Float) {
-        return schema::Value {static_cast<float>(result)};
+        return common::Value {static_cast<float>(result)};
     }
-    return schema::Value {result};
+    return common::Value {result};
 }
 
 /**
@@ -495,17 +502,17 @@ std::expected<schema::Value, EvaluationError> calculate_numeric(
  * @return 逻辑与结果
  */
 [[nodiscard]]
-schema::Value three_value_and(const schema::Value & left, const schema::Value & right)
+common::Value three_value_and(const common::Value & left, const common::Value & right)
 {
     const auto left_bool = as_optional_bool(left);
     const auto right_bool = as_optional_bool(right);
     if ((left_bool.has_value() && !*left_bool) || (right_bool.has_value() && !*right_bool)) {
-        return schema::Value {false};
+        return common::Value {false};
     }
     if (!left_bool.has_value() || !right_bool.has_value()) {
-        return schema::Value::null();
+        return common::Value::null();
     }
-    return schema::Value {*left_bool && *right_bool};
+    return common::Value {*left_bool && *right_bool};
 }
 
 /**
@@ -515,17 +522,17 @@ schema::Value three_value_and(const schema::Value & left, const schema::Value & 
  * @return 逻辑或结果
  */
 [[nodiscard]]
-schema::Value three_value_or(const schema::Value & left, const schema::Value & right)
+common::Value three_value_or(const common::Value & left, const common::Value & right)
 {
     const auto left_bool = as_optional_bool(left);
     const auto right_bool = as_optional_bool(right);
     if ((left_bool.has_value() && *left_bool) || (right_bool.has_value() && *right_bool)) {
-        return schema::Value {true};
+        return common::Value {true};
     }
     if (!left_bool.has_value() || !right_bool.has_value()) {
-        return schema::Value::null();
+        return common::Value::null();
     }
-    return schema::Value {*left_bool || *right_bool};
+    return common::Value {*left_bool || *right_bool};
 }
 
 /**
@@ -569,20 +576,20 @@ bool like_matches(const std::string & value, const std::string & pattern)
  * @return 转换结果
  */
 [[nodiscard]]
-std::expected<schema::Value, EvaluationError> cast_value(
-    const schema::Value & value,
+std::expected<common::Value, EvaluationError> cast_value(
+    const common::Value & value,
     const LogicalType & target_type,
     parser::ast::AstNodeLocation location
 )
 {
     if (value.is_null()) {
-        return schema::Value::null();
+        return common::Value::null();
     }
 
     switch (target_type.id) {
     case LogicalTypeId::Boolean:
         if (const auto * boolean = std::get_if<bool>(&value.data())) {
-            return schema::Value {*boolean};
+            return common::Value {*boolean};
         }
         break;
     case LogicalTypeId::Integer:
@@ -591,7 +598,7 @@ std::expected<schema::Value, EvaluationError> cast_value(
             if (!number.has_value()) {
                 return std::unexpected(std::move(number.error()));
             }
-            return schema::Value {static_cast<std::int32_t>(*number)};
+            return common::Value {static_cast<std::int32_t>(*number)};
         }
         break;
     case LogicalTypeId::BigInt:
@@ -600,7 +607,7 @@ std::expected<schema::Value, EvaluationError> cast_value(
             if (!number.has_value()) {
                 return std::unexpected(std::move(number.error()));
             }
-            return schema::Value {static_cast<std::int64_t>(*number)};
+            return common::Value {static_cast<std::int64_t>(*number)};
         }
         break;
     case LogicalTypeId::Float:
@@ -609,7 +616,7 @@ std::expected<schema::Value, EvaluationError> cast_value(
             if (!number.has_value()) {
                 return std::unexpected(std::move(number.error()));
             }
-            return schema::Value {static_cast<float>(*number)};
+            return common::Value {static_cast<float>(*number)};
         }
         break;
     case LogicalTypeId::Double:
@@ -618,20 +625,20 @@ std::expected<schema::Value, EvaluationError> cast_value(
             if (!number.has_value()) {
                 return std::unexpected(std::move(number.error()));
             }
-            return schema::Value {*number};
+            return common::Value {*number};
         }
         break;
     case LogicalTypeId::Varchar:
         return std::visit(
-            [location](const auto & data) -> std::expected<schema::Value, EvaluationError> {
+            [location](const auto & data) -> std::expected<common::Value, EvaluationError> {
                 using T = std::decay_t<decltype(data)>;
                 if constexpr (std::is_same_v<T, bool>) {
-                    return schema::Value {data ? std::string {"true"} : std::string {"false"}};
+                    return common::Value {data ? std::string {"true"} : std::string {"false"}};
                 } else if constexpr (std::is_same_v<T, std::int32_t> || std::is_same_v<T, std::int64_t>
                     || std::is_same_v<T, float> || std::is_same_v<T, double>) {
-                    return schema::Value {std::to_string(data)};
+                    return common::Value {std::to_string(data)};
                 } else if constexpr (std::is_same_v<T, std::string>) {
-                    return schema::Value {data};
+                    return common::Value {data};
                 } else {
                     return std::unexpected(make_error(EvaluationErrorCode::CastFailed, location, "Cannot cast value to string"));
                 }
@@ -639,12 +646,12 @@ std::expected<schema::Value, EvaluationError> cast_value(
             value.data()
         );
     case LogicalTypeId::Vector:
-        if (std::holds_alternative<schema::VectorValue>(value.data())) {
+        if (std::holds_alternative<common::VectorValue>(value.data())) {
             return value;
         }
         break;
     case LogicalTypeId::Null:
-        return schema::Value::null();
+        return common::Value::null();
     }
 
     return std::unexpected(make_error(EvaluationErrorCode::CastFailed, location, "Unsupported cast"));
@@ -657,7 +664,7 @@ std::expected<schema::Value, EvaluationError> cast_value(
 class EvaluationWorker
 {
 public:
-    explicit EvaluationWorker(const schema::Record & record)
+    explicit EvaluationWorker(const common::Record & record)
         : record_(record)
     {
     }
@@ -669,13 +676,13 @@ public:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> evaluate(const BoundExpression & expression)
+    std::expected<common::Value, EvaluationError> evaluate(const BoundExpression & expression)
     {
         switch (expression.kind()) {
         case BoundExpressionKind::Literal:
             return parse_literal_value(static_cast<const BoundLiteralExpression &>(expression));
         case BoundExpressionKind::Null:
-            return schema::Value::null();
+            return common::Value::null();
         case BoundExpressionKind::ColumnRef:
             return eval_column_ref(static_cast<const BoundColumnRefExpression &>(expression));
         case BoundExpressionKind::Unary:
@@ -710,9 +717,9 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_function(const BoundFunctionExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_function(const BoundFunctionExpression & expression)
     {
-        std::vector<schema::Value> arguments;
+        std::vector<common::Value> arguments;
         arguments.reserve(expression.arguments().size());
 
         for (const auto & argument : expression.arguments()) {
@@ -720,14 +727,14 @@ public:
             if (!value.has_value()) {
                 return std::unexpected(std::move(value.error()));
             }
-            arguments.push_back(std::move(value.value()));
+            arguments.push_back(std::move(*value));
         }
 
         auto result = expression.function().evaluate(arguments, function::ScalarFunctionContext {}, expression.location());
         if (!result.has_value()) {
             return std::unexpected(from_function_error(std::move(result.error())));
         }
-        return std::move(result.value());
+        return std::move(*result);
     }
 
 private:
@@ -737,7 +744,7 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_column_ref(const BoundColumnRefExpression & expression) const
+    std::expected<common::Value, EvaluationError> eval_column_ref(const BoundColumnRefExpression & expression) const
     {
         if (expression.column_id() == 0) {
             return std::unexpected(make_error(
@@ -765,20 +772,20 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_unary(const BoundUnaryExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_unary(const BoundUnaryExpression & expression)
     {
         auto operand = evaluate(expression.operand());
         if (!operand.has_value()) {
             return std::unexpected(std::move(operand.error()));
         }
         if (operand->is_null()) {
-            return schema::Value::null();
+            return common::Value::null();
         }
 
         switch (expression.op()) {
         case TokenType::Not: {
             if (const auto * boolean = std::get_if<bool>(&operand->data())) {
-                return schema::Value {!*boolean};
+                return common::Value {!*boolean};
             }
             return std::unexpected(make_error(EvaluationErrorCode::InvalidType, expression.location(), "NOT expects boolean"));
         }
@@ -794,9 +801,9 @@ private:
                     return std::unexpected(std::move(number.error()));
                 }
                 if (expression.type().id == LogicalTypeId::Integer) {
-                    return schema::Value {static_cast<std::int32_t>(-*number)};
+                    return common::Value {static_cast<std::int32_t>(-*number)};
                 }
-                return schema::Value {-*number};
+                return common::Value {-*number};
             }
             if (is_numeric_value(*operand)) {
                 auto number = as_double(*operand, expression.location());
@@ -804,9 +811,9 @@ private:
                     return std::unexpected(std::move(number.error()));
                 }
                 if (expression.type().id == LogicalTypeId::Float) {
-                    return schema::Value {static_cast<float>(-*number)};
+                    return common::Value {static_cast<float>(-*number)};
                 }
-                return schema::Value {-*number};
+                return common::Value {-*number};
             }
             break;
         default:
@@ -822,7 +829,7 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_binary(const BoundBinaryExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_binary(const BoundBinaryExpression & expression)
     {
         auto left = evaluate(expression.left());
         if (!left.has_value()) {
@@ -874,9 +881,9 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_vector(const BoundVectorExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_vector(const BoundVectorExpression & expression)
     {
-        schema::VectorValue values;
+        common::VectorValue values;
         values.reserve(expression.elements().size());
 
         for (const auto & element : expression.elements()) {
@@ -885,7 +892,7 @@ private:
                 return std::unexpected(std::move(value.error()));
             }
             if (value->is_null()) {
-                return schema::Value::null();
+                return common::Value::null();
             }
             auto number = as_double(*value, element->location());
             if (!number.has_value()) {
@@ -894,7 +901,7 @@ private:
             values.push_back(*number);
         }
 
-        return schema::Value {std::move(values)};
+        return common::Value {std::move(values)};
     }
 
     /**
@@ -903,14 +910,14 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_in(const BoundInExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_in(const BoundInExpression & expression)
     {
         auto target = evaluate(expression.expression());
         if (!target.has_value()) {
             return std::unexpected(std::move(target.error()));
         }
         if (target->is_null()) {
-            return schema::Value::null();
+            return common::Value::null();
         }
 
         bool saw_null = false;
@@ -924,14 +931,14 @@ private:
                 continue;
             }
             if (values_equal(*target, *candidate)) {
-                return schema::Value {true};
+                return common::Value {true};
             }
         }
 
         if (saw_null) {
-            return schema::Value::null();
+            return common::Value::null();
         }
-        return schema::Value {false};
+        return common::Value {false};
     }
 
     /**
@@ -940,7 +947,7 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_between(const BoundBetweenExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_between(const BoundBetweenExpression & expression)
     {
         auto target = evaluate(expression.expression());
         if (!target.has_value()) {
@@ -972,7 +979,7 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_like(const BoundLikeExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_like(const BoundLikeExpression & expression)
     {
         auto value = evaluate(expression.expression());
         if (!value.has_value()) {
@@ -983,7 +990,7 @@ private:
             return std::unexpected(std::move(pattern.error()));
         }
         if (value->is_null() || pattern->is_null()) {
-            return schema::Value::null();
+            return common::Value::null();
         }
 
         const auto * value_string = std::get_if<std::string>(&value->data());
@@ -992,7 +999,7 @@ private:
             return std::unexpected(make_error(EvaluationErrorCode::InvalidType, expression.location(), "LIKE expects strings"));
         }
 
-        return schema::Value {like_matches(*value_string, *pattern_string)};
+        return common::Value {like_matches(*value_string, *pattern_string)};
     }
 
     /**
@@ -1001,7 +1008,7 @@ private:
      * @return 评估结果
      */
     [[nodiscard]]
-    std::expected<schema::Value, EvaluationError> eval_cast(const BoundCastExpression & expression)
+    std::expected<common::Value, EvaluationError> eval_cast(const BoundCastExpression & expression)
     {
         auto value = evaluate(expression.expression());
         if (!value.has_value()) {
@@ -1011,14 +1018,14 @@ private:
     }
 
 private:
-    const schema::Record & record_;     ///< 记录
+    const common::Record & record_;     ///< 记录
 };
 
 } // namespace
 
-std::expected<schema::Value, EvaluationError> ExpressionEvaluator::evaluate(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::evaluate(
     const binder::bound::BoundExpression & expression,
-    const schema::Record & record
+    const common::Record & record
 ) const
 {
     EvaluationWorker worker {record};
@@ -1027,7 +1034,7 @@ std::expected<schema::Value, EvaluationError> ExpressionEvaluator::evaluate(
 
 std::expected<bool, EvaluationError> ExpressionEvaluator::evaluate_predicate(
     const binder::bound::BoundExpression & expression,
-    const schema::Record & record
+    const common::Record & record
 ) const
 {
     auto value = evaluate(expression, record);

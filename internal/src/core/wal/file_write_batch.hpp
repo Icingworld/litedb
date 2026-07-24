@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -12,6 +13,8 @@
 
 namespace litedb::core::wal
 {
+
+using FileWriteAppliedHook = std::function<bool(std::size_t, const FileWrite &)>;
 
 /**
  * @brief 文件写入批处理
@@ -64,7 +67,8 @@ public:
     std::expected<void, WalError> apply(
         const std::filesystem::path & data_directory,
         filesystem::FileSystem & filesystem,
-        bool sync
+        bool sync,
+        const FileWriteAppliedHook & applied_hook = {}
     ) const;
 
     /**

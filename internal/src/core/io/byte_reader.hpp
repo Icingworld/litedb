@@ -24,6 +24,7 @@ public:
      * @return 结果
      * @note 允许短读，返回的字节数可能小于请求的字节数
      */
+    [[nodiscard]]
     virtual std::expected<std::size_t, IoError> read_some(std::span<std::byte> data) = 0;
 
     /**
@@ -32,6 +33,7 @@ public:
      * @return 结果
      * @note 必须把缓冲区填满，如果读取的字节数不足，则返回错误
      */
+    [[nodiscard]]
     std::expected<void, IoError> read_exact(std::span<std::byte> data);
 };
 

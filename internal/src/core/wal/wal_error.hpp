@@ -1,42 +1,79 @@
 #pragma once
 
+#include <cstdint>
+#include <filesystem>
+#include <optional>
 #include <string>
+#include <utility>
+
+#include "core/error/error.hpp"
+#include "core/transaction/transaction_id.hpp"
 
 namespace litedb::core::wal
 {
 
-/**
- * @brief WAL 错误码
- */
-enum class WalErrorCode
+enum class WalErrorCode : std::uint8_t
 {
-    FileSystemError,       ///< 文件系统错误
-    InvalidFormat,         ///< 格式错误
-    UnsupportedVersion,    ///< 不支持的版本
-    CorruptedRecord,       ///< 损坏的记录
-    InvalidRecord,         ///< 无效的记录
-    MissingTarget,         ///< 缺少目标
+    FileSystemError = 0,
+    InvalidFormat = 1,
+    UnsupportedVersion = 2,
+    CorruptedRecord = 3,
+    InvalidRecord = 4,
+    MissingTarget = 5,
+    ResourceLimitExceeded = 6,
 };
 
-/**
- * @brief WAL 错误
- */
-struct WalError
+enum class WalOperation : std::uint8_t
 {
-    WalErrorCode code;     ///< 错误码
-    std::string message;   ///< 错误消息
+    Encode,
+    Decode,
+    Open,
+    Append,
+    Flush,
+    Scan,
+    Truncate,
+    Discover,
+    Rotate,
+    Apply,
+    Recover,
 };
 
-/**
- * @brief 创建 WAL 错误
- * @param code 错误码
- * @param message 错误消息
- * @return WAL 错误
- */
+struct WalErrorContext
+{
+    WalOperation operation {WalOperation::Decode};
+    std::filesystem::path path;
+    transaction::TransactionId transaction_id {transaction::InvalidTransactionId};
+    std::optional<transaction::Lsn> lsn;
+    std::optional<std::uint64_t> generation;
+    std::optional<std::uint16_t> source_code;
+};
+
+using WalError = error::Error;
+
+} // namespace litedb::core::wal
+
+namespace litedb::core::error
+{
+
+template <>
+struct ErrorTraits<wal::WalErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Wal;
+};
+
+} // namespace litedb::core::error
+
+namespace litedb::core::wal
+{
+
 [[nodiscard]]
-inline WalError make_error(WalErrorCode code, std::string message)
+inline WalError make_error(
+    WalErrorCode code,
+    std::string message,
+    WalErrorContext context = {}
+)
 {
-    return {code, std::move(message)};
+    return WalError {code, message, std::move(context)};
 }
 
 } // namespace litedb::core::wal

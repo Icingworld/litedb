@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::vindex::hnsw_index
 {
@@ -18,7 +18,7 @@ struct HnswNode
 {
     HnswNodeId node_id {InvalidHnswNodeId};
     common::RecordId record_id {0};
-    schema::VectorValue vector;
+    common::VectorValue vector;
     std::size_t level {0};
     bool deleted {false};
     std::vector<std::vector<HnswNodeId>> neighbors;

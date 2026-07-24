@@ -63,7 +63,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
             ParserErrorCode::ExpectedIdentifier
         );
         if (!database.has_value()) [[unlikely]] {
-            return std::unexpected(database.error());
+            return std::unexpected(std::move(database.error()));
         }
         database_name = std::string(database->value());
     }
@@ -78,7 +78,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
 {
     auto from = context_.consume(TokenType::From, "Expected FROM after SHOW INDEXES");
     if (!from.has_value()) [[unlikely]] {
-        return std::unexpected(from.error());
+        return std::unexpected(std::move(from.error()));
     }
 
     auto collection = context_.consume(
@@ -87,7 +87,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
         ParserErrorCode::ExpectedIdentifier
     );
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     return std::make_unique<ast::ShowIndexesStatement>(
@@ -100,7 +100,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
 {
     auto from = context_.consume(TokenType::From, "Expected FROM after SHOW VINDEXES");
     if (!from.has_value()) [[unlikely]] {
-        return std::unexpected(from.error());
+        return std::unexpected(std::move(from.error()));
     }
 
     auto collection = context_.consume(
@@ -109,7 +109,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserShowWorker
         ParserErrorCode::ExpectedIdentifier
     );
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     return std::make_unique<ast::ShowVectorIndexesStatement>(

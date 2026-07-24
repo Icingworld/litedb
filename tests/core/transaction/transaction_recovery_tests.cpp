@@ -3,6 +3,7 @@
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/index/scalar_index_key.hpp"
 #include "core/vindex/vector_index_key.hpp"
+#include "core/wal/wal_codec.hpp"
 #include "core/wal/wal_store.hpp"
 
 #include <filesystem>
@@ -39,14 +40,14 @@ std::unique_ptr<database::DatabaseEngine> open_database(
         .data_dir = path,
         .transaction_options = std::move(options),
     });
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
-    if (!result) throw std::runtime_error(result.error().message);
+    if (!result) throw std::runtime_error(result.error().message());
     return std::move(*result);
 }
 
@@ -162,7 +163,7 @@ void test_committed_wal_redoes_all_participants_and_ignores_loser()
     require(selected.rows.size() == 1 && std::get<std::int64_t>(selected.rows[0].values[0].data()) == 7,
             "committed storage write was not recovered or loser was replayed");
 
-    auto scalar_key = index::ScalarIndexKey::from_value(schema::Value {std::int64_t {7}});
+    auto scalar_key = index::ScalarIndexKey::from_value(common::Value {std::int64_t {7}});
     require(scalar_key.has_value(), "scalar key failed");
     auto scalar = recovered->index_engine().find_equal(index_id, *scalar_key);
     require(scalar && scalar->size() == 1, "scalar index WAL redo failed");
@@ -276,12 +277,8 @@ void test_dml_staging_is_scoped_to_affected_collection()
             if (stage != transaction::CommitStage::AfterPrepare) return false;
             inspected = true;
             const auto staging = directory / ".transactions" / ("txn_" + std::to_string(transaction_id));
-            require(std::filesystem::exists(staging / "collections" / (std::to_string(users_id) + ".store")),
-                    "affected collection was not staged");
-            require(std::filesystem::exists(staging / "indexes" / (std::to_string(users_index_id) + ".bti")),
-                    "affected scalar index was not staged");
-            require(std::filesystem::exists(staging / "vindexes" / ("vindex_" + std::to_string(users_vector_id) + ".lhnsw")),
-                    "affected vector index was not staged");
+            require(!std::filesystem::exists(staging),
+                    "sparse prepare created a physical transaction staging directory");
             require(!std::filesystem::exists(staging / "collections" / (std::to_string(audit_id) + ".store")),
                     "unrelated collection was staged");
             require(!std::filesystem::exists(staging / "indexes" / (std::to_string(audit_index_id) + ".bti")),
@@ -304,6 +301,65 @@ void test_dml_staging_is_scoped_to_affected_collection()
     require(audit.rows.size() == 1 && std::get<std::int64_t>(audit.rows[0].values[0].data()) == 2,
             "unrelated collection runtime changed");
 }
+
+void test_single_row_wal_write_amplification()
+{
+    const auto directory = temp_dir("litedb_transaction_write_amplification");
+    common::CollectionId collection_id {0};
+    {
+        auto engine = open_database(directory);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        execute_ok(session, "CREATE COLLECTION docs (id BIGINT, payload VARCHAR(3500));");
+        const auto large = std::string(2500, 'a');
+        for (std::int64_t id = 1; id <= 6; ++id) {
+            execute_ok(session, "INSERT INTO docs VALUES (" + std::to_string(id) + ", '" + large + "');");
+        }
+        const auto * database_entry = engine->meta().find_database("demo");
+        require(database_entry != nullptr, "write amplification database missing");
+        const auto * collection = engine->meta().find_collection(database_entry->id(), "docs");
+        require(collection != nullptr, "write amplification collection missing");
+        collection_id = collection->id();
+        execute_ok(session, "UPDATE docs SET payload = '" + std::string(2000, 'b') + "' WHERE id = 3;");
+    }
+
+    auto filesystem = filesystem::create_platform_filesystem();
+    auto manager = wal::WalManager::open(directory / "wal", filesystem);
+    require(manager.has_value(), "write amplification WAL open failed");
+    auto scanned = manager->scan(false);
+    require(scanned.has_value(), "write amplification WAL scan failed");
+    transaction::TransactionId final_transaction {0};
+    for (const auto & record : scanned->records) {
+        if (record.type == wal::WalRecordType::Commit) {
+            final_transaction = std::max(final_transaction, record.transaction_id);
+        }
+    }
+    require(final_transaction != 0, "final committed transaction was not found");
+
+    std::size_t storage_after_image_bytes {0};
+    bool storage_replace {false};
+    std::size_t storage_writes {0};
+    for (const auto & record : scanned->records) {
+        if (record.transaction_id != final_transaction ||
+            record.type != wal::WalRecordType::FileWrite) {
+            continue;
+        }
+        auto write = wal::WalCodec::decode_file_write(record.payload);
+        require(write.has_value(), "write amplification WAL payload decode failed");
+        if (write->target.kind != wal::FileKind::CollectionStore ||
+            write->target.object_id != collection_id) {
+            continue;
+        }
+        ++storage_writes;
+        storage_after_image_bytes += write->after_image.size();
+        storage_replace = storage_replace || write->mode == wal::FileWriteMode::Replace;
+    }
+    require(storage_writes != 0, "single-row update emitted no storage WAL");
+    require(!storage_replace, "single-row update emitted a full collection replacement");
+    require(storage_after_image_bytes <= 3 * storage::StoragePageSize,
+            "single-row storage WAL exceeded header plus two data pages");
+}
 }
 
 int main()
@@ -312,5 +368,6 @@ int main()
     test_committed_wal_redoes_all_participants_and_ignores_loser();
     test_failpoint_metrics_and_staging_cleanup();
     test_dml_staging_is_scoped_to_affected_collection();
+    test_single_row_wal_write_amplification();
     return 0;
 }

@@ -5,7 +5,7 @@
 
 #include "core/meta/meta_engine.hpp"
 #include "core/index/btree_index/btree_index.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
 namespace litedb::core::index
@@ -17,9 +17,13 @@ namespace
 /**
  * @brief 创建索引错误
  */
-IndexError make_error(IndexErrorCode code, std::string message)
+IndexError make_error(
+    IndexErrorCode code,
+    std::string message,
+    IndexErrorContext context = {}
+)
 {
-    return IndexError {code, std::move(message)};
+    return IndexError {code, message, std::move(context)};
 }
 
 } // namespace
@@ -48,9 +52,18 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_back
     }
     auto created = BTreeIndex::create(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
     if (!created.has_value()) {
-        return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(created.error().message)));
+        return std::unexpected(make_error(
+            IndexErrorCode::StorageError,
+            created.error().message(),
+            {
+                .operation = IndexOperation::Create,
+                .index_id = index_entry.id(),
+                .path = index_path(index_entry.id()),
+                .source_code = created.error().encode_code(),
+            }
+        ));
     }
-    return std::make_unique<BTreeIndex>(std::move(created.value()));
+    return std::make_unique<BTreeIndex>(std::move(*created));
 }
 
 std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_backend(
@@ -63,13 +76,22 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_bac
     }
     auto opened = BTreeIndex::open(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
     if (!opened.has_value()) {
-        return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(opened.error().message)));
+        return std::unexpected(make_error(
+            IndexErrorCode::StorageError,
+            opened.error().message(),
+            {
+                .operation = IndexOperation::Open,
+                .index_id = index_entry.id(),
+                .path = index_path(index_entry.id()),
+                .source_code = opened.error().encode_code(),
+            }
+        ));
     }
-    return std::make_unique<BTreeIndex>(std::move(opened.value()));
+    return std::make_unique<BTreeIndex>(std::move(*opened));
 }
 
 std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_from_record(
-    const schema::RecordData & record_data,
+    const common::RecordData & record_data,
     std::size_t column_ordinal,
     const common::LogicalType & key_type
 )
@@ -93,7 +115,7 @@ std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_f
     if (!key.has_value()) {
         return std::unexpected(std::move(key.error()));
     }
-    return std::optional<ScalarIndexKey>(std::move(key.value()));
+    return std::optional<ScalarIndexKey>(std::move(*key));
 }
 
 ManagedIndexView IndexEngine::make_view(const IndexStore & store) noexcept
@@ -154,11 +176,20 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
 ) const
 {
     const auto & descriptor = store.descriptor();
+    std::vector<ScalarIndexEntry> entries;
     auto cursor = storage.scan(descriptor.collection_id);
-    if (!cursor) return std::unexpected(make_error(IndexErrorCode::StorageError, cursor.error().message));
+    if (!cursor) return std::unexpected(make_error(
+        IndexErrorCode::StorageError,
+        cursor.error().message(),
+        {.operation = IndexOperation::Build, .index_id = descriptor.index_id}
+    ));
     while (true) {
         auto next = cursor->next();
-        if (!next) return std::unexpected(make_error(IndexErrorCode::StorageError, next.error().message));
+        if (!next) return std::unexpected(make_error(
+            IndexErrorCode::StorageError,
+            next.error().message(),
+            {.operation = IndexOperation::Build, .index_id = descriptor.index_id}
+        ));
         if (!*next) break;
         const auto & record = **next;
         auto key = make_key_from_record(record.data, descriptor.column_ordinal, descriptor.key_type);
@@ -169,12 +200,12 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
             continue;
         }
 
-        auto inserted = store.insert(key->value(), record.record_id);
-        if (!inserted.has_value()) {
-            return std::unexpected(std::move(inserted.error()));
-        }
+        entries.push_back(ScalarIndexEntry {
+            .key = std::move(key->value()),
+            .record_id = record.record_id,
+        });
     }
-    return {};
+    return store.bulk_load(std::move(entries));
 }
 
 std::expected<void, IndexError> IndexEngine::create_index(
@@ -191,7 +222,7 @@ std::expected<void, IndexError> IndexEngine::create_index(
     if (!column_id.has_value()) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
     }
-    const auto * column = collection_schema.find_column(column_id.value());
+    const auto * column = collection_schema.find_column(*column_id);
     if (column == nullptr) {
         return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is not in collection schema"));
     }
@@ -207,18 +238,31 @@ std::expected<void, IndexError> IndexEngine::create_index(
     auto store = std::make_unique<IndexStore>(IndexDescriptor {
         .index_id = index_entry.id(),
         .collection_id = index_entry.collection_id(),
-        .column_id = column_id.value(),
+        .column_id = *column_id,
         .column_ordinal = column->ordinal(),
         .key_type = column->type(),
-        .kind = index.value()->kind(),
+        .kind = (*index)->kind(),
         .unique = index_entry.unique(),
-    }, std::move(index.value()));
+    }, std::move(*index));
 
     auto built = build_index_from_storage(*store, storage);
     if (!built.has_value()) {
         store.reset();
         if (index_entry.kind() == meta::entry::IndexKind::BTree) {
-            (void) filesystem_->remove(index_path(index_entry.id()));
+            auto removed = filesystem_->remove(index_path(index_entry.id()));
+            if (!removed.has_value()) {
+                return std::unexpected(make_error(
+                    IndexErrorCode::StorageError,
+                    built.error().message() + "; failed to remove partial index: "
+                        + removed.error().message(),
+                    {
+                        .operation = IndexOperation::Drop,
+                        .index_id = index_entry.id(),
+                        .path = index_path(index_entry.id()),
+                        .source_code = removed.error().encode_code(),
+                    }
+                ));
+            }
         }
         return std::unexpected(std::move(built.error()));
     }
@@ -252,7 +296,36 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
     if (descriptor.kind == IndexKind::BTree) {
         auto removed = filesystem_->remove(index_path(index_id));
         if (!removed.has_value()) {
-            return std::unexpected(make_error(IndexErrorCode::StorageError, std::move(removed.error().message)));
+            auto message = removed.error().message();
+            auto reopened = BTreeIndex::open(
+                index_path(index_id),
+                index_id,
+                descriptor.key_type,
+                *filesystem_
+            );
+            if (reopened.has_value()) {
+                stores_by_id_.emplace(
+                    index_id,
+                    IndexStore {
+                        descriptor,
+                        std::make_unique<BTreeIndex>(std::move(*reopened)),
+                    }
+                );
+                indexes_by_collection_[descriptor.collection_id].push_back(index_id);
+            } else {
+                message += "; failed to restore in-memory index after remove failure: ";
+                message += reopened.error().message();
+            }
+            return std::unexpected(make_error(
+                IndexErrorCode::StorageError,
+                std::move(message),
+                {
+                    .operation = IndexOperation::Drop,
+                    .index_id = index_id,
+                    .path = index_path(index_id),
+                    .source_code = removed.error().encode_code(),
+                }
+            ));
         }
     }
     return {};
@@ -276,7 +349,7 @@ std::expected<void, IndexError> IndexEngine::drop_collection_indexes(common::Col
 }
 
 std::expected<void, IndexError> IndexEngine::restore_all(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage
 )
 {
@@ -296,11 +369,11 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                 continue;
             }
 
-            auto collection_schema = schema::load_collection_schema(catalog, collection->id());
+            auto collection_schema = storage::load_collection_schema(catalog, collection->id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(make_error(
                     IndexErrorCode::InvalidIndexColumn,
-                    collection_schema.error().message
+                    collection_schema.error().message()
                 ));
             }
 
@@ -313,7 +386,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                 if (!column_id.has_value()) {
                     return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
                 }
-                const auto * column = collection_schema->find_column(column_id.value());
+                const auto * column = collection_schema->find_column(*column_id);
                 if (column == nullptr || column->type().id == common::LogicalTypeId::Vector) {
                     return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid"));
                 }
@@ -326,12 +399,12 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                 IndexStore store {IndexDescriptor {
                     .index_id = index_entry->id(),
                     .collection_id = index_entry->collection_id(),
-                    .column_id = column_id.value(),
+                    .column_id = *column_id,
                     .column_ordinal = column->ordinal(),
                     .key_type = column->type(),
-                    .kind = backend.value()->kind(),
+                    .kind = (*backend)->kind(),
                     .unique = index_entry->unique(),
-                }, std::move(backend.value())};
+                }, std::move(*backend)};
 
                 restored.stores_by_id_.emplace(index_entry->id(), std::move(store));
                 restored.indexes_by_collection_[index_entry->collection_id()].push_back(index_entry->id());
@@ -344,7 +417,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
 }
 
 std::expected<void, IndexError> IndexEngine::reload_collection(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )
@@ -353,9 +426,9 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
         return std::unexpected(make_error(IndexErrorCode::StorageError, "Index collection is absent from storage"));
     }
 
-    auto collection_schema = schema::load_collection_schema(catalog, collection_id);
+    auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message));
+        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message()));
     }
 
     IndexEngine restored {data_directory_, *filesystem_};
@@ -400,7 +473,7 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
 
 std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_insert(
     common::CollectionId collection_id,
-    const schema::RecordData & record_data
+    const common::RecordData & record_data
 ) const
 {
     IndexKeyBindings bindings;
@@ -433,18 +506,42 @@ std::expected<void, IndexError> IndexEngine::on_insert(
 {
     IndexKeyBindings inserted_bindings;
     inserted_bindings.reserve(bindings.size());
+    const auto rollback_inserted = [&]() {
+        std::string failure;
+        for (auto it = inserted_bindings.rbegin(); it != inserted_bindings.rend(); ++it) {
+            auto * rollback_index = find_store(it->index_id);
+            if (rollback_index == nullptr) {
+                failure += " rollback index disappeared;";
+                continue;
+            }
+            auto rolled_back = rollback_index->erase(it->key, record_id);
+            if (!rolled_back.has_value()) {
+                failure += " rollback erase failed: " + rolled_back.error().message() + ';';
+            }
+        }
+        return failure;
+    };
 
     for (const auto & binding : bindings) {
         auto * store = find_store(binding.index_id);
         if (store == nullptr) {
+            const auto rollback_failure = rollback_inserted();
+            if (!rollback_failure.empty()) {
+                return std::unexpected(make_error(
+                    IndexErrorCode::StorageError,
+                    "Index disappeared during insert;" + rollback_failure
+                ));
+            }
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
         auto inserted = store->insert(binding.key, record_id);
         if (!inserted.has_value()) {
-            for (auto it = inserted_bindings.rbegin(); it != inserted_bindings.rend(); ++it) {
-                if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
-                    (void) rollback_index->erase(it->key, record_id);
-                }
+            const auto rollback_failure = rollback_inserted();
+            if (!rollback_failure.empty()) {
+                return std::unexpected(make_error(
+                    IndexErrorCode::StorageError,
+                    inserted.error().message() + ';' + rollback_failure
+                ));
             }
             return std::unexpected(std::move(inserted.error()));
         }
@@ -455,8 +552,8 @@ std::expected<void, IndexError> IndexEngine::on_insert(
 
 std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
     common::CollectionId collection_id,
-    const schema::RecordData & old_record_data,
-    const schema::RecordData & new_record_data
+    const common::RecordData & old_record_data,
+    const common::RecordData & new_record_data
 ) const
 {
     IndexUpdateBindings bindings;
@@ -473,8 +570,8 @@ std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
 
         IndexUpdateBinding binding {
             .index_id = store->descriptor().index_id,
-            .old_key = std::move(old_key.value()),
-            .new_key = std::move(new_key.value()),
+            .old_key = std::move(*old_key),
+            .new_key = std::move(*new_key),
         };
 
         if (!binding.old_key.has_value() && !binding.new_key.has_value()) {
@@ -503,10 +600,40 @@ std::expected<void, IndexError> IndexEngine::on_update(
 )
 {
     std::vector<IndexUpdateBinding> applied_bindings;
+    const auto rollback_applied = [&]() {
+        std::string failure;
+        for (auto it = applied_bindings.rbegin(); it != applied_bindings.rend(); ++it) {
+            auto * rollback_index = find_store(it->index_id);
+            if (rollback_index == nullptr) {
+                failure += " rollback index disappeared;";
+                continue;
+            }
+            if (it->new_key.has_value()) {
+                auto erased = rollback_index->erase(*it->new_key, record_id);
+                if (!erased.has_value()) {
+                    failure += " rollback new-key erase failed: " + erased.error().message() + ';';
+                }
+            }
+            if (it->old_key.has_value()) {
+                auto inserted = rollback_index->insert(*it->old_key, record_id);
+                if (!inserted.has_value()) {
+                    failure += " rollback old-key insert failed: " + inserted.error().message() + ';';
+                }
+            }
+        }
+        return failure;
+    };
 
     for (const auto & binding : bindings) {
         auto * store = find_store(binding.index_id);
         if (store == nullptr) {
+            const auto rollback_failure = rollback_applied();
+            if (!rollback_failure.empty()) {
+                return std::unexpected(make_error(
+                    IndexErrorCode::StorageError,
+                    "Index disappeared during update;" + rollback_failure
+                ));
+            }
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
 
@@ -515,37 +642,36 @@ std::expected<void, IndexError> IndexEngine::on_update(
         }
 
         if (binding.new_key.has_value()) {
-            auto inserted = store->insert(binding.new_key.value(), record_id);
+            auto inserted = store->insert(*binding.new_key, record_id);
             if (!inserted.has_value()) {
-                for (auto it = applied_bindings.rbegin(); it != applied_bindings.rend(); ++it) {
-                    if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
-                        if (it->new_key.has_value()) {
-                            (void) rollback_index->erase(it->new_key.value(), record_id);
-                        }
-                        if (it->old_key.has_value()) {
-                            (void) rollback_index->insert(it->old_key.value(), record_id);
-                        }
-                    }
+                const auto rollback_failure = rollback_applied();
+                if (!rollback_failure.empty()) {
+                    return std::unexpected(make_error(
+                        IndexErrorCode::StorageError,
+                        inserted.error().message() + ';' + rollback_failure
+                    ));
                 }
                 return std::unexpected(std::move(inserted.error()));
             }
         }
 
         if (binding.old_key.has_value()) {
-            auto erased = store->erase(binding.old_key.value(), record_id);
+            auto erased = store->erase(*binding.old_key, record_id);
             if (!erased.has_value()) {
+                std::string rollback_failure;
                 if (binding.new_key.has_value()) {
-                    (void) store->erase(binding.new_key.value(), record_id);
-                }
-                for (auto it = applied_bindings.rbegin(); it != applied_bindings.rend(); ++it) {
-                    if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
-                        if (it->new_key.has_value()) {
-                            (void) rollback_index->erase(it->new_key.value(), record_id);
-                        }
-                        if (it->old_key.has_value()) {
-                            (void) rollback_index->insert(it->old_key.value(), record_id);
-                        }
+                    auto removed_new = store->erase(*binding.new_key, record_id);
+                    if (!removed_new.has_value()) {
+                        rollback_failure += " current new-key erase failed: "
+                            + removed_new.error().message() + ';';
                     }
+                }
+                rollback_failure += rollback_applied();
+                if (!rollback_failure.empty()) {
+                    return std::unexpected(make_error(
+                        IndexErrorCode::StorageError,
+                        erased.error().message() + ';' + rollback_failure
+                    ));
                 }
                 return std::unexpected(std::move(erased.error()));
             }
@@ -558,7 +684,7 @@ std::expected<void, IndexError> IndexEngine::on_update(
 
 std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_delete(
     common::CollectionId collection_id,
-    const schema::RecordData & old_record_data
+    const common::RecordData & old_record_data
 ) const
 {
     IndexKeyBindings bindings;
@@ -586,18 +712,42 @@ std::expected<void, IndexError> IndexEngine::on_delete(
 {
     IndexKeyBindings erased_bindings;
     erased_bindings.reserve(bindings.size());
+    const auto rollback_erased = [&]() {
+        std::string failure;
+        for (auto it = erased_bindings.rbegin(); it != erased_bindings.rend(); ++it) {
+            auto * rollback_index = find_store(it->index_id);
+            if (rollback_index == nullptr) {
+                failure += " rollback index disappeared;";
+                continue;
+            }
+            auto rolled_back = rollback_index->insert(it->key, record_id);
+            if (!rolled_back.has_value()) {
+                failure += " rollback insert failed: " + rolled_back.error().message() + ';';
+            }
+        }
+        return failure;
+    };
 
     for (const auto & binding : bindings) {
         auto * store = find_store(binding.index_id);
         if (store == nullptr) {
+            const auto rollback_failure = rollback_erased();
+            if (!rollback_failure.empty()) {
+                return std::unexpected(make_error(
+                    IndexErrorCode::StorageError,
+                    "Index disappeared during delete;" + rollback_failure
+                ));
+            }
             return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
         }
         auto erased = store->erase(binding.key, record_id);
         if (!erased.has_value()) {
-            for (auto it = erased_bindings.rbegin(); it != erased_bindings.rend(); ++it) {
-                if (auto * rollback_index = find_store(it->index_id); rollback_index != nullptr) {
-                    (void) rollback_index->insert(it->key, record_id);
-                }
+            const auto rollback_failure = rollback_erased();
+            if (!rollback_failure.empty()) {
+                return std::unexpected(make_error(
+                    IndexErrorCode::StorageError,
+                    erased.error().message() + ';' + rollback_failure
+                ));
             }
             return std::unexpected(std::move(erased.error()));
         }
@@ -660,6 +810,19 @@ std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::scan_range
         return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
     }
     return store->scan_range(range);
+}
+
+std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError>
+IndexEngine::scan_range_cursor(
+    common::IndexId index_id,
+    const IndexRange & range
+) const
+{
+    const auto * store = find_store(index_id);
+    if (store == nullptr) {
+        return std::unexpected(make_error(IndexErrorCode::IndexNotFound, "Index not found"));
+    }
+    return store->scan_range_cursor(range);
 }
 
 void IndexEngine::clear() noexcept

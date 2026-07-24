@@ -77,10 +77,10 @@ int main(int argc, char ** argv)
             litedb::core::database::DatabaseConfig {.data_dir = options.data_dir}
         );
         if (!opened.has_value()) {
-            std::cerr << "error: " << opened.error().message << '\n';
+            std::cerr << "error: " << opened.error().message() << '\n';
             return 1;
         }
-        std::shared_ptr<litedb::core::database::DatabaseEngine> engine {std::move(opened.value())};
+        std::shared_ptr<litedb::core::database::DatabaseEngine> engine {std::move(*opened)};
         litedb::server::Server server {
             io,
             litedb::server::ServerConfig {

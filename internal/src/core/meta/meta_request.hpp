@@ -6,7 +6,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/entry/index_entry.hpp"
 #include "core/meta/entry/vector_index_entry.hpp"
 
@@ -22,7 +22,7 @@ struct ColumnDefinition
     common::LogicalType type;
     bool unique {false};
     bool nullable {true};
-    std::optional<entry::DefaultExpression> default_expression;
+    std::optional<schema::DefaultExpression> default_expression;
     std::optional<std::string> comment;
 };
 

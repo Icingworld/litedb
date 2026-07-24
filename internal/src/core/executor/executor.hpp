@@ -25,14 +25,14 @@ public:
      * @details DML 必须使用带 TransactionManager 的构造函数。
      */
     Executor(
-        meta::MetaEngine & catalog,
+        meta::CatalogView catalog,
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine
     ) noexcept;
 
     Executor(
-        meta::MetaEngine & catalog,
+        meta::CatalogView catalog,
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine,
@@ -49,7 +49,7 @@ public:
     std::expected<ExecutionResult, ExecutionError> execute(const physical_plan::PhysicalStatementPlan & plan);
 
 private:
-    meta::MetaEngine & catalog_;                        ///< 目录
+    meta::CatalogView catalog_;                         ///< 目录
     storage::StorageEngine & storage_;                  ///< 存储引擎
     index::IndexEngine & index_engine_;                  ///< 索引引擎
     vindex::VectorIndexEngine * vector_index_engine_ {nullptr};

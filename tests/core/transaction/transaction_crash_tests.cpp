@@ -33,6 +33,8 @@ constexpr StageCase Stages[] {
     {transaction::CommitStage::AfterWalWrites, "after_wal_writes", false},
     {transaction::CommitStage::AfterWalCommitAppend, "after_wal_commit_append", false},
     {transaction::CommitStage::AfterWalCommitFlush, "after_wal_commit_flush", true},
+    {transaction::CommitStage::AfterDeltaApply, "after_delta_apply", true},
+    {transaction::CommitStage::AfterTruncate, "after_truncate", true},
     {transaction::CommitStage::AfterApply, "after_apply", true},
     {transaction::CommitStage::AfterRuntimeReload, "after_runtime_reload", true},
 };
@@ -51,14 +53,14 @@ std::unique_ptr<database::DatabaseEngine> open_database(
         .data_dir = path,
         .transaction_options = std::move(options),
     });
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
-    if (!result) throw std::runtime_error(result.error().message);
+    if (!result) throw std::runtime_error(result.error().message());
     return std::move(*result);
 }
 
@@ -119,7 +121,7 @@ void verify_recovered_state(const std::filesystem::path & directory, const Stage
     const auto * vector_entry = engine->meta().find_vector_index(collection->id(), "vidx_embedding");
     require(scalar_entry != nullptr && vector_entry != nullptr, "index metadata missing after crash recovery");
 
-    auto scalar_key = index::ScalarIndexKey::from_value(schema::Value {std::int64_t {7}});
+    auto scalar_key = index::ScalarIndexKey::from_value(common::Value {std::int64_t {7}});
     require(scalar_key.has_value(), "scalar key construction failed");
     auto scalar = engine->index_engine().find_equal(scalar_entry->id(), *scalar_key);
     require(scalar.has_value(), "scalar index lookup failed after crash recovery");

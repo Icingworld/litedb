@@ -42,9 +42,9 @@ IndexError make_index_error(IndexErrorCode code, std::string message)
  * @return 是否是向量值
  */
 [[nodiscard]]
-bool is_vector(const schema::Value & value) noexcept
+bool is_vector(const common::Value & value) noexcept
 {
-    return std::holds_alternative<schema::VectorValue>(value.data());
+    return std::holds_alternative<common::VectorValue>(value.data());
 }
 
 /**
@@ -53,7 +53,7 @@ bool is_vector(const schema::Value & value) noexcept
  * @return 是否是 NaN
  */
 [[nodiscard]]
-bool is_nan(const schema::Value & value) noexcept
+bool is_nan(const common::Value & value) noexcept
 {
     if (const auto * number = std::get_if<float>(&value.data())) {
         return std::isnan(*number);
@@ -70,7 +70,7 @@ bool is_nan(const schema::Value & value) noexcept
  * @return 键类型
  */
 [[nodiscard]]
-KeyType key_type(const schema::Value & value) noexcept
+KeyType key_type(const common::Value & value) noexcept
 {
     if (std::holds_alternative<bool>(value.data())) {
         return KeyType::Boolean;
@@ -104,12 +104,12 @@ std::size_t hash_combine(std::size_t seed, std::size_t value) noexcept
 
 } // namespace
 
-ScalarIndexKey::ScalarIndexKey(schema::Value value)
+ScalarIndexKey::ScalarIndexKey(common::Value value)
     : value_(std::move(value))
 {
 }
 
-std::expected<ScalarIndexKey, IndexError> ScalarIndexKey::from_value(schema::Value value)
+std::expected<ScalarIndexKey, IndexError> ScalarIndexKey::from_value(common::Value value)
 {
     if (is_vector(value)) [[unlikely]] {
         return std::unexpected(make_index_error(
@@ -132,7 +132,7 @@ std::expected<ScalarIndexKey, IndexError> ScalarIndexKey::from_value(schema::Val
     return ScalarIndexKey {std::move(value)};
 }
 
-const schema::Value & ScalarIndexKey::value() const noexcept
+const common::Value & ScalarIndexKey::value() const noexcept
 {
     return value_;
 }

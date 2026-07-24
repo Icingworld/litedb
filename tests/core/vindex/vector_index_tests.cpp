@@ -1,5 +1,6 @@
 #include "core/vindex/flat_index/flat_index.hpp"
 #include "core/vindex/hnsw_index/hnsw_index.hpp"
+#include "core/vindex/vector_distance.hpp"
 #include "core/vindex/vector_index_key.hpp"
 #include "core/vindex/vector_index_engine.hpp"
 
@@ -19,7 +20,7 @@
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/schema/collection.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
 namespace
@@ -82,18 +83,18 @@ void require_records(
 std::vector<VectorSearchResult> results(std::expected<std::vector<VectorSearchResult>, VectorIndexError> result)
 {
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 VectorIndexKey vector_key(VectorValue vector)
 {
     auto result = VectorIndexKey::from_vector(std::move(vector));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 HnswIndexOptions hnsw_options()
@@ -162,8 +163,8 @@ void test_hnsw_store_recovers_truncated_tail()
     const auto committed_size = std::filesystem::file_size(index_path);
     {
         auto file = filesystem.open(index_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open hnsw file for tail append failed");
         const std::array garbage {std::byte {0x48}, std::byte {0x57}, std::byte {0x43}};
@@ -189,8 +190,8 @@ void test_hnsw_store_rejects_corrupted_commit()
     }
     {
         auto file = filesystem.open(index_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "open hnsw file for corruption failed");
         const std::array corrupted {std::byte {0xff}};
@@ -202,7 +203,7 @@ void test_hnsw_store_rejects_corrupted_commit()
     }
     auto opened = HnswIndex::open(index_path, 12, 20, 31, hnsw_options(), filesystem);
     require(!opened.has_value(), "corrupted hnsw commit should be rejected");
-    require(opened.error().code == VectorIndexErrorCode::CorruptedIndex, "corrupted hnsw error code mismatch");
+    require(opened.error().is(VectorIndexErrorCode::ChecksumMismatch), "corrupted hnsw error code mismatch");
     std::filesystem::remove_all(directory);
 }
 
@@ -220,7 +221,7 @@ void test_hnsw_rejects_descriptor_mismatch()
     mismatched.metric = VectorDistanceMetric::Cosine;
     auto opened = HnswIndex::open(index_path, 13, 20, 31, mismatched, filesystem);
     require(!opened.has_value(), "HNSW descriptor mismatch should be rejected");
-    require(opened.error().code == VectorIndexErrorCode::CorruptedIndex, "descriptor mismatch error code mismatch");
+    require(opened.error().is(VectorIndexErrorCode::CorruptedIndex), "descriptor mismatch error code mismatch");
     std::filesystem::remove_all(directory);
 }
 
@@ -236,7 +237,7 @@ void test_hnsw_matches_brute_force_top_one()
     auto created = HnswIndex::create(index_path, 14, 20, 31, options, filesystem);
     require(created.has_value(), "create recall hnsw index failed");
 
-    std::vector<schema::VectorValue> vectors;
+    std::vector<common::VectorValue> vectors;
     vectors.reserve(128);
     for (std::size_t index = 0; index < 128; ++index) {
         const auto x = std::sin(static_cast<double>(index) * 0.37) * 10.0;
@@ -244,10 +245,15 @@ void test_hnsw_matches_brute_force_top_one()
         vectors.push_back({x, y});
         require(created->insert(vector_key({x, y}), index + 1).has_value(), "insert recall vector failed");
     }
+    const auto mutation_stats = created->stats();
+    require(
+        mutation_stats.last_commit_upsert_count < mutation_stats.physical_node_count / 2,
+        "HNSW insert should persist only touched nodes"
+    );
 
     std::size_t matches = 0;
     for (std::size_t query_index = 0; query_index < 32; ++query_index) {
-        const schema::VectorValue query {
+        const common::VectorValue query {
             std::sin(static_cast<double>(query_index) * 0.43) * 9.0,
             std::cos(static_cast<double>(query_index) * 0.29) * 9.0,
         };
@@ -275,7 +281,11 @@ void test_flat_index_scans_storage()
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path, filesystem};
+        storage::StorageEngine storage {
+            path,
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
         require(storage.insert(20, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first vector failed");
         require(storage.insert(20, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second vector failed");
@@ -321,7 +331,11 @@ void test_flat_index_validates_dimensions_and_storage()
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path, filesystem};
+        storage::StorageEngine storage {
+            path,
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         FlatIndex index(FlatIndexOptions {
             .collection_id = 20,
             .column_ordinal = 1,
@@ -331,11 +345,11 @@ void test_flat_index_validates_dimensions_and_storage()
 
         auto invalid = index.search(vector_key({1.0}), VectorSearchRequest {});
         require(!invalid.has_value(), "dimension mismatch should fail");
-        require(invalid.error().code == VectorIndexErrorCode::InvalidDimension, "dimension error code mismatch");
+        require(invalid.error().is(VectorIndexErrorCode::InvalidDimension), "dimension error code mismatch");
 
         auto missing_storage = index.search(vector_key({1.0, 0.0}), VectorSearchRequest {});
         require(!missing_storage.has_value(), "missing collection should fail");
-        require(missing_storage.error().code == VectorIndexErrorCode::StorageFailure, "storage error code mismatch");
+        require(missing_storage.error().is(VectorIndexErrorCode::StorageFailure), "storage error code mismatch");
 
         require(index.insert(vector_key({1.0, 0.0}), 1).has_value(), "flat insert hook should be a no-op");
         require(index.erase(1).has_value(), "flat erase hook should be a no-op");
@@ -348,7 +362,11 @@ void test_vector_index_engine_lifecycle()
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path / "storage", filesystem};
+        storage::StorageEngine storage {
+            path / "storage",
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
         require(storage.insert(20, vector_record("first", Value {VectorValue {1.0, 0.0}})).has_value(), "insert first vector failed");
         require(storage.insert(20, vector_record("second", Value {VectorValue {0.0, 2.0}})).has_value(), "insert second vector failed");
@@ -386,7 +404,7 @@ void test_vector_index_engine_lifecycle()
         };
         auto invalid_created = engine.create_index(invalid, vectors_schema(), storage);
         require(!invalid_created.has_value(), "invalid vector metadata should be rejected");
-        require(invalid_created.error().code == VectorIndexErrorCode::InvalidMetadata, "invalid metadata error code mismatch");
+        require(invalid_created.error().is(VectorIndexErrorCode::InvalidMetadata), "invalid metadata error code mismatch");
 
         require(engine.drop_index(10).has_value(), "drop vector index failed");
         require(!engine.find_index(10).has_value(), "dropped vector index should be absent");
@@ -400,7 +418,7 @@ void test_vector_index_engine_restores_and_rebuilds_all()
     const auto path = temporary_path();
     const auto index_directory = path / "indexes";
     {
-        meta::MetaEngine catalog;
+        meta::CatalogEditor catalog;
         auto database_id = catalog.create_database(meta::CreateDatabaseRequest {.name = "demo"});
         require(database_id.has_value(), "create vector catalog database failed");
         auto collection_id = catalog.create_collection(meta::CreateCollectionRequest {
@@ -412,7 +430,7 @@ void test_vector_index_engine_restores_and_rebuilds_all()
             },
         });
         require(collection_id.has_value(), "create vector catalog collection failed");
-        const auto * column = catalog.find_column(*collection_id, "embedding");
+        const auto * column = catalog.view().find_column(*collection_id, "embedding");
         require(column != nullptr, "vector catalog column missing");
         auto index_id = catalog.create_vector_index(meta::CreateVectorIndexRequest {
             .collection_id = *collection_id,
@@ -423,12 +441,16 @@ void test_vector_index_engine_restores_and_rebuilds_all()
             .hnsw_options = {.max_neighbors = 4, .ef_construction = 32, .ef_search_default = 32, .random_seed = 7},
         });
         require(index_id.has_value(), "create vector catalog index failed");
-        auto collection_schema = schema::load_collection_schema(catalog, *collection_id);
+        auto collection_schema = storage::load_collection_schema(catalog.view(), *collection_id);
         require(collection_schema.has_value(), "load vector catalog schema failed");
-        const auto * index_entry = catalog.find_vector_index(*index_id);
+        const auto * index_entry = catalog.view().find_vector_index(*index_id);
         require(index_entry != nullptr, "vector catalog index entry missing");
 
-        storage::StorageEngine storage {path / "storage", filesystem};
+        storage::StorageEngine storage {
+            path / "storage",
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         require(storage.create_collection(*collection_schema).has_value(), "create hnsw engine collection failed");
         require(storage.insert(*collection_id, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first engine vector failed");
         require(storage.insert(*collection_id, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second engine vector failed");
@@ -448,32 +470,102 @@ void test_vector_index_engine_restores_and_rebuilds_all()
         require(std::filesystem::exists(index_path), "engine hnsw file is missing");
         {
             VectorIndexEngine restored {index_directory, filesystem};
-            require(restored.restore_all(catalog, storage).has_value(), "engine restore_all failed");
+            require(restored.restore_all(catalog.view(), storage).has_value(), "engine restore_all failed");
             require_records(
                 results(restored.search(*index_id, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
                 {1, 2},
                 "engine-restored hnsw search mismatch"
             );
 
-            storage::StorageEngine missing_storage {path / "missing-storage", filesystem};
-            auto failed = restored.restore_all(catalog, missing_storage);
+            storage::StorageEngine missing_storage {
+                path / "missing-storage",
+                filesystem,
+                storage::StorageOpenMode::TransactionalStaging,
+            };
+            auto failed = restored.restore_all(catalog.view(), missing_storage);
             require(!failed.has_value(), "restore_all should reject missing collection storage");
             require(restored.find_index(*index_id).has_value(), "failed restore_all should preserve prior engine state");
         }
         require(filesystem.remove(index_path).has_value(), "remove HNSW file for missing-file recovery failed");
         {
             VectorIndexEngine missing {index_directory, filesystem};
-            require(missing.restore_all(catalog, storage).has_value(), "engine should rebuild a missing HNSW file");
+            require(missing.restore_all(catalog.view(), storage).has_value(), "engine should rebuild a missing HNSW file");
             require(missing.find_index(*index_id)->entry_count == 3, "missing-file rebuild size mismatch");
         }
         require(storage.insert(*collection_id, vector_record("fourth", Value {VectorValue {0.1, 0.0}})).has_value(), "insert stale storage vector failed");
         {
             VectorIndexEngine stale {index_directory, filesystem};
-            require(stale.restore_all(catalog, storage).has_value(), "engine should rebuild stale HNSW index");
+            require(stale.restore_all(catalog.view(), storage).has_value(), "engine should rebuild stale HNSW index");
             require(stale.find_index(*index_id)->entry_count == 4, "rebuilt HNSW index size mismatch");
             require(stale.drop_index(*index_id).has_value(), "engine drop hnsw index failed");
         }
         require(!std::filesystem::exists(index_path), "engine did not remove hnsw file");
+    }
+    std::filesystem::remove_all(path);
+}
+
+void test_vector_index_checkpoint_compacts_tombstones()
+{
+    auto filesystem = filesystem::create_platform_filesystem();
+    const auto path = temporary_path();
+    {
+        storage::StorageEngine storage {
+            path / "storage",
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
+        require(storage.create_collection(vectors_schema()).has_value(), "create compaction collection failed");
+        constexpr std::size_t RecordCount = 1024;
+        for (std::size_t index = 0; index < RecordCount; ++index) {
+            require(
+                storage.insert(
+                    20,
+                    vector_record(
+                        std::to_string(index),
+                        Value {VectorValue {static_cast<double>(index), static_cast<double>(index % 17)}}
+                    )
+                ).has_value(),
+                "insert compaction vector failed"
+            );
+        }
+
+        meta::entry::VectorIndexEntry entry {
+            10, 20, 31, "vectors_embedding",
+            meta::entry::VectorIndexKind::Hnsw,
+            meta::entry::VectorDistanceMetric::L2,
+            2,
+            meta::entry::HnswOptions {
+                .max_neighbors = 4,
+                .ef_construction = 32,
+                .ef_search_default = 32,
+                .random_seed = 7,
+            },
+        };
+        VectorIndexEngine engine {path / "indexes", filesystem};
+        require(engine.create_index(entry, vectors_schema(), storage).has_value(), "create compaction index failed");
+
+        for (std::size_t index = 0; index < RecordCount; ++index) {
+            const auto data = vector_record(
+                std::to_string(index),
+                Value {VectorValue {static_cast<double>(index), static_cast<double>(index % 17)}}
+            );
+            auto bindings = engine.prepare_delete(20, data);
+            require(bindings.has_value(), "prepare compaction delete failed");
+            require(engine.on_delete(index + 1, *bindings).has_value(), "apply compaction delete failed");
+            require(storage.erase(20, index + 1).has_value(), "erase compaction storage record failed");
+        }
+
+        const auto before = engine.maintenance_stats();
+        require(before.tombstone_count == RecordCount, "compaction tombstone count mismatch");
+        auto checkpointed = engine.checkpoint(storage);
+        if (!checkpointed) {
+            throw std::runtime_error("vector index checkpoint failed: " + checkpointed.error().message());
+        }
+        const auto after = engine.maintenance_stats();
+        require(after.tombstone_count == 0, "checkpoint did not remove HNSW tombstones");
+        require(after.physical_node_count == 0 && after.active_count == 0, "checkpoint graph should be empty");
+        require(after.file_bytes < before.file_bytes, "checkpoint did not shrink HNSW file");
+        require(after.last_compaction_reclaimed_bytes > 0, "checkpoint reclaimed-byte metric mismatch");
     }
     std::filesystem::remove_all(path);
 }
@@ -487,11 +579,54 @@ void test_vector_index_key()
 
     auto scalar = VectorIndexKey::from_value(Value {1.0});
     require(!scalar.has_value(), "scalar value should not become vector key");
-    require(scalar.error().code == VectorIndexErrorCode::InvalidDimension, "scalar key error code mismatch");
+    require(scalar.error().is(VectorIndexErrorCode::InvalidDimension), "scalar key error code mismatch");
 
     auto empty = VectorIndexKey::from_vector({});
     require(!empty.has_value(), "empty vector should not become vector key");
-    require(empty.error().code == VectorIndexErrorCode::EmptyQuery, "empty vector key error code mismatch");
+    require(empty.error().is(VectorIndexErrorCode::EmptyQuery), "empty vector key error code mismatch");
+
+    auto not_finite = VectorIndexKey::from_vector({
+        std::numeric_limits<double>::quiet_NaN(),
+        1.0,
+    });
+    require(!not_finite.has_value(), "non-finite vector key should fail");
+    require(
+        not_finite.error().is(VectorIndexErrorCode::InvalidVectorValue),
+        "non-finite vector key error code mismatch"
+    );
+}
+
+void test_vector_distance_numeric_limits()
+{
+    const auto maximum = std::numeric_limits<double>::max();
+    auto overflowing_l2 = vector_distance(
+        {maximum},
+        {-maximum},
+        VectorDistanceMetric::L2
+    );
+    require(!overflowing_l2, "overflowing L2 distance should fail");
+    require(
+        overflowing_l2.error().is(VectorIndexErrorCode::NumericOverflow),
+        "overflowing L2 error code mismatch"
+    );
+
+    auto overflowing_inner_product = vector_distance(
+        {maximum},
+        {maximum},
+        VectorDistanceMetric::InnerProduct
+    );
+    require(!overflowing_inner_product, "overflowing inner product should fail");
+    require(
+        overflowing_inner_product.error().is(VectorIndexErrorCode::NumericOverflow),
+        "overflowing inner product error code mismatch"
+    );
+
+    auto stable_cosine = vector_distance(
+        {maximum, maximum},
+        {maximum, maximum},
+        VectorDistanceMetric::Cosine
+    );
+    require(stable_cosine && std::abs(*stable_cosine) < 0.000001, "large cosine distance should remain finite");
 }
 
 } // namespace
@@ -508,7 +643,9 @@ int main()
         test_flat_index_validates_dimensions_and_storage();
         test_vector_index_engine_lifecycle();
         test_vector_index_engine_restores_and_rebuilds_all();
+        test_vector_index_checkpoint_compacts_tombstones();
         test_vector_index_key();
+        test_vector_distance_numeric_limits();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

@@ -66,7 +66,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
         // 检查列是否重复
         std::unordered_set<std::string> seen_columns;
         for (std::size_t index = 0; index < statement.columns().size(); ++index) {
-            const auto column_key = meta::normalize_identifier(statement.columns()[index]);
+            const auto column_key = common::normalize_identifier(statement.columns()[index]);
             if (!seen_columns.emplace(column_key).second) {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::DuplicateColumn,
@@ -112,18 +112,18 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
         if (source_value_by_target[target_index].has_value()) {
             auto expression = helper.bind_expression(
                 *statement.values()[source_value_by_target[target_index].value()],
-                collection.value()
+                *collection
             );
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
-            value = std::move(expression.value());
+            value = std::move(*expression);
         } else if (column.default_expression().has_value()) {
             auto expression = helper.bind_default_expression(column.default_expression().value(), statement.location());
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
-            value = std::move(expression.value());
+            value = std::move(*expression);
         } else if (column.nullable()) [[likely]] {
             value = std::make_unique<BoundNullExpression>(column.type(), statement.location());
         } else [[unlikely]] {

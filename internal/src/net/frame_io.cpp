@@ -15,17 +15,21 @@ namespace
 NetworkError from_io_error(const std::error_code & error)
 {
     return NetworkError {
-        .code = NetworkErrorCode::IoError,
-        .message = error.message(),
+        NetworkErrorCode::IoError,
+        error.message(),
+        NetworkErrorContext {.native_code = error.value()},
     };
 }
 
 [[nodiscard]]
 NetworkError from_protocol_error(protocol::ProtocolError error)
 {
+    auto message = error.message();
     return NetworkError {
-        .code = NetworkErrorCode::ProtocolError,
-        .message = std::move(error.message),
+        NetworkErrorCode::ProtocolError,
+        message,
+        NetworkErrorContext {.source_code = error.encode_code()},
+        std::move(error),
     };
 }
 
@@ -49,8 +53,8 @@ asio::awaitable<std::expected<protocol::Frame, NetworkError>> async_read_frame(
     }
     if (header->payload_size > max_frame_size) {
         co_return std::unexpected(NetworkError {
-            .code = NetworkErrorCode::FrameTooLarge,
-            .message = "frame payload exceeds maximum size",
+            NetworkErrorCode::FrameTooLarge,
+            "frame payload exceeds maximum size",
         });
     }
 
@@ -63,7 +67,7 @@ asio::awaitable<std::expected<protocol::Frame, NetworkError>> async_read_frame(
     }
 
     co_return protocol::Frame {
-        .header = header.value(),
+        .header = *header,
         .payload = std::move(payload),
     };
 }

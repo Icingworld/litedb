@@ -7,7 +7,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/meta/meta_snapshot.hpp"
-#include "core/schema/record.hpp"
+#include "core/common/record.hpp"
 #include "core/transaction/transaction_id.hpp"
 #include "core/transaction/transaction_state.hpp"
 
@@ -46,8 +46,8 @@ struct RowMutation
     RowMutationKind kind;                        ///< 变更类型
     common::CollectionId collection_id;          ///< 集合 ID
     common::RecordId record_id;                  ///< 记录 ID
-    std::optional<schema::RecordData> before;    ///< 变更前的记录数据
-    std::optional<schema::RecordData> after;     ///< 变更后的记录数据
+    std::optional<common::RecordData> before;    ///< 变更前的记录数据
+    std::optional<common::RecordData> after;     ///< 变更后的记录数据
 };
 
 /**

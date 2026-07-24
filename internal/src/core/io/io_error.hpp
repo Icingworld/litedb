@@ -1,6 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
+
+#include "core/error/error.hpp"
 
 namespace litedb::core::io
 {
@@ -8,21 +10,24 @@ namespace litedb::core::io
 /**
  * @brief IO 错误码
  */
-enum class IoErrorCode
+enum class IoErrorCode : std::uint8_t
 {
-    UnexpectedEof,             ///< 意外到达文件末尾
-    InvalidData,               ///< 数据无效
-    ValueTooLarge,             ///< 值过大，无法编码
-    FileSystemError,           ///< 文件系统错误
+    UnexpectedEof = 0,          ///< 意外到达文件末尾
+    InvalidData = 1,            ///< 数据无效
+    ValueTooLarge = 2,          ///< 值过大，无法编码
 };
 
-/**
- * @brief IO 错误
- */
-struct IoError
-{
-    IoErrorCode code;           ///< 错误码
-    std::string message;        ///< 错误消息
-};
+using IoError = error::Error;
 
 } // namespace litedb::core::io
+
+namespace litedb::core::error
+{
+
+template <>
+struct ErrorTraits<io::IoErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Io;
+};
+
+} // namespace litedb::core::error

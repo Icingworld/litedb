@@ -87,6 +87,12 @@ public:
     [[nodiscard]]
     const HnswIndexOptions & options() const noexcept;
 
+    [[nodiscard]]
+    hnsw_index::HnswStoreStats stats() const noexcept;
+
+    [[nodiscard]]
+    std::expected<void, VectorIndexError> close();
+
 private:
     [[nodiscard]]
     std::expected<void, VectorIndexError> validate_key(const VectorIndexKey & key) const;

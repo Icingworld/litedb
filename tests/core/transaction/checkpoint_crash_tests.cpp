@@ -47,14 +47,14 @@ std::unique_ptr<database::DatabaseEngine> open_database(
         .data_dir = path,
         .transaction_options = std::move(options),
     });
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
-    if (!result) throw std::runtime_error(result.error().message);
+    if (!result) throw std::runtime_error(result.error().message());
     return std::move(*result);
 }
 
@@ -91,7 +91,7 @@ int run_worker(const std::filesystem::path & directory, const StageCase & select
     };
     auto engine = open_database(directory, std::move(options));
     auto checkpointed = engine->checkpoint();
-    if (!checkpointed) throw std::runtime_error(checkpointed.error().message);
+    if (!checkpointed) throw std::runtime_error(checkpointed.error().message());
     return 0;
 }
 

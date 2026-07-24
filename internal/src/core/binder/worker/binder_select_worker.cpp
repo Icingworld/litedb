@@ -78,7 +78,7 @@ const ExpressionNode * order_by_alias_target(
         return nullptr;
     }
 
-    const auto it = aliases.find(meta::normalize_identifier(column.column()));
+    const auto it = aliases.find(common::normalize_identifier(column.column()));
     if (it == aliases.end()) {
         return nullptr;
     }
@@ -102,7 +102,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expre
 )
 {
     if (const auto * alias_target = order_by_alias_target(expression, aliases); alias_target != nullptr) {
-        const auto alias_key = meta::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
+        const auto alias_key = common::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
         if (aliases.at(alias_key).count > 1) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::AmbiguousAlias,
@@ -139,11 +139,11 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
 
     for (const auto & item : statement.select_list()) {
         if (item->kind() == AstNodeKind::Wildcard) {
-            auto expanded = helper.expand_wildcard(static_cast<const WildcardExpression &>(*item), collection.value());
+            auto expanded = helper.expand_wildcard(static_cast<const WildcardExpression &>(*item), *collection);
             if (!expanded.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expanded.error()));
             }
-            for (auto & expression : expanded.value()) {
+            for (auto & expression : *expanded) {
                 projections.push_back(BoundProjectionItem {
                     .expression = std::move(expression),
                     .alias = std::nullopt,
@@ -154,37 +154,37 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
 
         const auto & expression_node = projection_expression(*item);
         auto alias = projection_alias(*item);
-        auto expression = helper.bind_expression(expression_node, collection.value());
+        auto expression = helper.bind_expression(expression_node, *collection);
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
 
         if (alias.has_value()) {
-            auto & binding = aliases[meta::normalize_identifier(alias.value())];
+            auto & binding = aliases[common::normalize_identifier(*alias)];
             binding.expression = &expression_node;
             ++binding.count;
         }
 
         projections.push_back(BoundProjectionItem {
-            .expression = std::move(expression.value()),
+            .expression = std::move(*expression),
             .alias = std::move(alias),
         });
     }
 
     std::unique_ptr<BoundExpression> where;
     if (statement.where() != nullptr) {
-        auto bound_where = helper.bind_expression(*statement.where(), collection.value());
+        auto bound_where = helper.bind_expression(*statement.where(), *collection);
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
-        if (!is_boolean(bound_where.value()->type())) [[unlikely]] {
+        if (!is_boolean((*bound_where)->type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 statement.where()->location(),
                 "WHERE expression must be BOOLEAN"
             ));
         }
-        where = std::move(bound_where.value());
+        where = std::move(*bound_where);
     }
 
     std::vector<BoundOrderByItem> order_by;
@@ -192,14 +192,14 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
         auto expression = bind_order_by_expression(
             helper,
             *item.expression,
-            collection.value(),
+            *collection,
             aliases
         );
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
         order_by.push_back(BoundOrderByItem {
-            .expression = std::move(expression.value()),
+            .expression = std::move(*expression),
             .ascending = item.ascending,
         });
     }

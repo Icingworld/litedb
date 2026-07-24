@@ -11,7 +11,7 @@
 
 #include "core/filesystem/backend/filesystem_backend.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace
 {
@@ -19,7 +19,7 @@ namespace
 using namespace litedb::core;
 using namespace litedb::core::index;
 using namespace litedb::core::index::btree_index;
-using litedb::core::schema::Value;
+using litedb::core::common::Value;
 
 void require(bool condition, const std::string & message)
 {
@@ -34,7 +34,7 @@ ScalarIndexKey key(std::int32_t value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 BTreeEntryKey entry(std::int32_t value, common::RecordId record_id)
@@ -61,7 +61,7 @@ void test_create_allocate_write_and_reopen(const std::filesystem::path & directo
     {
         auto created = BTreePageStore::create(path, 42, type, filesystem);
         require(created.has_value(), "page store create failed");
-        auto store = std::move(created.value());
+        auto store = std::move(*created);
         require(store.index_id() == 42, "created store index id mismatch");
         require(store.root_page_id() == InvalidBTreePageId, "new store should have no root");
         require(store.page_count() == 0, "new store page count mismatch");
@@ -98,7 +98,7 @@ void test_create_allocate_write_and_reopen(const std::filesystem::path & directo
     {
         auto opened = BTreePageStore::open(path, 42, type, filesystem);
         require(opened.has_value(), "page store reopen failed");
-        auto store = std::move(opened.value());
+        auto store = std::move(*opened);
         require(store.root_page_id() == 3, "reopened root page mismatch");
         require(store.page_count() == 3, "reopened page count mismatch");
         require(store.entry_count() == 3, "reopened entry count mismatch");
@@ -118,31 +118,38 @@ void test_create_allocate_write_and_reopen(const std::filesystem::path & directo
 
         auto fourth = store.allocate_leaf_page(2);
         require(fourth.has_value() && fourth->page_id() == 4, "reopened allocation did not continue page ids");
+        require(store.release_page(fourth->page_id()).has_value(), "free page release failed");
+        require(store.free_page_count() == 1, "free page count mismatch");
+        auto reused = store.allocate_leaf_page(2);
+        require(reused.has_value() && reused->page_id() == 4,
+                "page allocation should reuse the persisted free page");
+        require(store.page_count() == 4 && store.free_page_count() == 0,
+                "free page reuse should not grow the file");
         require(store.sync_data().has_value(), "page store data sync failed");
 
         auto missing = store.read_page(99);
-        require(!missing.has_value() && missing.error().code == BTreePageStoreErrorCode::PageNotFound,
+        require(!missing.has_value() && missing.error().is(BTreePageStoreErrorCode::PageNotFound),
                 "missing page read error mismatch");
         auto unknown_root = store.set_root_page_id(99);
-        require(!unknown_root.has_value() && unknown_root.error().code == BTreePageStoreErrorCode::PageNotFound,
+        require(!unknown_root.has_value() && unknown_root.error().is(BTreePageStoreErrorCode::PageNotFound),
                 "unknown root error mismatch");
 
         BTreeLeafPage invalid_links {1, InvalidBTreePageId, 99};
         auto invalid_write = store.write_page(BTreePage {std::move(invalid_links)});
-        require(!invalid_write.has_value() && invalid_write.error().code == BTreePageStoreErrorCode::InvalidPage,
+        require(!invalid_write.has_value() && invalid_write.error().is(BTreePageStoreErrorCode::InvalidPage),
                 "unknown leaf link should fail write");
 
         auto invalid_internal = store.allocate_internal_page(99);
-        require(!invalid_internal.has_value() && invalid_internal.error().code == BTreePageStoreErrorCode::PageNotFound,
+        require(!invalid_internal.has_value() && invalid_internal.error().is(BTreePageStoreErrorCode::PageNotFound),
                 "unknown first child should fail internal allocation");
     }
 
     auto wrong_index = BTreePageStore::open(path, 43, type, filesystem);
-    require(!wrong_index.has_value() && wrong_index.error().code == BTreePageStoreErrorCode::InvalidFormat,
+    require(!wrong_index.has_value() && wrong_index.error().is(BTreePageStoreErrorCode::InvalidFormat),
             "wrong index identity should fail open");
     const common::LogicalType wrong_type {common::LogicalTypeId::BigInt, std::nullopt};
     auto mismatched_type = BTreePageStore::open(path, 42, wrong_type, filesystem);
-    require(!mismatched_type.has_value() && mismatched_type.error().code == BTreePageStoreErrorCode::InvalidFormat,
+    require(!mismatched_type.has_value() && mismatched_type.error().is(BTreePageStoreErrorCode::InvalidFormat),
             "wrong key type should fail open");
 }
 
@@ -173,8 +180,8 @@ void test_corrupted_node_is_reported_on_read(const std::filesystem::path & direc
     }
     {
         auto file = filesystem.open(path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "corrupted page raw open failed");
         const std::array invalid_magic {std::byte {0}};
@@ -184,9 +191,10 @@ void test_corrupted_node_is_reported_on_read(const std::filesystem::path & direc
     auto opened = BTreePageStore::open(path, 88, type, filesystem);
     require(opened.has_value(), "store open should not eagerly decode node pages");
     auto page = opened->read_page(1);
-    require(!page.has_value() && page.error().code == BTreePageStoreErrorCode::CorruptedPage,
+    require(!page.has_value() && page.error().is(BTreePageStoreErrorCode::CorruptedPage),
             "corrupted node page should fail on read");
-    require(page.error().codec_code == BTreePageCodecErrorCode::InvalidFormat,
+    const auto * context = page.error().context<BTreePageStoreErrorContext>();
+    require(context != nullptr && context->codec_code == BTreePageCodecErrorCode::InvalidFormat,
             "corrupted node codec error mismatch");
 }
 
@@ -202,16 +210,57 @@ void test_invalid_header_and_file_size_are_rejected(const std::filesystem::path 
     }
     {
         auto file = filesystem.open(version_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "bad version raw open failed");
-        const std::array version {std::byte {2}, std::byte {0}};
+        const std::array version {std::byte {3}, std::byte {0}};
         require(file->write_at(4, version).has_value(), "bad version raw write failed");
     }
     auto unsupported = BTreePageStore::open(version_path, 90, type, filesystem);
-    require(!unsupported.has_value() && unsupported.error().code == BTreePageStoreErrorCode::UnsupportedVersion,
+    require(!unsupported.has_value() && unsupported.error().is(BTreePageStoreErrorCode::UnsupportedVersion),
             "unsupported store version should fail open");
+
+    const auto legacy_path = directory / "legacy-v1-header.bti";
+    {
+        auto created = BTreePageStore::create(legacy_path, 93, type, filesystem);
+        require(created.has_value(), "legacy header store create failed");
+    }
+    {
+        auto file = filesystem.open(legacy_path, {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
+        });
+        require(file.has_value(), "legacy header raw open failed");
+        const std::array version {std::byte {1}, std::byte {0}};
+        const std::array checksum {
+            std::byte {0}, std::byte {0}, std::byte {0}, std::byte {0},
+        };
+        require(file->write_at(4, version).has_value(), "legacy header version write failed");
+        require(file->write_at(56, checksum).has_value(), "legacy header checksum write failed");
+    }
+    auto legacy = BTreePageStore::open(legacy_path, 93, type, filesystem);
+    require(legacy.has_value(), "version 1 store header should remain readable");
+
+    const auto checksum_path = directory / "bad-header-checksum.bti";
+    {
+        auto created = BTreePageStore::create(checksum_path, 92, type, filesystem);
+        require(created.has_value(), "header checksum store create failed");
+    }
+    {
+        auto file = filesystem.open(checksum_path, {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
+        });
+        require(file.has_value(), "header checksum raw open failed");
+        const std::array changed_count {std::byte {1}};
+        require(file->write_at(48, changed_count).has_value(),
+                "header checksum corruption write failed");
+    }
+    auto checksum = BTreePageStore::open(checksum_path, 92, type, filesystem);
+    require(!checksum.has_value()
+                && checksum.error().is(BTreePageStoreErrorCode::ChecksumMismatch),
+            "header bit flip should fail store checksum");
 
     const auto truncated_path = directory / "truncated.bti";
     {
@@ -221,15 +270,15 @@ void test_invalid_header_and_file_size_are_rejected(const std::filesystem::path 
     }
     {
         auto file = filesystem.open(truncated_path, {
-            .access = filesystem::backend::FileAccess::ReadWrite,
-            .create_mode = filesystem::backend::FileCreateMode::OpenExisting,
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "truncated raw open failed");
         require(file->truncate(BTreePageStore::HeaderSize + BTreePageCodec::PageSize - 1).has_value(),
                 "truncated raw resize failed");
     }
     auto truncated = BTreePageStore::open(truncated_path, 91, type, filesystem);
-    require(!truncated.has_value() && truncated.error().code == BTreePageStoreErrorCode::InvalidFormat,
+    require(!truncated.has_value() && truncated.error().is(BTreePageStoreErrorCode::InvalidFormat),
             "truncated store should fail open");
 }
 

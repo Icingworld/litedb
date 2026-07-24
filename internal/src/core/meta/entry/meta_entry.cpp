@@ -11,7 +11,7 @@ MetaEntry::MetaEntry(MetaEntryKind kind, common::MetaEntryId id, std::string nam
     : kind_(kind)
     , id_(id)
     , name_(std::move(name))
-    , key_(meta::normalize_identifier(name_))
+    , key_(common::normalize_identifier(name_))
 {
 }
 

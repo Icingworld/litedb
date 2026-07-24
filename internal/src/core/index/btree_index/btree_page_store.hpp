@@ -20,11 +20,12 @@ namespace litedb::core::index::btree_index
 /**
  * @brief B+ 树页存储错误码
  */
-enum class BTreePageStoreErrorCode
+enum class BTreePageStoreErrorCode : std::uint8_t
 {
     FileSystemError,      ///< 文件系统操作失败
     InvalidFormat,        ///< 文件格式或文件级元数据无效
     UnsupportedVersion,   ///< 不支持的文件格式版本
+    ChecksumMismatch,     ///< 文件或页面校验和不匹配
     CorruptedPage,        ///< 节点页损坏
     PageNotFound,         ///< 页 ID 不存在
     InvalidPage,          ///< 待写入页面状态无效
@@ -34,12 +35,12 @@ enum class BTreePageStoreErrorCode
 /**
  * @brief B+ 树页存储错误
  */
-struct BTreePageStoreError
+struct BTreePageStoreErrorContext
 {
-    BTreePageStoreErrorCode code;                         ///< 错误码
-    std::string message;                                  ///< 错误信息
     std::optional<BTreePageCodecErrorCode> codec_code;    ///< 页编解码错误码
 };
+
+using BTreePageStoreError = error::Error;
 
 /**
  * @brief 单个 B+ 树索引文件的页面存储
@@ -138,6 +139,9 @@ public:
     [[nodiscard]]
     std::uint64_t page_count() const noexcept;
 
+    [[nodiscard]]
+    std::uint64_t free_page_count() const noexcept;
+
     /**
      * @brief 获取索引条目数量
      * @return 索引条目数量
@@ -200,6 +204,18 @@ public:
     std::expected<void, BTreePageStoreError> set_entry_count(std::uint64_t count);
 
     /**
+     * @brief Publish a newly built tree and its entry count in one header write.
+     */
+    [[nodiscard]]
+    std::expected<void, BTreePageStoreError> publish_tree(
+        BTreePageId root_page_id,
+        std::uint64_t entry_count
+    );
+
+    [[nodiscard]]
+    std::expected<void, BTreePageStoreError> release_page(BTreePageId page_id);
+
+    /**
      * @brief 同步文件数据和读取所需元数据
      */
     [[nodiscard]]
@@ -254,6 +270,18 @@ private:
     [[nodiscard]]
     std::expected<void, BTreePageStoreError> append_page(const BTreePage & page);
 
+    [[nodiscard]]
+    std::expected<std::optional<BTreePageId>, BTreePageStoreError> acquire_free_page();
+
+    [[nodiscard]]
+    std::expected<BTreePageId, BTreePageStoreError> read_free_page_next(BTreePageId page_id) const;
+
+    [[nodiscard]]
+    std::expected<void, BTreePageStoreError> write_free_page(
+        BTreePageId page_id,
+        BTreePageId next_free_page_id
+    );
+
     /**
      * @brief 获取页偏移量
      * @param page_id 页 ID
@@ -270,6 +298,17 @@ private:
     BTreePageId root_page_id_ {InvalidBTreePageId};     ///< 根页 ID
     BTreePageId next_page_id_ {1};                      ///< 下一个待分配页 ID
     std::uint64_t entry_count_ {0};                     ///< 索引条目数量
+    BTreePageId free_page_head_ {InvalidBTreePageId};   ///< 空闲页链表头
+    std::uint64_t free_page_count_ {0};                 ///< 空闲页数量
 };
 
 } // namespace litedb::core::index::btree_index
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<index::btree_index::BTreePageStoreErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Index;
+};
+} // namespace litedb::core::error

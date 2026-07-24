@@ -22,9 +22,9 @@ schema::CollectionSchema users_schema()
              schema::ColumnSchema {2, 10, 1, "age", {common::LogicalTypeId::Integer, {}}, true, false, {}, {}}}};
 }
 
-schema::RecordData user(std::string name, std::int32_t age)
+common::RecordData user(std::string name, std::int32_t age)
 {
-    return {{schema::Value {std::move(name)}, schema::Value {age}}};
+    return {{common::Value {std::move(name)}, common::Value {age}}};
 }
 
 void contract(storage::StorageEngine & engine, bool open_existing)
@@ -43,10 +43,10 @@ void contract(storage::StorageEngine & engine, bool open_existing)
     require(row && row->has_value() && (**row).record_id == *first, "cursor row mismatch");
     auto end = cursor->next();
     require(end && !end->has_value(), "cursor eof mismatch");
-    auto invalid = engine.insert(10, {{schema::Value {std::int32_t {1}}}});
-    require(!invalid && invalid.error().code == storage::StorageErrorCode::ValueCountMismatch, "validation mismatch");
+    auto invalid = engine.insert(10, {{common::Value {std::int32_t {1}}}});
+    require(!invalid && invalid.error().is(storage::StorageErrorCode::ValueCountMismatch), "validation mismatch");
     auto oversized = engine.insert(10, user(std::string(5000, 'z'), 1));
-    require(!oversized && oversized.error().code == storage::StorageErrorCode::RecordTooLarge, "oversized record accepted");
+    require(!oversized && oversized.error().is(storage::StorageErrorCode::RecordTooLarge), "oversized record accepted");
 }
 
 void test_file_reopen()
@@ -55,16 +55,38 @@ void test_file_reopen()
     const auto path = std::filesystem::temp_directory_path() /
         ("litedb-storage-v2-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     {
-        storage::StorageEngine engine {path, filesystem};
+        storage::StorageEngine engine {path, filesystem, storage::StorageOpenMode::TransactionalStaging};
         contract(engine, false);
+        auto snapshot = engine.scan(10);
+        require(snapshot.has_value(), "snapshot cursor creation failed");
+        engine.clear();
+        auto retained = snapshot->next();
+        require(retained && retained->has_value() && (**retained).record_id == 1,
+                "cursor did not retain records after engine clear");
     }
     {
-        storage::StorageEngine engine {path, filesystem};
+        storage::StorageEngine engine {path, filesystem, storage::StorageOpenMode::TransactionalStaging};
         require(engine.open_collection(users_schema()).has_value(), "reopen failed");
         auto record = engine.get(10, 1);
         require(record && std::get<std::string>(record->data.values[0].data()).size() == 3000, "reopened record mismatch");
         auto next = engine.insert(10, user("carol", 50));
         require(next && *next == 3, "next record id was not persisted");
+        {
+            storage::StorageEngine live {path, filesystem};
+            require(live.open_collection(users_schema()).has_value(), "live collection open failed");
+            auto insert = live.insert(10, user("blocked", 1));
+            auto update = live.update(10, 1, user("blocked", 1));
+            auto erase = live.erase(10, 1);
+            auto drop = live.drop_collection(10);
+            require(!insert && insert.error().is(storage::StorageErrorCode::InvalidState),
+                    "live insert bypassed transaction boundary");
+            require(!update && update.error().is(storage::StorageErrorCode::InvalidState),
+                    "live update bypassed transaction boundary");
+            require(!erase && erase.error().is(storage::StorageErrorCode::InvalidState),
+                    "live erase bypassed transaction boundary");
+            require(!drop && drop.error().is(storage::StorageErrorCode::InvalidState),
+                    "live drop bypassed transaction boundary");
+        }
         require(engine.drop_collection(10).has_value(), "drop failed");
     }
     std::filesystem::remove_all(path);

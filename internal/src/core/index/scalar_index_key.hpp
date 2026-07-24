@@ -5,7 +5,7 @@
 #include <expected>
 
 #include "core/index/index_error.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::index
 {
@@ -22,20 +22,20 @@ public:
      * @return 标量索引键
      */
     [[nodiscard]]
-    static std::expected<ScalarIndexKey, IndexError> from_value(schema::Value value);
+    static std::expected<ScalarIndexKey, IndexError> from_value(common::Value value);
 
     /**
      * @brief 获取标量索引键值
      * @return 标量索引键值
      */
     [[nodiscard]]
-    const schema::Value & value() const noexcept;
+    const common::Value & value() const noexcept;
 
 private:
-    explicit ScalarIndexKey(schema::Value value);
+    explicit ScalarIndexKey(common::Value value);
 
 private:
-    schema::Value value_;       ///< 值
+    common::Value value_;       ///< 值
 };
 
 /**

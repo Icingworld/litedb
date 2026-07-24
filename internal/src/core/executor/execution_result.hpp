@@ -7,7 +7,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::executor
 {
@@ -36,7 +36,7 @@ struct ExecutionColumn
  */
 struct ExecutionRow
 {
-    std::vector<schema::Value> values;      ///< 值列表
+    std::vector<common::Value> values;      ///< 值列表
 };
 
 /**

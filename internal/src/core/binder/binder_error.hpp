@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
 
+#include "core/error/error.hpp"
 #include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::binder
@@ -10,7 +11,7 @@ namespace litedb::core::binder
 /**
  * @brief 绑定错误码
  */
-enum class BinderErrorCode
+enum class BinderErrorCode : std::uint8_t
 {
     UnsupportedStatement,      ///< 不支持的语句
     UnsupportedExpression,     ///< 不支持的表达式
@@ -30,11 +31,20 @@ enum class BinderErrorCode
 /**
  * @brief 绑定错误
  */
-struct BinderError
+struct BinderErrorContext
 {
-    BinderErrorCode code;                   ///< 错误码
     parser::ast::AstNodeLocation location;  ///< 错误位置
-    std::string message;                    ///< 错误消息
 };
 
+using BinderError = error::Error;
+
 } // namespace litedb::core::binder
+
+namespace litedb::core::error
+{
+template <>
+struct ErrorTraits<binder::BinderErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Binder;
+};
+} // namespace litedb::core::error

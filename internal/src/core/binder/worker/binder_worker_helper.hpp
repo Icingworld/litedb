@@ -7,7 +7,7 @@
 
 #include "core/binder/binder_error.hpp"
 #include "core/binder/binder_context.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
@@ -111,7 +111,7 @@ public:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_default_expression(
-        const meta::entry::DefaultExpression & expression,
+        const schema::DefaultExpression & expression,
         parser::ast::AstNodeLocation location
     ) const;
 
@@ -145,7 +145,7 @@ public:
      * @return 快照后的默认表达式
      */
     [[nodiscard]]
-    std::expected<meta::entry::DefaultExpression, BinderError> snapshot_default_expression(
+    std::expected<schema::DefaultExpression, BinderError> snapshot_default_expression(
         const parser::ast::ExpressionNode & expression
     ) const;
 

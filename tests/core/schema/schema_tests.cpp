@@ -1,5 +1,5 @@
 #include "core/meta/meta_engine.hpp"
-#include "core/schema/schema_loader.hpp"
+#include "core/storage/schema_loader.hpp"
 
 #include <exception>
 #include <iostream>
@@ -12,6 +12,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::meta;
 using namespace litedb::core::meta::entry;
 using namespace litedb::core::schema;
+using namespace litedb::core::storage;
 
 void require(bool condition, const char * message)
 {
@@ -25,15 +26,15 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
     return LogicalType {id, parameter};
 }
 
-CollectionId create_users_collection(MetaEngine & catalog)
+CollectionId create_users_collection(CatalogEditor & catalog)
 {
     auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
     if (!database.has_value()) {
-        throw std::runtime_error(database.error().message);
+        throw std::runtime_error(std::string {database.error().message()});
     }
 
     CreateCollectionRequest request;
-    request.database_id = database.value();
+    request.database_id = *database;
     request.name = "users";
     request.comment = "user collection";
     request.columns.push_back(ColumnDefinition {
@@ -56,20 +57,20 @@ CollectionId create_users_collection(MetaEngine & catalog)
 
     auto collection = catalog.create_collection(request);
     if (!collection.has_value()) {
-        throw std::runtime_error(collection.error().message);
+        throw std::runtime_error(std::string {collection.error().message()});
     }
-    return collection.value();
+    return *collection;
 }
 
 void test_load_collection_schema_from_catalog()
 {
-    MetaEngine catalog;
+    CatalogEditor catalog;
     const auto collection_id = create_users_collection(catalog);
 
-    auto loaded = load_collection_schema(catalog, collection_id);
+    auto loaded = load_collection_schema(catalog.view(), collection_id);
     require(loaded.has_value(), "collection schema load failed");
 
-    const auto & schema = loaded.value();
+    const auto & schema = *loaded;
     require(schema.collection_id() == collection_id, "collection id mismatch");
     require(schema.collection_name() == "users", "collection name mismatch");
     require(schema.comment().has_value(), "collection comment missing");
@@ -104,10 +105,10 @@ void test_load_collection_schema_from_catalog()
 
 void test_load_missing_collection_schema_fails()
 {
-    MetaEngine catalog;
-    auto loaded = load_collection_schema(catalog, 999);
+    CatalogEditor catalog;
+    auto loaded = load_collection_schema(catalog.view(), 999);
     require(!loaded.has_value(), "missing collection schema should fail");
-    require(loaded.error().code == SchemaErrorCode::CollectionNotFound, "missing collection error code mismatch");
+    require(loaded.error().is(SchemaLoadErrorCode::CollectionNotFound), "missing collection error code mismatch");
 }
 
 } // namespace

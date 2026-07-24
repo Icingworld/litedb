@@ -24,12 +24,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUpdateWork
     ParserSchemaHelper schema_helper(context_);
     auto collection = schema_helper.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
-        return std::unexpected(collection.error());
+        return std::unexpected(std::move(collection.error()));
     }
 
     auto set = context_.consume(TokenType::Set, "Expected SET after collection name");
     if (!set.has_value()) [[unlikely]] {
-        return std::unexpected(set.error());
+        return std::unexpected(std::move(set.error()));
     }
 
     ParserExpressionWorker expression_worker(context_);
@@ -37,22 +37,22 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUpdateWork
     while (true) {
         auto column = schema_helper.parse_identifier_string("Expected column name");
         if (!column.has_value()) [[unlikely]] {
-            return std::unexpected(column.error());
+            return std::unexpected(std::move(column.error()));
         }
 
         auto equal = context_.consume(TokenType::Equal, "Expected '=' after column name");
         if (!equal.has_value()) {
-            return std::unexpected(equal.error());
+            return std::unexpected(std::move(equal.error()));
         }
 
         auto value = expression_worker.parse_expression();
         if (!value.has_value()) [[unlikely]] {
-            return std::unexpected(value.error());
+            return std::unexpected(std::move(value.error()));
         }
 
         assignments.push_back(ast::Assignment {
-            std::move(column.value()),
-            std::move(value.value()),
+            std::move(*column),
+            std::move(*value),
         });
 
         if (!context_.match(TokenType::Comma)) {
@@ -64,13 +64,13 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUpdateWork
     if (context_.match(TokenType::Where)) {
         auto expression = expression_worker.parse_expression();
         if (!expression.has_value()) [[unlikely]] {
-            return std::unexpected(expression.error());
+            return std::unexpected(std::move(expression.error()));
         }
-        where = std::move(expression.value());
+        where = std::move(*expression);
     }
 
     return std::make_unique<ast::UpdateStatement>(
-        std::move(collection.value()),
+        std::move(*collection),
         std::move(assignments),
         std::move(where),
         context_.ast_location(location)

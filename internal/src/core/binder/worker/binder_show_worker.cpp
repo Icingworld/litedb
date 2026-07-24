@@ -52,12 +52,12 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
         return std::make_unique<BoundShowCollectionsStatement>(database->id(), statement.location());
     }
 
-    const auto database_id = helper.require_database(statement.location());
+    auto database_id = helper.require_database(statement.location());
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
 
-    return std::make_unique<BoundShowCollectionsStatement>(database_id.value(), statement.location());
+    return std::make_unique<BoundShowCollectionsStatement>(*database_id, statement.location());
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bind_show_indexes(

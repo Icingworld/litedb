@@ -33,7 +33,7 @@ void require(bool condition, const char * message)
 }
 
 template <typename T>
-const T & get_value(const schema::Value & value)
+const T & get_value(const common::Value & value)
 {
     return std::get<T>(value.data());
 }
@@ -41,7 +41,7 @@ const T & get_value(const schema::Value & value)
 std::vector<common::RecordId> find_index_equal(
     database::DatabaseEngine & engine,
     common::IndexId index_id,
-    schema::Value value
+    common::Value value
 )
 {
     auto key = index::ScalarIndexKey::from_value(std::move(value));
@@ -50,9 +50,9 @@ std::vector<common::RecordId> find_index_equal(
     auto index_view = engine.index_engine().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = engine.index_engine().find_equal(index_id, key.value());
+    auto found = engine.index_engine().find_equal(index_id, *key);
     require(found.has_value(), "index lookup failed");
-    return std::move(found.value());
+    return std::move(*found);
 }
 
 std::filesystem::path make_temp_dir(std::string name)
@@ -67,18 +67,18 @@ std::unique_ptr<database::DatabaseEngine> open_database(const std::filesystem::p
 {
     auto opened = database::DatabaseEngine::open(database::DatabaseConfig {.data_dir = data_dir});
     if (!opened.has_value()) {
-        throw std::runtime_error(opened.error().message);
+        throw std::runtime_error(opened.error().message());
     }
-    return std::move(opened.value());
+    return std::move(*opened);
 }
 
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 common::LogicalType type(common::LogicalTypeId id, std::optional<std::size_t> parameter = std::nullopt)
@@ -112,7 +112,7 @@ void test_truncated_database_manifest_is_rejected()
 
     auto reopened = manifest.ensure_initialized();
     require(!reopened.has_value(), "truncated manifest should be rejected");
-    require(reopened.error().code == database::ManifestErrorCode::InvalidFormat, "truncated manifest error code mismatch");
+    require(reopened.error().is(database::ManifestErrorCode::InvalidFormat), "truncated manifest error code mismatch");
 }
 
 void test_database_engine_open_propagates_manifest_error()
@@ -131,17 +131,17 @@ void test_database_engine_open_propagates_manifest_error()
     auto opened = database::DatabaseEngine::open(database::DatabaseConfig {.data_dir = dir});
     require(!opened.has_value(), "database engine should reject truncated manifest");
     require(
-        opened.error().code == database::DatabaseErrorCode::ManifestError,
+        opened.error().is(database::DatabaseErrorCode::ManifestError),
         "database engine manifest error code mismatch"
     );
 }
 
-schema::RecordData simple_record(std::int64_t id, std::string name)
+common::RecordData simple_record(std::int64_t id, std::string name)
 {
-    return schema::RecordData {
+    return common::RecordData {
         .values = {
-            schema::Value {id},
-            schema::Value {std::move(name)},
+            common::Value {id},
+            common::Value {std::move(name)},
         },
     };
 }
@@ -179,7 +179,7 @@ void test_database_engine_reopens_persistent_data()
         require(selected.rows.size() == 1, "reopen row count mismatch");
         require(get_value<std::string>(selected.rows[0].values[0]) == "alice", "reopen name mismatch");
         require(get_value<std::int32_t>(selected.rows[0].values[1]) == 19, "reopen updated age mismatch");
-        require(get_value<schema::VectorValue>(selected.rows[0].values[2]).size() == 3, "reopen vector mismatch");
+        require(get_value<common::VectorValue>(selected.rows[0].values[2]).size() == 3, "reopen vector mismatch");
 
         auto describe = execute_ok(session, "DESCRIBE users;");
         require(get_value<std::string>(describe.rows[1].values[4]) == "display name", "reopen column comment mismatch");
@@ -213,7 +213,7 @@ void test_index_ddl_reopen()
         require(index != nullptr, "created index lookup failed");
         persisted_index_id = index->id();
         require(index->kind() == meta::entry::IndexKind::BTree, "created index kind mismatch");
-        require(find_index_equal(*engine, index->id(), schema::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
+        require(find_index_equal(*engine, index->id(), common::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
         require(
             std::filesystem::exists(dir / "indexes" / (std::to_string(persisted_index_id) + ".bti")),
             "created BTREE index file missing"
@@ -232,15 +232,15 @@ void test_index_ddl_reopen()
         require(index != nullptr, "reopened index missing");
         require(index->kind() == meta::entry::IndexKind::BTree, "reopened index kind mismatch");
         const auto index_id = index->id();
-        require(find_index_equal(*reopened, index_id, schema::Value {std::int32_t {18}}).size() == 1, "reopened persistent index lookup mismatch");
+        require(find_index_equal(*reopened, index_id, common::Value {std::int32_t {18}}).size() == 1, "reopened persistent index lookup mismatch");
 
         database::Session session {*reopened};
         execute_ok(session, "USE demo;");
         execute_ok(session, "UPDATE users SET age = 19 WHERE id = 1;");
-        require(find_index_equal(*reopened, index_id, schema::Value {std::int32_t {18}}).empty(), "persistent UPDATE should remove old index key");
-        require(find_index_equal(*reopened, index_id, schema::Value {std::int32_t {19}}).size() == 1, "persistent UPDATE should add new index key");
+        require(find_index_equal(*reopened, index_id, common::Value {std::int32_t {18}}).empty(), "persistent UPDATE should remove old index key");
+        require(find_index_equal(*reopened, index_id, common::Value {std::int32_t {19}}).size() == 1, "persistent UPDATE should add new index key");
         execute_ok(session, "DELETE FROM users WHERE id = 1;");
-        require(find_index_equal(*reopened, index_id, schema::Value {std::int32_t {19}}).empty(), "persistent DELETE should remove index key");
+        require(find_index_equal(*reopened, index_id, common::Value {std::int32_t {19}}).empty(), "persistent DELETE should remove index key");
         auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
         require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
         require(reopened->meta().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");

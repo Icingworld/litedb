@@ -31,6 +31,8 @@ constexpr StageCase Stages[] {
     {transaction::CommitStage::AfterWalWrites, "after_wal_writes", false},
     {transaction::CommitStage::AfterWalCommitAppend, "after_wal_commit_append", false},
     {transaction::CommitStage::AfterWalCommitFlush, "after_wal_commit_flush", true},
+    {transaction::CommitStage::AfterDeltaApply, "after_delta_apply", true},
+    {transaction::CommitStage::AfterTruncate, "after_truncate", true},
     {transaction::CommitStage::AfterApply, "after_apply", true},
     {transaction::CommitStage::AfterRuntimeReload, "after_runtime_reload", true},
 };
@@ -49,14 +51,14 @@ std::unique_ptr<database::DatabaseEngine> open_database(
         .data_dir = path,
         .transaction_options = std::move(options),
     });
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
-    if (!result) throw std::runtime_error(result.error().message);
+    if (!result) throw std::runtime_error(result.error().message());
     return std::move(*result);
 }
 
@@ -156,7 +158,7 @@ void verify_index(const std::filesystem::path & directory, const StageCase & sta
     require(std::filesystem::exists(directory / "indexes" / "1.bti") == exists,
             "CREATE INDEX meta and file disagree after recovery");
     if (exists) {
-        auto key = index::ScalarIndexKey::from_value(schema::Value {std::int64_t {7}});
+        auto key = index::ScalarIndexKey::from_value(common::Value {std::int64_t {7}});
         require(key.has_value(), "scalar key construction failed");
         auto rows = engine->index_engine().find_equal(entry->id(), *key);
         require(rows && rows->size() == 1, "recovered B+Tree does not contain existing row");

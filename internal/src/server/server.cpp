@@ -14,9 +14,9 @@ namespace
 {
 
 [[nodiscard]]
-std::uint16_t to_error_code(core::database::SessionErrorCode code) noexcept
+std::uint16_t to_error_code(const core::error::Error & error) noexcept
 {
-    return static_cast<std::uint16_t>(code) + 1U;
+    return static_cast<std::uint16_t>(error.code()) + 1U;
 }
 
 } // namespace
@@ -97,7 +97,7 @@ asio::awaitable<void> Server::handle_connection(net::TcpSocket socket)
         case protocol::MessageKind::ExecuteSqlRequest: {
             auto request = protocol::decode_execute_sql_request(frame->payload);
             if (!request.has_value()) {
-                auto error = make_error_response(frame->header.request_id, 0, request.error().message);
+                auto error = make_error_response(frame->header.request_id, 0, request.error().message());
                 (void) co_await net::async_write_frame(socket, error);
                 co_return;
             }
@@ -106,8 +106,8 @@ asio::awaitable<void> Server::handle_connection(net::TcpSocket socket)
             if (!executed.has_value()) {
                 auto error = make_error_response(
                     frame->header.request_id,
-                    to_error_code(executed.error().code),
-                    executed.error().message
+                    to_error_code(executed.error()),
+                    executed.error().message()
                 );
                 auto written = co_await net::async_write_frame(socket, error);
                 if (!written.has_value()) {
@@ -123,7 +123,7 @@ asio::awaitable<void> Server::handle_connection(net::TcpSocket socket)
                     .kind = protocol::MessageKind::ExecuteSqlResponse,
                     .request_id = frame->header.request_id,
                 },
-                .payload = protocol::encode_execute_sql_response(executed.value()),
+                .payload = protocol::encode_execute_sql_response(*executed),
             };
             auto written = co_await net::async_write_frame(socket, response);
             if (!written.has_value()) {

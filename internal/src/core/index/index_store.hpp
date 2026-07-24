@@ -64,6 +64,9 @@ public:
     [[nodiscard]]
     std::expected<void, IndexError> insert(const ScalarIndexKey & key, common::RecordId record_id);
 
+    [[nodiscard]]
+    std::expected<void, IndexError> bulk_load(std::vector<ScalarIndexEntry> entries);
+
     /**
      * @brief 删除键值对
      */
@@ -81,6 +84,11 @@ public:
      */
     [[nodiscard]]
     std::expected<std::vector<common::RecordId>, IndexError> scan_range(const IndexRange & range) const;
+
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError> scan_range_cursor(
+        const IndexRange & range
+    ) const;
 
     /**
      * @brief 获取索引大小

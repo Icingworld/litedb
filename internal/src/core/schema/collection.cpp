@@ -1,6 +1,6 @@
 #include "core/schema/collection.hpp"
 
-#include "core/meta/meta_helper.hpp"
+#include "core/common/identifier.hpp"
 
 #include <utility>
 
@@ -67,9 +67,9 @@ const ColumnSchema * CollectionSchema::find_column(common::ColumnId column_id) c
 
 const ColumnSchema * CollectionSchema::find_column(std::string_view column_name) const
 {
-    const auto key = meta::normalize_identifier(column_name);
+    const auto key = common::normalize_identifier(column_name);
     for (const auto & column : columns_) {
-        if (meta::normalize_identifier(column.column_name()) == key) {
+        if (common::normalize_identifier(column.column_name()) == key) {
             return &column;
         }
     }

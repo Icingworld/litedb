@@ -10,7 +10,7 @@ PlannerError make_planner_error(
     std::string message
 )
 {
-    return PlannerError {code, location, message};
+    return PlannerError {code, message, PlannerErrorContext {location}};
 }
 
 } // namespace litedb::core::planner

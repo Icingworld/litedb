@@ -37,7 +37,8 @@ public:
     static std::expected<RecoveryResult, WalError> recover(
         const std::filesystem::path & data_directory,
         filesystem::FileSystem & filesystem,
-        WalManager & wal
+        WalManager & wal,
+        const WalDecodeLimits & limits = {}
     );
 };
 

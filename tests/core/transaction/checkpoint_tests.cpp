@@ -19,21 +19,21 @@ void require(bool condition, const char * message)
 executor::ExecutionResult execute_ok(database::Session & session, std::string_view sql)
 {
     auto result = session.execute_sql(sql);
-    if (!result) throw std::runtime_error(result.error().message);
+    if (!result) throw std::runtime_error(result.error().message());
     return std::move(*result);
 }
 
 std::unique_ptr<database::DatabaseEngine> open_database(const std::filesystem::path & directory)
 {
     auto opened = database::DatabaseEngine::open({.data_dir = directory});
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
 std::unique_ptr<database::DatabaseEngine> open_database(database::DatabaseConfig config)
 {
     auto opened = database::DatabaseEngine::open(std::move(config));
-    if (!opened) throw std::runtime_error(opened.error().message);
+    if (!opened) throw std::runtime_error(opened.error().message());
     return std::move(*opened);
 }
 
@@ -74,6 +74,56 @@ void test_automatic_checkpoint_by_wal_size()
     execute_ok(session, "USE demo;");
     const auto rows = execute_ok(session, "SELECT id FROM docs;");
     require(rows.rows.size() == 1, "automatic checkpoint restart lost committed data");
+}
+
+void test_database_recovery_uses_configured_wal_limits()
+{
+    const auto directory = std::filesystem::temp_directory_path() / "litedb_wal_limit_config_tests";
+    std::filesystem::remove_all(directory);
+    {
+        auto engine = open_database(directory);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+    }
+
+    auto limited = database::DatabaseEngine::open(database::DatabaseConfig {
+        .data_dir = directory,
+        .wal_decode_limits = {
+            .max_record_size_bytes = 1024 * 1024,
+            .max_scan_size_bytes = wal::WalCodec::FileHeaderSize,
+            .max_record_count = 16,
+        },
+    });
+    require(!limited && limited.error().is(database::DatabaseErrorCode::WalError),
+            "Database recovery did not enforce configured WAL limits");
+}
+
+void test_wal_write_budget_prevents_unrecoverable_commit()
+{
+    const auto directory = std::filesystem::temp_directory_path() / "litedb_wal_write_budget_tests";
+    std::filesystem::remove_all(directory);
+    const database::DatabaseConfig config {
+        .data_dir = directory,
+        .wal_decode_limits = {
+            .max_record_size_bytes = 1024 * 1024,
+            .max_scan_size_bytes = 1024 * 1024,
+            .max_record_count = 4,
+        },
+    };
+    {
+        auto engine = open_database(config);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        const auto rejected = session.execute_sql("CREATE COLLECTION docs (id BIGINT);");
+        require(!rejected, "WAL budget should reject a transaction that cannot be recovered");
+    }
+
+    auto reopened = open_database(config);
+    database::Session session {*reopened};
+    execute_ok(session, "USE demo;");
+    const auto collections = execute_ok(session, "SHOW COLLECTIONS;");
+    require(collections.rows.empty(), "rejected over-budget transaction became visible after restart");
 }
 
 } // namespace
@@ -127,5 +177,7 @@ int main()
     const auto rows = execute_ok(session, "SELECT id FROM docs;");
     require(rows.rows.size() == 2, "checkpoint restart lost committed rows");
     test_automatic_checkpoint_by_wal_size();
+    test_database_recovery_uses_configured_wal_limits();
+    test_wal_write_budget_prevents_unrecoverable_commit();
     return 0;
 }

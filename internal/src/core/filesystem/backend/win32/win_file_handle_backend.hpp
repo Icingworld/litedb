@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <mutex>
 #include <span>
 
@@ -22,7 +23,7 @@ namespace litedb::core::filesystem::backend
 class Win32FileHandleBackend final : public FileHandleBackend
 {
 public:
-    explicit Win32FileHandleBackend(HANDLE handle);
+    Win32FileHandleBackend(HANDLE handle, std::filesystem::path path);
 
     Win32FileHandleBackend(const Win32FileHandleBackend &) = delete;
 
@@ -31,32 +32,37 @@ public:
     ~Win32FileHandleBackend() override;
 
 public:
-    std::expected<void, FileSystemError> close() override;
+    std::expected<void, error::Error> close() override;
 
-    std::expected<std::size_t, FileSystemError> read_at(
+    std::expected<std::size_t, error::Error> read_at(
         std::uint64_t offset,
         std::span<std::byte> buffer
     ) override;
 
-    std::expected<void, FileSystemError> write_at(
+    std::expected<void, error::Error> write_at(
         std::uint64_t offset,
         std::span<const std::byte> data
     ) override;
 
-    std::expected<void, FileSystemError> append(std::span<const std::byte> data) override;
+    std::expected<void, error::Error> append(std::span<const std::byte> data) override;
 
-    std::expected<std::uint64_t, FileSystemError> size() override;
+    std::expected<std::uint64_t, error::Error> size() override;
 
-    std::expected<void, FileSystemError> truncate(std::uint64_t size) override;
+    std::expected<void, error::Error> truncate(std::uint64_t size) override;
 
-    std::expected<void, FileSystemError> sync_data() override;
+    std::expected<void, error::Error> sync_data() override;
 
-    std::expected<void, FileSystemError> sync_all() override;
+    std::expected<void, error::Error> sync_all() override;
 
 private:
-    std::expected<void, FileSystemError> seek_locked(std::uint64_t offset);
+    std::expected<void, error::Error> seek_locked(
+        std::uint64_t offset,
+        std::size_t size,
+        const char * operation
+    );
 
     HANDLE handle_ {INVALID_HANDLE_VALUE};
+    std::filesystem::path path_;
     std::mutex mutex_;
 };
 

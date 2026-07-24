@@ -6,7 +6,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
-#include "core/meta/entry/default_expression.hpp"
+#include "core/schema/default_expression.hpp"
 #include "core/meta/entry/index_entry.hpp"
 #include "core/meta/entry/vector_index_entry.hpp"
 
@@ -23,7 +23,7 @@ struct MetaSnapshotColumn
     common::LogicalType type;                                       ///< 列类型
     bool unique {false};                                            ///< 是否唯一
     bool nullable {true};                                           ///< 是否可空
-    std::optional<entry::DefaultExpression> default_expression;     ///< 默认值表达式
+    std::optional<schema::DefaultExpression> default_expression;     ///< 默认值表达式
     std::optional<std::string> comment;                             ///< 列注释
 };
 

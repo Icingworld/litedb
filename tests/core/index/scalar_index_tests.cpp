@@ -16,7 +16,6 @@ namespace
 
 using namespace litedb::core::common;
 using namespace litedb::core::index;
-using namespace litedb::core::schema;
 
 class EqualityOnlyTestIndex final : public ScalarIndex
 {
@@ -74,17 +73,17 @@ ScalarIndexKey key(Value value)
 {
     auto result = ScalarIndexKey::from_value(std::move(value));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::vector<RecordId> ids(std::expected<std::vector<RecordId>, IndexError> result)
 {
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 void require_ids(std::vector<RecordId> actual, std::vector<RecordId> expected, const char * message)
@@ -105,19 +104,19 @@ void test_scalar_key_validation()
 
     auto vector_key = ScalarIndexKey::from_value(Value {VectorValue {1.0, 2.0}});
     require(!vector_key.has_value(), "vector key should be rejected");
-    require(vector_key.error().code == IndexErrorCode::UnsupportedKeyType, "vector key error code mismatch");
+    require(vector_key.error().is(IndexErrorCode::UnsupportedKeyType), "vector key error code mismatch");
 
     auto null_key = ScalarIndexKey::from_value(Value::null());
     require(!null_key.has_value(), "null key should be rejected");
-    require(null_key.error().code == IndexErrorCode::InvalidKeyValue, "null key error code mismatch");
+    require(null_key.error().is(IndexErrorCode::InvalidKeyValue), "null key error code mismatch");
 
     auto float_nan_key = ScalarIndexKey::from_value(Value {std::numeric_limits<float>::quiet_NaN()});
     require(!float_nan_key.has_value(), "float NaN key should be rejected");
-    require(float_nan_key.error().code == IndexErrorCode::InvalidKeyValue, "float NaN key error code mismatch");
+    require(float_nan_key.error().is(IndexErrorCode::InvalidKeyValue), "float NaN key error code mismatch");
 
     auto double_nan_key = ScalarIndexKey::from_value(Value {std::numeric_limits<double>::quiet_NaN()});
     require(!double_nan_key.has_value(), "double NaN key should be rejected");
-    require(double_nan_key.error().code == IndexErrorCode::InvalidKeyValue, "double NaN key error code mismatch");
+    require(double_nan_key.error().is(IndexErrorCode::InvalidKeyValue), "double NaN key error code mismatch");
 }
 
 void test_scalar_key_exact_type_semantics()
@@ -164,16 +163,16 @@ void test_index_store_enforces_descriptor_constraints()
 
     auto duplicate_key = store.validate_insert(one);
     require(!duplicate_key.has_value(), "unique store should reject an existing key");
-    require(duplicate_key.error().code == IndexErrorCode::DuplicateKey, "unique store error mismatch");
+    require(duplicate_key.error().is(IndexErrorCode::DuplicateKey), "unique store error mismatch");
 
     auto wrong_type = store.find_equal(key(Value {std::int64_t {1}}));
     require(!wrong_type.has_value(), "store should reject a mismatched key type");
-    require(wrong_type.error().code == IndexErrorCode::KeyTypeMismatch, "store key type error mismatch");
+    require(wrong_type.error().is(IndexErrorCode::KeyTypeMismatch), "store key type error mismatch");
 
     auto unsupported_range = store.scan_range(IndexRange::all());
     require(!unsupported_range.has_value(), "equality-only store should reject range scans");
     require(
-        unsupported_range.error().code == IndexErrorCode::UnsupportedRangeScan,
+        unsupported_range.error().is(IndexErrorCode::UnsupportedRangeScan),
         "equality-only store range error mismatch"
     );
 }

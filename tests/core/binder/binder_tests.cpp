@@ -51,14 +51,14 @@ std::unique_ptr<litedb::core::parser::ast::StatementNode> parse_ok(std::string_v
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(std::string(result.error().message).append(": ").append(sql));
+        throw std::runtime_error(std::string(result.error().message()).append(": ").append(sql));
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 struct Fixture
 {
-    MetaEngine catalog;
+    CatalogEditor catalog;
     DatabaseId database_id {0};
     CollectionId users_id {0};
 
@@ -66,9 +66,9 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         if (!database.has_value()) {
-            throw std::runtime_error(database.error().message);
+            throw std::runtime_error(database.error().message());
         }
-        database_id = database.value();
+        database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
@@ -82,7 +82,7 @@ struct Fixture
             ColumnDefinition {
                 .name = "name",
                 .type = type(LogicalTypeId::Varchar, 64),
-                .default_expression = DefaultExpression::literal(DefaultLiteralKind::String, "unknown"),
+                .default_expression = litedb::core::schema::DefaultExpression::literal(litedb::core::schema::DefaultLiteralKind::String, "unknown"),
             },
             ColumnDefinition {
                 .name = "age",
@@ -98,9 +98,9 @@ struct Fixture
 
         auto collection = catalog.create_collection(users);
         if (!collection.has_value()) {
-            throw std::runtime_error(collection.error().message);
+            throw std::runtime_error(collection.error().message());
         }
-        users_id = collection.value();
+        users_id = *collection;
     }
 };
 
@@ -108,24 +108,24 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 BinderError bind_error(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog, session};
+    BinderContext context {fixture.catalog.view(), session};
     Binder binder {context};
     auto result = binder.bind(*statement);
     require(!result.has_value(), "statement should fail to bind");
-    return result.error();
+    return std::move(result.error());
 }
 
 void test_use_and_missing_database_context()
@@ -138,11 +138,11 @@ void test_use_and_missing_database_context()
 
     auto select_ast = parse_ok("SELECT * FROM users;");
     SessionContext empty_session;
-    BinderContext context {fixture.catalog, empty_session};
+    BinderContext context {fixture.catalog.view(), empty_session};
     Binder binder {context};
     auto result = binder.bind(*select_ast);
     require(!result.has_value(), "SELECT without database should fail");
-    require(result.error().code == BinderErrorCode::DatabaseNotSelected, "missing database error mismatch");
+    require(result.error().is(BinderErrorCode::DatabaseNotSelected), "missing database error mismatch");
 }
 
 void test_select_binding()
@@ -204,17 +204,17 @@ void test_select_alias_binding()
     require(duplicate_select->projections()[0].alias.value() == "x", "first duplicate alias mismatch");
     require(duplicate_select->projections()[1].alias.value() == "x", "second duplicate alias mismatch");
 
-    require(bind_error(fixture, "SELECT age AS x, name AS x FROM users ORDER BY x;").code == BinderErrorCode::AmbiguousAlias, "ambiguous ORDER BY alias error mismatch");
+    require(bind_error(fixture, "SELECT age AS x, name AS x FROM users ORDER BY x;").is(BinderErrorCode::AmbiguousAlias), "ambiguous ORDER BY alias error mismatch");
 }
 
 void test_select_errors()
 {
     Fixture fixture;
-    require(bind_error(fixture, "SELECT missing FROM users;").code == BinderErrorCode::ColumnNotFound, "missing column error mismatch");
-    require(bind_error(fixture, "SELECT other.id FROM users;").code == BinderErrorCode::InvalidQualifier, "qualifier error mismatch");
-    require(bind_error(fixture, "SELECT * FROM users WHERE name + 1 > 3;").code == BinderErrorCode::InvalidType, "invalid arithmetic error mismatch");
+    require(bind_error(fixture, "SELECT missing FROM users;").is(BinderErrorCode::ColumnNotFound), "missing column error mismatch");
+    require(bind_error(fixture, "SELECT other.id FROM users;").is(BinderErrorCode::InvalidQualifier), "qualifier error mismatch");
+    require(bind_error(fixture, "SELECT * FROM users WHERE name + 1 > 3;").is(BinderErrorCode::InvalidType), "invalid arithmetic error mismatch");
 
-    require(bind_error(fixture, "SELECT missing_function(age) FROM users;").code == BinderErrorCode::UnsupportedExpression, "unknown function error mismatch");
+    require(bind_error(fixture, "SELECT missing_function(age) FROM users;").is(BinderErrorCode::UnsupportedExpression), "unknown function error mismatch");
 }
 
 void test_function_binding()
@@ -233,7 +233,7 @@ void test_function_binding()
     require(function.type().id == LogicalTypeId::Double, "function return type mismatch");
     require(function.arguments().size() == 2, "function argument count mismatch");
 
-    require(bind_error(fixture, "SELECT id FROM users ORDER BY l2_distance(embedding, [0.1, 0.2]);").code == BinderErrorCode::InvalidType, "function vector dimension error mismatch");
+    require(bind_error(fixture, "SELECT id FROM users ORDER BY l2_distance(embedding, [0.1, 0.2]);").is(BinderErrorCode::InvalidType), "function vector dimension error mismatch");
 }
 
 void test_insert_binding()
@@ -256,10 +256,10 @@ void test_insert_binding()
 void test_insert_errors()
 {
     Fixture fixture;
-    require(bind_error(fixture, "INSERT INTO users (id, id) VALUES (1, 2);").code == BinderErrorCode::DuplicateColumn, "duplicate insert column error mismatch");
-    require(bind_error(fixture, "INSERT INTO users (id) VALUES (1, 2);").code == BinderErrorCode::InvalidValueCount, "insert value count error mismatch");
-    require(bind_error(fixture, "INSERT INTO users (id, embedding) VALUES (1, [0.1, 0.2]);").code == BinderErrorCode::InvalidType, "vector dimension error mismatch");
-    require(bind_error(fixture, "INSERT INTO users (id) VALUES (NULL);").code == BinderErrorCode::NotNullable, "insert null primary key error mismatch");
+    require(bind_error(fixture, "INSERT INTO users (id, id) VALUES (1, 2);").is(BinderErrorCode::DuplicateColumn), "duplicate insert column error mismatch");
+    require(bind_error(fixture, "INSERT INTO users (id) VALUES (1, 2);").is(BinderErrorCode::InvalidValueCount), "insert value count error mismatch");
+    require(bind_error(fixture, "INSERT INTO users (id, embedding) VALUES (1, [0.1, 0.2]);").is(BinderErrorCode::InvalidType), "vector dimension error mismatch");
+    require(bind_error(fixture, "INSERT INTO users (id) VALUES (NULL);").is(BinderErrorCode::NotNullable), "insert null primary key error mismatch");
 }
 
 void test_update_delete_binding()
@@ -276,9 +276,9 @@ void test_update_delete_binding()
     const auto * bound_delete = static_cast<const BoundDeleteStatement *>(del.get());
     require(bound_delete->where() == nullptr, "DELETE without where mismatch");
 
-    require(bind_error(fixture, "UPDATE users SET age = name;").code == BinderErrorCode::InvalidType, "UPDATE type error mismatch");
-    require(bind_error(fixture, "UPDATE users SET id = NULL;").code == BinderErrorCode::NotNullable, "UPDATE null primary key error mismatch");
-    require(bind_error(fixture, "DELETE FROM users WHERE age + 1;").code == BinderErrorCode::InvalidType, "DELETE where type error mismatch");
+    require(bind_error(fixture, "UPDATE users SET age = name;").is(BinderErrorCode::InvalidType), "UPDATE type error mismatch");
+    require(bind_error(fixture, "UPDATE users SET id = NULL;").is(BinderErrorCode::NotNullable), "UPDATE null primary key error mismatch");
+    require(bind_error(fixture, "DELETE FROM users WHERE age + 1;").is(BinderErrorCode::InvalidType), "DELETE where type error mismatch");
 }
 
 void test_ddl_and_metadata_binding()
@@ -311,7 +311,7 @@ void test_ddl_and_metadata_binding()
     require(create_collection->columns()[1].type.id == LogicalTypeId::Vector, "CREATE COLLECTION vector type mismatch");
     require(create_collection->columns()[1].nullable, "CREATE COLLECTION NULL mismatch");
 
-    require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").code == BinderErrorCode::InvalidType, "default type error mismatch");
+    require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").is(BinderErrorCode::InvalidType), "default type error mismatch");
 }
 
 void test_index_binding()
@@ -334,10 +334,10 @@ void test_index_binding()
     require(bound_create_name->index_kind() == IndexKind::BTree, "CREATE INDEX BTREE kind mismatch");
     require(bound_create_name->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
 
-    require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").code == BinderErrorCode::InvalidType, "vector index type error mismatch");
-    require(bind_error(fixture, "CREATE INDEX idx_missing ON users (missing);").code == BinderErrorCode::ColumnNotFound, "missing index column error mismatch");
+    require(bind_error(fixture, "CREATE INDEX idx_embedding ON users (embedding);").is(BinderErrorCode::InvalidType), "vector index type error mismatch");
+    require(bind_error(fixture, "CREATE INDEX idx_missing ON users (missing);").is(BinderErrorCode::ColumnNotFound), "missing index column error mismatch");
 
-    const auto * age_column = fixture.catalog.find_column(fixture.users_id, "age");
+    const auto * age_column = fixture.catalog.view().find_column(fixture.users_id, "age");
     require(age_column != nullptr, "age column lookup failed");
     auto created_index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
@@ -356,7 +356,7 @@ void test_index_binding()
     require(bound_drop_age->index_name() == "idx_age", "DROP INDEX index name mismatch");
     require(!bound_drop_age->if_exists(), "DROP INDEX if-exists mismatch");
 
-    require(bind_error(fixture, "DROP INDEX missing ON users;").code == BinderErrorCode::IndexNotFound, "missing index error mismatch");
+    require(bind_error(fixture, "DROP INDEX missing ON users;").is(BinderErrorCode::IndexNotFound), "missing index error mismatch");
 
     auto drop_missing = bind_ok(fixture, "DROP INDEX IF EXISTS missing ON users;");
     const auto * bound_drop_missing = static_cast<const BoundDropIndexStatement *>(drop_missing.get());
@@ -394,10 +394,10 @@ void test_vector_index_binding()
     require(bound_defaults->ef_search_default() == 64, "CREATE VINDEX default ef_search mismatch");
     require(bound_defaults->random_seed() == 0, "CREATE VINDEX default random_seed mismatch");
 
-    require(bind_error(fixture, "CREATE VINDEX vidx_age ON users (age) USING HNSW;").code == BinderErrorCode::InvalidType, "vector index scalar column error mismatch");
-    require(bind_error(fixture, "CREATE VINDEX vidx_missing ON users (missing) USING HNSW;").code == BinderErrorCode::ColumnNotFound, "missing vector index column error mismatch");
+    require(bind_error(fixture, "CREATE VINDEX vidx_age ON users (age) USING HNSW;").is(BinderErrorCode::InvalidType), "vector index scalar column error mismatch");
+    require(bind_error(fixture, "CREATE VINDEX vidx_missing ON users (missing) USING HNSW;").is(BinderErrorCode::ColumnNotFound), "missing vector index column error mismatch");
 
-    const auto * embedding_column = fixture.catalog.find_column(fixture.users_id, "embedding");
+    const auto * embedding_column = fixture.catalog.view().find_column(fixture.users_id, "embedding");
     require(embedding_column != nullptr, "embedding column lookup failed");
     auto created_index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,
@@ -415,7 +415,7 @@ void test_vector_index_binding()
     require(bound_drop->index_name() == "vidx_embedding", "DROP VINDEX index name mismatch");
     require(!bound_drop->if_exists(), "DROP VINDEX if-exists mismatch");
 
-    require(bind_error(fixture, "DROP VINDEX missing ON users;").code == BinderErrorCode::IndexNotFound, "missing vector index error mismatch");
+    require(bind_error(fixture, "DROP VINDEX missing ON users;").is(BinderErrorCode::IndexNotFound), "missing vector index error mismatch");
 
     auto drop_missing = bind_ok(fixture, "DROP VINDEX IF EXISTS missing ON users;");
     const auto * bound_drop_missing = static_cast<const BoundDropVectorIndexStatement *>(drop_missing.get());

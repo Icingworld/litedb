@@ -5,7 +5,7 @@
 namespace litedb::core::database
 {
 
-inline constexpr std::uint16_t DatabaseFormatVersion = 1;           ///< 数据库格式版本
+inline constexpr std::uint16_t DatabaseFormatVersion = 2;           ///< 数据库格式版本
 inline constexpr std::uint16_t FileHeaderSize = 8;                  ///< 文件头大小
 
 inline constexpr std::uint32_t ManifestMagic = 0x464d444c;          ///< LDMF

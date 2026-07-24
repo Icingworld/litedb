@@ -38,8 +38,8 @@
 #include "core/logical_plan/statement/mutation/delete_plan.hpp"
 #include "core/logical_plan/statement/mutation/update_plan.hpp"
 #include "core/logical_plan/statement/query/query_plan.hpp"
-#include "core/schema/record.hpp"
-#include "core/schema/value.hpp"
+#include "core/common/record.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::optimizer
 {
@@ -119,7 +119,7 @@ OptimizerError make_error(
     std::string message
 )
 {
-    return OptimizerError {code, location, std::move(message)};
+    return OptimizerError {code, message, OptimizerErrorContext {location}};
 }
 
 [[nodiscard]]
@@ -196,7 +196,7 @@ std::string numeric_to_string(auto value)
 
 [[nodiscard]]
 std::optional<std::unique_ptr<BoundExpression>> value_to_expression(
-    const schema::Value & value,
+    const common::Value & value,
     const BoundExpression & original
 )
 {
@@ -207,7 +207,7 @@ std::optional<std::unique_ptr<BoundExpression>> value_to_expression(
     return std::visit(
         [&original](const auto & data) -> std::optional<std::unique_ptr<BoundExpression>> {
             using T = std::decay_t<decltype(data)>;
-            if constexpr (std::is_same_v<T, schema::NullValue>) {
+            if constexpr (std::is_same_v<T, common::NullValue>) {
                 return std::make_unique<BoundNullExpression>(original.type(), original.location());
             } else if constexpr (std::is_same_v<T, bool>) {
                 return make_bool_literal(data, original.location());
@@ -236,12 +236,12 @@ std::optional<std::unique_ptr<BoundExpression>> try_fold_constant(
     }
 
     evaluator::ExpressionEvaluator evaluator;
-    auto value = evaluator.evaluate(expression, schema::Record {});
+    auto value = evaluator.evaluate(expression, common::Record {});
     if (!value.has_value()) {
         return std::nullopt;
     }
 
-    return value_to_expression(value.value(), expression);
+    return value_to_expression(*value, expression);
 }
 
 [[nodiscard]]
@@ -252,16 +252,16 @@ std::optional<index::ScalarIndexKey> expression_to_index_key(const BoundExpressi
     }
 
     evaluator::ExpressionEvaluator evaluator;
-    auto value = evaluator.evaluate(expression, schema::Record {});
+    auto value = evaluator.evaluate(expression, common::Record {});
     if (!value.has_value()) {
         return std::nullopt;
     }
 
-    auto key = index::ScalarIndexKey::from_value(std::move(value.value()));
+    auto key = index::ScalarIndexKey::from_value(std::move(*value));
     if (!key.has_value()) {
         return std::nullopt;
     }
-    return std::move(key.value());
+    return std::move(*key);
 }
 
 [[nodiscard]]
@@ -340,7 +340,7 @@ std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryE
         if (!inverted.has_value()) {
             return std::nullopt;
         }
-        op = inverted.value();
+        op = *inverted;
     }
 
     if (column == nullptr) {
@@ -352,7 +352,7 @@ std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryE
         return std::nullopt;
     }
 
-    auto lookup = lookup_from_comparison(op, std::move(key.value()));
+    auto lookup = lookup_from_comparison(op, std::move(*key));
     if (!lookup.has_value()) {
         return std::nullopt;
     }
@@ -360,7 +360,7 @@ std::optional<IndexCandidate> candidate_from_binary_predicate(const BoundBinaryE
     return IndexCandidate {
         .collection_id = column->collection_id(),
         .column_id = column->column_id(),
-        .lookup = std::move(lookup.value()),
+        .lookup = std::move(*lookup),
     };
 }
 
@@ -383,8 +383,8 @@ std::optional<IndexCandidate> candidate_from_between_predicate(const BoundBetwee
         .column_id = column->column_id(),
         .lookup = LogicalIndexLookup {
             .kind = LogicalIndexLookupKind::Range,
-            .lower = LogicalIndexBound {.key = std::move(lower.value()), .inclusive = true},
-            .upper = LogicalIndexBound {.key = std::move(upper.value()), .inclusive = true},
+            .lower = LogicalIndexBound {.key = std::move(*lower), .inclusive = true},
+            .upper = LogicalIndexBound {.key = std::move(*upper), .inclusive = true},
         },
     };
 }
@@ -415,7 +415,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
     const LogicalScan & scan,
     const BoundExpression & predicate,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     if (!options.enable_index_selection || catalog == nullptr || scan.index_hint().has_value()) {
@@ -439,7 +439,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
         if (!column_id.has_value()) {
             continue;
         }
-        const auto * column = catalog->find_column(column_id.value());
+        const auto * column = catalog->find_column(*column_id);
         if (column == nullptr) {
             continue;
         }
@@ -448,7 +448,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
             .index_id = index_entry->id(),
             .index_name = index_entry->name(),
             .index_kind = index_entry->kind(),
-            .column_id = column_id.value(),
+            .column_id = *column_id,
             .column_name = column->name(),
             .lookup = std::move(candidate->lookup),
         };
@@ -552,10 +552,10 @@ ExpressionRewriteResult rewrite_expression(const BoundExpression & expression, c
             unary.location()
         );
         if (auto simplified = simplify_boolean_unary(*rebuilt, options); simplified.has_value()) {
-            return ExpressionRewriteResult {std::move(simplified.value()), true};
+            return ExpressionRewriteResult {std::move(*simplified), true};
         }
         if (auto folded = try_fold_constant(*rebuilt, options); folded.has_value()) {
-            return ExpressionRewriteResult {std::move(folded.value()), true};
+            return ExpressionRewriteResult {std::move(*folded), true};
         }
         return ExpressionRewriteResult {std::move(rebuilt), operand.changed};
     }
@@ -571,10 +571,10 @@ ExpressionRewriteResult rewrite_expression(const BoundExpression & expression, c
             binary.location()
         );
         if (auto simplified = simplify_boolean_binary(*rebuilt, options); simplified.has_value()) {
-            return ExpressionRewriteResult {std::move(simplified.value()), true};
+            return ExpressionRewriteResult {std::move(*simplified), true};
         }
         if (auto folded = try_fold_constant(*rebuilt, options); folded.has_value()) {
-            return ExpressionRewriteResult {std::move(folded.value()), true};
+            return ExpressionRewriteResult {std::move(*folded), true};
         }
         return ExpressionRewriteResult {std::move(rebuilt), left.changed || right.changed};
     }
@@ -635,7 +635,7 @@ ExpressionRewriteResult rewrite_expression(const BoundExpression & expression, c
             cast.location()
         );
         if (auto folded = try_fold_constant(*rebuilt, options); folded.has_value()) {
-            return ExpressionRewriteResult {std::move(folded.value()), true};
+            return ExpressionRewriteResult {std::move(*folded), true};
         }
         return ExpressionRewriteResult {std::move(rebuilt), inner.changed};
     }
@@ -786,7 +786,7 @@ std::optional<VectorTopKPattern> match_vector_top_k(const LogicalLimit & limit)
 std::optional<std::unique_ptr<LogicalPlanNode>> try_rewrite_vector_top_k(
     const LogicalLimit & limit,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     if (!options.enable_index_selection || catalog == nullptr) {
@@ -841,7 +841,7 @@ std::optional<std::unique_ptr<LogicalPlanNode>> try_rewrite_vector_top_k(
 LogicalRewriteResult rewrite_logical_once(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     switch (node.kind()) {
@@ -864,7 +864,7 @@ LogicalRewriteResult rewrite_logical_once(
                     scan.database_id(),
                     scan.collection_id(),
                     scan.collection_name(),
-                    std::move(index_hint.value()),
+                    std::move(*index_hint),
                     scan.location()
                 );
                 return LogicalRewriteResult {
@@ -917,7 +917,7 @@ LogicalRewriteResult rewrite_logical_once(
     case LogicalPlanNodeKind::Limit: {
         const auto & limit = static_cast<const LogicalLimit &>(node);
         if (auto vector_search = try_rewrite_vector_top_k(limit, options, catalog); vector_search.has_value()) {
-            return LogicalRewriteResult {std::move(vector_search.value()), true};
+            return LogicalRewriteResult {std::move(*vector_search), true};
         }
         auto child = rewrite_logical_once(limit.child(), options, catalog);
         return LogicalRewriteResult {
@@ -939,7 +939,7 @@ LogicalRewriteResult rewrite_logical_once(
 std::unique_ptr<LogicalPlanNode> optimize_logical(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     auto current = node.clone();
@@ -970,7 +970,10 @@ std::vector<BoundAssignment> clone_assignments(const std::vector<BoundAssignment
 
 } // namespace
 
-Optimizer::Optimizer(OptimizerOptions options, const meta::MetaEngine * catalog) noexcept
+Optimizer::Optimizer(
+    OptimizerOptions options,
+    std::optional<meta::CatalogView> catalog
+) noexcept
     : options_(options)
     , catalog_(catalog)
 {
@@ -995,12 +998,15 @@ std::expected<std::unique_ptr<LogicalStatementPlan>, OptimizerError> Optimizer::
     switch (plan->kind()) {
     case LogicalStatementPlanKind::Query: {
         const auto & query = static_cast<const QueryPlan &>(*plan);
-        return std::make_unique<QueryPlan>(optimize_logical(query.root(), options_, catalog_), query.location());
+        return std::make_unique<QueryPlan>(
+            optimize_logical(query.root(), options_, catalog_ ? &*catalog_ : nullptr),
+            query.location()
+        );
     }
     case LogicalStatementPlanKind::Update: {
         const auto & update = static_cast<const UpdatePlan &>(*plan);
         return std::make_unique<UpdatePlan>(
-            optimize_logical(update.input(), options_, catalog_),
+            optimize_logical(update.input(), options_, catalog_ ? &*catalog_ : nullptr),
             update.database_id(),
             update.collection_id(),
             update.collection_name(),
@@ -1011,7 +1017,7 @@ std::expected<std::unique_ptr<LogicalStatementPlan>, OptimizerError> Optimizer::
     case LogicalStatementPlanKind::Delete: {
         const auto & del = static_cast<const DeletePlan &>(*plan);
         return std::make_unique<DeletePlan>(
-            optimize_logical(del.input(), options_, catalog_),
+            optimize_logical(del.input(), options_, catalog_ ? &*catalog_ : nullptr),
             del.database_id(),
             del.collection_id(),
             del.collection_name(),

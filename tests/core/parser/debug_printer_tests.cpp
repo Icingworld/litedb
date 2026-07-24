@@ -35,9 +35,9 @@ std::unique_ptr<StatementNode> parse_ok(std::string_view sql)
     Parser parser {std::string(sql)};
     auto result = parser.parse();
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::string print_without_location(const AstNode & node)

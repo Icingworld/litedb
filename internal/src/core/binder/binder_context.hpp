@@ -12,7 +12,7 @@ namespace litedb::core::binder
 class BinderContext
 {
 public:
-    BinderContext(const meta::MetaEngine & meta, const SessionContext & session) noexcept;
+    BinderContext(meta::CatalogView meta, const SessionContext & session) noexcept;
 
 public:
     /**
@@ -20,7 +20,7 @@ public:
      * @return 数据库读取器
      */
     [[nodiscard]]
-    const meta::MetaEngine & meta() const noexcept;
+    const meta::CatalogView & meta() const noexcept;
 
     /**
      * @brief 获取会话上下文
@@ -30,7 +30,7 @@ public:
     const SessionContext & session() const noexcept;
 
 private:
-    const meta::MetaEngine & meta_;       ///< 元数据引擎
+    meta::CatalogView meta_;              ///< 元数据视图
     const SessionContext & session_;            ///< 会话上下文
 };
 
