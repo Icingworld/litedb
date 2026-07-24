@@ -89,14 +89,14 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> FlatIndex::sear
 
     auto cursor = storage_->scan(options_.collection_id);
     if (!cursor.has_value()) {
-        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message));
+        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message()));
     }
 
     std::priority_queue<VectorSearchResult, std::vector<VectorSearchResult>, ResultLess> nearest;
     while (true) {
         auto next = cursor->next();
         if (!next.has_value()) {
-            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message));
+            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message()));
         }
         if (!next->has_value()) {
             break;

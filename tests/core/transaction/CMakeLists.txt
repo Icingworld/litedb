@@ -2,6 +2,10 @@ add_executable(transaction_tests transaction_tests.cpp)
 target_link_libraries(transaction_tests PRIVATE litedb_transaction)
 add_test(NAME transaction_tests COMMAND transaction_tests)
 
+add_executable(transaction_file_overlay_tests transaction_file_overlay_tests.cpp)
+target_link_libraries(transaction_file_overlay_tests PRIVATE litedb_transaction)
+add_test(NAME transaction_file_overlay_tests COMMAND transaction_file_overlay_tests)
+
 add_executable(transaction_recovery_tests transaction_recovery_tests.cpp)
 target_link_libraries(transaction_recovery_tests PRIVATE litedb_database litedb_wal)
 add_test(NAME transaction_recovery_tests COMMAND transaction_recovery_tests)

@@ -155,10 +155,10 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
 {
     const auto & descriptor = store.descriptor();
     auto cursor = storage.scan(descriptor.collection_id);
-    if (!cursor) return std::unexpected(make_error(IndexErrorCode::StorageError, cursor.error().message));
+    if (!cursor) return std::unexpected(make_error(IndexErrorCode::StorageError, cursor.error().message()));
     while (true) {
         auto next = cursor->next();
-        if (!next) return std::unexpected(make_error(IndexErrorCode::StorageError, next.error().message));
+        if (!next) return std::unexpected(make_error(IndexErrorCode::StorageError, next.error().message()));
         if (!*next) break;
         const auto & record = **next;
         auto key = make_key_from_record(record.data, descriptor.column_ordinal, descriptor.key_type);

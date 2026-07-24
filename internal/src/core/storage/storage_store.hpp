@@ -3,152 +3,132 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <map>
 #include <memory>
+#include <optional>
+#include <set>
+#include <span>
 #include <unordered_map>
+#include <vector>
 
 #include "core/common/ids.hpp"
+#include "core/common/record.hpp"
 #include "core/filesystem/file_handle.hpp"
 #include "core/filesystem/filesystem.hpp"
-#include "core/common/record.hpp"
 #include "core/storage/storage_cursor.hpp"
 #include "core/storage/storage_error.hpp"
+#include "core/storage/storage_page_codec.hpp"
 
 namespace litedb::core::storage
 {
 
-/**
- * @brief 物理记录 ID
- */
 struct PhysicalRid
 {
-    std::uint32_t page_id;         ///< 页 ID
-    std::uint16_t slot_id;         ///< 槽 ID
+    std::uint32_t page_id;
+    std::uint16_t slot_id;
 };
 
-/**
- * @brief 单个集合的持久化存储
- */
+struct StorageMetrics
+{
+    std::uint64_t page_reads {0};
+    std::uint64_t page_writes {0};
+    std::uint64_t bytes_read {0};
+    std::uint64_t bytes_written {0};
+    std::uint64_t compactions {0};
+    std::uint64_t reused_pages {0};
+    std::uint64_t new_pages {0};
+    std::uint64_t checksum_failures {0};
+};
+
 class StorageStore final
 {
 private:
-    StorageStore(common::CollectionId collection_id, filesystem::FileHandle file) noexcept;
+    struct PageSpace
+    {
+        std::size_t contiguous {0};
+        std::size_t reclaimable {0};
+        bool has_deleted_slot {false};
+    };
+
+    StorageStore(
+        std::filesystem::path path,
+        common::CollectionId collection_id,
+        filesystem::FileHandle file
+    ) noexcept;
 
 public:
-    static constexpr std::uint32_t PageSize = 4096;
+    static constexpr std::uint32_t PageSize = StoragePageSize;
 
-    /**
-     * @brief 创建持久化存储器
-     * @param path 路径
-     * @param collection_id 集合 ID
-     * @param filesystem 文件系统
-     * @return 持久化存储器
-     */
-    static std::expected<std::unique_ptr<StorageStore>, StorageStoreError> create(
+    static std::expected<std::unique_ptr<StorageStore>, StorageError> create(
         std::filesystem::path path,
         common::CollectionId collection_id,
         filesystem::FileSystem & filesystem
     );
 
-    /**
-     * @brief 打开持久化存储器
-     * @param path 路径
-     * @param collection_id 集合 ID
-     * @param filesystem 文件系统
-     * @return 持久化存储器
-     */
-    static std::expected<std::unique_ptr<StorageStore>, StorageStoreError> open(
+    static std::expected<std::unique_ptr<StorageStore>, StorageError> open(
         std::filesystem::path path,
         common::CollectionId collection_id,
         filesystem::FileSystem & filesystem
     );
 
-    /**
-     * @brief 获取记录
-     * @param id 记录 ID
-     * @return 记录
-     */
     [[nodiscard]]
-    std::expected<common::Record, StorageStoreError> get(common::RecordId id) const;
+    std::expected<common::Record, StorageError> get(common::RecordId id) const;
 
-    /**
-     * @brief 插入记录
-     * @param data 记录数据
-     * @return 记录 ID
-     */
-    std::expected<common::RecordId, StorageStoreError> insert(common::RecordData data);
+    std::expected<common::RecordId, StorageError> insert(common::RecordData data);
 
-    /**
-     * @brief 更新记录
-     * @param id 记录 ID
-     * @param data 记录数据
-     * @return 是否成功
-     */
-    std::expected<void, StorageStoreError> update(common::RecordId id, common::RecordData data);
+    std::expected<void, StorageError> update(common::RecordId id, common::RecordData data);
 
-    /**
-     * @brief 删除记录
-     * @param id 记录 ID
-     * @return 是否成功
-     */
-    std::expected<void, StorageStoreError> erase(common::RecordId id);
+    std::expected<void, StorageError> erase(common::RecordId id);
 
-    /**
-     * @brief 扫描记录
-     * @return 记录游标
-     */
     [[nodiscard]]
-    StorageCursor scan() const;
+    std::expected<StorageCursor, StorageError> scan() const;
+
+    [[nodiscard]]
+    StorageMetrics metrics() const noexcept;
+
+    [[nodiscard]]
+    std::uint32_t page_count() const noexcept;
 
 private:
-    /**
-     * @brief 初始化持久化存储器
-     * @return 是否成功
-     */
-    std::expected<void, StorageStoreError> initialize();
+    std::expected<void, StorageError> initialize();
+    std::expected<void, StorageError> load();
+    std::expected<void, StorageError> write_header();
+    std::expected<StoragePageBuffer, StorageError> load_page(std::uint32_t page_id) const;
+    std::expected<void, StorageError> write_page(std::uint32_t page_id, const StoragePageBuffer & page);
 
-    /**
-     * @brief 加载持久化存储器
-     * @return 是否成功
-     */
-    std::expected<void, StorageStoreError> load();
-
-    /**
-     * @brief 写入头信息
-     * @return 是否成功
-     */
-    std::expected<void, StorageStoreError> write_header();
-
-    /**
-     * @brief 放置记录
-     * @param id 记录 ID
-     * @param data 记录数据
-     * @return 物理记录 ID
-     */
-    std::expected<PhysicalRid, StorageStoreError> place(
+    std::expected<PhysicalRid, StorageError> place(
         common::RecordId id,
-        const common::RecordData & data
+        const common::RecordData & data,
+        std::optional<std::uint32_t> preferred_page = {}
     );
 
-    /**
-     * @brief 读取记录
-     * @param rid 物理记录 ID
-     * @return 记录
-     */
-    std::expected<common::Record, StorageStoreError> read(PhysicalRid rid) const;
+    std::expected<PhysicalRid, StorageError> place_encoded_on_page(
+        std::uint32_t page_id,
+        StoragePageBuffer & page,
+        StoragePageInfo & info,
+        std::span<const std::byte> encoded
+    );
 
-    /**
-     * @brief 标记记录为删除
-     * @param rid 物理记录 ID
-     * @return 是否成功
-     */
-    std::expected<void, StorageStoreError> mark_deleted(PhysicalRid rid);
+    std::expected<common::Record, StorageError> read(PhysicalRid rid) const;
+    std::expected<void, StorageError> compact_page(
+        std::uint32_t page_id,
+        StoragePageBuffer & page,
+        StoragePageInfo & info
+    );
+
+    void update_page_space(std::uint32_t page_id, const StoragePageInfo & info);
+    void remove_page_space(std::uint32_t page_id);
 
 private:
-    common::CollectionId collection_id_;        ///< 集合 ID
-    mutable filesystem::FileHandle file_;       ///< 文件句柄
-    common::RecordId next_record_id_ {1};       ///< 下一个记录 ID
-    std::uint32_t page_count_ {0};              ///< 页数
-    std::unordered_map<common::RecordId, PhysicalRid> locations_;    ///< 记录位置
+    std::filesystem::path path_;
+    common::CollectionId collection_id_;
+    mutable filesystem::FileHandle file_;
+    common::RecordId next_record_id_ {1};
+    std::uint32_t page_count_ {0};
+    std::map<common::RecordId, PhysicalRid> locations_;
+    std::vector<PageSpace> page_spaces_;
+    std::set<std::pair<std::size_t, std::uint32_t>> free_space_index_;
+    mutable StorageMetrics metrics_;
 };
 
 } // namespace litedb::core::storage

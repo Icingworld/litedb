@@ -14,6 +14,12 @@
 namespace litedb::core::storage
 {
 
+enum class StorageOpenMode : std::uint8_t
+{
+    LiveReadOnly,
+    TransactionalStaging,
+};
+
 /**
  * @brief 存储引擎
  * @details 管理多个集合的持久化存储，提供记录读写与集合生命周期操作
@@ -21,7 +27,11 @@ namespace litedb::core::storage
 class StorageEngine
 {
 public:
-    StorageEngine(std::filesystem::path data_directory, filesystem::FileSystem & filesystem) noexcept;
+    StorageEngine(
+        std::filesystem::path data_directory,
+        filesystem::FileSystem & filesystem,
+        StorageOpenMode mode = StorageOpenMode::LiveReadOnly
+    ) noexcept;
 
     StorageEngine(const StorageEngine &) = delete;
 
@@ -124,6 +134,9 @@ public:
     [[nodiscard]]
     std::expected<StorageCursor, StorageError> scan(common::CollectionId collection_id) const;
 
+    [[nodiscard]]
+    StorageMetrics metrics() const noexcept;
+
     /**
      * @brief 清空内存中的全部集合状态
      */
@@ -163,6 +176,7 @@ private:
     std::filesystem::path data_directory_;                                      ///< 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};                             ///< 文件系统
     std::unordered_map<common::CollectionId, CollectionState> collections_;     ///< 已加载集合
+    StorageOpenMode mode_ {StorageOpenMode::LiveReadOnly};                     ///< 打开模式
 };
 
 } // namespace litedb::core::storage

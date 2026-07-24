@@ -216,7 +216,7 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const s
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
     }
     const auto mode_value = read_number<std::uint8_t>(payload.data() + 1);
-    if (mode_value > static_cast<std::uint8_t>(FileWriteMode::Delete)) {
+    if (mode_value > static_cast<std::uint8_t>(FileWriteMode::Truncate)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file-write mode"));
     }
     const auto mode = static_cast<FileWriteMode>(mode_value);
@@ -224,6 +224,7 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::span<const s
     const auto object_id = read_number<std::uint64_t>(payload.data() + 8);
     if ((mode == FileWriteMode::Replace && offset != 0) ||
         (mode == FileWriteMode::Delete && (offset != 0 || payload.size() != 24)) ||
+        (mode == FileWriteMode::Truncate && payload.size() != 24) ||
         (kind_value == static_cast<std::uint8_t>(FileKind::MetaStore) && object_id != 0) ||
         (kind_value != static_cast<std::uint8_t>(FileKind::MetaStore) && object_id == 0)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation"));

@@ -275,7 +275,11 @@ void test_flat_index_scans_storage()
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path, filesystem};
+        storage::StorageEngine storage {
+            path,
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
         require(storage.insert(20, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first vector failed");
         require(storage.insert(20, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second vector failed");
@@ -321,7 +325,11 @@ void test_flat_index_validates_dimensions_and_storage()
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path, filesystem};
+        storage::StorageEngine storage {
+            path,
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         FlatIndex index(FlatIndexOptions {
             .collection_id = 20,
             .column_ordinal = 1,
@@ -348,7 +356,11 @@ void test_vector_index_engine_lifecycle()
     auto filesystem = filesystem::create_platform_filesystem();
     const auto path = temporary_path();
     {
-        storage::StorageEngine storage {path / "storage", filesystem};
+        storage::StorageEngine storage {
+            path / "storage",
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         require(storage.create_collection(vectors_schema()).has_value(), "create vector collection failed");
         require(storage.insert(20, vector_record("first", Value {VectorValue {1.0, 0.0}})).has_value(), "insert first vector failed");
         require(storage.insert(20, vector_record("second", Value {VectorValue {0.0, 2.0}})).has_value(), "insert second vector failed");
@@ -428,7 +440,11 @@ void test_vector_index_engine_restores_and_rebuilds_all()
         const auto * index_entry = catalog.view().find_vector_index(*index_id);
         require(index_entry != nullptr, "vector catalog index entry missing");
 
-        storage::StorageEngine storage {path / "storage", filesystem};
+        storage::StorageEngine storage {
+            path / "storage",
+            filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         require(storage.create_collection(*collection_schema).has_value(), "create hnsw engine collection failed");
         require(storage.insert(*collection_id, vector_record("first", Value {VectorValue {0.0, 0.0}})).has_value(), "insert first engine vector failed");
         require(storage.insert(*collection_id, vector_record("second", Value {VectorValue {1.0, 0.0}})).has_value(), "insert second engine vector failed");
@@ -455,7 +471,11 @@ void test_vector_index_engine_restores_and_rebuilds_all()
                 "engine-restored hnsw search mismatch"
             );
 
-            storage::StorageEngine missing_storage {path / "missing-storage", filesystem};
+            storage::StorageEngine missing_storage {
+                path / "missing-storage",
+                filesystem,
+                storage::StorageOpenMode::TransactionalStaging,
+            };
             auto failed = restored.restore_all(catalog.view(), missing_storage);
             require(!failed.has_value(), "restore_all should reject missing collection storage");
             require(restored.find_index(*index_id).has_value(), "failed restore_all should preserve prior engine state");

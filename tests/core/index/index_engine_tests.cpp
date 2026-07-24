@@ -56,7 +56,11 @@ struct Fixture
     litedb::tests::TemporaryDirectory storage_directory {"litedb-index-engine-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     CatalogEditor catalog;
-    StorageEngine storage {storage_directory.path(), filesystem};
+    StorageEngine storage {
+        storage_directory.path(),
+        filesystem,
+        litedb::core::storage::StorageOpenMode::TransactionalStaging,
+    };
     DatabaseId database_id {0};
     CollectionId users_id {0};
     ColumnId age_column_id {0};
@@ -99,7 +103,7 @@ struct Fixture
         }
         auto created_storage = storage.create_collection(std::move(collection_schema.value()));
         if (!created_storage.has_value()) {
-            throw std::runtime_error(created_storage.error().message);
+            throw std::runtime_error(created_storage.error().message());
         }
     }
 
@@ -110,9 +114,9 @@ struct Fixture
         record_data.values.push_back(age.has_value() ? Value {age.value()} : Value::null());
         auto inserted = storage.insert(users_id, std::move(record_data));
         if (!inserted.has_value()) {
-            throw std::runtime_error(inserted.error().message);
+            throw std::runtime_error(inserted.error().message());
         }
-        return inserted.value();
+        return *inserted;
     }
 
     const IndexEntry & create_catalog_index(std::string name, litedb::core::meta::entry::IndexKind kind, bool unique = false)

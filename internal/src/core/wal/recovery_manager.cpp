@@ -74,23 +74,28 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
         }
     }
 
-    FileWriteBatch batch;
+    std::unordered_map<transaction::TransactionId, FileWriteBatch> batches;
     for (const auto & record : scanned->records) {
-        if (record.type != WalRecordType::FileWrite || !states[record.transaction_id].committed) {
+        if (!states[record.transaction_id].committed) {
             continue;
         }
-
-        auto write = WalCodec::decode_file_write(record.payload);
-        if (!write) {
-            return std::unexpected(std::move(write.error()));
+        if (record.type == WalRecordType::FileWrite) {
+            auto write = WalCodec::decode_file_write(record.payload);
+            if (!write) {
+                return std::unexpected(std::move(write.error()));
+            }
+            batches[record.transaction_id].add(std::move(*write));
+            ++result.replayed_writes;
+        } else if (record.type == WalRecordType::Commit) {
+            auto batch = batches.find(record.transaction_id);
+            if (batch != batches.end()) {
+                auto applied = batch->second.apply(data_directory, filesystem, true);
+                if (!applied) {
+                    return std::unexpected(std::move(applied.error()));
+                }
+                batches.erase(batch);
+            }
         }
-        batch.add(std::move(*write));
-        ++result.replayed_writes;
-    }
-
-    auto applied = batch.apply(data_directory, filesystem, true);
-    if (!applied) {
-        return std::unexpected(std::move(applied.error()));
     }
     return result;
 }

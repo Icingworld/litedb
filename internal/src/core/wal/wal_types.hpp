@@ -31,6 +31,7 @@ enum class FileWriteMode : std::uint8_t
     Overwrite = 0,          ///< 覆盖指定范围
     Replace = 1,            ///< 以 after-image 完整替换文件
     Delete = 2,             ///< 删除文件
+    Truncate = 3,           ///< 将文件调整为 offset 指定的长度
 };
 
 /**

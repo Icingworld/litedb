@@ -151,7 +151,11 @@ struct Fixture
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     CatalogEditor catalog;
     CatalogPublisher publisher {storage_directory.path() / "meta.ldb", filesystem};
-    StorageEngine storage {storage_directory.path(), filesystem};
+    StorageEngine storage {
+        storage_directory.path(),
+        filesystem,
+        litedb::core::storage::StorageOpenMode::TransactionalStaging,
+    };
     IndexEngine index_engine {storage_directory.path(), filesystem};
     litedb::core::vindex::VectorIndexEngine vector_index_engine {storage_directory.path() / "vindexes", filesystem};
     std::optional<litedb::core::wal::WalManager> wal_store;

@@ -114,9 +114,14 @@ v0.7.0 is still an experimental single-node release:
 - Execution currently uses a global single writer and fixed statement-level
   `Serializable` isolation. There is no MVCC, concurrent-writer scheduling,
   lock manager, or additional isolation level.
+- Live `StorageEngine` instances are read-only. Persistent DML/DDL is prepared
+  through a 4 KiB sparse transaction overlay and published only after the
+  shared redo-WAL Commit Record is durable. `StorageStore` has no independent
+  crash-atomicity guarantee.
 - Checkpointing is synchronous. A WAL-size threshold can trigger it after a
   successful write statement; background checkpointing, commit-count/time
-  thresholds, WAL archiving, and compaction are not implemented.
+  thresholds, WAL archiving, background vacuum, and online file truncation are
+  not implemented.
 - No SQL joins, subqueries, aggregates, `GROUP BY`, or full SQL compatibility.
 - The optimizer is rule-based. It has no statistics, cardinality estimation, or
 cost model for choosing between sequential, scalar-index, and vector-index
@@ -200,6 +205,8 @@ The data directory contains `manifest.ldb`, `meta.lmeta`, redo WAL segments
 under `wal/`, collection store files under `collections/`, B+Tree files under
 `indexes/`, and HNSW files under `vindexes/`. The v0.7 storage, index, and WAL
 formats are experimental and do not promise compatibility with future versions.
+Database and collection Storage format version 2 is a direct incompatible
+upgrade: older manifests and `.store` files are rejected without migration.
 
 In another terminal, start the client CLI:
 

@@ -114,7 +114,7 @@ ExecutionError from_schema_error(storage::SchemaLoadError error, AstNodeLocation
 [[nodiscard]]
 ExecutionError from_storage_error(storage::StorageError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::StorageError, location, std::move(error.message));
+    return make_error(ExecutionErrorCode::StorageError, location, error.message());
 }
 
 [[nodiscard]]
@@ -457,7 +457,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
         if (!record.has_value()) {
             return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
         }
-        append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
+        append_pipeline_row(result, collection_schema.value(), std::move(*record));
     }
 
     return result;
@@ -516,10 +516,10 @@ std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
         if (!next.has_value()) {
             return std::unexpected(from_storage_error(std::move(next.error()), search.location()));
         }
-        if (!next.value().has_value()) {
+        if (!next->has_value()) {
             break;
         }
-        append_pipeline_row(result, collection_schema.value(), std::move(next.value().value()));
+        append_pipeline_row(result, collection_schema.value(), std::move(**next));
     }
     auto filtered = apply_predicate(result, search.predicate());
     if (!filtered.has_value()) {
@@ -622,7 +622,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
             if (!record.has_value()) {
                 return std::unexpected(from_storage_error(std::move(record.error()), search.location()));
             }
-            append_pipeline_row(result, collection_schema.value(), std::move(record.value()));
+            append_pipeline_row(result, collection_schema.value(), std::move(*record));
         }
         auto filtered = apply_predicate(result, search.predicate());
         if (!filtered.has_value()) {

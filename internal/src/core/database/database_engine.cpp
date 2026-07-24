@@ -37,7 +37,7 @@ DatabaseError to_database_error(ManifestError error)
  * @param error meta 引擎错误
  * @return 数据库错误
  */
-DatabaseError to_database_error(meta::MetaError error)
+DatabaseError meta_error_to_database(meta::MetaError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::MetaError,
@@ -50,11 +50,11 @@ DatabaseError to_database_error(meta::MetaError error)
  * @param error 存储引擎错误
  * @return 数据库错误
  */
-DatabaseError to_database_error(storage::StorageError error)
+DatabaseError storage_error_to_database(storage::StorageError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::StorageError,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -271,12 +271,12 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     auto loaded = meta_.open_or_initialize();
     if (!loaded.has_value()) {
-        return std::unexpected(to_database_error(std::move(loaded.error())));
+        return std::unexpected(meta_error_to_database(std::move(loaded.error())));
     }
 
     auto storage_restored = restore_storage_from_meta();
     if (!storage_restored.has_value()) {
-        return std::unexpected(to_database_error(std::move(storage_restored.error())));
+        return std::unexpected(storage_error_to_database(std::move(storage_restored.error())));
     }
 
     auto indexes_restored = index_engine_.restore_all(meta(), storage_);
@@ -598,11 +598,14 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
 
             auto collection_schema = storage::load_collection_schema(meta(), collection->id());
             if (!collection_schema.has_value()) {
-                return std::unexpected(storage::StorageError {
-                    .code = storage::StorageErrorCode::StoreError,
-                    .message = std::move(collection_schema.error().message),
-                    .storage_store_code = storage::StorageStoreErrorCode::InvalidFormat,
-                });
+                return std::unexpected(storage::make_storage_error(
+                    storage::StorageErrorCode::InvalidFormat,
+                    std::move(collection_schema.error().message),
+                    {
+                        .operation = storage::StorageOperation::Load,
+                        .collection_id = collection->id(),
+                    }
+                ));
             }
 
             auto opened = storage_.open_collection(std::move(collection_schema.value()));
@@ -646,7 +649,7 @@ executor::ExecutionError DatabaseEngine::from_storage_error(
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::StorageError,
         .location = location,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 

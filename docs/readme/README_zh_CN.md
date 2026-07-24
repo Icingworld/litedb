@@ -68,7 +68,8 @@ v0.7.0 仍然是实验性的单机版本：
 - 示例服务端默认使用 `litedb-data`，可通过 `--data-dir` 指定其他持久化数据目录。
 - 事务目前仅为隐式语句级范围，尚无 SQL `BEGIN`、`COMMIT`、`ROLLBACK`；DML 与 DDL 还不能组成调用方控制的多语句事务。
 - 执行层固定为全局单写者与语句级 `Serializable` 隔离；尚无 MVCC、并发写调度、锁管理器或其他隔离级别。
-- Checkpoint 为同步执行。WAL 大小阈值可在成功写语句后触发；尚无后台 checkpoint、按提交次数/时间阈值、WAL 归档或 compaction。
+- live `StorageEngine` 只读。持久化 DML/DDL 通过 4 KiB 稀疏事务 overlay 准备，仅在共享 redo WAL 的 Commit Record durable 后发布；`StorageStore` 本身不保证 crash atomicity。
+- Checkpoint 为同步执行。WAL 大小阈值可在成功写语句后触发；尚无后台 checkpoint、按提交次数/时间阈值、WAL 归档、后台 vacuum 或在线文件截断。
 - 不支持 SQL 连接（join）、子查询、聚合、`GROUP BY` 或完整 SQL 兼容性。
 - 优化器目前基于规则，尚无统计信息、基数估算，也不会通过代价模型比较 SeqScan、B+Tree 和 HNSW 访问路径。
 - 尚无 SQL `EXPLAIN` 和显式向量索引重建命令。
@@ -139,6 +140,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 该目录中会生成 `manifest.ldb`、`meta.lmeta`、位于 `wal/` 下的 redo WAL 段、位于 `collections/` 下的 collection 存储文件、位于 `indexes/` 下的 B+Tree 文件，以及位于 `vindexes/` 下的 HNSW 文件。v0.7 的存储、索引与 WAL 格式仍处于实验阶段，不承诺与未来版本保持二进制兼容。
+
+数据库与 collection Storage format version 2 是一次直接不兼容升级：旧 manifest 和旧 `.store` 文件会被明确拒绝，不提供迁移。
 
 在另一个终端中启动客户端 CLI：
 

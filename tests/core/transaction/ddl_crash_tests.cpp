@@ -31,6 +31,8 @@ constexpr StageCase Stages[] {
     {transaction::CommitStage::AfterWalWrites, "after_wal_writes", false},
     {transaction::CommitStage::AfterWalCommitAppend, "after_wal_commit_append", false},
     {transaction::CommitStage::AfterWalCommitFlush, "after_wal_commit_flush", true},
+    {transaction::CommitStage::AfterDeltaApply, "after_delta_apply", true},
+    {transaction::CommitStage::AfterTruncate, "after_truncate", true},
     {transaction::CommitStage::AfterApply, "after_apply", true},
     {transaction::CommitStage::AfterRuntimeReload, "after_runtime_reload", true},
 };

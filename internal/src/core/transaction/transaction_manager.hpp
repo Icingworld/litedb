@@ -28,6 +28,8 @@ enum class CommitStage
     AfterWalWrites,
     AfterWalCommitAppend,
     AfterWalCommitFlush,
+    AfterDeltaApply,
+    AfterTruncate,
     AfterApply,
     AfterRuntimeReload,
 };

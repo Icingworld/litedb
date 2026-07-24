@@ -8,6 +8,7 @@
 #include "core/filesystem/filesystem_error.hpp"
 #include "core/io/io_error.hpp"
 #include "core/meta/meta_error.hpp"
+#include "core/storage/storage_error.hpp"
 
 namespace
 {
@@ -20,13 +21,18 @@ using litedb::core::io::IoErrorCode;
 using litedb::core::meta::MetaErrorCode;
 using litedb::core::meta::MetaErrorContext;
 using litedb::core::meta::MetaOperation;
+using litedb::core::storage::StorageErrorCode;
+using litedb::core::storage::StorageErrorContext;
+using litedb::core::storage::StorageOperation;
 
 static_assert(litedb::core::error::ErrorType<FileSystemErrorCode>);
 static_assert(litedb::core::error::ErrorType<IoErrorCode>);
 static_assert(litedb::core::error::ErrorType<MetaErrorCode>);
+static_assert(litedb::core::error::ErrorType<StorageErrorCode>);
 static_assert(std::to_underlying(ErrorCategory::FileSystem) == 1);
 static_assert(std::to_underlying(ErrorCategory::Io) == 2);
 static_assert(std::to_underlying(ErrorCategory::Meta) == 3);
+static_assert(std::to_underlying(ErrorCategory::Storage) == 4);
 static_assert(!std::is_copy_constructible_v<Error>);
 static_assert(!std::is_copy_assignable_v<Error>);
 static_assert(std::is_nothrow_move_constructible_v<Error>);
@@ -102,13 +108,42 @@ bool test_move_preserves_context()
            context->source_code == 0x0104;
 }
 
+bool test_storage_code_and_context()
+{
+    Error error {
+        StorageErrorCode::ChecksumMismatch,
+        "page checksum mismatch",
+        StorageErrorContext {
+            .operation = StorageOperation::ReadPage,
+            .path = std::filesystem::path {"collections/7.store"},
+            .collection_id = 7,
+            .record_id = 9,
+            .page_id = 3,
+            .slot_id = 2,
+            .source_code = static_cast<std::uint16_t>(0x0203),
+        },
+    };
+    const auto * context = error.context<StorageErrorContext>();
+    return error.category() == ErrorCategory::Storage &&
+           error.is(StorageErrorCode::ChecksumMismatch) &&
+           error.encode_code() == 0x0410 &&
+           context != nullptr &&
+           context->operation == StorageOperation::ReadPage &&
+           context->collection_id == 7 &&
+           context->record_id == 9 &&
+           context->page_id == 3 &&
+           context->slot_id == 2 &&
+           context->source_code == 0x0203;
+}
+
 } // namespace
 
 int main()
 {
     return test_filesystem_context() &&
-                   test_code_and_context() &&
-                   test_move_preserves_context()
-               ? 0
-               : 1;
+           test_code_and_context() &&
+           test_move_preserves_context() &&
+           test_storage_code_and_context()
+        ? 0
+        : 1;
 }

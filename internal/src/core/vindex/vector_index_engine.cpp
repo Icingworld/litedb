@@ -619,12 +619,12 @@ std::expected<void, VectorIndexError> VectorIndexEngine::build_from_storage(
 {
     auto cursor = storage.scan(descriptor.collection_id);
     if (!cursor) {
-        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, std::move(cursor.error().message)));
+        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message()));
     }
     while (true) {
         auto next = cursor->next();
         if (!next) {
-            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, std::move(next.error().message)));
+            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message()));
         }
         if (!*next) {
             break;
@@ -657,13 +657,13 @@ std::expected<void, VectorIndexError> VectorIndexEngine::verify_against_storage(
 {
     auto cursor = storage.scan(descriptor.collection_id);
     if (!cursor) {
-        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, std::move(cursor.error().message)));
+        return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, cursor.error().message()));
     }
     std::size_t expected_size = 0;
     while (true) {
         auto next = cursor->next();
         if (!next) {
-            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, std::move(next.error().message)));
+            return std::unexpected(make_error(VectorIndexErrorCode::StorageFailure, next.error().message()));
         }
         if (!*next) {
             break;

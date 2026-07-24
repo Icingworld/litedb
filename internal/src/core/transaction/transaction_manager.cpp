@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <limits>
 #include <set>
 #include <system_error>
@@ -10,6 +9,7 @@
 
 #include "core/storage/schema_loader.hpp"
 #include "core/meta/meta_store.hpp"
+#include "core/transaction/transaction_file_overlay.hpp"
 
 namespace litedb::core::transaction
 {
@@ -69,69 +69,12 @@ private:
  * @return 是否成功
  * @details 复制目录到目标目录
  */
-std::expected<void, std::string> copy_directory(
-    const std::filesystem::path & source,
-    const std::filesystem::path & destination
-)
-{
-    std::error_code error;
-    if (!std::filesystem::exists(source, error)) {
-        if (error) return std::unexpected("Failed to inspect staging source: " + error.message());
-        std::filesystem::create_directories(destination, error);
-        if (error) return std::unexpected("Failed to create staging directory: " + error.message());
-        return {};
-    }
-    std::filesystem::create_directories(destination, error);
-    if (error) return std::unexpected("Failed to create staging directory: " + error.message());
-    for (std::filesystem::recursive_directory_iterator it(source, error), end; it != end; it.increment(error)) {
-        if (error) return std::unexpected("Failed to enumerate staging source: " + error.message());
-        const auto relative = std::filesystem::relative(it->path(), source, error);
-        if (error) return std::unexpected("Failed to resolve staging path: " + error.message());
-        const auto target = destination / relative;
-        if (it->is_directory()) {
-            std::filesystem::create_directories(target, error);
-        } else if (it->is_regular_file()) {
-            std::filesystem::create_directories(target.parent_path(), error);
-            if (!error) std::filesystem::copy_file(it->path(), target, std::filesystem::copy_options::overwrite_existing, error);
-        }
-        if (error) return std::unexpected("Failed to copy staging data: " + error.message());
-    }
-    return {};
-}
-
-std::expected<void, std::string> copy_transaction_file(
-    const std::filesystem::path & source,
-    const std::filesystem::path & destination
-)
-{
-    std::error_code error;
-    std::filesystem::create_directories(destination.parent_path(), error);
-    if (error) return std::unexpected("Failed to create transaction staging directory: " + error.message());
-    std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing, error);
-    if (error) return std::unexpected("Failed to copy transaction participant: " + error.message());
-    return {};
-}
-
 /**
  * @brief 读取文件
  * @param path 文件路径
  * @return 文件内容
  * @details 读取文件内容
  */
-std::expected<std::vector<std::byte>, std::string> read_file(const std::filesystem::path & path)
-{
-    std::ifstream input(path, std::ios::binary | std::ios::ate);
-    if (!input) return std::unexpected("Failed to open transaction file: " + path.string());
-    const auto end = input.tellg();
-    if (end < 0) return std::unexpected("Failed to size transaction file: " + path.string());
-    std::vector<std::byte> bytes(static_cast<std::size_t>(end));
-    input.seekg(0);
-    if (!bytes.empty() && !input.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()))) {
-        return std::unexpected("Failed to read transaction file: " + path.string());
-    }
-    return bytes;
-}
-
 /**
  * @brief 生成子系统错误信息
  * @param subsystem 子系统
@@ -200,19 +143,6 @@ std::expected<void, std::string> sync_directory_if_supported(
         return std::unexpected(synced.error().message());
     }
     return {};
-}
-
-std::expected<std::optional<std::vector<std::byte>>, std::string> read_optional_file(
-    const std::filesystem::path & path
-)
-{
-    std::error_code error;
-    const auto exists = std::filesystem::exists(path, error);
-    if (error) return std::unexpected("Failed to inspect transaction file: " + error.message());
-    if (!exists) return std::optional<std::vector<std::byte>> {};
-    auto bytes = read_file(path);
-    if (!bytes) return std::unexpected(std::move(bytes.error()));
-    return std::optional<std::vector<std::byte>> {std::move(*bytes)};
 }
 
 std::vector<wal::FileTarget> catalog_physical_targets(meta::CatalogView catalog)
@@ -537,18 +467,8 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), "Catalog snapshot is absent"));
     }
 
-    std::error_code fs_error;
-    std::filesystem::create_directories(staging_directory, fs_error);
-    if (fs_error) {
-        return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     "Failed to create DDL staging directory: " + fs_error.message()));
-    }
-    for (const auto * directory : {"collections", "indexes", "vindexes"}) {
-        auto copied = copy_directory(data_directory_ / directory, staging_directory / directory);
-        if (!copied) {
-            return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(copied.error())));
-        }
-    }
+    TransactionFileOverlay overlay {staging_directory, data_directory_, *filesystem_};
+    auto & staging_filesystem = overlay.filesystem();
 
     meta::CatalogEditor after_catalog;
     auto after_catalog_editor = meta::CatalogEditor::from(*transaction.catalog_snapshot());
@@ -558,14 +478,18 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     }
     after_catalog = std::move(*after_catalog_editor);
     const auto after_catalog_view = after_catalog.view();
-    meta::MetaStore staged_meta {staging_directory / "meta.lmeta", *filesystem_};
+    meta::MetaStore staged_meta {staging_directory / "meta.lmeta", staging_filesystem};
     auto saved_meta = staged_meta.save(*transaction.catalog_snapshot());
     if (!saved_meta) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                      mutation_error("meta", saved_meta.error().message())));
     }
 
-    storage::StorageEngine staged_storage {staging_directory, *filesystem_};
+    storage::StorageEngine staged_storage {
+        staging_directory,
+        staging_filesystem,
+        storage::StorageOpenMode::TransactionalStaging,
+    };
     for (const auto * database : after_catalog_view.list_databases()) {
         if (database == nullptr) continue;
         for (const auto * collection : after_catalog_view.list_collections(database->id())) {
@@ -580,13 +504,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                               : staged_storage.create_collection(std::move(*schema));
             if (!opened) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("storage", std::move(opened.error().message))));
+                                             mutation_error("storage", opened.error().message())));
             }
         }
     }
 
     {
-        index::IndexEngine creator {staging_directory, *filesystem_};
+        index::IndexEngine creator {staging_directory, staging_filesystem};
         for (const auto * database : after_catalog_view.list_databases()) {
             if (database == nullptr) continue;
             for (const auto * collection : after_catalog_view.list_collections(database->id())) {
@@ -601,7 +525,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             }
         }
     }
-    index::IndexEngine staged_indexes {staging_directory, *filesystem_};
+    index::IndexEngine staged_indexes {staging_directory, staging_filesystem};
     auto indexes_restored = staged_indexes.restore_all(after_catalog_view, staged_storage);
     if (!indexes_restored) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
@@ -609,7 +533,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     }
 
     {
-        vindex::VectorIndexEngine creator {staging_directory / "vindexes", *filesystem_};
+        vindex::VectorIndexEngine creator {staging_directory / "vindexes", staging_filesystem};
         for (const auto * database : after_catalog_view.list_databases()) {
             if (database == nullptr) continue;
             for (const auto * collection : after_catalog_view.list_collections(database->id())) {
@@ -624,7 +548,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             }
         }
     }
-    vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", *filesystem_};
+    vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", staging_filesystem};
     auto vectors_restored = staged_vectors.restore_all(after_catalog_view, staged_storage);
     if (!vectors_restored) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
@@ -633,40 +557,29 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
 
     const auto before_targets = catalog_physical_targets(catalog_->view());
     const auto after_targets = catalog_physical_targets(after_catalog_view);
-    wal::FileWriteBatch batch;
-    auto add_replacement = [&](wal::FileTarget target) -> std::expected<void, TransactionError> {
-        auto live = read_optional_file(wal::FileWriteBatch::resolve_target(data_directory_, target));
-        if (!live) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(live.error())));
-        auto staged = read_file(wal::FileWriteBatch::resolve_target(staging_directory, target));
-        if (!staged) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(staged.error())));
-        if (!*live || **live != *staged) {
-            batch.add(wal::FileWrite {
-                .target = target,
-                .offset = 0,
-                .after_image = std::move(*staged),
-                .mode = wal::FileWriteMode::Replace,
-            });
-        }
-        return {};
-    };
-
-    for (const auto & target : after_targets) {
-        auto added = add_replacement(target);
-        if (!added) return std::unexpected(std::move(added.error()));
-    }
-    auto meta_added = add_replacement({.kind = wal::FileKind::MetaStore, .object_id = 0});
-    if (!meta_added) return std::unexpected(std::move(meta_added.error()));
     for (const auto & target : before_targets) {
         if (!contains_target(after_targets, target)) {
-            batch.add(wal::FileWrite {
-                .target = target,
-                .offset = 0,
-                .after_image = {},
-                .mode = wal::FileWriteMode::Delete,
-            });
+            auto removed = staging_filesystem.remove(
+                wal::FileWriteBatch::resolve_target(staging_directory, target)
+            );
+            if (!removed) {
+                return std::unexpected(error(
+                    TransactionErrorCode::PrepareFailed,
+                    transaction.id(),
+                    mutation_error("overlay", removed.error().message())
+                ));
+            }
         }
     }
-    return batch;
+    auto batch = overlay.export_batch();
+    if (!batch) {
+        return std::unexpected(error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            mutation_error("overlay", batch.error().message())
+        ));
+    }
+    return std::move(*batch);
 }
 
 std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare(
@@ -677,52 +590,17 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     if (transaction.catalog_snapshot()) {
         return prepare_catalog(transaction, staging_directory);
     }
-    std::error_code fs_error;
-    std::filesystem::create_directories(staging_directory, fs_error);
-    if (fs_error) {
-        return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     "Failed to create transaction staging directory: " + fs_error.message()));
-    }
+    TransactionFileOverlay overlay {staging_directory, data_directory_, *filesystem_};
+    auto & staging_filesystem = overlay.filesystem();
     std::set<common::CollectionId> collections;
     for (const auto & mutation : transaction.write_set()) collections.insert(mutation.collection_id);
 
-    for (const auto collection_id : collections) {
-        const wal::FileTarget collection_target {
-            .kind = wal::FileKind::CollectionStore,
-            .object_id = collection_id,
-        };
-        auto copied = copy_transaction_file(
-            wal::FileWriteBatch::resolve_target(data_directory_, collection_target),
-            wal::FileWriteBatch::resolve_target(staging_directory, collection_target)
-        );
-        if (!copied) {
-            return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(copied.error())));
-        }
-        for (const auto & index : index_engine_->list_indexes(collection_id)) {
-            const wal::FileTarget target {.kind = wal::FileKind::ScalarIndex, .object_id = index.index_id};
-            copied = copy_transaction_file(
-                wal::FileWriteBatch::resolve_target(data_directory_, target),
-                wal::FileWriteBatch::resolve_target(staging_directory, target)
-            );
-            if (!copied) {
-                return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(copied.error())));
-            }
-        }
-        for (const auto & index : vector_index_engine_->list_indexes(collection_id)) {
-            if (index.kind != vindex::VectorIndexKind::Hnsw) continue;
-            const wal::FileTarget target {.kind = wal::FileKind::VectorIndex, .object_id = index.index_id};
-            copied = copy_transaction_file(
-                wal::FileWriteBatch::resolve_target(data_directory_, target),
-                wal::FileWriteBatch::resolve_target(staging_directory, target)
-            );
-            if (!copied) {
-                return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(copied.error())));
-            }
-        }
-    }
-
     {
-        storage::StorageEngine staged_storage {staging_directory, *filesystem_};
+        storage::StorageEngine staged_storage {
+            staging_directory,
+            staging_filesystem,
+            storage::StorageOpenMode::TransactionalStaging,
+        };
         for (const auto collection_id : collections) {
             auto collection_schema = storage::load_collection_schema(catalog_->view(), collection_id);
             if (!collection_schema) {
@@ -732,11 +610,11 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             auto opened = staged_storage.open_collection(std::move(*collection_schema));
             if (!opened) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("storage", std::move(opened.error().message))));
+                                             mutation_error("storage", opened.error().message())));
             }
         }
-        index::IndexEngine staged_indexes {staging_directory, *filesystem_};
-        vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", *filesystem_};
+        index::IndexEngine staged_indexes {staging_directory, staging_filesystem};
+        vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", staging_filesystem};
         for (const auto collection_id : collections) {
             auto indexes_restored = staged_indexes.reload_collection(catalog_->view(), staged_storage, collection_id);
             if (!indexes_restored) {
@@ -761,7 +639,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                 auto vector = staged_vectors.prepare_insert(mutation.collection_id, *mutation.after);
                 if (!vector) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", std::move(vector.error().message))));
                 auto inserted = staged_storage.insert(mutation.collection_id, *mutation.after);
-                if (!inserted) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", std::move(inserted.error().message))));
+                if (!inserted) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", inserted.error().message())));
                 auto scalar_applied = staged_indexes.on_insert(*inserted, *scalar);
                 if (!scalar_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", std::move(scalar_applied.error().message))));
                 auto vector_applied = staged_vectors.on_insert(*inserted, *vector);
@@ -777,7 +655,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                 auto vector = staged_vectors.prepare_update(mutation.collection_id, *mutation.before, *mutation.after);
                 if (!vector) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", std::move(vector.error().message))));
                 auto stored = staged_storage.update(mutation.collection_id, mutation.record_id, *mutation.after);
-                if (!stored) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", std::move(stored.error().message))));
+                if (!stored) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", stored.error().message())));
                 auto scalar_applied = staged_indexes.on_update(mutation.record_id, *scalar);
                 if (!scalar_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", std::move(scalar_applied.error().message))));
                 auto vector_applied = staged_vectors.on_update(mutation.record_id, *vector);
@@ -797,46 +675,22 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                 auto scalar_applied = staged_indexes.on_delete(mutation.record_id, *scalar);
                 if (!scalar_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", std::move(scalar_applied.error().message))));
                 auto stored = staged_storage.erase(mutation.collection_id, mutation.record_id);
-                if (!stored) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", std::move(stored.error().message))));
+                if (!stored) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", stored.error().message())));
                 break;
             }
             }
         }
     }
 
-    wal::FileWriteBatch batch;
-    auto add_changed = [&](wal::FileTarget target) -> std::expected<void, TransactionError> {
-        const auto live_path = wal::FileWriteBatch::resolve_target(data_directory_, target);
-        const auto staged_path = wal::FileWriteBatch::resolve_target(staging_directory, target);
-        auto live = read_file(live_path);
-        if (!live) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(live.error())));
-        auto staged = read_file(staged_path);
-        if (!staged) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(staged.error())));
-        if (*live != *staged) {
-            batch.add(wal::FileWrite {
-                .target = target,
-                .offset = 0,
-                .after_image = std::move(*staged),
-                .mode = wal::FileWriteMode::Replace,
-            });
-        }
-        return {};
-    };
-
-    for (const auto collection_id : collections) {
-        auto added = add_changed({.kind = wal::FileKind::CollectionStore, .object_id = collection_id});
-        if (!added) return std::unexpected(std::move(added.error()));
-        for (const auto & index : index_engine_->list_indexes(collection_id)) {
-            added = add_changed({.kind = wal::FileKind::ScalarIndex, .object_id = index.index_id});
-            if (!added) return std::unexpected(std::move(added.error()));
-        }
-        for (const auto & index : vector_index_engine_->list_indexes(collection_id)) {
-            if (index.kind != vindex::VectorIndexKind::Hnsw) continue;
-            added = add_changed({.kind = wal::FileKind::VectorIndex, .object_id = index.index_id});
-            if (!added) return std::unexpected(std::move(added.error()));
-        }
+    auto batch = overlay.export_batch();
+    if (!batch) {
+        return std::unexpected(error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            mutation_error("overlay", batch.error().message())
+        ));
     }
-    return batch;
+    return std::move(*batch);
 }
 
 std::expected<void, TransactionError> TransactionManager::reload_runtime(const TransactionContext & transaction)
@@ -854,7 +708,7 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
             auto storage_reloaded = storage_->reload_collection(std::move(*collection_schema));
             if (!storage_reloaded) {
                 return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
-                                             std::move(storage_reloaded.error().message)));
+                                             storage_reloaded.error().message()));
             }
             auto indexes_reloaded = index_engine_->reload_collection(catalog_->view(), *storage_, collection_id);
             if (!indexes_reloaded) {
@@ -879,7 +733,7 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
             auto schema = storage::load_collection_schema(catalog_->view(), collection->id());
             if (!schema) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(schema.error().message)));
             auto opened = restored_storage.open_collection(std::move(*schema));
-            if (!opened) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(opened.error().message)));
+            if (!opened) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, opened.error().message()));
         }
     }
     index::IndexEngine restored_indexes {data_directory_, *filesystem_};
@@ -987,7 +841,16 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after WAL commit flush"));
     }
 
-    auto applied = batch->apply(data_directory_, *filesystem_, false);
+    auto applied = batch->apply(
+        data_directory_,
+        *filesystem_,
+        false,
+        [&](std::size_t, const wal::FileWrite & write) {
+            if (failpoint(CommitStage::AfterDeltaApply, transaction, true)) return true;
+            return write.mode == wal::FileWriteMode::Truncate &&
+                   failpoint(CommitStage::AfterTruncate, transaction, true);
+        }
+    );
     if (!applied) {
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();

@@ -19,6 +19,7 @@ enum class ErrorCategory : std::uint8_t
     FileSystem = 1,             ///< 文件系统
     Io = 2,                     ///< 二进制输入输出
     Meta = 3,                   ///< 元数据目录
+    Storage = 4,                ///< 记录存储
 };
 
 /**

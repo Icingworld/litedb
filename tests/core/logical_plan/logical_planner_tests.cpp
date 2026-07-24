@@ -85,7 +85,11 @@ struct Fixture
     litedb::tests::TemporaryDirectory storage_directory {"litedb-logical-planner-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
     CatalogEditor catalog;
-    StorageEngine storage {storage_directory.path(), filesystem};
+    StorageEngine storage {
+        storage_directory.path(),
+        filesystem,
+        litedb::core::storage::StorageOpenMode::TransactionalStaging,
+    };
     IndexEngine index_engine {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -135,7 +139,7 @@ struct Fixture
         }
         auto storage_created = storage.create_collection(std::move(schema.value()));
         if (!storage_created.has_value()) {
-            throw std::runtime_error(storage_created.error().message);
+            throw std::runtime_error(storage_created.error().message());
         }
     }
 };
