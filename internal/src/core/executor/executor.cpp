@@ -100,9 +100,9 @@ ExecutionError make_error(ExecutionErrorCode code, AstNodeLocation location, std
 }
 
 [[nodiscard]]
-ExecutionError from_meta_error(meta::MetaEngineError error, AstNodeLocation location)
+ExecutionError from_meta_error(meta::MetaError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::MetaError, location, std::move(error.message));
+    return make_error(ExecutionErrorCode::MetaError, location, error.message());
 }
 
 [[nodiscard]]
@@ -290,7 +290,7 @@ std::expected<void, ExecutionError> find_storage(
 
 [[nodiscard]]
 std::expected<schema::CollectionSchema, ExecutionError> load_schema(
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     common::CollectionId collection_id,
     AstNodeLocation location
 )
@@ -305,7 +305,7 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -339,7 +339,7 @@ void append_scan_columns(PipelineResult & result, const schema::CollectionSchema
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_scan(
     const PhysicalSeqScan & scan,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage
 )
 {
@@ -405,7 +405,7 @@ std::expected<index::IndexRange, ExecutionError> index_range_from_lookup(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_index_scan(
     const PhysicalIndexScan & scan,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine
 )
@@ -492,7 +492,7 @@ std::expected<void, ExecutionError> apply_predicate(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
     const PhysicalVectorSearch & search,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage
 )
 {
@@ -554,7 +554,7 @@ std::size_t saturating_multiply(std::size_t value, std::size_t factor)
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_vector_search(
     const PhysicalVectorSearch & search,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     vindex::VectorIndexEngine & vector_index_engine
 )
@@ -641,7 +641,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_filter(
     const PhysicalFilter & filter,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -691,7 +691,7 @@ std::string projection_name(const binder::bound::BoundProjectionItem & projectio
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_projection(
     const PhysicalProjection & projection,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -791,7 +791,7 @@ std::expected<std::vector<common::Value>, ExecutionError> evaluate_order_keys(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_order_by(
     const PhysicalSort & order_by,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -863,7 +863,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_limit(
     const PhysicalLimit & limit,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -895,7 +895,7 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
 
 std::expected<PipelineResult, ExecutionError> execute_physical(
     const PhysicalPlanNode & node,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -926,7 +926,7 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_query(
     const PhysicalQueryPlan & plan,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -996,7 +996,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_delete(
     const PhysicalDeletePlan & plan,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -1045,7 +1045,7 @@ std::optional<std::size_t> ordinal_for_column(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_update(
     const PhysicalUpdatePlan & plan,
-    meta::MetaEngine & catalog,
+    meta::CatalogView & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -1110,7 +1110,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::MetaEngine & catalog)
+std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::CatalogView & catalog)
 {
     std::vector<ExecutionRow> rows;
     for (const auto * database : catalog.list_databases()) {
@@ -1128,7 +1128,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::Meta
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_collections(
     const PhysicalShowCollectionsPlan & plan,
-    meta::MetaEngine & catalog
+    meta::CatalogView & catalog
 )
 {
     std::vector<ExecutionRow> rows;
@@ -1147,7 +1147,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_collections(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
     const PhysicalShowIndexesPlan & plan,
-    meta::MetaEngine & catalog
+    meta::CatalogView & catalog
 )
 {
     std::vector<ExecutionRow> rows;
@@ -1182,7 +1182,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
     const PhysicalShowVectorIndexesPlan & plan,
-    meta::MetaEngine & catalog
+    meta::CatalogView & catalog
 )
 {
     std::vector<ExecutionRow> rows;
@@ -1226,7 +1226,7 @@ std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
     const PhysicalDescribeCollectionPlan & plan,
-    meta::MetaEngine & catalog
+    meta::CatalogView & catalog
 )
 {
     auto collection_schema = load_schema(catalog, plan.collection_id(), plan.location());
@@ -1264,7 +1264,7 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 } // namespace
 
 Executor::Executor(
-    meta::MetaEngine & catalog,
+    meta::CatalogView catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -1277,7 +1277,7 @@ Executor::Executor(
 }
 
 Executor::Executor(
-    meta::MetaEngine & catalog,
+    meta::CatalogView catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,

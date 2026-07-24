@@ -276,7 +276,7 @@ std::expected<void, IndexError> IndexEngine::drop_collection_indexes(common::Col
 }
 
 std::expected<void, IndexError> IndexEngine::restore_all(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage
 )
 {
@@ -344,7 +344,7 @@ std::expected<void, IndexError> IndexEngine::restore_all(
 }
 
 std::expected<void, IndexError> IndexEngine::reload_collection(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )

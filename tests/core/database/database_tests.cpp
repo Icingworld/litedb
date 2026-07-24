@@ -52,7 +52,7 @@ public:
 
     auto execute_sql(std::string_view sql) { return session_.execute_sql(sql); }
     auto current_database_id() const noexcept { return session_.current_database_id(); }
-    const auto & meta() const noexcept { return engine_->meta(); }
+    auto meta() const noexcept { return engine_->meta(); }
     const auto & index_engine() const noexcept { return engine_->index_engine(); }
 
 private:

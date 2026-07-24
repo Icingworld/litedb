@@ -95,7 +95,7 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
         return std::unexpected(from_parser_error(std::move(parsed.error())));
     }
 
-    binder::BinderContext context {engine_->meta_, session_};
+    binder::BinderContext context {engine_->meta(), session_};
     binder::Binder binder {context};
     auto bound = binder.bind(*parsed.value());
     if (!bound.has_value()) {
@@ -108,7 +108,7 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
         return std::unexpected(from_planner_error(std::move(planned.error())));
     }
 
-    optimizer::Optimizer optimizer {{}, &engine_->meta_};
+    optimizer::Optimizer optimizer {{}, engine_->meta()};
     auto optimized = optimizer.optimize(std::move(planned.value()));
     if (!optimized.has_value()) {
         return std::unexpected(from_optimizer_error(std::move(optimized.error())));

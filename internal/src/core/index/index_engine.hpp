@@ -108,7 +108,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> restore_all(
-        const meta::MetaEngine & catalog,
+        const meta::CatalogView & catalog,
         const storage::StorageEngine & storage
     );
 
@@ -117,7 +117,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> reload_collection(
-        const meta::MetaEngine & catalog,
+        const meta::CatalogView & catalog,
         const storage::StorageEngine & storage,
         common::CollectionId collection_id
     );

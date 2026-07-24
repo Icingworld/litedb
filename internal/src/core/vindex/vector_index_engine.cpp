@@ -79,7 +79,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::create_index(
 }
 
 std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage
 )
 {
@@ -132,7 +132,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
 }
 
 std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
-    const meta::MetaEngine & catalog,
+    const meta::CatalogView & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )

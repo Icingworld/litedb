@@ -41,6 +41,8 @@ struct FileSystemErrorContext
     std::error_code native_code;              ///< 原始平台错误码
 };
 
+using FileSystemError = error::Error;
+
 } // namespace litedb::core::filesystem
 
 namespace litedb::core::error

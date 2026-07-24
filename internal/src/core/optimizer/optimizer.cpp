@@ -415,7 +415,7 @@ std::optional<LogicalScanIndexHint> try_make_index_hint(
     const LogicalScan & scan,
     const BoundExpression & predicate,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     if (!options.enable_index_selection || catalog == nullptr || scan.index_hint().has_value()) {
@@ -786,7 +786,7 @@ std::optional<VectorTopKPattern> match_vector_top_k(const LogicalLimit & limit)
 std::optional<std::unique_ptr<LogicalPlanNode>> try_rewrite_vector_top_k(
     const LogicalLimit & limit,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     if (!options.enable_index_selection || catalog == nullptr) {
@@ -841,7 +841,7 @@ std::optional<std::unique_ptr<LogicalPlanNode>> try_rewrite_vector_top_k(
 LogicalRewriteResult rewrite_logical_once(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     switch (node.kind()) {
@@ -939,7 +939,7 @@ LogicalRewriteResult rewrite_logical_once(
 std::unique_ptr<LogicalPlanNode> optimize_logical(
     const LogicalPlanNode & node,
     const OptimizerOptions & options,
-    const meta::MetaEngine * catalog
+    const meta::CatalogView * catalog
 )
 {
     auto current = node.clone();
@@ -970,7 +970,10 @@ std::vector<BoundAssignment> clone_assignments(const std::vector<BoundAssignment
 
 } // namespace
 
-Optimizer::Optimizer(OptimizerOptions options, const meta::MetaEngine * catalog) noexcept
+Optimizer::Optimizer(
+    OptimizerOptions options,
+    std::optional<meta::CatalogView> catalog
+) noexcept
     : options_(options)
     , catalog_(catalog)
 {
@@ -995,12 +998,15 @@ std::expected<std::unique_ptr<LogicalStatementPlan>, OptimizerError> Optimizer::
     switch (plan->kind()) {
     case LogicalStatementPlanKind::Query: {
         const auto & query = static_cast<const QueryPlan &>(*plan);
-        return std::make_unique<QueryPlan>(optimize_logical(query.root(), options_, catalog_), query.location());
+        return std::make_unique<QueryPlan>(
+            optimize_logical(query.root(), options_, catalog_ ? &*catalog_ : nullptr),
+            query.location()
+        );
     }
     case LogicalStatementPlanKind::Update: {
         const auto & update = static_cast<const UpdatePlan &>(*plan);
         return std::make_unique<UpdatePlan>(
-            optimize_logical(update.input(), options_, catalog_),
+            optimize_logical(update.input(), options_, catalog_ ? &*catalog_ : nullptr),
             update.database_id(),
             update.collection_id(),
             update.collection_name(),
@@ -1011,7 +1017,7 @@ std::expected<std::unique_ptr<LogicalStatementPlan>, OptimizerError> Optimizer::
     case LogicalStatementPlanKind::Delete: {
         const auto & del = static_cast<const DeletePlan &>(*plan);
         return std::make_unique<DeletePlan>(
-            optimize_logical(del.input(), options_, catalog_),
+            optimize_logical(del.input(), options_, catalog_ ? &*catalog_ : nullptr),
             del.database_id(),
             del.collection_id(),
             del.collection_name(),

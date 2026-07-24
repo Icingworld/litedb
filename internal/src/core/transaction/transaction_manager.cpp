@@ -149,7 +149,7 @@ std::string mutation_error(std::string subsystem, std::string message)
 TransactionManager::TransactionManager(
     std::filesystem::path data_directory,
     filesystem::FileSystem & filesystem,
-    meta::MetaEngine & catalog,
+    meta::CatalogPublisher & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -215,7 +215,7 @@ std::expected<std::optional<std::vector<std::byte>>, std::string> read_optional_
     return std::optional<std::vector<std::byte>> {std::move(*bytes)};
 }
 
-std::vector<wal::FileTarget> catalog_physical_targets(const meta::MetaEngine & catalog)
+std::vector<wal::FileTarget> catalog_physical_targets(meta::CatalogView catalog)
 {
     std::vector<wal::FileTarget> targets;
     for (const auto * database : catalog.list_databases()) {
@@ -290,7 +290,7 @@ std::expected<void, TransactionError> TransactionManager::sync_checkpoint_partic
                                      "Failed to sync meta participant: " + std::move(synced_meta.error())));
     }
 
-    for (const auto & target : catalog_physical_targets(*catalog_)) {
+    for (const auto & target : catalog_physical_targets(catalog_->view())) {
         const auto path = wal::FileWriteBatch::resolve_target(data_directory_, target);
         auto synced = sync_file(*filesystem_, path);
         if (!synced) {
@@ -305,7 +305,7 @@ std::expected<void, TransactionError> TransactionManager::sync_checkpoint_partic
         auto created = filesystem_->create_dir_all(path);
         if (!created) {
             return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                     "Failed to create checkpoint directory: " + created.error().message()));
+                                         "Failed to create checkpoint directory: " + created.error().message()));
         }
         auto synced = sync_directory_if_supported(*filesystem_, path);
         if (!synced) {
@@ -516,6 +516,14 @@ std::expected<void, TransactionError> TransactionManager::stage_catalog(
         !transaction.write_set().empty() || transaction.catalog_snapshot_) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Cannot stage catalog"));
     }
+    auto validated = meta::build_catalog_state(snapshot);
+    if (!validated) {
+        return std::unexpected(error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            mutation_error("meta", validated.error().message())
+        ));
+    }
     transaction.catalog_snapshot_ = std::move(snapshot);
     return {};
 }
@@ -542,30 +550,32 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
         }
     }
 
-    meta::MetaEngine after_catalog;
-    auto restored_catalog = after_catalog.restore(*transaction.catalog_snapshot());
-    if (!restored_catalog) {
+    meta::CatalogEditor after_catalog;
+    auto after_catalog_editor = meta::CatalogEditor::from(*transaction.catalog_snapshot());
+    if (!after_catalog_editor) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     mutation_error("meta", std::move(restored_catalog.error().message))));
+                                     mutation_error("meta", after_catalog_editor.error().message())));
     }
+    after_catalog = std::move(*after_catalog_editor);
+    const auto after_catalog_view = after_catalog.view();
     meta::MetaStore staged_meta {staging_directory / "meta.lmeta", *filesystem_};
     auto saved_meta = staged_meta.save(*transaction.catalog_snapshot());
     if (!saved_meta) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     mutation_error("meta", std::move(saved_meta.error().message))));
+                                     mutation_error("meta", saved_meta.error().message())));
     }
 
     storage::StorageEngine staged_storage {staging_directory, *filesystem_};
-    for (const auto * database : after_catalog.list_databases()) {
+    for (const auto * database : after_catalog_view.list_databases()) {
         if (database == nullptr) continue;
-        for (const auto * collection : after_catalog.list_collections(database->id())) {
+        for (const auto * collection : after_catalog_view.list_collections(database->id())) {
             if (collection == nullptr) continue;
-            auto schema = storage::load_collection_schema(after_catalog, collection->id());
+            auto schema = storage::load_collection_schema(after_catalog_view, collection->id());
             if (!schema) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                              mutation_error("schema", std::move(schema.error().message))));
             }
-            auto opened = catalog_->find_collection(collection->id()) != nullptr
+            auto opened = catalog_->view().find_collection(collection->id()) != nullptr
                               ? staged_storage.open_collection(std::move(*schema))
                               : staged_storage.create_collection(std::move(*schema));
             if (!opened) {
@@ -577,14 +587,14 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
 
     {
         index::IndexEngine creator {staging_directory, *filesystem_};
-        for (const auto * database : after_catalog.list_databases()) {
+        for (const auto * database : after_catalog_view.list_databases()) {
             if (database == nullptr) continue;
-            for (const auto * collection : after_catalog.list_collections(database->id())) {
+            for (const auto * collection : after_catalog_view.list_collections(database->id())) {
                 if (collection == nullptr) continue;
-                auto schema = storage::load_collection_schema(after_catalog, collection->id());
+                auto schema = storage::load_collection_schema(after_catalog_view, collection->id());
                 if (!schema) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(schema.error().message)));
-                for (const auto * index : after_catalog.list_indexes(collection->id())) {
-                    if (index == nullptr || catalog_->find_index(index->id()) != nullptr) continue;
+                for (const auto * index : after_catalog_view.list_indexes(collection->id())) {
+                    if (index == nullptr || catalog_->view().find_index(index->id()) != nullptr) continue;
                     auto created = creator.create_index(*index, *schema, staged_storage);
                     if (!created) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", std::move(created.error().message))));
                 }
@@ -592,7 +602,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
         }
     }
     index::IndexEngine staged_indexes {staging_directory, *filesystem_};
-    auto indexes_restored = staged_indexes.restore_all(after_catalog, staged_storage);
+    auto indexes_restored = staged_indexes.restore_all(after_catalog_view, staged_storage);
     if (!indexes_restored) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                      mutation_error("scalar index", std::move(indexes_restored.error().message))));
@@ -600,14 +610,14 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
 
     {
         vindex::VectorIndexEngine creator {staging_directory / "vindexes", *filesystem_};
-        for (const auto * database : after_catalog.list_databases()) {
+        for (const auto * database : after_catalog_view.list_databases()) {
             if (database == nullptr) continue;
-            for (const auto * collection : after_catalog.list_collections(database->id())) {
+            for (const auto * collection : after_catalog_view.list_collections(database->id())) {
                 if (collection == nullptr) continue;
-                auto schema = storage::load_collection_schema(after_catalog, collection->id());
+                auto schema = storage::load_collection_schema(after_catalog_view, collection->id());
                 if (!schema) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), std::move(schema.error().message)));
-                for (const auto * index : after_catalog.list_vector_indexes(collection->id())) {
-                    if (index == nullptr || catalog_->find_vector_index(index->id()) != nullptr) continue;
+                for (const auto * index : after_catalog_view.list_vector_indexes(collection->id())) {
+                    if (index == nullptr || catalog_->view().find_vector_index(index->id()) != nullptr) continue;
                     auto created = creator.create_index(*index, *schema, staged_storage);
                     if (!created) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", std::move(created.error().message))));
                 }
@@ -615,14 +625,14 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
         }
     }
     vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", *filesystem_};
-    auto vectors_restored = staged_vectors.restore_all(after_catalog, staged_storage);
+    auto vectors_restored = staged_vectors.restore_all(after_catalog_view, staged_storage);
     if (!vectors_restored) {
         return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                      mutation_error("vector index", std::move(vectors_restored.error().message))));
     }
 
-    const auto before_targets = catalog_physical_targets(*catalog_);
-    const auto after_targets = catalog_physical_targets(after_catalog);
+    const auto before_targets = catalog_physical_targets(catalog_->view());
+    const auto after_targets = catalog_physical_targets(after_catalog_view);
     wal::FileWriteBatch batch;
     auto add_replacement = [&](wal::FileTarget target) -> std::expected<void, TransactionError> {
         auto live = read_optional_file(wal::FileWriteBatch::resolve_target(data_directory_, target));
@@ -714,7 +724,7 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     {
         storage::StorageEngine staged_storage {staging_directory, *filesystem_};
         for (const auto collection_id : collections) {
-            auto collection_schema = storage::load_collection_schema(*catalog_, collection_id);
+            auto collection_schema = storage::load_collection_schema(catalog_->view(), collection_id);
             if (!collection_schema) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                              mutation_error("schema", std::move(collection_schema.error().message))));
@@ -728,12 +738,12 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
         index::IndexEngine staged_indexes {staging_directory, *filesystem_};
         vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", *filesystem_};
         for (const auto collection_id : collections) {
-            auto indexes_restored = staged_indexes.reload_collection(*catalog_, staged_storage, collection_id);
+            auto indexes_restored = staged_indexes.reload_collection(catalog_->view(), staged_storage, collection_id);
             if (!indexes_restored) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                              mutation_error("scalar index", std::move(indexes_restored.error().message))));
             }
-            auto vectors_restored = staged_vectors.reload_collection(*catalog_, staged_storage, collection_id);
+            auto vectors_restored = staged_vectors.reload_collection(catalog_->view(), staged_storage, collection_id);
             if (!vectors_restored) {
                 return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
                                              mutation_error("vector index", std::move(vectors_restored.error().message))));
@@ -836,7 +846,7 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
         std::set<common::CollectionId> collections;
         for (const auto & mutation : transaction.write_set()) collections.insert(mutation.collection_id);
         for (const auto collection_id : collections) {
-            auto collection_schema = storage::load_collection_schema(*catalog_, collection_id);
+            auto collection_schema = storage::load_collection_schema(catalog_->view(), collection_id);
             if (!collection_schema) {
                 return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
                                              std::move(collection_schema.error().message)));
@@ -846,12 +856,12 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
                 return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
                                              std::move(storage_reloaded.error().message)));
             }
-            auto indexes_reloaded = index_engine_->reload_collection(*catalog_, *storage_, collection_id);
+            auto indexes_reloaded = index_engine_->reload_collection(catalog_->view(), *storage_, collection_id);
             if (!indexes_reloaded) {
                 return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
                                              std::move(indexes_reloaded.error().message)));
             }
-            auto vectors_reloaded = vector_index_engine_->reload_collection(*catalog_, *storage_, collection_id);
+            auto vectors_reloaded = vector_index_engine_->reload_collection(catalog_->view(), *storage_, collection_id);
             if (!vectors_reloaded) {
                 return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
                                              std::move(vectors_reloaded.error().message)));
@@ -861,18 +871,19 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
     }
 
     storage::StorageEngine restored_storage {data_directory_, *filesystem_};
-    for (const auto * database : catalog_->list_databases()) {
+    const auto catalog_view = catalog_->view();
+    for (const auto * database : catalog_view.list_databases()) {
         if (database == nullptr) continue;
-        for (const auto * collection : catalog_->list_collections(database->id())) {
+        for (const auto * collection : catalog_view.list_collections(database->id())) {
             if (collection == nullptr) continue;
-            auto schema = storage::load_collection_schema(*catalog_, collection->id());
+            auto schema = storage::load_collection_schema(catalog_->view(), collection->id());
             if (!schema) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(schema.error().message)));
             auto opened = restored_storage.open_collection(std::move(*schema));
             if (!opened) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(opened.error().message)));
         }
     }
     index::IndexEngine restored_indexes {data_directory_, *filesystem_};
-    auto indexes = restored_indexes.restore_all(*catalog_, restored_storage);
+    auto indexes = restored_indexes.restore_all(catalog_->view(), restored_storage);
     if (!indexes) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(indexes.error().message)));
     *storage_ = std::move(restored_storage);
     *index_engine_ = std::move(restored_indexes);
@@ -880,7 +891,7 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
     // FlatIndex keeps a non-owning StorageEngine pointer, so construct the
     // replacement vector engine only after the live storage object is published.
     vindex::VectorIndexEngine restored_vectors {data_directory_ / "vindexes", *filesystem_};
-    auto vectors = restored_vectors.restore_all(*catalog_, *storage_);
+    auto vectors = restored_vectors.restore_all(catalog_->view(), *storage_);
     if (!vectors) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(vectors.error().message)));
     *vector_index_engine_ = std::move(restored_vectors);
     return {};
@@ -986,12 +997,12 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after participant apply"));
     }
     if (transaction.catalog_snapshot()) {
-        auto catalog_restored = catalog_->restore(*transaction.catalog_snapshot());
+        auto catalog_restored = catalog_->publish_committed(*transaction.catalog_snapshot());
         if (!catalog_restored) {
             recovery_required_.store(true, std::memory_order_release);
             transaction.release_writer_guard();
             return std::unexpected(error(TransactionErrorCode::CommittedApplyFailed, transaction.id(),
-                                         std::move(catalog_restored.error().message)));
+                                          catalog_restored.error().message()));
         }
     }
     auto reloaded = reload_runtime(transaction);

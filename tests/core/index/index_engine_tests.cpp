@@ -55,7 +55,7 @@ struct Fixture
 {
     litedb::tests::TemporaryDirectory storage_directory {"litedb-index-engine-tests"};
     litedb::core::filesystem::FileSystem filesystem {litedb::core::filesystem::create_platform_filesystem()};
-    MetaEngine catalog;
+    CatalogEditor catalog;
     StorageEngine storage {storage_directory.path(), filesystem};
     DatabaseId database_id {0};
     CollectionId users_id {0};
@@ -65,9 +65,9 @@ struct Fixture
     {
         auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
         if (!database.has_value()) {
-            throw std::runtime_error(database.error().message);
+            throw std::runtime_error(database.error().message());
         }
-        database_id = database.value();
+        database_id = *database;
 
         auto collection = catalog.create_collection(CreateCollectionRequest {
             .database_id = database_id,
@@ -85,15 +85,15 @@ struct Fixture
             },
         });
         if (!collection.has_value()) {
-            throw std::runtime_error(collection.error().message);
+            throw std::runtime_error(collection.error().message());
         }
-        users_id = collection.value();
+        users_id = *collection;
 
-        const auto * age_column = catalog.find_column(users_id, "age");
+        const auto * age_column = catalog.view().find_column(users_id, "age");
         require(age_column != nullptr, "age column missing");
         age_column_id = age_column->id();
 
-        auto collection_schema = load_collection_schema(catalog, users_id);
+        auto collection_schema = load_collection_schema(catalog.view(), users_id);
         if (!collection_schema.has_value()) {
             throw std::runtime_error(collection_schema.error().message);
         }
@@ -125,16 +125,16 @@ struct Fixture
             .unique = unique,
         });
         if (!created.has_value()) {
-            throw std::runtime_error(created.error().message);
+            throw std::runtime_error(std::string {created.error().message()});
         }
-        const auto * index = catalog.find_index(created.value());
+        const auto * index = catalog.view().find_index(*created);
         require(index != nullptr, "catalog index missing");
         return *index;
     }
 
     CollectionSchema users_schema() const
     {
-        auto collection_schema = load_collection_schema(catalog, users_id);
+        auto collection_schema = load_collection_schema(catalog.view(), users_id);
         if (!collection_schema.has_value()) {
             throw std::runtime_error(collection_schema.error().message);
         }
@@ -257,7 +257,7 @@ void test_restore_all_is_atomic_on_failure()
     require(engine.find_index(index_entry.id()).has_value(), "initial index missing");
 
     const auto & missing_index = fixture.create_catalog_index("idx_age_missing", litedb::core::meta::entry::IndexKind::BTree);
-    auto restored = engine.restore_all(fixture.catalog, fixture.storage);
+    auto restored = engine.restore_all(fixture.catalog.view(), fixture.storage);
     require(!restored.has_value(), "restore should fail when a persistent index file is missing");
     require(restored.error().code == IndexErrorCode::StorageError, "restore storage error mismatch");
     require(engine.find_index(index_entry.id()).has_value(), "failed restore should keep existing indexes");

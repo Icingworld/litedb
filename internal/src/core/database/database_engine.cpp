@@ -37,11 +37,11 @@ DatabaseError to_database_error(ManifestError error)
  * @param error meta 引擎错误
  * @return 数据库错误
  */
-DatabaseError to_database_error(meta::MetaEngineError error)
+DatabaseError to_database_error(meta::MetaError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::MetaError,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -134,8 +134,7 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     : data_directory_(std::move(config.data_dir))
     , filesystem_(filesystem::create_platform_filesystem())
     , manifest_(data_directory_, filesystem_)
-    , meta_store_(manifest_.meta_path(), filesystem_)
-    , meta_(meta_store_)
+    , meta_(manifest_.meta_path(), filesystem_)
     , storage_(data_directory_, filesystem_)
     , index_engine_(data_directory_, filesystem_)
     , vector_index_engine_(data_directory_ / "vindexes", filesystem_)
@@ -154,9 +153,9 @@ std::expected<std::unique_ptr<DatabaseEngine>, DatabaseError> DatabaseEngine::op
     return engine;
 }
 
-const meta::MetaEngine & DatabaseEngine::meta() const noexcept
+meta::CatalogView DatabaseEngine::meta() const noexcept
 {
-    return meta_;
+    return meta_.view();
 }
 
 const index::IndexEngine & DatabaseEngine::index_engine() const noexcept
@@ -270,14 +269,9 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
     recovered_committed_transactions_ = recovered->committed_transactions;
     replayed_writes_ = recovered->replayed_writes;
 
-    auto loaded = meta_.load();
+    auto loaded = meta_.open_or_initialize();
     if (!loaded.has_value()) {
         return std::unexpected(to_database_error(std::move(loaded.error())));
-    }
-
-    auto initialized_meta = meta_.commit(meta_.snapshot());
-    if (!initialized_meta.has_value()) {
-        return std::unexpected(to_database_error(std::move(initialized_meta.error())));
     }
 
     auto storage_restored = restore_storage_from_meta();
@@ -285,12 +279,12 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(storage_restored.error())));
     }
 
-    auto indexes_restored = index_engine_.restore_all(meta_, storage_);
+    auto indexes_restored = index_engine_.restore_all(meta(), storage_);
     if (!indexes_restored.has_value()) {
         return std::unexpected(to_database_error(std::move(indexes_restored.error())));
     }
 
-    auto vector_indexes_restored = vector_index_engine_.restore_all(meta_, storage_);
+    auto vector_indexes_restored = vector_index_engine_.restore_all(meta(), storage_);
     if (!vector_indexes_restored.has_value()) {
         return std::unexpected(to_database_error(std::move(vector_indexes_restored.error())));
     }
@@ -336,7 +330,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         case PhysicalStatementPlanKind::DropVectorIndex:
             return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
         default:
-            executor::Executor executor {meta_, storage_, index_engine_, vector_index_engine_, *transaction_manager_};
+            executor::Executor executor {meta(), storage_, index_engine_, vector_index_engine_, *transaction_manager_};
             return executor.execute(plan);
         }
     }();
@@ -368,13 +362,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_plan::PhysicalCreateDatabasePlan & plan
 )
 {
-    const auto existed = meta_.find_database(plan.database_name()) != nullptr;
+    const auto existed = meta().find_database(plan.database_name()) != nullptr;
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto created = staged.create_database(meta::CreateDatabaseRequest {
         .name = plan.database_name(),
@@ -391,13 +385,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_plan::PhysicalCreateCollectionPlan & plan
 )
 {
-    const auto * existing = meta_.find_collection(plan.database_id(), plan.collection_name());
+    const auto * existing = meta().find_collection(plan.database_id(), plan.collection_name());
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto created = staged.create_collection(meta::CreateCollectionRequest {
         .database_id = plan.database_id(),
@@ -410,7 +404,7 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
     }
 
-    const auto collection_id = created.value();
+    const auto collection_id = *created;
     if (existing != nullptr) {
         return command_result(0);
     }
@@ -422,13 +416,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_plan::PhysicalCreateIndexPlan & plan
 )
 {
-    const auto * existing = meta_.find_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta().find_index(plan.collection_id(), plan.index_name());
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto created = staged.create_index(meta::CreateIndexRequest {
         .collection_id = plan.collection_id(),
@@ -453,13 +447,13 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_plan::PhysicalCreateVectorIndexPlan & plan
 )
 {
-    const auto * existing = meta_.find_vector_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta().find_vector_index(plan.collection_id(), plan.index_name());
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto created = staged.create_vector_index(meta::CreateVectorIndexRequest {
         .collection_id = plan.collection_id(),
@@ -494,11 +488,11 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto dropped = staged.drop_database(meta::DropDatabaseRequest {
         .name = plan.database_name(),
@@ -519,11 +513,11 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
         return command_result(0);
     }
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto dropped = staged.drop_collection(meta::DropCollectionRequest {
         .database_id = plan.database_id(),
@@ -541,15 +535,15 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_plan::PhysicalDropIndexPlan & plan
 )
 {
-    const auto * existing = meta_.find_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta().find_index(plan.collection_id(), plan.index_name());
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto dropped = staged.drop_index(meta::DropIndexRequest {
         .collection_id = plan.collection_id(),
@@ -567,16 +561,16 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_plan::PhysicalDropVectorIndexPlan & plan
 )
 {
-    const auto * existing = meta_.find_vector_index(plan.collection_id(), plan.index_name());
+    const auto * existing = meta().find_vector_index(plan.collection_id(), plan.index_name());
     if (existing == nullptr && plan.if_exists()) {
         return command_result(0);
     }
 
-    meta::MetaEngine staged;
-    auto restored = staged.restore(meta_.snapshot());
-    if (!restored.has_value()) {
-        return std::unexpected(from_meta_error(std::move(restored.error()), plan.location()));
+    auto editor = meta::CatalogEditor::from(meta());
+    if (!editor) {
+        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
     }
+    auto staged = std::move(*editor);
 
     auto dropped = staged.drop_vector_index(meta::DropVectorIndexRequest {
         .collection_id = plan.collection_id(),
@@ -593,16 +587,16 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
 std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_meta()
 {
     storage_.clear();
-    for (const auto * database : meta_.list_databases()) {
+    for (const auto * database : meta().list_databases()) {
         if (database == nullptr) {
             continue;
         }
-        for (const auto * collection : meta_.list_collections(database->id())) {
+        for (const auto * collection : meta().list_collections(database->id())) {
             if (collection == nullptr) {
                 continue;
             }
 
-            auto collection_schema = storage::load_collection_schema(meta_, collection->id());
+            auto collection_schema = storage::load_collection_schema(meta(), collection->id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(storage::StorageError {
                     .code = storage::StorageErrorCode::StoreError,
@@ -621,14 +615,14 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
 }
 
 executor::ExecutionError DatabaseEngine::from_meta_error(
-    meta::MetaEngineError error,
+    meta::MetaError error,
     parser::ast::AstNodeLocation location
 )
 {
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::MetaError,
         .location = location,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 

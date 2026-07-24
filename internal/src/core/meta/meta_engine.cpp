@@ -1,6 +1,7 @@
 #include "core/meta/meta_engine.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <unordered_set>
 #include <utility>
 
@@ -13,33 +14,6 @@ namespace
 {
 
 /**
- * @brief 创建元数据引擎错误
- * @param code 错误码
- * @param message 错误消息
- * @return 元数据引擎错误
- */
-[[nodiscard]]
-MetaEngineError make_error(MetaEngineErrorCode code, std::string message)
-{
-    return MetaEngineError {code, std::move(message), std::nullopt};
-}
-
-/**
- * @brief 从存储错误转换为引擎错误
- * @param error 存储错误
- * @return 元数据引擎错误
- */
-[[nodiscard]]
-MetaEngineError from_store_error(MetaStoreError error)
-{
-    return MetaEngineError {
-        MetaEngineErrorCode::StoreError,
-        std::move(error.message),
-        error.code,
-    };
-}
-
-/**
  * @brief 判断标识符是否为空
  * @param value 标识符
  * @return 是否为空
@@ -50,59 +24,70 @@ bool blank(std::string_view value) noexcept
     return value.empty();
 }
 
+[[nodiscard]]
+bool valid_logical_type(const common::LogicalType & type) noexcept
+{
+    if (static_cast<std::uint8_t>(type.id) > static_cast<std::uint8_t>(common::LogicalTypeId::Vector)) {
+        return false;
+    }
+    if (type.id == common::LogicalTypeId::Varchar || type.id == common::LogicalTypeId::Vector) {
+        return type.parameter.has_value() && *type.parameter != 0;
+    }
+    return !type.parameter.has_value();
+}
+
+[[nodiscard]]
+bool valid_default_expression(const schema::DefaultExpression & expression, std::size_t depth = 0) noexcept
+{
+    constexpr std::size_t MaximumDepth = 64;
+    if (depth >= MaximumDepth
+        || static_cast<std::uint8_t>(expression.kind)
+               > static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector)
+        || static_cast<std::uint8_t>(expression.literal_kind)
+               > static_cast<std::uint8_t>(schema::DefaultLiteralKind::String)) {
+        return false;
+    }
+    if (expression.kind == schema::DefaultExpressionKind::Literal) {
+        return expression.elements.empty();
+    }
+    if (!expression.value.empty() || expression.elements.empty()) {
+        return false;
+    }
+    return std::ranges::all_of(expression.elements, [depth](const auto & element) {
+        return element.kind == schema::DefaultExpressionKind::Literal
+            && valid_default_expression(element, depth + 1);
+    });
+}
+
+template <typename Id>
+[[nodiscard]]
+bool can_allocate(Id next, std::size_t count = 1) noexcept
+{
+    constexpr auto Maximum = std::numeric_limits<Id>::max();
+    return next != 0 && count <= static_cast<std::size_t>(Maximum - next);
+}
+
 } // namespace
 
-MetaEngine::MetaEngine(MetaStore & store) noexcept
-    : store_(&store)
-{
-}
-
-std::expected<void, MetaEngineError> MetaEngine::load()
-{
-    if (store_ == nullptr) {
-        return {};
-    }
-    auto loaded = store_->load();
-    if (!loaded) {
-        return std::unexpected(from_store_error(std::move(loaded.error())));
-    }
-    return restore(*loaded);
-}
-
-std::expected<void, MetaEngineError> MetaEngine::commit(const MetaSnapshot & source)
-{
-    const auto before = snapshot();
-    auto restored = restore(source);
-    if (!restored.has_value()) {
-        return std::unexpected(std::move(restored.error()));
-    }
-    auto saved = persist();
-    if (!saved.has_value()) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
-    return {};
-}
-
-const entry::DatabaseEntry * MetaEngine::find_database(std::string_view name) const
+const entry::DatabaseEntry * CatalogState::find_database(std::string_view name) const
 {
     const auto key = database_keys_.find(common::normalize_identifier(name));
     return key == database_keys_.end() ? nullptr : find_database(key->second);
 }
 
-const entry::DatabaseEntry * MetaEngine::find_database(common::DatabaseId id) const
+const entry::DatabaseEntry * CatalogState::find_database(common::DatabaseId id) const
 {
     const auto it = databases_.find(id);
     return it == databases_.end() ? nullptr : it->second.get();
 }
 
-entry::DatabaseEntry * MetaEngine::find_database_mutable(common::DatabaseId id)
+entry::DatabaseEntry * CatalogState::find_database_mutable(common::DatabaseId id)
 {
     const auto it = databases_.find(id);
     return it == databases_.end() ? nullptr : it->second.get();
 }
 
-const entry::CollectionEntry * MetaEngine::find_collection(common::DatabaseId database_id, std::string_view name) const
+const entry::CollectionEntry * CatalogState::find_collection(common::DatabaseId database_id, std::string_view name) const
 {
     const auto * database = find_database(database_id);
     if (database == nullptr) {
@@ -112,19 +97,19 @@ const entry::CollectionEntry * MetaEngine::find_collection(common::DatabaseId da
     return id ? find_collection(*id) : nullptr;
 }
 
-const entry::CollectionEntry * MetaEngine::find_collection(common::CollectionId id) const
+const entry::CollectionEntry * CatalogState::find_collection(common::CollectionId id) const
 {
     const auto it = collections_.find(id);
     return it == collections_.end() ? nullptr : it->second.get();
 }
 
-entry::CollectionEntry * MetaEngine::find_collection_mutable(common::CollectionId id)
+entry::CollectionEntry * CatalogState::find_collection_mutable(common::CollectionId id)
 {
     const auto it = collections_.find(id);
     return it == collections_.end() ? nullptr : it->second.get();
 }
 
-const entry::ColumnEntry * MetaEngine::find_column(common::CollectionId collection_id, std::string_view name) const
+const entry::ColumnEntry * CatalogState::find_column(common::CollectionId collection_id, std::string_view name) const
 {
     const auto * collection = find_collection(collection_id);
     if (collection == nullptr) {
@@ -134,13 +119,13 @@ const entry::ColumnEntry * MetaEngine::find_column(common::CollectionId collecti
     return id ? find_column(*id) : nullptr;
 }
 
-const entry::ColumnEntry * MetaEngine::find_column(common::ColumnId id) const
+const entry::ColumnEntry * CatalogState::find_column(common::ColumnId id) const
 {
     const auto it = columns_.find(id);
     return it == columns_.end() ? nullptr : it->second.get();
 }
 
-const entry::IndexEntry * MetaEngine::find_index(common::CollectionId collection_id, std::string_view name) const
+const entry::IndexEntry * CatalogState::find_index(common::CollectionId collection_id, std::string_view name) const
 {
     const auto * collection = find_collection(collection_id);
     if (collection == nullptr) {
@@ -150,13 +135,13 @@ const entry::IndexEntry * MetaEngine::find_index(common::CollectionId collection
     return id ? find_index(*id) : nullptr;
 }
 
-const entry::IndexEntry * MetaEngine::find_index(common::IndexId id) const
+const entry::IndexEntry * CatalogState::find_index(common::IndexId id) const
 {
     const auto it = indexes_.find(id);
     return it == indexes_.end() ? nullptr : it->second.get();
 }
 
-const entry::VectorIndexEntry * MetaEngine::find_vector_index(common::CollectionId collection_id, std::string_view name) const
+const entry::VectorIndexEntry * CatalogState::find_vector_index(common::CollectionId collection_id, std::string_view name) const
 {
     const auto * collection = find_collection(collection_id);
     if (collection == nullptr) {
@@ -166,13 +151,13 @@ const entry::VectorIndexEntry * MetaEngine::find_vector_index(common::Collection
     return id ? find_vector_index(*id) : nullptr;
 }
 
-const entry::VectorIndexEntry * MetaEngine::find_vector_index(common::VIndexId id) const
+const entry::VectorIndexEntry * CatalogState::find_vector_index(common::VIndexId id) const
 {
     const auto it = vector_indexes_.find(id);
     return it == vector_indexes_.end() ? nullptr : it->second.get();
 }
 
-std::vector<const entry::DatabaseEntry *> MetaEngine::list_databases() const
+std::vector<const entry::DatabaseEntry *> CatalogState::list_databases() const
 {
     std::vector<const entry::DatabaseEntry *> result;
     result.reserve(database_ids_.size());
@@ -184,7 +169,7 @@ std::vector<const entry::DatabaseEntry *> MetaEngine::list_databases() const
     return result;
 }
 
-std::vector<const entry::CollectionEntry *> MetaEngine::list_collections(common::DatabaseId database_id) const
+std::vector<const entry::CollectionEntry *> CatalogState::list_collections(common::DatabaseId database_id) const
 {
     std::vector<const entry::CollectionEntry *> result;
     const auto * database = find_database(database_id);
@@ -200,7 +185,7 @@ std::vector<const entry::CollectionEntry *> MetaEngine::list_collections(common:
     return result;
 }
 
-std::vector<const entry::ColumnEntry *> MetaEngine::list_columns(common::CollectionId collection_id) const
+std::vector<const entry::ColumnEntry *> CatalogState::list_columns(common::CollectionId collection_id) const
 {
     std::vector<const entry::ColumnEntry *> result;
     const auto * collection = find_collection(collection_id);
@@ -216,7 +201,7 @@ std::vector<const entry::ColumnEntry *> MetaEngine::list_columns(common::Collect
     return result;
 }
 
-std::vector<const entry::IndexEntry *> MetaEngine::list_indexes(common::CollectionId collection_id) const
+std::vector<const entry::IndexEntry *> CatalogState::list_indexes(common::CollectionId collection_id) const
 {
     std::vector<const entry::IndexEntry *> result;
     const auto * collection = find_collection(collection_id);
@@ -232,7 +217,7 @@ std::vector<const entry::IndexEntry *> MetaEngine::list_indexes(common::Collecti
     return result;
 }
 
-std::vector<const entry::VectorIndexEntry *> MetaEngine::list_vector_indexes(common::CollectionId collection_id) const
+std::vector<const entry::VectorIndexEntry *> CatalogState::list_vector_indexes(common::CollectionId collection_id) const
 {
     std::vector<const entry::VectorIndexEntry *> result;
     const auto * collection = find_collection(collection_id);
@@ -248,56 +233,41 @@ std::vector<const entry::VectorIndexEntry *> MetaEngine::list_vector_indexes(com
     return result;
 }
 
-std::expected<void, MetaEngineError> MetaEngine::persist() const
-{
-    if (store_ == nullptr) {
-        return {};
-    }
-    auto saved = store_->save(snapshot());
-    if (!saved) {
-        return std::unexpected(from_store_error(std::move(saved.error())));
-    }
-    return {};
-}
-
-std::expected<common::DatabaseId, MetaEngineError> MetaEngine::create_database(const CreateDatabaseRequest & request)
+std::expected<common::DatabaseId, MetaError> CatalogState::create_database(const CreateDatabaseRequest & request)
 {
     if (blank(request.name)) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Database name cannot be empty"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Database name cannot be empty"));
     }
     const auto key = common::normalize_identifier(request.name);
     if (const auto it = database_keys_.find(key); it != database_keys_.end()) {
         if (request.if_not_exists) {
             return it->second;
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::DuplicateDatabase, "Database already exists: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DuplicateDatabase, "Database already exists: " + request.name));
     }
-    const auto before = snapshot();
+    if (!can_allocate(next_database_id_)) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidState, "Database ID space is exhausted"));
+    }
     const auto id = next_database_id_++;
     auto database = std::make_unique<entry::DatabaseEntry>(id, request.name);
     database_keys_.emplace(database->key(), id);
     databases_.emplace(id, std::move(database));
     database_ids_.push_back(id);
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return id;
 }
 
-std::expected<void, MetaEngineError> MetaEngine::drop_database(const DropDatabaseRequest & request)
+std::expected<void, MetaError> CatalogState::drop_database(const DropDatabaseRequest & request)
 {
     if (blank(request.name)) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Database name cannot be empty"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Database name cannot be empty"));
     }
     auto * database = const_cast<entry::DatabaseEntry *>(find_database(request.name));
     if (database == nullptr) {
         if (request.if_exists) {
             return {};
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::DatabaseNotFound, "Database not found: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DatabaseNotFound, "Database not found: " + request.name));
     }
-    const auto before = snapshot();
     const auto id = database->id();
     const auto key = database->key();
     const auto children = database->collection_ids();
@@ -307,42 +277,50 @@ std::expected<void, MetaEngineError> MetaEngine::drop_database(const DropDatabas
     databases_.erase(id);
     database_keys_.erase(key);
     std::erase(database_ids_, id);
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return {};
 }
 
-std::expected<common::CollectionId, MetaEngineError> MetaEngine::create_collection(const CreateCollectionRequest & request)
+std::expected<common::CollectionId, MetaError> CatalogState::create_collection(const CreateCollectionRequest & request)
 {
     auto * database = find_database_mutable(request.database_id);
     if (database == nullptr) {
-        return std::unexpected(make_error(MetaEngineErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(make_error(MetaErrorCode::DatabaseNotFound, "Database not found"));
     }
     if (blank(request.name)) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Collection name cannot be empty"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Collection name cannot be empty"));
     }
     const auto key = common::normalize_identifier(request.name);
     if (const auto existing = database->find_collection_id(key)) {
         if (request.if_not_exists) {
             return *existing;
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::DuplicateCollection, "Collection already exists: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DuplicateCollection, "Collection already exists: " + request.name));
     }
     if (request.columns.empty()) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Collection must have at least one column"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Collection must have at least one column"));
     }
     std::unordered_set<std::string> column_keys;
     for (const auto & column : request.columns) {
         if (blank(column.name)) {
-            return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Column name cannot be empty"));
+            return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Column name cannot be empty"));
         }
         if (!column_keys.insert(common::normalize_identifier(column.name)).second) {
-            return std::unexpected(make_error(MetaEngineErrorCode::DuplicateColumn, "Duplicate column: " + column.name));
+            return std::unexpected(make_error(MetaErrorCode::DuplicateColumn, "Duplicate column: " + column.name));
+        }
+        if (!valid_logical_type(column.type)
+            || (column.default_expression && !valid_default_expression(*column.default_expression))) {
+            return std::unexpected(make_error(
+                MetaErrorCode::InvalidArgument,
+                "Invalid column type or default expression: " + column.name
+            ));
         }
     }
-    const auto before = snapshot();
+    if (!can_allocate(next_collection_id_) || !can_allocate(next_column_id_, request.columns.size())) {
+        return std::unexpected(make_error(
+            MetaErrorCode::InvalidState,
+            "Collection or column ID space is exhausted"
+        ));
+    }
     const auto id = next_collection_id_++;
     auto collection = std::make_unique<entry::CollectionEntry>(id, request.database_id, request.name, request.comment);
     for (std::size_t ordinal = 0; ordinal < request.columns.size(); ++ordinal) {
@@ -364,14 +342,10 @@ std::expected<common::CollectionId, MetaEngineError> MetaEngine::create_collecti
     }
     database->add_collection(collection->key(), id);
     collections_.emplace(id, std::move(collection));
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return id;
 }
 
-void MetaEngine::erase_collection(common::CollectionId id)
+void CatalogState::erase_collection(common::CollectionId id)
 {
     auto * collection = find_collection_mutable(id);
     if (collection == nullptr) {
@@ -389,64 +363,64 @@ void MetaEngine::erase_collection(common::CollectionId id)
     collections_.erase(id);
 }
 
-std::expected<void, MetaEngineError> MetaEngine::drop_collection(const DropCollectionRequest & request)
+std::expected<void, MetaError> CatalogState::drop_collection(const DropCollectionRequest & request)
 {
     auto * database = find_database_mutable(request.database_id);
     if (database == nullptr) {
-        return std::unexpected(make_error(MetaEngineErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(make_error(MetaErrorCode::DatabaseNotFound, "Database not found"));
     }
     const auto * collection = find_collection(request.database_id, request.name);
     if (collection == nullptr) {
         if (request.if_exists) {
             return {};
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::CollectionNotFound, "Collection not found: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::CollectionNotFound, "Collection not found: " + request.name));
     }
-    const auto before = snapshot();
     const auto id = collection->id();
     const auto key = collection->key();
-    database->remove_collection(key, id);
+    database->remove_collection(key);
     erase_collection(id);
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return {};
 }
 
-std::expected<common::IndexId, MetaEngineError> MetaEngine::create_index(const CreateIndexRequest & request)
+std::expected<common::IndexId, MetaError> CatalogState::create_index(const CreateIndexRequest & request)
 {
     auto * collection = find_collection_mutable(request.collection_id);
     if (collection == nullptr) {
-        return std::unexpected(make_error(MetaEngineErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(make_error(MetaErrorCode::CollectionNotFound, "Collection not found"));
     }
     if (blank(request.name) || request.column_ids.empty()) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Index name and columns cannot be empty"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Index name and columns cannot be empty"));
     }
     const auto key = common::normalize_identifier(request.name);
     if (const auto existing = collection->find_index_id(key)) {
         if (request.if_not_exists) {
             return *existing;
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::DuplicateIndex, "Index already exists: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DuplicateIndex, "Index already exists: " + request.name));
     }
     if (collection->contains_vector_index(key)) {
-        return std::unexpected(make_error(MetaEngineErrorCode::DuplicateIndex, "Index name already exists: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DuplicateIndex, "Index name already exists: " + request.name));
+    }
+    if (request.kind != entry::IndexKind::BTree) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Scalar index kind must be BTREE"));
     }
     std::unordered_set<common::ColumnId> seen;
     for (const auto column_id : request.column_ids) {
         const auto * column = find_column(column_id);
         if (column == nullptr || column->collection_id() != request.collection_id) {
-            return std::unexpected(make_error(MetaEngineErrorCode::ColumnNotFound, "Index column not found"));
+            return std::unexpected(make_error(MetaErrorCode::ColumnNotFound, "Index column not found"));
         }
         if (column->type().id == common::LogicalTypeId::Vector) {
-            return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Scalar index cannot contain a VECTOR column"));
+            return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Scalar index cannot contain a VECTOR column"));
         }
         if (!seen.insert(column_id).second) {
-            return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Index contains duplicate columns"));
+            return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Index contains duplicate columns"));
         }
     }
-    const auto before = snapshot();
+    if (!can_allocate(next_index_id_)) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidState, "Index ID space is exhausted"));
+    }
     const auto id = next_index_id_++;
     auto index = std::make_unique<entry::IndexEntry>(
         id,
@@ -458,70 +432,68 @@ std::expected<common::IndexId, MetaEngineError> MetaEngine::create_index(const C
     );
     collection->add_index(index->key(), id);
     indexes_.emplace(id, std::move(index));
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return id;
 }
 
-std::expected<void, MetaEngineError> MetaEngine::drop_index(const DropIndexRequest & request)
+std::expected<void, MetaError> CatalogState::drop_index(const DropIndexRequest & request)
 {
     auto * collection = find_collection_mutable(request.collection_id);
     if (collection == nullptr) {
-        return std::unexpected(make_error(MetaEngineErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(make_error(MetaErrorCode::CollectionNotFound, "Collection not found"));
     }
     const auto * index = find_index(request.collection_id, request.name);
     if (index == nullptr) {
         if (request.if_exists) {
             return {};
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::IndexNotFound, "Index not found: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::IndexNotFound, "Index not found: " + request.name));
     }
-    const auto before = snapshot();
     const auto id = index->id();
     const auto key = index->key();
-    collection->remove_index(key, id);
+    collection->remove_index(key);
     indexes_.erase(id);
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return {};
 }
 
-std::expected<common::VIndexId, MetaEngineError> MetaEngine::create_vector_index(const CreateVectorIndexRequest & request)
+std::expected<common::VIndexId, MetaError> CatalogState::create_vector_index(const CreateVectorIndexRequest & request)
 {
     auto * collection = find_collection_mutable(request.collection_id);
     if (collection == nullptr) {
-        return std::unexpected(make_error(MetaEngineErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(make_error(MetaErrorCode::CollectionNotFound, "Collection not found"));
     }
     if (blank(request.name)) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Vector index name cannot be empty"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Vector index name cannot be empty"));
     }
     const auto key = common::normalize_identifier(request.name);
     if (const auto existing = collection->find_vector_index_id(key)) {
         if (request.if_not_exists) {
             return *existing;
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::DuplicateVectorIndex, "Vector index already exists: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DuplicateVectorIndex, "Vector index already exists: " + request.name));
     }
     if (collection->contains_index(key)) {
-        return std::unexpected(make_error(MetaEngineErrorCode::DuplicateVectorIndex, "Index name already exists: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::DuplicateVectorIndex, "Index name already exists: " + request.name));
     }
     const auto * column = find_column(request.column_id);
     if (column == nullptr || column->collection_id() != request.collection_id) {
-        return std::unexpected(make_error(MetaEngineErrorCode::ColumnNotFound, "Vector index column not found"));
+        return std::unexpected(make_error(MetaErrorCode::ColumnNotFound, "Vector index column not found"));
     }
     if (column->type().id != common::LogicalTypeId::Vector || !column->type().parameter || *column->type().parameter == 0) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Vector index requires a VECTOR(n) column"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Vector index requires a VECTOR(n) column"));
+    }
+    if (request.kind != entry::VectorIndexKind::Hnsw
+        || static_cast<std::uint8_t>(request.metric)
+               > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Invalid vector index kind or metric"));
     }
     if (request.hnsw_options.max_neighbors == 0
         || request.hnsw_options.ef_construction < request.hnsw_options.max_neighbors
         || request.hnsw_options.ef_search_default == 0) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidArgument, "Invalid HNSW options"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Invalid HNSW options"));
     }
-    const auto before = snapshot();
+    if (!can_allocate(next_vector_index_id_)) {
+        return std::unexpected(make_error(MetaErrorCode::InvalidState, "Vector index ID space is exhausted"));
+    }
     const auto id = next_vector_index_id_++;
     auto index = std::make_unique<entry::VectorIndexEntry>(
         id,
@@ -535,39 +507,30 @@ std::expected<common::VIndexId, MetaEngineError> MetaEngine::create_vector_index
     );
     collection->add_vector_index(index->key(), id);
     vector_indexes_.emplace(id, std::move(index));
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return id;
 }
 
-std::expected<void, MetaEngineError> MetaEngine::drop_vector_index(const DropVectorIndexRequest & request)
+std::expected<void, MetaError> CatalogState::drop_vector_index(const DropVectorIndexRequest & request)
 {
     auto * collection = find_collection_mutable(request.collection_id);
     if (collection == nullptr) {
-        return std::unexpected(make_error(MetaEngineErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(make_error(MetaErrorCode::CollectionNotFound, "Collection not found"));
     }
     const auto * index = find_vector_index(request.collection_id, request.name);
     if (index == nullptr) {
         if (request.if_exists) {
             return {};
         }
-        return std::unexpected(make_error(MetaEngineErrorCode::VectorIndexNotFound, "Vector index not found: " + request.name));
+        return std::unexpected(make_error(MetaErrorCode::VectorIndexNotFound, "Vector index not found: " + request.name));
     }
-    const auto before = snapshot();
     const auto id = index->id();
     const auto key = index->key();
-    collection->remove_vector_index(key, id);
+    collection->remove_vector_index(key);
     vector_indexes_.erase(id);
-    if (auto saved = persist(); !saved) {
-        (void) restore(before);
-        return std::unexpected(std::move(saved.error()));
-    }
     return {};
 }
 
-MetaSnapshot MetaEngine::snapshot() const
+MetaSnapshot CatalogState::snapshot() const
 {
     MetaSnapshot result;
     result.next_database_id = next_database_id_;
@@ -624,10 +587,9 @@ MetaSnapshot MetaEngine::snapshot() const
     return result;
 }
 
-std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & source)
+std::expected<void, MetaError> CatalogState::restore(const MetaSnapshot & source)
 {
-    MetaEngine rebuilt;
-    rebuilt.store_ = store_;
+    CatalogState rebuilt;
     rebuilt.next_database_id_ = source.next_database_id;
     rebuilt.next_collection_id_ = source.next_collection_id;
     rebuilt.next_column_id_ = source.next_column_id;
@@ -639,10 +601,10 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
     common::IndexId max_index = 0;
     common::VIndexId max_vector_index = 0;
     for (const auto & database_snapshot : source.databases) {
-        if (database_snapshot.id == 0 || blank(database_snapshot.name)) return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid database in meta snapshot"));
+        if (database_snapshot.id == 0 || blank(database_snapshot.name)) return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid database in meta snapshot"));
         auto database = std::make_unique<entry::DatabaseEntry>(database_snapshot.id, database_snapshot.name);
         if (rebuilt.databases_.contains(database_snapshot.id) || rebuilt.database_keys_.contains(database->key())) {
-            return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Duplicate database in meta snapshot"));
+            return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Duplicate database in meta snapshot"));
         }
         auto * database_ptr = database.get();
         rebuilt.database_ids_.push_back(database_snapshot.id);
@@ -651,27 +613,29 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
         max_database = std::max(max_database, database_snapshot.id);
         for (const auto & collection_snapshot : database_snapshot.collections) {
             if (collection_snapshot.id == 0 || collection_snapshot.database_id != database_snapshot.id || blank(collection_snapshot.name)) {
-                return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid collection in meta snapshot"));
+                return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid collection in meta snapshot"));
             }
             if (collection_snapshot.columns.empty()) {
-                return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Collection snapshot must contain columns"));
+                return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Collection snapshot must contain columns"));
             }
             auto collection = std::make_unique<entry::CollectionEntry>(collection_snapshot.id, database_snapshot.id,
                                                                         collection_snapshot.name, collection_snapshot.comment);
             if (rebuilt.collections_.contains(collection_snapshot.id) || database_ptr->contains_collection(collection->key())) {
-                return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Duplicate collection in meta snapshot"));
+                return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Duplicate collection in meta snapshot"));
             }
             auto * collection_ptr = collection.get();
             std::unordered_set<common::ColumnId> collection_columns;
             for (std::size_t ordinal = 0; ordinal < collection_snapshot.columns.size(); ++ordinal) {
                 const auto & value = collection_snapshot.columns[ordinal];
                 if (value.id == 0 || blank(value.name) || rebuilt.columns_.contains(value.id) || collection_ptr->contains_column(common::normalize_identifier(value.name))) {
-                    return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate column in meta snapshot"));
+                    return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid or duplicate column in meta snapshot"));
                 }
-                if (static_cast<std::uint8_t>(value.type.id) > static_cast<std::uint8_t>(common::LogicalTypeId::Vector)
-                    || (value.type.id == common::LogicalTypeId::Vector
-                        && (!value.type.parameter || *value.type.parameter == 0))) {
-                    return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid column type in meta snapshot"));
+                if (!valid_logical_type(value.type)
+                    || (value.default_expression && !valid_default_expression(*value.default_expression))) {
+                    return std::unexpected(make_error(
+                        MetaErrorCode::InvalidSnapshot,
+                        "Invalid column type or default expression in meta snapshot"
+                    ));
                 }
                 auto column = std::make_unique<entry::ColumnEntry>(value.id, collection_snapshot.id, ordinal, value.name,
                                                                    value.type, value.unique, value.nullable,
@@ -685,16 +649,16 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
                 if (value.id == 0 || blank(value.name) || value.column_ids.empty() || rebuilt.indexes_.contains(value.id)
                     || collection_ptr->contains_index(common::normalize_identifier(value.name))
                     || value.index_kind != entry::IndexKind::BTree) {
-                    return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate index in meta snapshot"));
+                    return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid or duplicate index in meta snapshot"));
                 }
                 std::unordered_set<common::ColumnId> index_columns;
                 for (const auto column_id : value.column_ids) {
                     const auto * column = rebuilt.find_column(column_id);
                     if (!collection_columns.contains(column_id) || column == nullptr) {
-                        return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Index column not found in meta snapshot"));
+                        return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Index column not found in meta snapshot"));
                     }
                     if (column->type().id == common::LogicalTypeId::Vector || !index_columns.insert(column_id).second) {
-                        return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid scalar index columns in meta snapshot"));
+                        return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid scalar index columns in meta snapshot"));
                     }
                 }
                 auto index = std::make_unique<entry::IndexEntry>(value.id, collection_snapshot.id, value.column_ids,
@@ -710,13 +674,13 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
                     || !collection_columns.contains(value.column_id)
                     || static_cast<std::uint8_t>(value.index_kind) > static_cast<std::uint8_t>(entry::VectorIndexKind::Hnsw)
                     || static_cast<std::uint8_t>(value.metric) > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
-                    return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid or duplicate vector index in meta snapshot"));
+                    return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid or duplicate vector index in meta snapshot"));
                 }
                 const auto * column = rebuilt.find_column(value.column_id);
                 if (column == nullptr || column->type().id != common::LogicalTypeId::Vector || !column->type().parameter
                     || *column->type().parameter != value.dimension || value.max_neighbors == 0
                     || value.ef_construction < value.max_neighbors || value.ef_search_default == 0) {
-                    return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Invalid vector index options in meta snapshot"));
+                    return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid vector index options in meta snapshot"));
                 }
                 entry::HnswOptions options {value.max_neighbors, value.ef_construction, value.ef_search_default, value.random_seed};
                 auto index = std::make_unique<entry::VectorIndexEntry>(value.id, collection_snapshot.id, value.column_id,
@@ -734,9 +698,219 @@ std::expected<void, MetaEngineError> MetaEngine::restore(const MetaSnapshot & so
     if (source.next_database_id <= max_database || source.next_collection_id <= max_collection
         || source.next_column_id <= max_column || source.next_index_id <= max_index
         || source.next_vector_index_id <= max_vector_index) {
-        return std::unexpected(make_error(MetaEngineErrorCode::InvalidSnapshot, "Meta snapshot next id is behind existing ids"));
+        return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Meta snapshot next id is behind existing ids"));
     }
     *this = std::move(rebuilt);
+    return {};
+}
+
+const entry::DatabaseEntry * CatalogView::find_database(std::string_view name) const
+{
+    return state_->find_database(name);
+}
+
+const entry::DatabaseEntry * CatalogView::find_database(common::DatabaseId id) const
+{
+    return state_->find_database(id);
+}
+
+const entry::CollectionEntry * CatalogView::find_collection(
+    common::DatabaseId database_id,
+    std::string_view name
+) const
+{
+    return state_->find_collection(database_id, name);
+}
+
+const entry::CollectionEntry * CatalogView::find_collection(common::CollectionId id) const
+{
+    return state_->find_collection(id);
+}
+
+const entry::ColumnEntry * CatalogView::find_column(
+    common::CollectionId collection_id,
+    std::string_view name
+) const
+{
+    return state_->find_column(collection_id, name);
+}
+
+const entry::ColumnEntry * CatalogView::find_column(common::ColumnId id) const
+{
+    return state_->find_column(id);
+}
+
+const entry::IndexEntry * CatalogView::find_index(
+    common::CollectionId collection_id,
+    std::string_view name
+) const
+{
+    return state_->find_index(collection_id, name);
+}
+
+const entry::IndexEntry * CatalogView::find_index(common::IndexId id) const
+{
+    return state_->find_index(id);
+}
+
+const entry::VectorIndexEntry * CatalogView::find_vector_index(
+    common::CollectionId collection_id,
+    std::string_view name
+) const
+{
+    return state_->find_vector_index(collection_id, name);
+}
+
+const entry::VectorIndexEntry * CatalogView::find_vector_index(common::VIndexId id) const
+{
+    return state_->find_vector_index(id);
+}
+
+std::vector<const entry::DatabaseEntry *> CatalogView::list_databases() const
+{
+    return state_->list_databases();
+}
+
+std::vector<const entry::CollectionEntry *> CatalogView::list_collections(
+    common::DatabaseId database_id
+) const
+{
+    return state_->list_collections(database_id);
+}
+
+std::vector<const entry::ColumnEntry *> CatalogView::list_columns(
+    common::CollectionId collection_id
+) const
+{
+    return state_->list_columns(collection_id);
+}
+
+std::vector<const entry::IndexEntry *> CatalogView::list_indexes(
+    common::CollectionId collection_id
+) const
+{
+    return state_->list_indexes(collection_id);
+}
+
+std::vector<const entry::VectorIndexEntry *> CatalogView::list_vector_indexes(
+    common::CollectionId collection_id
+) const
+{
+    return state_->list_vector_indexes(collection_id);
+}
+
+MetaSnapshot CatalogView::snapshot() const
+{
+    return state_->snapshot();
+}
+
+std::expected<CatalogState, MetaError> build_catalog_state(const MetaSnapshot & snapshot)
+{
+    CatalogState state;
+    if (auto restored = state.restore(snapshot); !restored) {
+        return std::unexpected(std::move(restored.error()));
+    }
+    return state;
+}
+
+std::expected<CatalogEditor, MetaError> CatalogEditor::from(CatalogView source)
+{
+    return from(source.snapshot());
+}
+
+std::expected<CatalogEditor, MetaError> CatalogEditor::from(const MetaSnapshot & source)
+{
+    auto state = build_catalog_state(source);
+    if (!state) {
+        return std::unexpected(std::move(state.error()));
+    }
+    CatalogEditor editor;
+    editor.state_ = std::move(*state);
+    return editor;
+}
+
+std::expected<common::DatabaseId, MetaError> CatalogEditor::create_database(
+    const CreateDatabaseRequest & request
+)
+{
+    return state_.create_database(request);
+}
+
+std::expected<void, MetaError> CatalogEditor::drop_database(const DropDatabaseRequest & request)
+{
+    return state_.drop_database(request);
+}
+
+std::expected<common::CollectionId, MetaError> CatalogEditor::create_collection(
+    const CreateCollectionRequest & request
+)
+{
+    return state_.create_collection(request);
+}
+
+std::expected<void, MetaError> CatalogEditor::drop_collection(const DropCollectionRequest & request)
+{
+    return state_.drop_collection(request);
+}
+
+std::expected<common::IndexId, MetaError> CatalogEditor::create_index(
+    const CreateIndexRequest & request
+)
+{
+    return state_.create_index(request);
+}
+
+std::expected<void, MetaError> CatalogEditor::drop_index(const DropIndexRequest & request)
+{
+    return state_.drop_index(request);
+}
+
+std::expected<common::VIndexId, MetaError> CatalogEditor::create_vector_index(
+    const CreateVectorIndexRequest & request
+)
+{
+    return state_.create_vector_index(request);
+}
+
+std::expected<void, MetaError> CatalogEditor::drop_vector_index(
+    const DropVectorIndexRequest & request
+)
+{
+    return state_.drop_vector_index(request);
+}
+
+CatalogPublisher::CatalogPublisher(
+    std::filesystem::path path,
+    filesystem::FileSystem & filesystem
+)
+    : store_(std::move(path), filesystem)
+{
+}
+
+std::expected<void, MetaError> CatalogPublisher::open_or_initialize()
+{
+    auto loaded = store_.load();
+    if (!loaded) {
+        return std::unexpected(std::move(loaded.error()));
+    }
+    MetaSnapshot snapshot;
+    if (*loaded) {
+        snapshot = std::move(**loaded);
+    } else {
+        if (auto saved = store_.save(snapshot); !saved) {
+            return std::unexpected(std::move(saved.error()));
+        }
+    }
+    return publish_committed(snapshot);
+}
+
+std::expected<void, MetaError> CatalogPublisher::publish_committed(const MetaSnapshot & snapshot)
+{
+    auto rebuilt = build_catalog_state(snapshot);
+    if (!rebuilt) {
+        return std::unexpected(std::move(rebuilt.error()));
+    }
+    state_ = std::move(*rebuilt);
     return {};
 }
 

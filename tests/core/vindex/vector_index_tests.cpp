@@ -400,7 +400,7 @@ void test_vector_index_engine_restores_and_rebuilds_all()
     const auto path = temporary_path();
     const auto index_directory = path / "indexes";
     {
-        meta::MetaEngine catalog;
+        meta::CatalogEditor catalog;
         auto database_id = catalog.create_database(meta::CreateDatabaseRequest {.name = "demo"});
         require(database_id.has_value(), "create vector catalog database failed");
         auto collection_id = catalog.create_collection(meta::CreateCollectionRequest {
@@ -412,7 +412,7 @@ void test_vector_index_engine_restores_and_rebuilds_all()
             },
         });
         require(collection_id.has_value(), "create vector catalog collection failed");
-        const auto * column = catalog.find_column(*collection_id, "embedding");
+        const auto * column = catalog.view().find_column(*collection_id, "embedding");
         require(column != nullptr, "vector catalog column missing");
         auto index_id = catalog.create_vector_index(meta::CreateVectorIndexRequest {
             .collection_id = *collection_id,
@@ -423,9 +423,9 @@ void test_vector_index_engine_restores_and_rebuilds_all()
             .hnsw_options = {.max_neighbors = 4, .ef_construction = 32, .ef_search_default = 32, .random_seed = 7},
         });
         require(index_id.has_value(), "create vector catalog index failed");
-        auto collection_schema = storage::load_collection_schema(catalog, *collection_id);
+        auto collection_schema = storage::load_collection_schema(catalog.view(), *collection_id);
         require(collection_schema.has_value(), "load vector catalog schema failed");
-        const auto * index_entry = catalog.find_vector_index(*index_id);
+        const auto * index_entry = catalog.view().find_vector_index(*index_id);
         require(index_entry != nullptr, "vector catalog index entry missing");
 
         storage::StorageEngine storage {path / "storage", filesystem};
@@ -448,7 +448,7 @@ void test_vector_index_engine_restores_and_rebuilds_all()
         require(std::filesystem::exists(index_path), "engine hnsw file is missing");
         {
             VectorIndexEngine restored {index_directory, filesystem};
-            require(restored.restore_all(catalog, storage).has_value(), "engine restore_all failed");
+            require(restored.restore_all(catalog.view(), storage).has_value(), "engine restore_all failed");
             require_records(
                 results(restored.search(*index_id, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
                 {1, 2},
@@ -456,20 +456,20 @@ void test_vector_index_engine_restores_and_rebuilds_all()
             );
 
             storage::StorageEngine missing_storage {path / "missing-storage", filesystem};
-            auto failed = restored.restore_all(catalog, missing_storage);
+            auto failed = restored.restore_all(catalog.view(), missing_storage);
             require(!failed.has_value(), "restore_all should reject missing collection storage");
             require(restored.find_index(*index_id).has_value(), "failed restore_all should preserve prior engine state");
         }
         require(filesystem.remove(index_path).has_value(), "remove HNSW file for missing-file recovery failed");
         {
             VectorIndexEngine missing {index_directory, filesystem};
-            require(missing.restore_all(catalog, storage).has_value(), "engine should rebuild a missing HNSW file");
+            require(missing.restore_all(catalog.view(), storage).has_value(), "engine should rebuild a missing HNSW file");
             require(missing.find_index(*index_id)->entry_count == 3, "missing-file rebuild size mismatch");
         }
         require(storage.insert(*collection_id, vector_record("fourth", Value {VectorValue {0.1, 0.0}})).has_value(), "insert stale storage vector failed");
         {
             VectorIndexEngine stale {index_directory, filesystem};
-            require(stale.restore_all(catalog, storage).has_value(), "engine should rebuild stale HNSW index");
+            require(stale.restore_all(catalog.view(), storage).has_value(), "engine should rebuild stale HNSW index");
             require(stale.find_index(*index_id)->entry_count == 4, "rebuilt HNSW index size mismatch");
             require(stale.drop_index(*index_id).has_value(), "engine drop hnsw index failed");
         }

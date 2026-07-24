@@ -115,7 +115,7 @@ public:
      * @return meta 引擎
      */
     [[nodiscard]]
-    const meta::MetaEngine & meta() const noexcept;
+    meta::CatalogView meta() const noexcept;
 
     /**
      * @brief 获取标量索引引擎
@@ -265,7 +265,7 @@ private:
      */
     [[nodiscard]]
     static executor::ExecutionError from_meta_error(
-        meta::MetaEngineError error,
+        meta::MetaError error,
         parser::ast::AstNodeLocation location
     );
 
@@ -315,8 +315,7 @@ private:
     std::filesystem::path data_directory_; ///< 数据目录
     filesystem::FileSystem filesystem_;    ///< 文件系统
     DatabaseManifest manifest_;            ///< 数据库 manifest
-    meta::MetaStore meta_store_;           ///< meta 存储
-    meta::MetaEngine meta_;                ///< meta 引擎
+    meta::CatalogPublisher meta_;          ///< 在线 Catalog 发布者
     storage::StorageEngine storage_;       ///< 存储引擎
     index::IndexEngine index_engine_;      ///< 索引引擎
     vindex::VectorIndexEngine vector_index_engine_; ///< 向量索引引擎

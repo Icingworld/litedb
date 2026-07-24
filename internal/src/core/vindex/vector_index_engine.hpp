@@ -19,7 +19,7 @@ class FileSystem;
 
 namespace litedb::core::meta
 {
-class MetaEngine;
+class CatalogView;
 }
 
 namespace litedb::core::storage
@@ -91,7 +91,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, VectorIndexError> restore_all(
-        const meta::MetaEngine & catalog,
+        const meta::CatalogView & catalog,
         const storage::StorageEngine & storage
     );
 
@@ -100,7 +100,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, VectorIndexError> reload_collection(
-        const meta::MetaEngine & catalog,
+        const meta::CatalogView & catalog,
         const storage::StorageEngine & storage,
         common::CollectionId collection_id
     );

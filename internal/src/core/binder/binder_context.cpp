@@ -3,13 +3,13 @@
 namespace litedb::core::binder
 {
 
-BinderContext::BinderContext(const meta::MetaEngine & meta, const SessionContext & session) noexcept
+BinderContext::BinderContext(meta::CatalogView meta, const SessionContext & session) noexcept
     : meta_(meta)
     , session_(session)
 {
 }
 
-const meta::MetaEngine & BinderContext::meta() const noexcept
+const meta::CatalogView & BinderContext::meta() const noexcept
 {
     return meta_;
 }
