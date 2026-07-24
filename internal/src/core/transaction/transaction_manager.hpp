@@ -223,7 +223,21 @@ private:
      * @return 事务错误
      */
     [[nodiscard]]
-    TransactionError error(TransactionErrorCode code, TransactionId id, std::string message) const;
+    TransactionError error(
+        TransactionErrorCode code,
+        TransactionId id,
+        std::string message,
+        TransactionOperation operation = TransactionOperation::Begin
+    ) const;
+
+    [[nodiscard]]
+    TransactionError source_error(
+        TransactionErrorCode code,
+        TransactionId id,
+        TransactionOperation operation,
+        std::string subsystem,
+        error::Error source
+    ) const;
 
     [[nodiscard]]
     bool failpoint(CommitStage stage, TransactionContext & transaction, bool durable);

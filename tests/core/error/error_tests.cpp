@@ -9,6 +9,7 @@
 #include "core/io/io_error.hpp"
 #include "core/meta/meta_error.hpp"
 #include "core/storage/storage_error.hpp"
+#include "core/transaction/transaction_error.hpp"
 #include "core/vindex/vector_index_error.hpp"
 
 namespace
@@ -25,6 +26,9 @@ using litedb::core::meta::MetaOperation;
 using litedb::core::storage::StorageErrorCode;
 using litedb::core::storage::StorageErrorContext;
 using litedb::core::storage::StorageOperation;
+using litedb::core::transaction::TransactionErrorCode;
+using litedb::core::transaction::TransactionErrorContext;
+using litedb::core::transaction::TransactionOperation;
 using litedb::core::vindex::VectorIndexErrorCode;
 using litedb::core::vindex::VectorIndexErrorContext;
 using litedb::core::vindex::VectorIndexOperation;
@@ -39,6 +43,7 @@ static_assert(std::to_underlying(ErrorCategory::Io) == 2);
 static_assert(std::to_underlying(ErrorCategory::Meta) == 3);
 static_assert(std::to_underlying(ErrorCategory::Storage) == 4);
 static_assert(std::to_underlying(ErrorCategory::VectorIndex) == 6);
+static_assert(std::to_underlying(ErrorCategory::Transaction) == 8);
 static_assert(!std::is_copy_constructible_v<Error>);
 static_assert(!std::is_copy_assignable_v<Error>);
 static_assert(std::is_nothrow_move_constructible_v<Error>);
@@ -168,6 +173,38 @@ bool test_vector_index_code_and_context()
            context->source_code == 0x010C;
 }
 
+bool test_transaction_error_preserves_cause()
+{
+    Error source {
+        StorageErrorCode::ChecksumMismatch,
+        "page checksum mismatch",
+        StorageErrorContext {
+            .operation = StorageOperation::ReadPage,
+            .collection_id = 7,
+            .page_id = 3,
+        },
+    };
+    Error error {
+        TransactionErrorCode::PrepareFailed,
+        "storage transaction preparation failed",
+        TransactionErrorContext {
+            .operation = TransactionOperation::Prepare,
+            .transaction_id = 11,
+            .source_code = source.encode_code(),
+        },
+        std::move(source),
+    };
+    const auto * context = error.context<TransactionErrorContext>();
+    return error.category() == ErrorCategory::Transaction &&
+           error.is(TransactionErrorCode::PrepareFailed) &&
+           context != nullptr &&
+           context->operation == TransactionOperation::Prepare &&
+           context->transaction_id == 11 &&
+           context->source_code == 0x0410 &&
+           error.cause() != nullptr &&
+           error.cause()->is(StorageErrorCode::ChecksumMismatch);
+}
+
 } // namespace
 
 int main()
@@ -176,7 +213,8 @@ int main()
            test_code_and_context() &&
            test_move_preserves_context() &&
            test_storage_code_and_context() &&
-           test_vector_index_code_and_context()
+           test_vector_index_code_and_context() &&
+           test_transaction_error_preserves_cause()
         ? 0
         : 1;
 }

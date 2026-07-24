@@ -330,7 +330,7 @@ private:
     std::atomic_uint64_t automatic_checkpoint_attempts_ {0};
     std::atomic_uint64_t completed_automatic_checkpoints_ {0};
     std::atomic_uint64_t failed_automatic_checkpoints_ {0};
-    std::mutex mutex_;                     ///< 互斥锁
+    mutable std::mutex mutex_;             ///< SQL、checkpoint 与观测的串行化边界
 };
 
 } // namespace litedb::core::database

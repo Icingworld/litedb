@@ -98,6 +98,34 @@ void test_database_recovery_uses_configured_wal_limits()
             "Database recovery did not enforce configured WAL limits");
 }
 
+void test_wal_write_budget_prevents_unrecoverable_commit()
+{
+    const auto directory = std::filesystem::temp_directory_path() / "litedb_wal_write_budget_tests";
+    std::filesystem::remove_all(directory);
+    const database::DatabaseConfig config {
+        .data_dir = directory,
+        .wal_decode_limits = {
+            .max_record_size_bytes = 1024 * 1024,
+            .max_scan_size_bytes = 1024 * 1024,
+            .max_record_count = 4,
+        },
+    };
+    {
+        auto engine = open_database(config);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+        execute_ok(session, "USE demo;");
+        const auto rejected = session.execute_sql("CREATE COLLECTION docs (id BIGINT);");
+        require(!rejected, "WAL budget should reject a transaction that cannot be recovered");
+    }
+
+    auto reopened = open_database(config);
+    database::Session session {*reopened};
+    execute_ok(session, "USE demo;");
+    const auto collections = execute_ok(session, "SHOW COLLECTIONS;");
+    require(collections.rows.empty(), "rejected over-budget transaction became visible after restart");
+}
+
 } // namespace
 
 int main()
@@ -150,5 +178,6 @@ int main()
     require(rows.rows.size() == 2, "checkpoint restart lost committed rows");
     test_automatic_checkpoint_by_wal_size();
     test_database_recovery_uses_configured_wal_limits();
+    test_wal_write_budget_prevents_unrecoverable_commit();
     return 0;
 }

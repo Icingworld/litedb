@@ -132,10 +132,15 @@ ExecutionError from_vector_index_error(vindex::VectorIndexError error, AstNodeLo
 [[nodiscard]]
 ExecutionError from_transaction_error(transaction::TransactionError error, AstNodeLocation location)
 {
+    const auto * context = error.context<transaction::TransactionErrorContext>();
     return make_error(
         ExecutionErrorCode::TransactionError,
         location,
-        "Transaction " + std::to_string(error.transaction_id) + ": " + std::move(error.message)
+        "Transaction " +
+            std::to_string(context != nullptr
+                               ? context->transaction_id
+                               : transaction::InvalidTransactionId) +
+            ": " + error.message()
     );
 }
 

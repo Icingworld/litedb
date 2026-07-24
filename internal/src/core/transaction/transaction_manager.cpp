@@ -115,7 +115,7 @@ TransactionManager::TransactionManager(
     wal_size_bytes_.store(wal_->metrics().size_bytes, std::memory_order_relaxed);
 }
 
-std::expected<void, std::string> sync_file(
+std::expected<void, error::Error> sync_file(
     filesystem::FileSystem & filesystem,
     const std::filesystem::path & path
 )
@@ -127,20 +127,20 @@ std::expected<void, std::string> sync_file(
             filesystem::FileCreateMode::OpenExisting,
         }
     );
-    if (!opened) return std::unexpected(opened.error().message());
+    if (!opened) return std::unexpected(std::move(opened.error()));
     auto synced = opened->sync_all();
-    if (!synced) return std::unexpected(synced.error().message());
+    if (!synced) return std::unexpected(std::move(synced.error()));
     return {};
 }
 
-std::expected<void, std::string> sync_directory_if_supported(
+std::expected<void, error::Error> sync_directory_if_supported(
     filesystem::FileSystem & filesystem,
     const std::filesystem::path & path
 )
 {
     auto synced = filesystem.sync_directory(path);
     if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
-        return std::unexpected(synced.error().message());
+        return std::unexpected(std::move(synced.error()));
     }
     return {};
 }
@@ -216,17 +216,26 @@ std::expected<void, TransactionError> TransactionManager::sync_checkpoint_partic
 {
     auto synced_meta = sync_file(*filesystem_, data_directory_ / "meta.lmeta");
     if (!synced_meta) {
-        return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                     "Failed to sync meta participant: " + std::move(synced_meta.error())));
+        return std::unexpected(source_error(
+            TransactionErrorCode::ApplyFailed,
+            checkpoint_transaction_id,
+            TransactionOperation::Checkpoint,
+            "meta checkpoint sync",
+            std::move(synced_meta.error())
+        ));
     }
 
     for (const auto & target : catalog_physical_targets(catalog_->view())) {
         const auto path = wal::FileWriteBatch::resolve_target(data_directory_, target);
         auto synced = sync_file(*filesystem_, path);
         if (!synced) {
-            return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                         "Failed to sync checkpoint participant " + path.string() + ": " +
-                                             std::move(synced.error())));
+            return std::unexpected(source_error(
+                TransactionErrorCode::ApplyFailed,
+                checkpoint_transaction_id,
+                TransactionOperation::Checkpoint,
+                "checkpoint participant " + path.string(),
+                std::move(synced.error())
+            ));
         }
     }
 
@@ -234,19 +243,34 @@ std::expected<void, TransactionError> TransactionManager::sync_checkpoint_partic
         const auto path = data_directory_ / name;
         auto created = filesystem_->create_dir_all(path);
         if (!created) {
-            return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                         "Failed to create checkpoint directory: " + created.error().message()));
+            return std::unexpected(source_error(
+                TransactionErrorCode::ApplyFailed,
+                checkpoint_transaction_id,
+                TransactionOperation::Checkpoint,
+                "checkpoint directory create",
+                std::move(created.error())
+            ));
         }
         auto synced = sync_directory_if_supported(*filesystem_, path);
         if (!synced) {
-            return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                         "Failed to sync checkpoint directory: " + std::move(synced.error())));
+            return std::unexpected(source_error(
+                TransactionErrorCode::ApplyFailed,
+                checkpoint_transaction_id,
+                TransactionOperation::Checkpoint,
+                "checkpoint directory sync",
+                std::move(synced.error())
+            ));
         }
     }
     auto root_synced = sync_directory_if_supported(*filesystem_, data_directory_);
     if (!root_synced) {
-        return std::unexpected(error(TransactionErrorCode::ApplyFailed, checkpoint_transaction_id,
-                                     "Failed to sync data directory: " + std::move(root_synced.error())));
+        return std::unexpected(source_error(
+            TransactionErrorCode::ApplyFailed,
+            checkpoint_transaction_id,
+            TransactionOperation::Checkpoint,
+            "data directory sync",
+            std::move(root_synced.error())
+        ));
     }
     return {};
 }
@@ -277,20 +301,33 @@ std::expected<void, TransactionError> TransactionManager::checkpoint()
     auto wal_flushed = wal_->flush_all();
     if (!wal_flushed) {
         finish(false);
-        return std::unexpected(error(TransactionErrorCode::WalError, checkpoint_transaction_id,
-                                     "Failed to flush WAL before checkpoint: " + wal_flushed.error().message()));
+        return std::unexpected(source_error(
+            TransactionErrorCode::WalError,
+            checkpoint_transaction_id,
+            TransactionOperation::Checkpoint,
+            "WAL checkpoint flush",
+            std::move(wal_flushed.error())
+        ));
     }
     if (options_.checkpoint_stage_hook) {
         options_.checkpoint_stage_hook(CheckpointStage::AfterWalFlush, checkpoint_transaction_id);
     }
     auto vectors_checkpointed = vector_index_engine_->checkpoint(*storage_);
     if (!vectors_checkpointed) {
+        const auto requires_recovery =
+            vectors_checkpointed.error().is(vindex::VectorIndexErrorCode::RecoveryRequired);
+        if (requires_recovery) {
+            recovery_required_.store(true, std::memory_order_release);
+        }
         finish(false);
-        return std::unexpected(error(
-            TransactionErrorCode::ApplyFailed,
+        return std::unexpected(source_error(
+            requires_recovery
+                ? TransactionErrorCode::RecoveryRequired
+                : TransactionErrorCode::ApplyFailed,
             checkpoint_transaction_id,
-            "Failed to compact vector indexes during checkpoint: " +
-                vectors_checkpointed.error().message()
+            TransactionOperation::Checkpoint,
+            "vector index checkpoint",
+            std::move(vectors_checkpointed.error())
         ));
     }
     auto participants_synced = sync_checkpoint_participants(checkpoint_transaction_id);
@@ -329,8 +366,13 @@ std::expected<void, TransactionError> TransactionManager::checkpoint()
     if (!rotated) {
         recovery_required_.store(true, std::memory_order_release);
         finish(false);
-        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, checkpoint_transaction_id,
-                                     "WAL rotation outcome is indeterminate: " + rotated.error().message()));
+        return std::unexpected(source_error(
+            TransactionErrorCode::RecoveryRequired,
+            checkpoint_transaction_id,
+            TransactionOperation::Checkpoint,
+            "WAL rotation outcome is indeterminate",
+            std::move(rotated.error())
+        ));
     }
 
     const auto after_bytes = wal_->metrics().size_bytes;
@@ -344,10 +386,36 @@ std::expected<void, TransactionError> TransactionManager::checkpoint()
 TransactionError TransactionManager::error(
     TransactionErrorCode code,
     TransactionId id,
-    std::string message
+    std::string message,
+    TransactionOperation operation
 ) const
 {
-    return TransactionError {.code = code, .transaction_id = id, .message = std::move(message)};
+    return make_error(code, std::move(message), {
+        .operation = operation,
+        .transaction_id = id,
+    });
+}
+
+TransactionError TransactionManager::source_error(
+    TransactionErrorCode code,
+    TransactionId id,
+    TransactionOperation operation,
+    std::string subsystem,
+    error::Error source
+) const
+{
+    auto message = operation == TransactionOperation::Prepare
+                       ? mutation_error(std::move(subsystem), source.message())
+                       : std::move(subsystem) + " failed: " + source.message();
+    return make_error(
+        code,
+        std::move(message),
+        {
+            .operation = operation,
+            .transaction_id = id,
+        },
+        std::move(source)
+    );
 }
 
 std::expected<TransactionContext, TransactionError> TransactionManager::begin_implicit()
@@ -458,10 +526,12 @@ std::expected<void, TransactionError> TransactionManager::stage_catalog(
     }
     auto validated = meta::build_catalog_state(snapshot);
     if (!validated) {
-        return std::unexpected(error(
+        return std::unexpected(source_error(
             TransactionErrorCode::PrepareFailed,
             transaction.id(),
-            mutation_error("meta", validated.error().message())
+            TransactionOperation::Prepare,
+            "meta",
+            std::move(validated.error())
         ));
     }
     transaction.catalog_snapshot_ = std::move(snapshot);
@@ -483,16 +553,26 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     meta::CatalogEditor after_catalog;
     auto after_catalog_editor = meta::CatalogEditor::from(*transaction.catalog_snapshot());
     if (!after_catalog_editor) {
-        return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     mutation_error("meta", after_catalog_editor.error().message())));
+        return std::unexpected(source_error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            TransactionOperation::Prepare,
+            "meta",
+            std::move(after_catalog_editor.error())
+        ));
     }
     after_catalog = std::move(*after_catalog_editor);
     const auto after_catalog_view = after_catalog.view();
     meta::MetaStore staged_meta {staging_directory / "meta.lmeta", staging_filesystem};
     auto saved_meta = staged_meta.save(*transaction.catalog_snapshot());
     if (!saved_meta) {
-        return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     mutation_error("meta", saved_meta.error().message())));
+        return std::unexpected(source_error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            TransactionOperation::Prepare,
+            "meta",
+            std::move(saved_meta.error())
+        ));
     }
 
     storage::StorageEngine staged_storage {
@@ -513,8 +593,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                               ? staged_storage.open_collection(std::move(*schema))
                               : staged_storage.create_collection(std::move(*schema));
             if (!opened) {
-                return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("storage", opened.error().message())));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::PrepareFailed,
+                    transaction.id(),
+                    TransactionOperation::Prepare,
+                    "storage",
+                    std::move(opened.error())
+                ));
             }
         }
     }
@@ -530,7 +615,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                 for (const auto * index : after_catalog_view.list_indexes(collection->id())) {
                     if (index == nullptr || catalog_->view().find_index(index->id()) != nullptr) continue;
                     auto created = creator.create_index(*index, *schema, staged_storage);
-                    if (!created) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", created.error().message())));
+                    if (!created) return std::unexpected(source_error(
+                        TransactionErrorCode::PrepareFailed,
+                        transaction.id(),
+                        TransactionOperation::Prepare,
+                        "scalar index",
+                        std::move(created.error())
+                    ));
                 }
             }
         }
@@ -538,8 +629,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     index::IndexEngine staged_indexes {staging_directory, staging_filesystem};
     auto indexes_restored = staged_indexes.restore_all(after_catalog_view, staged_storage);
     if (!indexes_restored) {
-        return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     mutation_error("scalar index", indexes_restored.error().message())));
+        return std::unexpected(source_error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            TransactionOperation::Prepare,
+            "scalar index",
+            std::move(indexes_restored.error())
+        ));
     }
 
     {
@@ -553,7 +649,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                 for (const auto * index : after_catalog_view.list_vector_indexes(collection->id())) {
                     if (index == nullptr || catalog_->view().find_vector_index(index->id()) != nullptr) continue;
                     auto created = creator.create_index(*index, *schema, staged_storage);
-                    if (!created) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", created.error().message())));
+                    if (!created) return std::unexpected(source_error(
+                        TransactionErrorCode::PrepareFailed,
+                        transaction.id(),
+                        TransactionOperation::Prepare,
+                        "vector index",
+                        std::move(created.error())
+                    ));
                 }
             }
         }
@@ -561,8 +663,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
     vindex::VectorIndexEngine staged_vectors {staging_directory / "vindexes", staging_filesystem};
     auto vectors_restored = staged_vectors.restore_all(after_catalog_view, staged_storage);
     if (!vectors_restored) {
-        return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                     mutation_error("vector index", vectors_restored.error().message())));
+        return std::unexpected(source_error(
+            TransactionErrorCode::PrepareFailed,
+            transaction.id(),
+            TransactionOperation::Prepare,
+            "vector index",
+            std::move(vectors_restored.error())
+        ));
     }
 
     const auto before_targets = catalog_physical_targets(catalog_->view());
@@ -573,20 +680,24 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                 wal::FileWriteBatch::resolve_target(staging_directory, target)
             );
             if (!removed) {
-                return std::unexpected(error(
+                return std::unexpected(source_error(
                     TransactionErrorCode::PrepareFailed,
                     transaction.id(),
-                    mutation_error("overlay", removed.error().message())
+                    TransactionOperation::Prepare,
+                    "overlay",
+                    std::move(removed.error())
                 ));
             }
         }
     }
     auto batch = overlay.export_batch();
     if (!batch) {
-        return std::unexpected(error(
+        return std::unexpected(source_error(
             TransactionErrorCode::PrepareFailed,
             transaction.id(),
-            mutation_error("overlay", batch.error().message())
+            TransactionOperation::Prepare,
+            "overlay",
+            std::move(batch.error())
         ));
     }
     return std::move(*batch);
@@ -619,8 +730,13 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
             }
             auto opened = staged_storage.open_collection(std::move(*collection_schema));
             if (!opened) {
-                return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("storage", opened.error().message())));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::PrepareFailed,
+                    transaction.id(),
+                    TransactionOperation::Prepare,
+                    "storage",
+                    std::move(opened.error())
+                ));
             }
         }
         index::IndexEngine staged_indexes {staging_directory, staging_filesystem};
@@ -628,13 +744,23 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
         for (const auto collection_id : collections) {
             auto indexes_restored = staged_indexes.reload_collection(catalog_->view(), staged_storage, collection_id);
             if (!indexes_restored) {
-                return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("scalar index", indexes_restored.error().message())));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::PrepareFailed,
+                    transaction.id(),
+                    TransactionOperation::Prepare,
+                    "scalar index",
+                    std::move(indexes_restored.error())
+                ));
             }
             auto vectors_restored = staged_vectors.reload_collection(catalog_->view(), staged_storage, collection_id);
             if (!vectors_restored) {
-                return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(),
-                                             mutation_error("vector index", vectors_restored.error().message())));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::PrepareFailed,
+                    transaction.id(),
+                    TransactionOperation::Prepare,
+                    "vector index",
+                    std::move(vectors_restored.error())
+                ));
             }
         }
 
@@ -645,15 +771,15 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                     return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), "Insert has no after image"));
                 }
                 auto scalar = staged_indexes.prepare_insert(mutation.collection_id, *mutation.after);
-                if (!scalar) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", scalar.error().message())));
+                if (!scalar) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "scalar index", std::move(scalar.error())));
                 auto vector = staged_vectors.prepare_insert(mutation.collection_id, *mutation.after);
-                if (!vector) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", vector.error().message())));
+                if (!vector) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "vector index", std::move(vector.error())));
                 auto inserted = staged_storage.insert(mutation.collection_id, *mutation.after);
-                if (!inserted) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", inserted.error().message())));
+                if (!inserted) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "storage", std::move(inserted.error())));
                 auto scalar_applied = staged_indexes.on_insert(*inserted, *scalar);
-                if (!scalar_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", scalar_applied.error().message())));
+                if (!scalar_applied) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "scalar index", std::move(scalar_applied.error())));
                 auto vector_applied = staged_vectors.on_insert(*inserted, *vector);
-                if (!vector_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", vector_applied.error().message())));
+                if (!vector_applied) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "vector index", std::move(vector_applied.error())));
                 break;
             }
             case RowMutationKind::Update: {
@@ -661,15 +787,15 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                     return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), "Update images are incomplete"));
                 }
                 auto scalar = staged_indexes.prepare_update(mutation.collection_id, *mutation.before, *mutation.after);
-                if (!scalar) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", scalar.error().message())));
+                if (!scalar) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "scalar index", std::move(scalar.error())));
                 auto vector = staged_vectors.prepare_update(mutation.collection_id, *mutation.before, *mutation.after);
-                if (!vector) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", vector.error().message())));
+                if (!vector) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "vector index", std::move(vector.error())));
                 auto stored = staged_storage.update(mutation.collection_id, mutation.record_id, *mutation.after);
-                if (!stored) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", stored.error().message())));
+                if (!stored) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "storage", std::move(stored.error())));
                 auto scalar_applied = staged_indexes.on_update(mutation.record_id, *scalar);
-                if (!scalar_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", scalar_applied.error().message())));
+                if (!scalar_applied) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "scalar index", std::move(scalar_applied.error())));
                 auto vector_applied = staged_vectors.on_update(mutation.record_id, *vector);
-                if (!vector_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", vector_applied.error().message())));
+                if (!vector_applied) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "vector index", std::move(vector_applied.error())));
                 break;
             }
             case RowMutationKind::Delete: {
@@ -677,15 +803,15 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
                     return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), "Delete has no before image"));
                 }
                 auto scalar = staged_indexes.prepare_delete(mutation.collection_id, *mutation.before);
-                if (!scalar) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", scalar.error().message())));
+                if (!scalar) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "scalar index", std::move(scalar.error())));
                 auto vector = staged_vectors.prepare_delete(mutation.collection_id, *mutation.before);
-                if (!vector) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", vector.error().message())));
+                if (!vector) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "vector index", std::move(vector.error())));
                 auto vector_applied = staged_vectors.on_delete(mutation.record_id, *vector);
-                if (!vector_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("vector index", vector_applied.error().message())));
+                if (!vector_applied) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "vector index", std::move(vector_applied.error())));
                 auto scalar_applied = staged_indexes.on_delete(mutation.record_id, *scalar);
-                if (!scalar_applied) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("scalar index", scalar_applied.error().message())));
+                if (!scalar_applied) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "scalar index", std::move(scalar_applied.error())));
                 auto stored = staged_storage.erase(mutation.collection_id, mutation.record_id);
-                if (!stored) return std::unexpected(error(TransactionErrorCode::PrepareFailed, transaction.id(), mutation_error("storage", stored.error().message())));
+                if (!stored) return std::unexpected(source_error(TransactionErrorCode::PrepareFailed, transaction.id(), TransactionOperation::Prepare, "storage", std::move(stored.error())));
                 break;
             }
             }
@@ -694,10 +820,12 @@ std::expected<wal::FileWriteBatch, TransactionError> TransactionManager::prepare
 
     auto batch = overlay.export_batch();
     if (!batch) {
-        return std::unexpected(error(
+        return std::unexpected(source_error(
             TransactionErrorCode::PrepareFailed,
             transaction.id(),
-            mutation_error("overlay", batch.error().message())
+            TransactionOperation::Prepare,
+            "overlay",
+            std::move(batch.error())
         ));
     }
     return std::move(*batch);
@@ -717,18 +845,33 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
             }
             auto storage_reloaded = storage_->reload_collection(std::move(*collection_schema));
             if (!storage_reloaded) {
-                return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
-                                             storage_reloaded.error().message()));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::ApplyFailed,
+                    transaction_id,
+                    TransactionOperation::Reload,
+                    "storage reload",
+                    std::move(storage_reloaded.error())
+                ));
             }
             auto indexes_reloaded = index_engine_->reload_collection(catalog_->view(), *storage_, collection_id);
             if (!indexes_reloaded) {
-                return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
-                                             indexes_reloaded.error().message()));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::ApplyFailed,
+                    transaction_id,
+                    TransactionOperation::Reload,
+                    "scalar index reload",
+                    std::move(indexes_reloaded.error())
+                ));
             }
             auto vectors_reloaded = vector_index_engine_->reload_collection(catalog_->view(), *storage_, collection_id);
             if (!vectors_reloaded) {
-                return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id,
-                                             vectors_reloaded.error().message()));
+                return std::unexpected(source_error(
+                    TransactionErrorCode::ApplyFailed,
+                    transaction_id,
+                    TransactionOperation::Reload,
+                    "vector index reload",
+                    std::move(vectors_reloaded.error())
+                ));
             }
         }
         return {};
@@ -743,12 +886,24 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
             auto schema = storage::load_collection_schema(catalog_->view(), collection->id());
             if (!schema) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, std::move(schema.error().message)));
             auto opened = restored_storage.open_collection(std::move(*schema));
-            if (!opened) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, opened.error().message()));
+            if (!opened) return std::unexpected(source_error(
+                TransactionErrorCode::ApplyFailed,
+                transaction_id,
+                TransactionOperation::Reload,
+                "storage restore",
+                std::move(opened.error())
+            ));
         }
     }
     index::IndexEngine restored_indexes {data_directory_, *filesystem_};
     auto indexes = restored_indexes.restore_all(catalog_->view(), restored_storage);
-    if (!indexes) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, indexes.error().message()));
+    if (!indexes) return std::unexpected(source_error(
+        TransactionErrorCode::ApplyFailed,
+        transaction_id,
+        TransactionOperation::Reload,
+        "scalar index restore",
+        std::move(indexes.error())
+    ));
     *storage_ = std::move(restored_storage);
     *index_engine_ = std::move(restored_indexes);
 
@@ -756,7 +911,13 @@ std::expected<void, TransactionError> TransactionManager::reload_runtime(const T
     // replacement vector engine only after the live storage object is published.
     vindex::VectorIndexEngine restored_vectors {data_directory_ / "vindexes", *filesystem_};
     auto vectors = restored_vectors.restore_all(catalog_->view(), *storage_);
-    if (!vectors) return std::unexpected(error(TransactionErrorCode::ApplyFailed, transaction_id, vectors.error().message()));
+    if (!vectors) return std::unexpected(source_error(
+        TransactionErrorCode::ApplyFailed,
+        transaction_id,
+        TransactionOperation::Reload,
+        "vector index restore",
+        std::move(vectors.error())
+    ));
     *vector_index_engine_ = std::move(restored_vectors);
     return {};
 }
@@ -791,12 +952,24 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     StagingCleanup cleanup {staging_directory};
     auto batch = prepare(transaction, staging_directory);
     if (!batch) {
-        transaction.mark_rollback_only(batch.error().message);
+        transaction.mark_rollback_only(batch.error().message());
         (void) abort(transaction);
         return std::unexpected(std::move(batch.error()));
     }
     if (failpoint(CommitStage::AfterPrepare, transaction, false)) {
         return std::unexpected(error(TransactionErrorCode::FaultInjected, transaction.id(), "Injected failure after prepare"));
+    }
+    auto wal_budget = wal_->validate_transaction(batch->writes());
+    if (!wal_budget) {
+        transaction.state_ = TransactionState::Aborting;
+        (void) abort(transaction);
+        return std::unexpected(source_error(
+            TransactionErrorCode::WalError,
+            transaction.id(),
+            TransactionOperation::AppendWal,
+            "WAL budget",
+            std::move(wal_budget.error())
+        ));
     }
     if (!transaction.transition_to(TransactionState::Committing)) {
         return std::unexpected(error(TransactionErrorCode::InvalidState, transaction.id(), "Transaction cannot enter commit"));
@@ -806,7 +979,13 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     if (!begin) {
         transaction.state_ = TransactionState::Aborting;
         (void) abort(transaction);
-        return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), begin.error().message()));
+        return std::unexpected(source_error(
+            TransactionErrorCode::WalError,
+            transaction.id(),
+            TransactionOperation::AppendWal,
+            "WAL begin append",
+            std::move(begin.error())
+        ));
     }
     transaction.note_lsn(*begin);
     if (failpoint(CommitStage::AfterWalBegin, transaction, false)) {
@@ -817,7 +996,13 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         if (!appended) {
             transaction.state_ = TransactionState::Aborting;
             (void) abort(transaction);
-            return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), appended.error().message()));
+            return std::unexpected(source_error(
+                TransactionErrorCode::WalError,
+                transaction.id(),
+                TransactionOperation::AppendWal,
+                "WAL file-write append",
+                std::move(appended.error())
+            ));
         }
         transaction.note_lsn(*appended);
     }
@@ -828,8 +1013,13 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     if (!committed) {
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
-        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(),
-                                     "WAL commit append outcome is indeterminate: " + committed.error().message()));
+        return std::unexpected(source_error(
+            TransactionErrorCode::RecoveryRequired,
+            transaction.id(),
+            TransactionOperation::AppendWal,
+            "WAL commit append outcome is indeterminate",
+            std::move(committed.error())
+        ));
     }
     transaction.note_commit_lsn(*committed);
     if (failpoint(CommitStage::AfterWalCommitAppend, transaction, true)) {
@@ -839,8 +1029,13 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     if (!flushed) {
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
-        return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(),
-                                     "WAL commit durability is indeterminate: " + flushed.error().message()));
+        return std::unexpected(source_error(
+            TransactionErrorCode::RecoveryRequired,
+            transaction.id(),
+            TransactionOperation::FlushWal,
+            "WAL commit durability is indeterminate",
+            std::move(flushed.error())
+        ));
     }
     if (!transaction.transition_to(TransactionState::Committed)) {
         recovery_required_.store(true, std::memory_order_release);
@@ -864,7 +1059,13 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     if (!applied) {
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
-        return std::unexpected(error(TransactionErrorCode::CommittedApplyFailed, transaction.id(), applied.error().message()));
+        return std::unexpected(source_error(
+            TransactionErrorCode::CommittedApplyFailed,
+            transaction.id(),
+            TransactionOperation::Apply,
+            "committed participant apply",
+            std::move(applied.error())
+        ));
     }
     if (failpoint(CommitStage::AfterApply, transaction, true)) {
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after participant apply"));
@@ -874,16 +1075,28 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         if (!catalog_restored) {
             recovery_required_.store(true, std::memory_order_release);
             transaction.release_writer_guard();
-            return std::unexpected(error(TransactionErrorCode::CommittedApplyFailed, transaction.id(),
-                                          catalog_restored.error().message()));
+            return std::unexpected(source_error(
+                TransactionErrorCode::CommittedApplyFailed,
+                transaction.id(),
+                TransactionOperation::Reload,
+                "committed catalog publish",
+                std::move(catalog_restored.error())
+            ));
         }
     }
     auto reloaded = reload_runtime(transaction);
     if (!reloaded) {
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
-        reloaded.error().code = TransactionErrorCode::CommittedApplyFailed;
-        return reloaded;
+        return std::unexpected(make_error(
+            TransactionErrorCode::CommittedApplyFailed,
+            reloaded.error().message(),
+            {
+                .operation = TransactionOperation::Reload,
+                .transaction_id = transaction.id(),
+            },
+            std::move(reloaded.error())
+        ));
     }
     if (failpoint(CommitStage::AfterRuntimeReload, transaction, true)) {
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after runtime reload"));

@@ -46,6 +46,9 @@ through `IndexEngine`.
 - Versioned redo WAL records with LSNs and checksums, incomplete-tail
   truncation, committed-transaction redo, and idempotent startup recovery
   across collection storage, B+Tree, and HNSW files.
+- Write-side WAL budgets match the configured recovery limits, so an
+  over-budget transaction is rejected before Begin instead of creating a
+  durable log that the same configuration cannot reopen.
 - Basic `DatabaseEngine::observability()` counters for current WAL size,
   WAL generation, checkpoint duration/reclaimed bytes, transaction counts and
   commit duration, and startup redo activity.
@@ -114,6 +117,8 @@ v0.7.0 is still an experimental single-node release:
 - Execution currently uses a global single writer and fixed statement-level
   `Serializable` isolation. There is no MVCC, concurrent-writer scheduling,
   lock manager, or additional isolation level.
+- The writer guard is scoped to one `DatabaseEngine`; the same data directory
+  must not be opened by multiple engine instances or processes for writing.
 - Live `StorageEngine` instances are read-only. Persistent DML/DDL is prepared
   through a 4 KiB sparse transaction overlay and published only after the
   shared redo-WAL Commit Record is durable. `StorageStore` has no independent

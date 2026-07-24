@@ -63,12 +63,14 @@ WalManager::WalManager(
     std::filesystem::path directory,
     filesystem::FileSystem & filesystem,
     WalStore active,
-    std::size_t retained_segments
+    std::size_t retained_segments,
+    WalDecodeLimits limits
 ) noexcept
     : directory_(std::move(directory))
     , filesystem_(&filesystem)
     , active_(std::move(active))
     , retained_segments_(retained_segments)
+    , limits_(limits)
 {
 }
 
@@ -84,7 +86,8 @@ std::filesystem::path WalManager::segment_path(
 
 std::expected<WalManager, WalError> WalManager::open(
     std::filesystem::path directory,
-    filesystem::FileSystem & filesystem
+    filesystem::FileSystem & filesystem,
+    WalDecodeLimits limits
 )
 {
     auto created = filesystem.create_dir_all(directory);
@@ -118,7 +121,7 @@ std::expected<WalManager, WalError> WalManager::open(
         if (!active) return std::unexpected(std::move(active.error()));
         auto synced = sync_directory_if_supported(filesystem, directory);
         if (!synced) return std::unexpected(std::move(synced.error()));
-        return WalManager {std::move(directory), filesystem, std::move(*active), 1};
+        return WalManager {std::move(directory), filesystem, std::move(*active), 1, limits};
     }
 
     const auto & [generation, path] = segments.back();
@@ -127,12 +130,85 @@ std::expected<WalManager, WalError> WalManager::open(
     if (active->header().generation != generation) {
         return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL generation does not match its file name"));
     }
-    return WalManager {std::move(directory), filesystem, std::move(*active), segments.size()};
+    return WalManager {std::move(directory), filesystem, std::move(*active), segments.size(), limits};
+}
+
+std::expected<void, WalError> WalManager::validate_transaction(
+    std::span<const FileWrite> writes
+) const
+{
+    constexpr std::uint64_t FileWritePayloadHeaderSize = 24;
+    if (limits_.max_record_size_bytes < WalCodec::RecordHeaderSize) {
+        return std::unexpected(make_error(
+            WalErrorCode::ResourceLimitExceeded,
+            "WAL transaction markers exceed the configured recovery record limit",
+            {.operation = WalOperation::Append, .path = active_.path()}
+        ));
+    }
+    if (writes.size() > std::numeric_limits<std::size_t>::max() - 2) {
+        return std::unexpected(make_error(
+            WalErrorCode::ResourceLimitExceeded,
+            "WAL transaction record count overflows",
+            {.operation = WalOperation::Append, .path = active_.path()}
+        ));
+    }
+    const auto additional_records = writes.size() + 2;
+    if (additional_records > limits_.max_record_count ||
+        record_count_ > limits_.max_record_count - additional_records) {
+        return std::unexpected(make_error(
+            WalErrorCode::ResourceLimitExceeded,
+            "WAL transaction would exceed the configured record-count limit",
+            {.operation = WalOperation::Append, .path = active_.path()}
+        ));
+    }
+
+    std::uint64_t additional_bytes = 2 * WalCodec::RecordHeaderSize;
+    for (const auto & write : writes) {
+        if (write.after_image.size() >
+            std::numeric_limits<std::uint64_t>::max() -
+                FileWritePayloadHeaderSize - WalCodec::RecordHeaderSize) {
+            return std::unexpected(make_error(
+                WalErrorCode::ResourceLimitExceeded,
+                "WAL transaction record size overflows",
+                {.operation = WalOperation::Append, .path = active_.path()}
+            ));
+        }
+        const auto record_size = static_cast<std::uint64_t>(WalCodec::RecordHeaderSize) +
+                                 FileWritePayloadHeaderSize +
+                                 static_cast<std::uint64_t>(write.after_image.size());
+        if (record_size > limits_.max_record_size_bytes) {
+            return std::unexpected(make_error(
+                WalErrorCode::ResourceLimitExceeded,
+                "WAL transaction record exceeds the configured recovery limit",
+                {.operation = WalOperation::Append, .path = active_.path()}
+            ));
+        }
+        if (additional_bytes > std::numeric_limits<std::uint64_t>::max() - record_size) {
+            return std::unexpected(make_error(
+                WalErrorCode::ResourceLimitExceeded,
+                "WAL transaction size overflows",
+                {.operation = WalOperation::Append, .path = active_.path()}
+            ));
+        }
+        additional_bytes += record_size;
+    }
+    const auto current_size = active_.size_bytes();
+    if (current_size > limits_.max_scan_size_bytes ||
+        additional_bytes > limits_.max_scan_size_bytes - current_size) {
+        return std::unexpected(make_error(
+            WalErrorCode::ResourceLimitExceeded,
+            "WAL transaction would exceed the configured recovery scan limit",
+            {.operation = WalOperation::Append, .path = active_.path()}
+        ));
+    }
+    return {};
 }
 
 std::expected<transaction::Lsn, WalError> WalManager::append_begin(transaction::TransactionId transaction_id)
 {
-    return active_.append_begin(transaction_id);
+    auto appended = active_.append_begin(transaction_id);
+    if (appended) ++record_count_;
+    return appended;
 }
 
 std::expected<transaction::Lsn, WalError> WalManager::append_write(
@@ -140,12 +216,16 @@ std::expected<transaction::Lsn, WalError> WalManager::append_write(
     const FileWrite & write
 )
 {
-    return active_.append_write(transaction_id, write);
+    auto appended = active_.append_write(transaction_id, write);
+    if (appended) ++record_count_;
+    return appended;
 }
 
 std::expected<transaction::Lsn, WalError> WalManager::append_commit(transaction::TransactionId transaction_id)
 {
-    return active_.append_commit(transaction_id);
+    auto appended = active_.append_commit(transaction_id);
+    if (appended) ++record_count_;
+    return appended;
 }
 
 std::expected<void, WalError> WalManager::flush_through(transaction::Lsn lsn)
@@ -163,7 +243,9 @@ std::expected<WalScanResult, WalError> WalManager::scan(
     const WalDecodeLimits & limits
 )
 {
-    return active_.scan(truncate_incomplete_tail, limits);
+    auto scanned = active_.scan(truncate_incomplete_tail, limits);
+    if (scanned) record_count_ = scanned->records.size();
+    return scanned;
 }
 
 std::expected<std::uint64_t, WalError> WalManager::rotate(
@@ -236,6 +318,7 @@ std::expected<std::uint64_t, WalError> WalManager::rotate(
     if (!next) return std::unexpected(std::move(next.error()));
     active_ = std::move(*next);
     retained_segments_ += 1;
+    record_count_ = 0;
     if (hook) hook(WalRotationStage::AfterSwitch);
 
     auto entries = filesystem_->list_dir(directory_);

@@ -174,15 +174,21 @@ executor::ExecutionError from_transaction_error(
     parser::ast::AstNodeLocation location
 )
 {
+    const auto * context = error.context<transaction::TransactionErrorContext>();
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::TransactionError,
         .location = location,
-        .message = "Transaction " + std::to_string(error.transaction_id) + ": " + std::move(error.message),
+        .message = "Transaction " +
+                   std::to_string(context != nullptr
+                                      ? context->transaction_id
+                                      : transaction::InvalidTransactionId) +
+                   ": " + error.message(),
     };
 }
 
 DatabaseObservability DatabaseEngine::observability() const noexcept
 {
+    std::scoped_lock lock {mutex_};
     return DatabaseObservability {
         .transaction = transaction_manager_ != nullptr
                            ? transaction_manager_->metrics()
@@ -214,6 +220,7 @@ void DatabaseEngine::maybe_run_automatic_checkpoint()
 
 std::expected<void, DatabaseError> DatabaseEngine::checkpoint()
 {
+    std::scoped_lock lock {mutex_};
     if (transaction_manager_ == nullptr) {
         return std::unexpected(DatabaseError {
             .code = DatabaseErrorCode::TransactionError,
@@ -223,10 +230,10 @@ std::expected<void, DatabaseError> DatabaseEngine::checkpoint()
     auto checkpointed = transaction_manager_->checkpoint();
     if (!checkpointed) {
         return std::unexpected(DatabaseError {
-            .code = checkpointed.error().code == transaction::TransactionErrorCode::WalError
+            .code = checkpointed.error().is(transaction::TransactionErrorCode::WalError)
                         ? DatabaseErrorCode::WalError
                         : DatabaseErrorCode::TransactionError,
-            .message = std::move(checkpointed.error().message),
+            .message = checkpointed.error().message(),
         });
     }
     return {};
@@ -257,7 +264,11 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(to_database_error(std::move(initialized.error())));
     }
 
-    auto opened_wal = wal::WalManager::open(data_directory_ / "wal", filesystem_);
+    auto opened_wal = wal::WalManager::open(
+        data_directory_ / "wal",
+        filesystem_,
+        wal_decode_limits_
+    );
     if (!opened_wal) {
         return std::unexpected(wal_error_to_database(std::move(opened_wal.error())));
     }

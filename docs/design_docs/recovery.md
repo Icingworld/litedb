@@ -51,10 +51,16 @@ WAL 尾部不足完整 record 时启动截断尾部；完整 record checksum 错
 扫描与恢复使用可配置的 `WalDecodeLimits`，默认限制单 record 为 512 MiB、active WAL
 为 4 GiB、record 数量为 2,000,000。超过预算返回 `ResourceLimitExceeded`，不会按磁盘长度
 直接执行无界内存分配；确有更大事务或恢复窗口的嵌入方可以通过 `DatabaseConfig` 显式放宽。
+提交前会按同一组限制验证完整 Begin/FileWrite/Commit 批次；超出预算的事务在写入 Begin
+之前失败，因此数据库不会产生自身恢复配置无法扫描的 durable WAL。
 
 `WalError` 使用统一的 move-only `error::Error`。`WalErrorCode` 保留 WAL 领域分类，
 `WalErrorContext` 携带 operation、path、TransactionId、LSN、generation 和下层 encoded
 error code；跨层传播错误时不得退回仅保留字符串的旧结构。
+
+`TransactionError` 同样使用 `error::Error`，通过 `TransactionErrorContext` 保留 operation、
+TransactionId 和下层 encoded code。`error::Error::cause()` 保存 move-only 下层错误链，
+因此事务协调层不会丢失 WAL、Storage、B+Tree、HNSW 或 filesystem 的领域上下文。
 
 ## Commit 协议
 
@@ -95,3 +101,8 @@ Overwrite、Replace、Truncate 和 Delete 都按 redo after-image 语义幂等�
 
 可选 WAL-size threshold 可在成功写语句后触发同步 checkpoint。自动 checkpoint 失败不会
 把已经 durable 的语句改报为失败；不确定的轮换结果仍进入 `RecoveryRequired`。
+公开的手动 checkpoint 与 observability 进入 `DatabaseEngine` 的 SQL 串行化边界，避免与
+查询或 runtime reload 并发访问 WAL/HNSW 状态。
+
+当前单写者锁仍是单个 `DatabaseEngine` 实例内的锁；filesystem 尚未提供跨进程 advisory
+lock，因此同一 data directory 不得被两个进程或两个 engine 实例同时以写模式打开。
