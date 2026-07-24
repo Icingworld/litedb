@@ -41,7 +41,7 @@ ScalarIndexKey key(std::int32_t value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 ScalarIndexKey bigint_key(std::int64_t value)
@@ -50,7 +50,7 @@ ScalarIndexKey bigint_key(std::int64_t value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create bigint scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 ScalarIndexKey varchar_key(std::string value)
@@ -59,7 +59,7 @@ ScalarIndexKey varchar_key(std::string value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create varchar scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 ScalarIndexKey padded_varchar_key(std::size_t value, std::size_t length)
@@ -128,7 +128,7 @@ void test_insert_simple_duplicate_and_reopen(const std::filesystem::path & direc
                 "first BTreeIndex insert should create a root leaf");
 
         const auto duplicate = index.insert(one, 10);
-        require(!duplicate.has_value() && duplicate.error().code == IndexErrorCode::DuplicateEntry,
+        require(!duplicate.has_value() && duplicate.error().is(IndexErrorCode::DuplicateEntry),
                 "duplicate BTreeIndex entry should be rejected");
         require(index.insert(one, 11).has_value(),
                 "same BTreeIndex key with a different record id should succeed");
@@ -138,22 +138,22 @@ void test_insert_simple_duplicate_and_reopen(const std::filesystem::path & direc
                 "simple inserted entries lookup mismatch");
 
         const auto mismatched = index.insert(bigint_key(1), 12);
-        require(!mismatched.has_value() && mismatched.error().code == IndexErrorCode::KeyTypeMismatch,
+        require(!mismatched.has_value() && mismatched.error().is(IndexErrorCode::KeyTypeMismatch),
                 "mismatched insert key type should be rejected");
 
         require(index.erase(one, 10).has_value(), "simple BTreeIndex erase failed");
         require(index.entry_count() == 1, "simple BTreeIndex erase count mismatch");
         const auto missing_record = index.erase(one, 10);
         require(!missing_record.has_value() &&
-                missing_record.error().code == IndexErrorCode::RecordNotFound,
+                missing_record.error().is(IndexErrorCode::RecordNotFound),
                 "missing BTreeIndex record id should report RecordNotFound");
         const auto missing_key = index.erase(key(2), 10);
         require(!missing_key.has_value() &&
-                missing_key.error().code == IndexErrorCode::KeyNotFound,
+                missing_key.error().is(IndexErrorCode::KeyNotFound),
                 "missing BTreeIndex key should report KeyNotFound");
         const auto mismatched_erase = index.erase(bigint_key(1), 11);
         require(!mismatched_erase.has_value() &&
-                mismatched_erase.error().code == IndexErrorCode::KeyTypeMismatch,
+                mismatched_erase.error().is(IndexErrorCode::KeyTypeMismatch),
                 "mismatched BTreeIndex erase key should be rejected");
 
         const auto range = index.scan_range(IndexRange::all());
@@ -178,7 +178,7 @@ void test_insert_rejects_oversized_entry(const std::filesystem::path & directory
     require(created.has_value(), "oversized-entry BTreeIndex create failed");
 
     const auto inserted = created->insert(varchar_key(std::string(5000, 'x')), 1);
-    require(!inserted.has_value() && inserted.error().code == IndexErrorCode::InvalidKeyValue,
+    require(!inserted.has_value() && inserted.error().is(IndexErrorCode::InvalidKeyValue),
             "oversized BTreeIndex entry should be rejected");
     require(created->root_page_id() == btree_index::InvalidBTreePageId &&
             created->page_count() == 0 && created->entry_count() == 0,
@@ -275,6 +275,52 @@ void test_insert_recursively_splits_internal_pages(const std::filesystem::path &
             "reopened internal-split BTreeIndex lookup mismatch");
 }
 
+void test_bulk_load_builds_sorted_persistent_tree(const std::filesystem::path & directory)
+{
+    const auto path = directory / "indexes" / "53.bti";
+    const common::LogicalType type {common::LogicalTypeId::Integer, std::nullopt};
+    auto filesystem = filesystem::create_platform_filesystem();
+    constexpr std::int32_t EntryCount = 3000;
+
+    {
+        auto created = BTreeIndex::create(path, 53, type, filesystem);
+        require(created.has_value(), "bulk-load BTreeIndex create failed");
+        std::vector<ScalarIndexEntry> entries;
+        entries.reserve(EntryCount);
+        for (std::int32_t value = EntryCount - 1; value >= 0; --value) {
+            entries.push_back({
+                .key = key(value),
+                .record_id = static_cast<common::RecordId>(value + 5000),
+            });
+        }
+        auto loaded = created->bulk_load(std::move(entries));
+        require(loaded.has_value(), "bulk-load BTreeIndex build failed");
+        require(created->entry_count() == EntryCount, "bulk-load entry count mismatch");
+        const auto range = created->scan_range(IndexRange::closed(key(100), key(102)));
+        require(range.has_value()
+                    && *range == std::vector<common::RecordId>({5100, 5101, 5102}),
+                "bulk-load range lookup mismatch");
+        auto cursor = created->scan_range_cursor(IndexRange::closed(key(100), key(102)));
+        require(cursor.has_value(), "bulk-load range cursor create failed");
+        for (const auto expected : {common::RecordId {5100}, common::RecordId {5101},
+                                    common::RecordId {5102}}) {
+            auto next = (*cursor)->next();
+            require(next.has_value() && next->has_value() && **next == expected,
+                    "bulk-load range cursor result mismatch");
+        }
+        auto exhausted = (*cursor)->next();
+        require(exhausted.has_value() && !exhausted->has_value(),
+                "bulk-load range cursor should be exhausted");
+    }
+
+    auto reopened = BTreeIndex::open(path, 53, type, filesystem);
+    require(reopened.has_value(), "bulk-load BTreeIndex reopen failed");
+    const auto found = reopened->find_equal(key(2999));
+    require(found.has_value()
+                && *found == std::vector<common::RecordId>({7999}),
+            "reopened bulk-load lookup mismatch");
+}
+
 void test_find_equal_on_empty_tree(const std::filesystem::path & directory)
 {
     const auto path = directory / "indexes" / "44.bti";
@@ -363,7 +409,7 @@ void test_find_equal_routes_and_scans_duplicate_keys(const std::filesystem::path
     require(missing.has_value() && missing->empty(), "missing key should return no records");
 
     const auto mismatched = opened->find_equal(bigint_key(20));
-    require(!mismatched.has_value() && mismatched.error().code == IndexErrorCode::KeyTypeMismatch,
+    require(!mismatched.has_value() && mismatched.error().is(IndexErrorCode::KeyTypeMismatch),
             "mismatched lookup key type should be rejected");
 }
 
@@ -430,13 +476,13 @@ void test_scan_range_boundaries_and_reopen(const std::filesystem::path & directo
             IndexRange::lower_bound(bigint_key(10))
         );
         require(!mismatched_lower.has_value() &&
-                mismatched_lower.error().code == IndexErrorCode::KeyTypeMismatch,
+                mismatched_lower.error().is(IndexErrorCode::KeyTypeMismatch),
                 "mismatched lower range key type should be rejected");
         const auto mismatched_upper = created->scan_range(
             IndexRange::upper_bound(bigint_key(10))
         );
         require(!mismatched_upper.has_value() &&
-                mismatched_upper.error().code == IndexErrorCode::KeyTypeMismatch,
+                mismatched_upper.error().is(IndexErrorCode::KeyTypeMismatch),
                 "mismatched upper range key type should be rejected");
     }
 
@@ -537,7 +583,9 @@ void test_erase_prunes_empty_subtrees_and_allows_reinsert(const std::filesystem:
                 created->root_page_id() == btree_index::InvalidBTreePageId,
                 "full multi-level erase should restore an empty tree");
         require(created->page_count() > 0,
-                "erase should not reclaim physical pages before free-page support exists");
+                "free-page reuse should retain allocated physical slots");
+        require(created->free_page_count() == created->page_count(),
+                "full erase should place every physical page on the free list");
         const auto empty = created->scan_range(IndexRange::all());
         require(empty.has_value() && empty->empty(),
                 "fully erased multi-level tree range should be empty");
@@ -548,8 +596,13 @@ void test_erase_prunes_empty_subtrees_and_allows_reinsert(const std::filesystem:
     require(reopened->entry_count() == 0 &&
             reopened->root_page_id() == btree_index::InvalidBTreePageId,
             "reopened fully erased multi-level tree should remain empty");
+    const auto pages_before_reinsert = reopened->page_count();
+    const auto free_pages_before_reinsert = reopened->free_page_count();
     require(reopened->insert(padded_varchar_key(42, KeyLength), 2042).has_value(),
             "insert after reopening a fully erased tree failed");
+    require(reopened->page_count() == pages_before_reinsert
+                && reopened->free_page_count() + 1 == free_pages_before_reinsert,
+            "reinsert should reuse one persisted free page");
     const auto found = reopened->find_equal(padded_varchar_key(42, KeyLength));
     require(found.has_value() && *found == std::vector<common::RecordId>({2042}),
             "insert-after-full-erase lookup mismatch");
@@ -620,6 +673,7 @@ int main()
         test_insert_rejects_oversized_entry(directory);
         test_insert_splits_leaf_and_preserves_duplicate_order(directory);
         test_insert_recursively_splits_internal_pages(directory);
+        test_bulk_load_builds_sorted_persistent_tree(directory);
         test_find_equal_on_empty_tree(directory);
         test_find_equal_routes_and_scans_duplicate_keys(directory);
         test_scan_range_boundaries_and_reopen(directory);

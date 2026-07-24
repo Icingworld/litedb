@@ -43,6 +43,7 @@ IndexError codec_error(btree_index::BTreePageCodecError error)
     case btree_index::BTreePageCodecErrorCode::PageTooLarge:
     case btree_index::BTreePageCodecErrorCode::InvalidFormat:
     case btree_index::BTreePageCodecErrorCode::UnsupportedVersion:
+    case btree_index::BTreePageCodecErrorCode::ChecksumMismatch:
     case btree_index::BTreePageCodecErrorCode::CorruptedPage:
         return IndexError {
             IndexErrorCode::StorageError,
@@ -511,6 +512,430 @@ private:
     btree_index::BTreePageStore & store_;
 };
 
+class BTreeBulkLoader final
+{
+private:
+    using PageId = btree_index::BTreePageId;
+
+    struct NodeRef
+    {
+        PageId page_id;
+        btree_index::BTreeEntryKey minimum;
+    };
+
+public:
+    explicit BTreeBulkLoader(btree_index::BTreePageStore & store) noexcept
+        : store_(store)
+    {
+    }
+
+    [[nodiscard]]
+    std::expected<void, IndexError> load(std::vector<ScalarIndexEntry> entries)
+    {
+        if (store_.root_page_id() != btree_index::InvalidBTreePageId
+            || store_.entry_count() != 0) {
+            return std::unexpected(IndexError {
+                IndexErrorCode::InvalidKeyValue,
+                "BTreeIndex bulk load requires an empty tree",
+            });
+        }
+        if (entries.empty()) {
+            return {};
+        }
+        if (entries.size() > std::numeric_limits<std::uint64_t>::max()) {
+            return std::unexpected(IndexError {
+                IndexErrorCode::StorageError,
+                "BTreeIndex bulk load entry count is exhausted",
+            });
+        }
+
+        std::vector<btree_index::BTreeEntryKey> sorted;
+        sorted.reserve(entries.size());
+        for (auto & entry : entries) {
+            if (!entry.key.value().matches_type(store_.key_type())) {
+                return std::unexpected(IndexError {
+                    IndexErrorCode::KeyTypeMismatch,
+                    "Bulk-loaded index key type does not match BTreeIndex key type",
+                });
+            }
+            sorted.push_back({
+                .key = std::move(entry.key),
+                .record_id = entry.record_id,
+            });
+        }
+        std::sort(sorted.begin(), sorted.end(), btree_index::BTreeEntryKeyLess {});
+        if (std::adjacent_find(sorted.begin(), sorted.end(), [](const auto & left, const auto & right) {
+                return btree_index::compare_btree_entry_keys(left, right)
+                    == std::strong_ordering::equal;
+            }) != sorted.end()) {
+            return std::unexpected(IndexError {
+                IndexErrorCode::DuplicateEntry,
+                "BTreeIndex bulk load contains a duplicate entry",
+            });
+        }
+
+        auto leaf_groups = partition_leaves(sorted);
+        if (!leaf_groups.has_value()) {
+            return std::unexpected(std::move(leaf_groups.error()));
+        }
+        auto level = write_leaves(*leaf_groups);
+        if (!level.has_value()) {
+            return std::unexpected(std::move(level.error()));
+        }
+        while (level->size() > 1) {
+            auto parent_level = write_parent_level(*level);
+            if (!parent_level.has_value()) {
+                return std::unexpected(std::move(parent_level.error()));
+            }
+            level = std::move(parent_level);
+        }
+
+        auto published = store_.publish_tree(
+            level->front().page_id,
+            static_cast<std::uint64_t>(sorted.size())
+        );
+        if (!published.has_value()) {
+            return std::unexpected(storage_error(std::move(published.error())));
+        }
+        return {};
+    }
+
+private:
+    [[nodiscard]]
+    std::expected<bool, IndexError> fits(const btree_index::BTreePage & page) const
+    {
+        auto result = btree_index::BTreePageCodec::can_fit(page, store_.key_type());
+        if (!result.has_value()) {
+            return std::unexpected(codec_error(std::move(result.error())));
+        }
+        return *result;
+    }
+
+    [[nodiscard]]
+    std::expected<std::vector<std::vector<btree_index::BTreeEntryKey>>, IndexError>
+    partition_leaves(const std::vector<btree_index::BTreeEntryKey> & sorted) const
+    {
+        std::vector<std::vector<btree_index::BTreeEntryKey>> groups;
+        std::vector<btree_index::BTreeEntryKey> current;
+        for (const auto & entry : sorted) {
+            auto trial_entries = current;
+            trial_entries.push_back(entry);
+            auto trial = build_leaf(
+                std::numeric_limits<PageId>::max(),
+                trial_entries
+            );
+            auto trial_fits = fits(btree_index::BTreePage {std::move(trial)});
+            if (!trial_fits.has_value()) {
+                return std::unexpected(std::move(trial_fits.error()));
+            }
+            if (!*trial_fits) {
+                if (current.empty()) {
+                    return std::unexpected(IndexError {
+                        IndexErrorCode::InvalidKeyValue,
+                        "BTreeIndex entry is too large to bulk load",
+                    });
+                }
+                groups.push_back(std::move(current));
+                current.clear();
+                auto single = build_leaf(
+                    std::numeric_limits<PageId>::max(),
+                    std::vector<btree_index::BTreeEntryKey> {entry}
+                );
+                auto single_fits = fits(btree_index::BTreePage {std::move(single)});
+                if (!single_fits.has_value()) {
+                    return std::unexpected(std::move(single_fits.error()));
+                }
+                if (!*single_fits) {
+                    return std::unexpected(IndexError {
+                        IndexErrorCode::InvalidKeyValue,
+                        "BTreeIndex entry is too large to bulk load",
+                    });
+                }
+                current.push_back(entry);
+            } else {
+                current.push_back(entry);
+            }
+        }
+        if (!current.empty()) {
+            groups.push_back(std::move(current));
+        }
+        return groups;
+    }
+
+    [[nodiscard]]
+    static btree_index::BTreeLeafPage build_leaf(
+        PageId page_id,
+        const std::vector<btree_index::BTreeEntryKey> & entries,
+        PageId previous = btree_index::InvalidBTreePageId,
+        PageId next = btree_index::InvalidBTreePageId
+    )
+    {
+        btree_index::BTreeLeafPage leaf {page_id, previous, next};
+        for (const auto & entry : entries) {
+            (void) leaf.insert(entry);
+        }
+        return leaf;
+    }
+
+    [[nodiscard]]
+    std::expected<std::vector<NodeRef>, IndexError> write_leaves(
+        const std::vector<std::vector<btree_index::BTreeEntryKey>> & groups
+    )
+    {
+        std::vector<PageId> page_ids;
+        page_ids.reserve(groups.size());
+        auto previous = btree_index::InvalidBTreePageId;
+        for (std::size_t index = 0; index < groups.size(); ++index) {
+            auto allocated = store_.allocate_leaf_page(previous);
+            if (!allocated.has_value()) {
+                return std::unexpected(storage_error(std::move(allocated.error())));
+            }
+            previous = allocated->page_id();
+            page_ids.push_back(previous);
+        }
+
+        std::vector<NodeRef> level;
+        level.reserve(groups.size());
+        for (std::size_t index = 0; index < groups.size(); ++index) {
+            const auto previous_id = index == 0
+                ? btree_index::InvalidBTreePageId
+                : page_ids[index - 1];
+            const auto next_id = index + 1 == groups.size()
+                ? btree_index::InvalidBTreePageId
+                : page_ids[index + 1];
+            auto leaf = build_leaf(page_ids[index], groups[index], previous_id, next_id);
+            auto written = store_.write_page(btree_index::BTreePage {leaf});
+            if (!written.has_value()) {
+                return std::unexpected(storage_error(std::move(written.error())));
+            }
+            level.push_back(NodeRef {
+                .page_id = page_ids[index],
+                .minimum = groups[index].front(),
+            });
+        }
+        return level;
+    }
+
+    [[nodiscard]]
+    btree_index::BTreeInternalPage build_internal_trial(
+        const std::vector<NodeRef> & children,
+        std::size_t begin,
+        std::size_t end,
+        PageId page_id
+    ) const
+    {
+        btree_index::BTreeInternalPage page {page_id, children[begin].page_id};
+        auto left_child = children[begin].page_id;
+        for (auto index = begin + 1; index < end; ++index) {
+            (void) page.insert_child_after(
+                left_child,
+                children[index].minimum,
+                children[index].page_id
+            );
+            left_child = children[index].page_id;
+        }
+        return page;
+    }
+
+    [[nodiscard]]
+    std::expected<std::vector<NodeRef>, IndexError> write_parent_level(
+        const std::vector<NodeRef> & children
+    )
+    {
+        std::vector<std::pair<std::size_t, std::size_t>> groups;
+        std::size_t begin = 0;
+        while (begin < children.size()) {
+            auto end = std::min(children.size(), begin + 2);
+            while (end < children.size()) {
+                auto trial = build_internal_trial(
+                    children,
+                    begin,
+                    end + 1,
+                    std::numeric_limits<PageId>::max()
+                );
+                auto trial_fits = fits(btree_index::BTreePage {std::move(trial)});
+                if (!trial_fits.has_value()) {
+                    return std::unexpected(std::move(trial_fits.error()));
+                }
+                if (!*trial_fits) {
+                    break;
+                }
+                ++end;
+            }
+            if (children.size() - end == 1 && end - begin > 2) {
+                --end;
+            }
+            groups.emplace_back(begin, end);
+            begin = end;
+        }
+
+        std::vector<NodeRef> parents;
+        parents.reserve(groups.size());
+        for (const auto [group_begin, group_end] : groups) {
+            auto allocated = store_.allocate_internal_page(children[group_begin].page_id);
+            if (!allocated.has_value()) {
+                return std::unexpected(storage_error(std::move(allocated.error())));
+            }
+            auto page = build_internal_trial(
+                children,
+                group_begin,
+                group_end,
+                allocated->page_id()
+            );
+            auto written = store_.write_page(btree_index::BTreePage {page});
+            if (!written.has_value()) {
+                return std::unexpected(storage_error(std::move(written.error())));
+            }
+            parents.push_back(NodeRef {
+                .page_id = page.page_id(),
+                .minimum = children[group_begin].minimum,
+            });
+        }
+        return parents;
+    }
+
+private:
+    btree_index::BTreePageStore & store_;
+};
+
+class BTreeRangeCursor final : public ScalarIndexCursor
+{
+public:
+    BTreeRangeCursor(
+        const btree_index::BTreePageStore & store,
+        IndexRange range
+    ) noexcept
+        : store_(&store)
+        , range_(std::move(range))
+    {
+    }
+
+    std::expected<std::optional<common::RecordId>, IndexError> next() override
+    {
+        if (!initialized_) {
+            auto initialized = initialize();
+            if (!initialized.has_value()) {
+                return std::unexpected(std::move(initialized.error()));
+            }
+            initialized_ = true;
+        }
+        while (!exhausted_) {
+            if (entry_index_ < leaf_->entries().size()) {
+                const auto & entry = leaf_->entries()[entry_index_++];
+                if (range_.upper().has_value()) {
+                    const auto compared = compare_scalar_index_keys(
+                        entry.key,
+                        range_.upper()->key
+                    );
+                    if (compared == std::strong_ordering::greater
+                        || (compared == std::strong_ordering::equal
+                            && !range_.upper()->inclusive)) {
+                        exhausted_ = true;
+                        return std::nullopt;
+                    }
+                }
+                return std::optional<common::RecordId> {entry.record_id};
+            }
+            const auto next_page_id = leaf_->next_page_id();
+            if (next_page_id == btree_index::InvalidBTreePageId) {
+                exhausted_ = true;
+                return std::nullopt;
+            }
+            if (!visited_pages_.insert(next_page_id).second) {
+                return std::unexpected(corrupted_tree("cycle detected in the range leaf chain"));
+            }
+            auto next_page = store_->read_page(next_page_id);
+            if (!next_page.has_value()) {
+                return std::unexpected(storage_error(std::move(next_page.error())));
+            }
+            const auto * next_leaf = std::get_if<btree_index::BTreeLeafPage>(&*next_page);
+            if (next_leaf == nullptr) {
+                return std::unexpected(corrupted_tree("range leaf links to a non-leaf page"));
+            }
+            leaf_ = *next_leaf;
+            entry_index_ = 0;
+        }
+        return std::nullopt;
+    }
+
+private:
+    std::expected<void, IndexError> initialize()
+    {
+        if (range_.lower().has_value()
+            && !range_.lower()->key.value().matches_type(store_->key_type())) {
+            return std::unexpected(IndexError {
+                IndexErrorCode::KeyTypeMismatch,
+                "Lower range key type does not match BTreeIndex key type",
+            });
+        }
+        if (range_.upper().has_value()
+            && !range_.upper()->key.value().matches_type(store_->key_type())) {
+            return std::unexpected(IndexError {
+                IndexErrorCode::KeyTypeMismatch,
+                "Upper range key type does not match BTreeIndex key type",
+            });
+        }
+        if (range_.lower().has_value() && range_.upper().has_value()) {
+            const auto compared = compare_scalar_index_keys(
+                range_.lower()->key,
+                range_.upper()->key
+            );
+            if (compared == std::strong_ordering::greater
+                || (compared == std::strong_ordering::equal
+                    && (!range_.lower()->inclusive || !range_.upper()->inclusive))) {
+                exhausted_ = true;
+                return {};
+            }
+        }
+        if (store_->root_page_id() == btree_index::InvalidBTreePageId) {
+            exhausted_ = true;
+            return {};
+        }
+
+        std::optional<btree_index::BTreeEntryKey> first_entry;
+        if (range_.lower().has_value()) {
+            first_entry = btree_index::BTreeEntryKey {
+                .key = range_.lower()->key,
+                .record_id = range_.lower()->inclusive
+                    ? std::numeric_limits<common::RecordId>::min()
+                    : std::numeric_limits<common::RecordId>::max(),
+            };
+        }
+        auto page_id = store_->root_page_id();
+        while (true) {
+            if (!visited_pages_.insert(page_id).second) {
+                return std::unexpected(corrupted_tree("cycle detected while locating the range start"));
+            }
+            auto page = store_->read_page(page_id);
+            if (!page.has_value()) {
+                return std::unexpected(storage_error(std::move(page.error())));
+            }
+            if (const auto * found_leaf = std::get_if<btree_index::BTreeLeafPage>(&*page)) {
+                leaf_ = *found_leaf;
+                entry_index_ = range_.lower().has_value()
+                    ? (range_.lower()->inclusive
+                        ? leaf_->lower_bound(range_.lower()->key)
+                        : leaf_->upper_bound(range_.lower()->key))
+                    : 0;
+                return {};
+            }
+            const auto & internal = std::get<btree_index::BTreeInternalPage>(*page);
+            page_id = first_entry.has_value()
+                ? internal.child_for(*first_entry)
+                : internal.first_child_id();
+        }
+    }
+
+private:
+    const btree_index::BTreePageStore * store_;
+    IndexRange range_;
+    std::optional<btree_index::BTreeLeafPage> leaf_;
+    std::size_t entry_index_ {0};
+    bool initialized_ {false};
+    bool exhausted_ {false};
+    std::unordered_set<btree_index::BTreePageId> visited_pages_;
+};
+
 class BTreeEraser final
 {
 private:
@@ -561,6 +986,10 @@ public:
             if (!emptied.has_value()) {
                 return std::unexpected(storage_error(std::move(emptied.error())));
             }
+            auto released = store_.release_page(leaf->page_id());
+            if (!released.has_value()) {
+                return std::unexpected(storage_error(std::move(released.error())));
+            }
         } else {
             auto unlinked = unlink_leaf(*leaf);
             if (!unlinked.has_value()) {
@@ -569,6 +998,10 @@ public:
             auto pruned = prune_empty_child(leaf->page_id(), path);
             if (!pruned.has_value()) {
                 return std::unexpected(std::move(pruned.error()));
+            }
+            auto released = store_.release_page(leaf->page_id());
+            if (!released.has_value()) {
+                return std::unexpected(storage_error(std::move(released.error())));
             }
         }
 
@@ -695,6 +1128,17 @@ private:
         SearchPath & path
     )
     {
+        std::vector<PageId> orphaned_internal_pages;
+        const auto release_orphans = [&]() -> std::expected<void, IndexError> {
+            for (const auto page_id : orphaned_internal_pages) {
+                auto released = store_.release_page(page_id);
+                if (!released.has_value()) {
+                    return std::unexpected(storage_error(std::move(released.error())));
+                }
+            }
+            return {};
+        };
+
         while (!path.empty()) {
             const auto parent_page_id = path.back();
             path.pop_back();
@@ -717,8 +1161,10 @@ private:
                     if (!emptied.has_value()) {
                         return std::unexpected(storage_error(std::move(emptied.error())));
                     }
-                    return {};
+                    orphaned_internal_pages.push_back(parent->page_id());
+                    return release_orphans();
                 }
+                orphaned_internal_pages.push_back(parent->page_id());
                 child_page_id = parent->page_id();
                 continue;
             }
@@ -740,7 +1186,8 @@ private:
                 if (!rooted.has_value()) {
                     return std::unexpected(storage_error(std::move(rooted.error())));
                 }
-                return {};
+                orphaned_internal_pages.push_back(parent->page_id());
+                return release_orphans();
             }
 
             auto written = store_.write_page(*parent_page);
@@ -748,11 +1195,14 @@ private:
                 return std::unexpected(storage_error(std::move(written.error())));
             }
             if (replacement_minimum.has_value()) {
-                return update_ancestor_minimum(
+                auto updated = update_ancestor_minimum(
                     parent->page_id(), *replacement_minimum, path
                 );
+                if (!updated.has_value()) {
+                    return std::unexpected(std::move(updated.error()));
+                }
             }
-            return {};
+            return release_orphans();
         }
         return std::unexpected(corrupted_tree("empty non-root leaf has no parent path"));
     }
@@ -1044,6 +1494,19 @@ std::expected<std::vector<common::RecordId>, IndexError> BTreeIndex::scan_range(
     }
 }
 
+std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError>
+BTreeIndex::scan_range_cursor(const IndexRange & range) const
+{
+    return std::unique_ptr<ScalarIndexCursor> {
+        std::make_unique<BTreeRangeCursor>(store_, range)
+    };
+}
+
+std::expected<void, IndexError> BTreeIndex::bulk_load(std::vector<ScalarIndexEntry> entries)
+{
+    return BTreeBulkLoader {store_}.load(std::move(entries));
+}
+
 std::size_t BTreeIndex::size() const noexcept
 {
     return static_cast<std::size_t>(store_.entry_count());
@@ -1072,6 +1535,11 @@ btree_index::BTreePageId BTreeIndex::root_page_id() const noexcept
 std::uint64_t BTreeIndex::page_count() const noexcept
 {
     return store_.page_count();
+}
+
+std::uint64_t BTreeIndex::free_page_count() const noexcept
+{
+    return store_.free_page_count();
 }
 
 std::uint64_t BTreeIndex::entry_count() const noexcept

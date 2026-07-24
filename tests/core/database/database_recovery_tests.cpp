@@ -50,9 +50,9 @@ std::vector<common::RecordId> find_index_equal(
     auto index_view = engine.index_engine().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = engine.index_engine().find_equal(index_id, key.value());
+    auto found = engine.index_engine().find_equal(index_id, *key);
     require(found.has_value(), "index lookup failed");
-    return std::move(found.value());
+    return std::move(*found);
 }
 
 std::filesystem::path make_temp_dir(std::string name)

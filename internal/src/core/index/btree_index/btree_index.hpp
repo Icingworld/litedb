@@ -93,6 +93,13 @@ public:
         const IndexRange & range
     ) const override;
 
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError> scan_range_cursor(
+        const IndexRange & range
+    ) const override;
+
+    std::expected<void, IndexError> bulk_load(std::vector<ScalarIndexEntry> entries) override;
+
     /**
      * @brief 获取索引条目数量
      */
@@ -133,6 +140,9 @@ public:
      */
     [[nodiscard]]
     std::uint64_t page_count() const noexcept;
+
+    [[nodiscard]]
+    std::uint64_t free_page_count() const noexcept;
 
     /**
      * @brief 获取索引条目数量

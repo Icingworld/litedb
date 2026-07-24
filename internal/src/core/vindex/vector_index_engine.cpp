@@ -555,11 +555,11 @@ std::expected<VectorIndexStore, VectorIndexError> VectorIndexEngine::restore_sto
     if (!backend) {
         return std::unexpected(std::move(backend.error()));
     }
-    const auto * hnsw = dynamic_cast<const HnswIndex *>(backend->get());
-    if (hnsw == nullptr) {
+    if ((*backend)->kind() != VectorIndexKind::Hnsw) {
         return std::unexpected(make_error(VectorIndexErrorCode::CorruptedIndex, "HNSW backend type mismatch"));
     }
-    auto verified = verify_against_storage(*hnsw, descriptor, storage);
+    const auto & hnsw = static_cast<const HnswIndex &>(**backend);
+    auto verified = verify_against_storage(hnsw, descriptor, storage);
     if (!verified) {
         return std::unexpected(std::move(verified.error()));
     }

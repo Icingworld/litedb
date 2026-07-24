@@ -1,37 +1,72 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+
+#include "core/common/ids.hpp"
+#include "core/error/error.hpp"
 
 namespace litedb::core::index
 {
 
-/**
- * @brief 索引错误码
- */
-enum class IndexErrorCode
+enum class IndexErrorCode : std::uint8_t
 {
-    UnsupportedKeyType,     ///< 不支持的键类型
-    InvalidKeyValue,        ///< 无效的键值
-    KeyTypeMismatch,        ///< 键类型与索引列类型不匹配
-    UnsupportedRangeScan,   ///< 不支持的范围扫描
-    KeyNotFound,            ///< 键不存在
-    RecordNotFound,         ///< 记录不存在
-    DuplicateEntry,         ///< 键值与记录 ID 对已存在
-    DuplicateKey,           ///< 唯一索引键重复
-    IndexAlreadyExists,     ///< 索引已存在
-    IndexNotFound,          ///< 索引不存在
-    InvalidIndexColumn,     ///< 索引列无效或不可索引
-    StorageError,           ///< 存储扫描失败
-    NotImplemented,         ///< 索引操作尚未实现
+    UnsupportedKeyType,
+    InvalidKeyValue,
+    KeyTypeMismatch,
+    UnsupportedRangeScan,
+    KeyNotFound,
+    RecordNotFound,
+    DuplicateEntry,
+    DuplicateKey,
+    IndexAlreadyExists,
+    IndexNotFound,
+    InvalidIndexColumn,
+    StorageError,
+    NotImplemented,
 };
 
-/**
- * @brief 索引错误
- */
-struct IndexError
+enum class IndexOperation : std::uint8_t
 {
-    IndexErrorCode code;    ///< 错误码
-    std::string message;    ///< 错误信息
+    ValidateKey,
+    Create,
+    Build,
+    Open,
+    Insert,
+    Erase,
+    Lookup,
+    RangeScan,
+    Drop,
+    Restore,
+    Reload,
+    EncodePage,
+    DecodePage,
+    ReadPage,
+    WritePage,
+    Sync,
 };
+
+struct IndexErrorContext
+{
+    IndexOperation operation {IndexOperation::Lookup};
+    common::IndexId index_id {0};
+    std::optional<std::uint64_t> page_id;
+    std::filesystem::path path;
+    std::optional<std::uint16_t> source_code;
+};
+
+using IndexError = error::Error;
 
 } // namespace litedb::core::index
+
+namespace litedb::core::error
+{
+
+template <>
+struct ErrorTraits<index::IndexErrorCode>
+{
+    static constexpr ErrorCategory category = ErrorCategory::Index;
+};
+
+} // namespace litedb::core::error

@@ -23,6 +23,7 @@ enum class BTreePageCodecErrorCode
     PageTooLarge,            ///< 逻辑页无法放入一个物理页
     InvalidFormat,           ///< 物理页格式无效
     UnsupportedVersion,      ///< 不支持的物理页格式版本
+    ChecksumMismatch,        ///< 物理页校验和不匹配
     CorruptedPage,           ///< 物理页内容损坏
 };
 

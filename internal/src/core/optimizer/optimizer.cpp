@@ -261,7 +261,7 @@ std::optional<index::ScalarIndexKey> expression_to_index_key(const BoundExpressi
     if (!key.has_value()) {
         return std::nullopt;
     }
-    return std::move(key.value());
+    return std::move(*key);
 }
 
 [[nodiscard]]

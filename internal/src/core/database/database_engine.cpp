@@ -67,7 +67,7 @@ DatabaseError to_database_error(index::IndexError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::IndexError,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -661,7 +661,7 @@ executor::ExecutionError DatabaseEngine::from_index_error(
     return executor::ExecutionError {
         .code = executor::ExecutionErrorCode::IndexError,
         .location = location,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 

@@ -67,6 +67,12 @@ bool can_allocate(Id next, std::size_t count = 1) noexcept
     return next != 0 && count <= static_cast<std::size_t>(Maximum - next);
 }
 
+[[nodiscard]]
+std::string implicit_unique_index_name(common::ColumnId column_id)
+{
+    return "__litedb_unique_" + std::to_string(column_id);
+}
+
 } // namespace
 
 const entry::DatabaseEntry * CatalogState::find_database(std::string_view name) const
@@ -300,6 +306,7 @@ std::expected<common::CollectionId, MetaError> CatalogState::create_collection(c
         return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Collection must have at least one column"));
     }
     std::unordered_set<std::string> column_keys;
+    std::size_t unique_column_count = 0;
     for (const auto & column : request.columns) {
         if (blank(column.name)) {
             return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Column name cannot be empty"));
@@ -314,11 +321,20 @@ std::expected<common::CollectionId, MetaError> CatalogState::create_collection(c
                 "Invalid column type or default expression: " + column.name
             ));
         }
+        if (column.unique && column.type.id == common::LogicalTypeId::Vector) {
+            return std::unexpected(make_error(
+                MetaErrorCode::InvalidArgument,
+                "VECTOR columns cannot have a UNIQUE constraint: " + column.name
+            ));
+        }
+        unique_column_count += column.unique ? 1U : 0U;
     }
-    if (!can_allocate(next_collection_id_) || !can_allocate(next_column_id_, request.columns.size())) {
+    if (!can_allocate(next_collection_id_)
+        || !can_allocate(next_column_id_, request.columns.size())
+        || !can_allocate(next_index_id_, unique_column_count)) {
         return std::unexpected(make_error(
             MetaErrorCode::InvalidState,
-            "Collection or column ID space is exhausted"
+            "Collection, column, or implicit unique index ID space is exhausted"
         ));
     }
     const auto id = next_collection_id_++;
@@ -339,6 +355,19 @@ std::expected<common::CollectionId, MetaError> CatalogState::create_collection(c
         );
         collection->add_column(column->key(), column_id);
         columns_.emplace(column_id, std::move(column));
+        if (definition.unique) {
+            const auto index_id = next_index_id_++;
+            auto index = std::make_unique<entry::IndexEntry>(
+                index_id,
+                id,
+                std::vector<common::ColumnId> {column_id},
+                implicit_unique_index_name(column_id),
+                entry::IndexKind::BTree,
+                true
+            );
+            collection->add_index(index->key(), index_id);
+            indexes_.emplace(index_id, std::move(index));
+        }
     }
     database->add_collection(collection->key(), id);
     collections_.emplace(id, std::move(collection));
@@ -389,8 +418,11 @@ std::expected<common::IndexId, MetaError> CatalogState::create_index(const Creat
     if (collection == nullptr) {
         return std::unexpected(make_error(MetaErrorCode::CollectionNotFound, "Collection not found"));
     }
-    if (blank(request.name) || request.column_ids.empty()) {
-        return std::unexpected(make_error(MetaErrorCode::InvalidArgument, "Index name and columns cannot be empty"));
+    if (blank(request.name) || request.column_ids.size() != 1) {
+        return std::unexpected(make_error(
+            MetaErrorCode::InvalidArgument,
+            "Scalar indexes require exactly one column"
+        ));
     }
     const auto key = common::normalize_identifier(request.name);
     if (const auto existing = collection->find_index_id(key)) {
@@ -450,6 +482,15 @@ std::expected<void, MetaError> CatalogState::drop_index(const DropIndexRequest &
     }
     const auto id = index->id();
     const auto key = index->key();
+    const auto column_id = index->column_id();
+    const auto * column = column_id ? find_column(*column_id) : nullptr;
+    if (column != nullptr && column->unique()
+        && index->unique() && index->name() == implicit_unique_index_name(*column_id)) {
+        return std::unexpected(make_error(
+            MetaErrorCode::InvalidArgument,
+            "Implicit UNIQUE indexes cannot be dropped"
+        ));
+    }
     collection->remove_index(key);
     indexes_.erase(id);
     return {};
@@ -646,7 +687,7 @@ std::expected<void, MetaError> CatalogState::restore(const MetaSnapshot & source
                 max_column = std::max(max_column, value.id);
             }
             for (const auto & value : collection_snapshot.indexes) {
-                if (value.id == 0 || blank(value.name) || value.column_ids.empty() || rebuilt.indexes_.contains(value.id)
+                if (value.id == 0 || blank(value.name) || value.column_ids.size() != 1 || rebuilt.indexes_.contains(value.id)
                     || collection_ptr->contains_index(common::normalize_identifier(value.name))
                     || value.index_kind != entry::IndexKind::BTree) {
                     return std::unexpected(make_error(MetaErrorCode::InvalidSnapshot, "Invalid or duplicate index in meta snapshot"));

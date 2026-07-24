@@ -120,7 +120,7 @@ ExecutionError from_storage_error(storage::StorageError error, AstNodeLocation l
 [[nodiscard]]
 ExecutionError from_index_error(index::IndexError error, AstNodeLocation location)
 {
-    return make_error(ExecutionErrorCode::IndexError, location, std::move(error.message));
+    return make_error(ExecutionErrorCode::IndexError, location, error.message());
 }
 
 [[nodiscard]]
@@ -444,7 +444,27 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
         if (!range.has_value()) {
             return std::unexpected(std::move(range.error()));
         }
-        record_ids = index_engine.scan_range(scan.index_id(), range.value());
+        auto cursor = index_engine.scan_range_cursor(scan.index_id(), *range);
+        if (!cursor.has_value()) {
+            return std::unexpected(from_index_error(std::move(cursor.error()), scan.location()));
+        }
+        PipelineResult result;
+        append_scan_columns(result, *collection_schema);
+        while (true) {
+            auto next = (*cursor)->next();
+            if (!next.has_value()) {
+                return std::unexpected(from_index_error(std::move(next.error()), scan.location()));
+            }
+            if (!*next) {
+                break;
+            }
+            auto record = storage.get(scan.collection_id(), **next);
+            if (!record.has_value()) {
+                return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
+            }
+            append_pipeline_row(result, *collection_schema, std::move(*record));
+        }
+        return result;
     }
     if (!record_ids.has_value()) {
         return std::unexpected(from_index_error(std::move(record_ids.error()), scan.location()));
@@ -452,7 +472,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 
     PipelineResult result;
     append_scan_columns(result, collection_schema.value());
-    for (const auto record_id : record_ids.value()) {
+    for (const auto record_id : *record_ids) {
         auto record = storage.get(scan.collection_id(), record_id);
         if (!record.has_value()) {
             return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));

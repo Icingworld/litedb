@@ -20,6 +20,7 @@ enum class ErrorCategory : std::uint8_t
     Io = 2,                     ///< 二进制输入输出
     Meta = 3,                   ///< 元数据目录
     Storage = 4,                ///< 记录存储
+    Index = 5,                  ///< 标量索引
 };
 
 /**

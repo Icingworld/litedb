@@ -210,6 +210,12 @@ public:
         const IndexRange & range
     ) const;
 
+    [[nodiscard]]
+    std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError> scan_range_cursor(
+        common::IndexId index_id,
+        const IndexRange & range
+    ) const;
+
     /**
      * @brief 清空所有索引
      */

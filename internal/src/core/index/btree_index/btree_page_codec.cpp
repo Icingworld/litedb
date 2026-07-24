@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/common/value.hpp"
+#include "core/io/checksum.hpp"
 
 namespace litedb::core::index::btree_index
 {
@@ -19,7 +20,8 @@ namespace
 {
 
 constexpr std::uint32_t PageMagic = 0x31505442; // BTP1
-constexpr std::uint16_t PageVersion = 1;
+constexpr std::uint16_t LegacyPageVersion = 1;
+constexpr std::uint16_t PageVersion = 2;
 constexpr std::uint8_t EncodedInternalPage = 1;
 constexpr std::uint8_t EncodedLeafPage = 2;
 
@@ -35,7 +37,7 @@ constexpr std::size_t FirstLinkOffset = 24;
 constexpr std::size_t SecondLinkOffset = 32;
 constexpr std::size_t FreeStartOffset = 40;
 constexpr std::size_t FreeEndOffset = 42;
-constexpr std::size_t ReservedWordOffset = 44;
+constexpr std::size_t ChecksumOffset = 44;
 
 [[nodiscard]]
 BTreePageCodecError make_codec_error(BTreePageCodecErrorCode code, std::string message)
@@ -71,6 +73,15 @@ T read_number(const std::byte * source) noexcept
         value |= static_cast<Unsigned>(std::to_integer<unsigned int>(source[index])) << (index * 8U);
     }
     return static_cast<T>(value);
+}
+
+[[nodiscard]]
+std::uint32_t checksum_with_zeroed_field(std::span<const std::byte> bytes)
+{
+    BTreePageCodec::PageBuffer checked {};
+    std::copy(bytes.begin(), bytes.end(), checked.begin());
+    write_number(checked.data() + ChecksumOffset, std::uint32_t {0});
+    return io::crc32(checked);
 }
 
 /**
@@ -261,7 +272,7 @@ std::expected<ScalarIndexKey, BTreePageCodecError> decode_key(
     if (!key.has_value()) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::CorruptedPage, "Encoded index key is invalid"));
     }
-    return std::move(key.value());
+    return std::move(*key);
 }
 
 /**
@@ -329,7 +340,7 @@ std::expected<DecodedEntry, BTreePageCodecError> decode_entry(
     }
     return DecodedEntry {
         .key = BTreeEntryKey {
-            .key = std::move(key.value()),
+            .key = std::move(*key),
             .record_id = record_id,
         },
         .right_child_id = child,
@@ -459,7 +470,7 @@ void write_header(
     }
     write_number(buffer.data() + FreeStartOffset, free_start);
     write_number(buffer.data() + FreeEndOffset, free_end);
-    write_number(buffer.data() + ReservedWordOffset, static_cast<std::uint32_t>(0));
+    write_number(buffer.data() + ChecksumOffset, static_cast<std::uint32_t>(0));
 }
 
 } // namespace
@@ -523,6 +534,7 @@ std::expected<BTreePageCodec::PageBuffer, BTreePageCodecError> BTreePageCodec::e
         free_start,
         free_end
     );
+    write_number(buffer.data() + ChecksumOffset, io::crc32(buffer));
     return buffer;
 }
 
@@ -541,14 +553,22 @@ std::expected<BTreePage, BTreePageCodecError> BTreePageCodec::decode(
     if (read_number<std::uint32_t>(bytes.data() + MagicOffset) != PageMagic) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::InvalidFormat, "Invalid B+ tree page magic"));
     }
-    if (read_number<std::uint16_t>(bytes.data() + VersionOffset) != PageVersion) {
+    const auto version = read_number<std::uint16_t>(bytes.data() + VersionOffset);
+    if (version != LegacyPageVersion && version != PageVersion) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::UnsupportedVersion, "Unsupported B+ tree page version"));
     }
     if (read_number<std::uint16_t>(bytes.data() + HeaderSizeOffset) != HeaderSize ||
         read_number<std::uint32_t>(bytes.data() + PageSizeOffset) != PageSize ||
-        read_number<std::uint8_t>(bytes.data() + ReservedByteOffset) != 0 ||
-        read_number<std::uint32_t>(bytes.data() + ReservedWordOffset) != 0) {
+        read_number<std::uint8_t>(bytes.data() + ReservedByteOffset) != 0) {
         return std::unexpected(make_codec_error(BTreePageCodecErrorCode::InvalidFormat, "Invalid B+ tree page header"));
+    }
+    if (version == LegacyPageVersion) {
+        if (read_number<std::uint32_t>(bytes.data() + ChecksumOffset) != 0) {
+            return std::unexpected(make_codec_error(BTreePageCodecErrorCode::InvalidFormat, "Invalid legacy B+ tree page header"));
+        }
+    } else if (read_number<std::uint32_t>(bytes.data() + ChecksumOffset)
+               != checksum_with_zeroed_field(bytes)) {
+        return std::unexpected(make_codec_error(BTreePageCodecErrorCode::ChecksumMismatch, "B+ tree page checksum mismatch"));
     }
 
     const auto page_id = read_number<BTreePageId>(bytes.data() + PageIdOffset);

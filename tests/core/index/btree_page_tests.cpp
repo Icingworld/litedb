@@ -29,7 +29,7 @@ ScalarIndexKey key(std::int32_t value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 BTreeEntryKey entry(std::int32_t value, common::RecordId record_id)

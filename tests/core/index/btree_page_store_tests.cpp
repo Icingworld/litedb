@@ -34,7 +34,7 @@ ScalarIndexKey key(std::int32_t value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 BTreeEntryKey entry(std::int32_t value, common::RecordId record_id)
@@ -118,6 +118,13 @@ void test_create_allocate_write_and_reopen(const std::filesystem::path & directo
 
         auto fourth = store.allocate_leaf_page(2);
         require(fourth.has_value() && fourth->page_id() == 4, "reopened allocation did not continue page ids");
+        require(store.release_page(fourth->page_id()).has_value(), "free page release failed");
+        require(store.free_page_count() == 1, "free page count mismatch");
+        auto reused = store.allocate_leaf_page(2);
+        require(reused.has_value() && reused->page_id() == 4,
+                "page allocation should reuse the persisted free page");
+        require(store.page_count() == 4 && store.free_page_count() == 0,
+                "free page reuse should not grow the file");
         require(store.sync_data().has_value(), "page store data sync failed");
 
         auto missing = store.read_page(99);
@@ -206,12 +213,53 @@ void test_invalid_header_and_file_size_are_rejected(const std::filesystem::path 
             .create_mode = filesystem::FileCreateMode::OpenExisting,
         });
         require(file.has_value(), "bad version raw open failed");
-        const std::array version {std::byte {2}, std::byte {0}};
+        const std::array version {std::byte {3}, std::byte {0}};
         require(file->write_at(4, version).has_value(), "bad version raw write failed");
     }
     auto unsupported = BTreePageStore::open(version_path, 90, type, filesystem);
     require(!unsupported.has_value() && unsupported.error().code == BTreePageStoreErrorCode::UnsupportedVersion,
             "unsupported store version should fail open");
+
+    const auto legacy_path = directory / "legacy-v1-header.bti";
+    {
+        auto created = BTreePageStore::create(legacy_path, 93, type, filesystem);
+        require(created.has_value(), "legacy header store create failed");
+    }
+    {
+        auto file = filesystem.open(legacy_path, {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
+        });
+        require(file.has_value(), "legacy header raw open failed");
+        const std::array version {std::byte {1}, std::byte {0}};
+        const std::array checksum {
+            std::byte {0}, std::byte {0}, std::byte {0}, std::byte {0},
+        };
+        require(file->write_at(4, version).has_value(), "legacy header version write failed");
+        require(file->write_at(56, checksum).has_value(), "legacy header checksum write failed");
+    }
+    auto legacy = BTreePageStore::open(legacy_path, 93, type, filesystem);
+    require(legacy.has_value(), "version 1 store header should remain readable");
+
+    const auto checksum_path = directory / "bad-header-checksum.bti";
+    {
+        auto created = BTreePageStore::create(checksum_path, 92, type, filesystem);
+        require(created.has_value(), "header checksum store create failed");
+    }
+    {
+        auto file = filesystem.open(checksum_path, {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
+        });
+        require(file.has_value(), "header checksum raw open failed");
+        const std::array changed_count {std::byte {1}};
+        require(file->write_at(48, changed_count).has_value(),
+                "header checksum corruption write failed");
+    }
+    auto checksum = BTreePageStore::open(checksum_path, 92, type, filesystem);
+    require(!checksum.has_value()
+                && checksum.error().code == BTreePageStoreErrorCode::ChecksumMismatch,
+            "header bit flip should fail store checksum");
 
     const auto truncated_path = directory / "truncated.bti";
     {

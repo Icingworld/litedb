@@ -63,14 +63,27 @@ void test_memory_engine_crud()
     const auto * name = engine.view().find_column(*collection, "name");
     const auto * embedding = engine.view().find_column(*collection, "embedding");
     require(id != nullptr && name != nullptr && embedding != nullptr, "column lookup failed");
+    const auto implicit_indexes = engine.view().list_indexes(*collection);
+    require(implicit_indexes.size() == 1, "UNIQUE column should create one implicit index");
+    require(implicit_indexes.front()->unique(), "implicit UNIQUE index should be unique");
+    require(implicit_indexes.front()->column_id() == id->id(), "implicit UNIQUE index column mismatch");
 
-    auto scalar_index = engine.create_index({
+    auto composite_index = engine.create_index({
         .collection_id = *collection,
         .column_ids = {id->id(), name->id()},
         .name = "idx_identity",
         .unique = true,
     });
-    require(scalar_index.has_value(), "create composite index failed");
+    require(!composite_index.has_value()
+                && composite_index.error().is(meta::MetaErrorCode::InvalidArgument),
+            "composite scalar index should be rejected");
+
+    auto scalar_index = engine.create_index({
+        .collection_id = *collection,
+        .column_ids = {name->id()},
+        .name = "idx_name",
+    });
+    require(scalar_index.has_value(), "create scalar index failed");
 
     auto vector_index = engine.create_vector_index({
         .collection_id = *collection,
@@ -80,7 +93,7 @@ void test_memory_engine_crud()
         .hnsw_options = {.max_neighbors = 24, .ef_construction = 240, .ef_search_default = 80, .random_seed = 7},
     });
     require(vector_index.has_value(), "create vector index failed");
-    require(engine.view().find_index(*scalar_index)->column_ids().size() == 2, "composite index columns mismatch");
+    require(engine.view().find_index(*scalar_index)->column_ids().size() == 1, "scalar index columns mismatch");
     require(engine.view().find_vector_index(*vector_index)->dimension() == 3, "vector index dimension mismatch");
 
     auto duplicate = engine.create_collection(users_request(*database));
@@ -89,7 +102,14 @@ void test_memory_engine_crud()
 
     require(engine.drop_vector_index({.collection_id = *collection, .name = "vidx_embedding"}).has_value(),
             "drop vector index failed");
-    require(engine.drop_index({.collection_id = *collection, .name = "idx_identity"}).has_value(),
+    auto implicit_drop = engine.drop_index({
+        .collection_id = *collection,
+        .name = implicit_indexes.front()->name(),
+    });
+    require(!implicit_drop.has_value()
+                && implicit_drop.error().is(meta::MetaErrorCode::InvalidArgument),
+            "implicit UNIQUE index should not be droppable");
+    require(engine.drop_index({.collection_id = *collection, .name = "idx_name"}).has_value(),
             "drop index failed");
     require(engine.drop_collection({.database_id = *database, .name = "users"}).has_value(),
             "drop collection failed");

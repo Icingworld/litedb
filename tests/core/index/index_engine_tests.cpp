@@ -38,17 +38,17 @@ ScalarIndexKey key(Value value)
 {
     auto result = ScalarIndexKey::from_value(std::move(value));
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 std::vector<RecordId> ids(std::expected<std::vector<RecordId>, IndexError> result)
 {
     if (!result.has_value()) {
-        throw std::runtime_error(result.error().message);
+        throw std::runtime_error(result.error().message());
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 struct Fixture
@@ -178,7 +178,7 @@ void test_build_skips_nulls_and_views_index()
 
     auto wrong_type = engine.find_equal(index_entry.id(), key(Value {std::int64_t {18}}));
     require(!wrong_type.has_value(), "lookup with mismatched physical key type should fail");
-    require(wrong_type.error().code == IndexErrorCode::KeyTypeMismatch, "lookup key type error mismatch");
+    require(wrong_type.error().is(IndexErrorCode::KeyTypeMismatch), "lookup key type error mismatch");
 }
 
 void test_insert_update_delete_maintenance()
@@ -200,12 +200,12 @@ void test_insert_update_delete_maintenance()
     auto insert = engine.prepare_insert(fixture.users_id, age_20);
     require(insert.has_value(), "insert prepare failed");
     require(insert->size() == 1, "insert binding count mismatch");
-    require(engine.on_insert(2, insert.value()).has_value(), "on_insert failed");
+    require(engine.on_insert(2, *insert).has_value(), "on_insert failed");
 
     RecordData wrong_age_type {.values = {Value {std::int64_t {3}}, Value {std::int64_t {20}}}};
     auto wrong_insert = engine.prepare_insert(fixture.users_id, wrong_age_type);
     require(!wrong_insert.has_value(), "mismatched indexed value type should fail during prepare");
-    require(wrong_insert.error().code == IndexErrorCode::KeyTypeMismatch, "prepare key type error mismatch");
+    require(wrong_insert.error().is(IndexErrorCode::KeyTypeMismatch), "prepare key type error mismatch");
 
     auto view = engine.find_index(index_entry.id());
     require(view.has_value(), "managed index missing");
@@ -214,13 +214,13 @@ void test_insert_update_delete_maintenance()
     RecordData age_21 {.values = {Value {std::int64_t {2}}, Value {std::int32_t {21}}}};
     auto update = engine.prepare_update(fixture.users_id, age_20, age_21);
     require(update.has_value(), "update prepare failed");
-    require(engine.on_update(2, update.value()).has_value(), "on_update failed");
+    require(engine.on_update(2, *update).has_value(), "on_update failed");
     require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {20}}))).empty(), "old update key should be erased");
     require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {21}}))) == std::vector<RecordId> {2}, "new update key mismatch");
 
     auto del = engine.prepare_delete(fixture.users_id, age_21);
     require(del.has_value(), "delete prepare failed");
-    require(engine.on_delete(2, del.value()).has_value(), "on_delete failed");
+    require(engine.on_delete(2, *del).has_value(), "on_delete failed");
     require(ids(engine.find_equal(index_entry.id(), key(Value {std::int32_t {21}}))).empty(), "deleted index key should be erased");
 }
 
@@ -234,7 +234,7 @@ void test_unique_index_rejects_duplicates()
     IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto duplicate_build = engine.create_index(duplicate_index, fixture.users_schema(), fixture.storage);
     require(!duplicate_build.has_value(), "unique index build should reject duplicates");
-    require(duplicate_build.error().code == IndexErrorCode::DuplicateKey, "unique duplicate build error mismatch");
+    require(duplicate_build.error().is(IndexErrorCode::DuplicateKey), "unique duplicate build error mismatch");
 
     Fixture clean_fixture;
     clean_fixture.insert_user(1, 18);
@@ -246,7 +246,7 @@ void test_unique_index_rejects_duplicates()
     RecordData duplicate {.values = {Value {std::int64_t {2}}, Value {std::int32_t {18}}}};
     auto duplicate_insert = clean_engine.prepare_insert(clean_fixture.users_id, duplicate);
     require(!duplicate_insert.has_value(), "unique index prepare insert should reject duplicate");
-    require(duplicate_insert.error().code == IndexErrorCode::DuplicateKey, "unique duplicate insert error mismatch");
+    require(duplicate_insert.error().is(IndexErrorCode::DuplicateKey), "unique duplicate insert error mismatch");
 }
 
 void test_restore_all_is_atomic_on_failure()
@@ -263,7 +263,16 @@ void test_restore_all_is_atomic_on_failure()
     const auto & missing_index = fixture.create_catalog_index("idx_age_missing", litedb::core::meta::entry::IndexKind::BTree);
     auto restored = engine.restore_all(fixture.catalog.view(), fixture.storage);
     require(!restored.has_value(), "restore should fail when a persistent index file is missing");
-    require(restored.error().code == IndexErrorCode::StorageError, "restore storage error mismatch");
+    require(restored.error().is(IndexErrorCode::StorageError), "restore storage error mismatch");
+    require(restored.error().category() == litedb::core::error::ErrorCategory::Index,
+            "restore error should retain the index category");
+    const auto * context = restored.error().context<IndexErrorContext>();
+    require(context != nullptr, "restore storage error should retain typed context");
+    require(context->operation == IndexOperation::Open, "restore error operation mismatch");
+    require(context->index_id == missing_index.id(), "restore error index id mismatch");
+    require(context->path.filename() == std::to_string(missing_index.id()) + ".bti",
+            "restore error path mismatch");
+    require(context->source_code.has_value(), "restore error source code is missing");
     require(engine.find_index(index_entry.id()).has_value(), "failed restore should keep existing indexes");
     require(!engine.find_index(missing_index.id()).has_value(), "failed restore should not publish partial indexes");
 }

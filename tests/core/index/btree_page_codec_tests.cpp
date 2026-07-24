@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "core/common/value.hpp"
+#include "core/io/checksum.hpp"
 
 namespace
 {
@@ -35,7 +36,7 @@ ScalarIndexKey key(Value value)
     if (!result.has_value()) {
         throw std::runtime_error("failed to create scalar index key");
     }
-    return std::move(result.value());
+    return std::move(*result);
 }
 
 BTreeEntryKey entry(Value value, common::RecordId record_id)
@@ -54,6 +55,12 @@ void write_number(std::byte * target, T value)
     for (std::size_t index = 0; index < sizeof(T); ++index) {
         target[index] = static_cast<std::byte>((bits >> (index * 8U)) & static_cast<Unsigned>(0xffU));
     }
+}
+
+void refresh_checksum(BTreePageCodec::PageBuffer & buffer)
+{
+    write_number<std::uint32_t>(buffer.data() + 44, 0);
+    write_number<std::uint32_t>(buffer.data() + 44, io::crc32(buffer));
 }
 
 template <typename T>
@@ -203,6 +210,19 @@ void test_decode_rejects_invalid_headers_and_slots()
     auto encoded = BTreePageCodec::encode(BTreePage {std::move(leaf)}, type);
     require(encoded.has_value(), "corruption test encode failed");
 
+    auto bad_checksum = *encoded;
+    bad_checksum.back() ^= std::byte {1};
+    auto checksum = BTreePageCodec::decode(bad_checksum, type, 90);
+    require(!checksum.has_value()
+                && checksum.error().code == BTreePageCodecErrorCode::ChecksumMismatch,
+            "payload bit flip should fail page checksum");
+
+    auto legacy = *encoded;
+    write_number<std::uint16_t>(legacy.data() + 4, 1);
+    write_number<std::uint32_t>(legacy.data() + 44, 0);
+    auto legacy_decoded = BTreePageCodec::decode(legacy, type, 90);
+    require(legacy_decoded.has_value(), "legacy v1 page should remain readable");
+
     auto truncated = BTreePageCodec::decode(
         std::span<const std::byte>(*encoded).first(BTreePageCodec::PageSize - 1),
         type,
@@ -218,13 +238,14 @@ void test_decode_rejects_invalid_headers_and_slots()
             "bad magic should fail");
 
     auto bad_version = *encoded;
-    write_number<std::uint16_t>(bad_version.data() + 4, 2);
+    write_number<std::uint16_t>(bad_version.data() + 4, 3);
     auto version = BTreePageCodec::decode(bad_version, type, 90);
     require(!version.has_value() && version.error().code == BTreePageCodecErrorCode::UnsupportedVersion,
             "bad version should fail");
 
     auto bad_type = *encoded;
     bad_type[12] = std::byte {99};
+    refresh_checksum(bad_type);
     auto page_type = BTreePageCodec::decode(bad_type, type, 90);
     require(!page_type.has_value() && page_type.error().code == BTreePageCodecErrorCode::InvalidFormat,
             "bad page type should fail");
@@ -235,6 +256,7 @@ void test_decode_rejects_invalid_headers_and_slots()
 
     auto bad_slot = *encoded;
     write_number<std::uint16_t>(bad_slot.data() + BTreePageCodec::HeaderSize, 0);
+    refresh_checksum(bad_slot);
     auto slot = BTreePageCodec::decode(bad_slot, type, 90);
     require(!slot.has_value() && slot.error().code == BTreePageCodecErrorCode::CorruptedPage,
             "bad slot should fail");
@@ -250,6 +272,7 @@ void test_decode_rejects_invalid_boolean_payload()
 
     const auto payload_offset = read_number<std::uint16_t>(encoded->data() + BTreePageCodec::HeaderSize);
     (*encoded)[payload_offset] = std::byte {2};
+    refresh_checksum(*encoded);
     auto decoded = BTreePageCodec::decode(*encoded, type, 100);
     require(!decoded.has_value(), "invalid boolean payload should fail decode");
     require(decoded.error().code == BTreePageCodecErrorCode::CorruptedPage, "invalid boolean error code mismatch");
@@ -266,6 +289,7 @@ void test_decode_rejects_out_of_order_entries()
 
     const auto first_payload = read_number<std::uint16_t>(encoded->data() + BTreePageCodec::HeaderSize);
     write_number<std::int32_t>(encoded->data() + first_payload, 3);
+    refresh_checksum(*encoded);
     auto decoded = BTreePageCodec::decode(*encoded, type, 110);
     require(!decoded.has_value(), "out-of-order leaf entries should fail decode");
     require(decoded.error().code == BTreePageCodecErrorCode::CorruptedPage, "out-of-order error code mismatch");

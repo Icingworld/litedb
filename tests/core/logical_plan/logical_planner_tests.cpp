@@ -208,7 +208,7 @@ IndexId create_managed_index(
     require(fixture.storage.contains_collection(fixture.users_id), "fixture collection storage missing");
     auto managed = fixture.index_engine.create_index(*entry, schema.value(), fixture.storage);
     if (!managed.has_value()) {
-        throw std::runtime_error(managed.error().message);
+        throw std::runtime_error(managed.error().message());
     }
     return *created;
 }

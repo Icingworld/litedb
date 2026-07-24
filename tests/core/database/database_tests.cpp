@@ -68,9 +68,9 @@ std::vector<litedb::core::common::RecordId> find_index_equal(TestDatabase & engi
     auto index_view = engine.index_engine().find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = engine.index_engine().find_equal(index_id, key.value());
+    auto found = engine.index_engine().find_equal(index_id, *key);
     require(found.has_value(), "index lookup failed");
-    return std::move(found.value());
+    return std::move(*found);
 }
 
 ExecutionResult execute_ok(TestDatabase & engine, std::string_view sql)
@@ -150,6 +150,34 @@ void test_execute_sql_end_to_end()
     require(drop_index.affected_rows == 1, "DROP INDEX affected rows mismatch");
     require(engine.meta().find_index(collection->id(), "idx_age") == nullptr, "dropped index should leave catalog");
     require(!engine.index_engine().find_index(index_id).has_value(), "dropped index should leave engine");
+}
+
+void test_column_unique_creates_and_enforces_index()
+{
+    litedb::tests::TemporaryDirectory data_directory {"litedb-engine-column-unique"};
+    TestDatabase engine {DatabaseConfig {.data_dir = data_directory.path()}};
+    execute_ok(engine, "CREATE DATABASE constraints;");
+    execute_ok(engine, "USE constraints;");
+    execute_ok(engine, "CREATE COLLECTION users (id BIGINT UNIQUE, name VARCHAR(64));");
+
+    const auto * collection = engine.meta().find_collection(
+        engine.current_database_id().value(),
+        "users"
+    );
+    require(collection != nullptr, "UNIQUE collection lookup failed");
+    const auto indexes = engine.meta().list_indexes(collection->id());
+    require(indexes.size() == 1 && indexes.front()->unique(),
+            "UNIQUE column should publish one unique index");
+    require(engine.index_engine().find_index(indexes.front()->id()).has_value(),
+            "UNIQUE column index should be loaded into the runtime engine");
+
+    execute_ok(engine, "INSERT INTO users VALUES (1, 'alice');");
+    auto duplicate = engine.execute_sql("INSERT INTO users VALUES (1, 'bob');");
+    require(!duplicate.has_value(), "duplicate UNIQUE value should be rejected");
+    auto rows = execute_ok(engine, "SELECT name FROM users WHERE id = 1;");
+    require(rows.rows.size() == 1
+                && get_value<std::string>(rows.rows.front().values.front()) == "alice",
+            "failed UNIQUE insert must not change stored rows");
 }
 
 void test_vector_distance_query()
@@ -332,6 +360,7 @@ int main()
 {
     try {
         test_execute_sql_end_to_end();
+        test_column_unique_creates_and_enforces_index();
         test_vector_distance_query();
         test_vector_index_ddl();
         test_vector_index_query_pipeline();

@@ -255,9 +255,9 @@ std::vector<RecordId> find_index_equal(Fixture & fixture, IndexId index_id, Valu
     auto index_view = fixture.index_engine.find_index(index_id);
     require(index_view.has_value(), "managed index missing");
 
-    auto found = fixture.index_engine.find_equal(index_id, key.value());
+    auto found = fixture.index_engine.find_equal(index_id, *key);
     require(found.has_value(), "index lookup failed");
-    return std::move(found.value());
+    return std::move(*found);
 }
 
 void test_use_show_and_describe()
