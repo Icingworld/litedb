@@ -55,6 +55,7 @@ struct DatabaseConfig
     std::filesystem::path data_dir;                         ///< 数据目录
     transaction::TransactionOptions transaction_options;   ///< 事务测试与观测配置
     AutomaticCheckpointOptions automatic_checkpoint;       ///< WAL size based checkpoint policy
+    wal::WalDecodeLimits wal_decode_limits;                 ///< WAL 扫描与恢复资源预算
 };
 
 struct DatabaseObservability
@@ -323,6 +324,7 @@ private:
     std::unique_ptr<transaction::TransactionManager> transaction_manager_; ///< 事务管理器
     transaction::TransactionOptions transaction_options_; ///< 事务配置
     AutomaticCheckpointOptions automatic_checkpoint_;     ///< WAL size based checkpoint policy
+    wal::WalDecodeLimits wal_decode_limits_;               ///< WAL 扫描与恢复资源预算
     std::size_t recovered_committed_transactions_ {0}; ///< 启动发现的已提交事务数
     std::size_t replayed_writes_ {0};                ///< 启动 redo 写入数
     std::atomic_uint64_t automatic_checkpoint_attempts_ {0};

@@ -18,9 +18,19 @@ namespace litedb::core::wal
 namespace
 {
 
-WalError fs_error(error::Error value)
+WalError fs_error(
+    error::Error value,
+    WalOperation operation,
+    const std::filesystem::path & path,
+    std::optional<std::uint64_t> generation = {}
+)
 {
-    return make_error(WalErrorCode::FileSystemError, value.message());
+    return make_error(WalErrorCode::FileSystemError, value.message(), {
+        .operation = operation,
+        .path = path,
+        .generation = generation,
+        .source_code = value.encode_code(),
+    });
 }
 
 std::optional<std::uint64_t> parse_generation(const std::filesystem::path & path)
@@ -42,7 +52,7 @@ std::expected<void, WalError> sync_directory_if_supported(
 {
     auto synced = filesystem.sync_directory(path);
     if (!synced && !synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) {
-        return std::unexpected(fs_error(std::move(synced.error())));
+        return std::unexpected(fs_error(std::move(synced.error()), WalOperation::Flush, path));
     }
     return {};
 }
@@ -78,10 +88,10 @@ std::expected<WalManager, WalError> WalManager::open(
 )
 {
     auto created = filesystem.create_dir_all(directory);
-    if (!created) return std::unexpected(fs_error(std::move(created.error())));
+    if (!created) return std::unexpected(fs_error(std::move(created.error()), WalOperation::Discover, directory));
 
     auto entries = filesystem.list_dir(directory);
-    if (!entries) return std::unexpected(fs_error(std::move(entries.error())));
+    if (!entries) return std::unexpected(fs_error(std::move(entries.error()), WalOperation::Discover, directory));
 
     std::vector<std::pair<std::uint64_t, std::filesystem::path>> segments;
     bool removed_temporary = false;
@@ -89,7 +99,11 @@ std::expected<WalManager, WalError> WalManager::open(
         if (auto generation = parse_generation(entry)) segments.emplace_back(*generation, directory / entry);
         else if (entry.filename().string().ends_with(".wal.tmp")) {
             auto removed = filesystem.remove(directory / entry);
-            if (!removed) return std::unexpected(fs_error(std::move(removed.error())));
+            if (!removed) return std::unexpected(fs_error(
+                std::move(removed.error()),
+                WalOperation::Discover,
+                directory / entry
+            ));
             removed_temporary = true;
         }
     }
@@ -144,9 +158,12 @@ std::expected<void, WalError> WalManager::flush_all()
     return active_.flush_all();
 }
 
-std::expected<WalScanResult, WalError> WalManager::scan(bool truncate_incomplete_tail)
+std::expected<WalScanResult, WalError> WalManager::scan(
+    bool truncate_incomplete_tail,
+    const WalDecodeLimits & limits
+)
 {
-    return active_.scan(truncate_incomplete_tail);
+    return active_.scan(truncate_incomplete_tail, limits);
 }
 
 std::expected<std::uint64_t, WalError> WalManager::rotate(
@@ -163,14 +180,29 @@ std::expected<std::uint64_t, WalError> WalManager::rotate(
     temporary_path += ".tmp";
 
     auto exists = filesystem_->exists(final_path);
-    if (!exists) return std::unexpected(fs_error(std::move(exists.error())));
+    if (!exists) return std::unexpected(fs_error(
+        std::move(exists.error()),
+        WalOperation::Rotate,
+        final_path,
+        next_generation
+    ));
     if (*exists) return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Next WAL generation already exists"));
 
     exists = filesystem_->exists(temporary_path);
-    if (!exists) return std::unexpected(fs_error(std::move(exists.error())));
+    if (!exists) return std::unexpected(fs_error(
+        std::move(exists.error()),
+        WalOperation::Rotate,
+        temporary_path,
+        next_generation
+    ));
     if (*exists) {
         auto removed = filesystem_->remove(temporary_path);
-        if (!removed) return std::unexpected(fs_error(std::move(removed.error())));
+        if (!removed) return std::unexpected(fs_error(
+            std::move(removed.error()),
+            WalOperation::Rotate,
+            temporary_path,
+            next_generation
+        ));
     }
 
     {
@@ -189,7 +221,12 @@ std::expected<std::uint64_t, WalError> WalManager::rotate(
     if (hook) hook(WalRotationStage::AfterTemporarySync);
 
     auto renamed = filesystem_->rename(temporary_path, final_path);
-    if (!renamed) return std::unexpected(fs_error(std::move(renamed.error())));
+    if (!renamed) return std::unexpected(fs_error(
+        std::move(renamed.error()),
+        WalOperation::Rotate,
+        final_path,
+        next_generation
+    ));
     if (hook) hook(WalRotationStage::AfterPublish);
     auto directory_synced = sync_directory_if_supported(*filesystem_, directory_);
     if (!directory_synced) return std::unexpected(std::move(directory_synced.error()));
@@ -202,7 +239,12 @@ std::expected<std::uint64_t, WalError> WalManager::rotate(
     if (hook) hook(WalRotationStage::AfterSwitch);
 
     auto entries = filesystem_->list_dir(directory_);
-    if (!entries) return std::unexpected(fs_error(std::move(entries.error())));
+    if (!entries) return std::unexpected(fs_error(
+        std::move(entries.error()),
+        WalOperation::Rotate,
+        directory_,
+        next_generation
+    ));
     bool removed_any = false;
     retained_segments_ = 0;
     for (const auto & entry : *entries) {

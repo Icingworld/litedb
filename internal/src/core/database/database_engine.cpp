@@ -79,11 +79,11 @@ DatabaseError vector_error_to_database(vindex::VectorIndexError error)
     };
 }
 
-DatabaseError to_database_error(wal::WalError error)
+DatabaseError wal_error_to_database(wal::WalError error)
 {
     return DatabaseError {
         .code = DatabaseErrorCode::WalError,
-        .message = std::move(error.message),
+        .message = error.message(),
     };
 }
 
@@ -140,6 +140,7 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , vector_index_engine_(data_directory_ / "vindexes", filesystem_)
     , transaction_options_(std::move(config.transaction_options))
     , automatic_checkpoint_(config.automatic_checkpoint)
+    , wal_decode_limits_(config.wal_decode_limits)
 {
 }
 
@@ -258,13 +259,18 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     auto opened_wal = wal::WalManager::open(data_directory_ / "wal", filesystem_);
     if (!opened_wal) {
-        return std::unexpected(to_database_error(std::move(opened_wal.error())));
+        return std::unexpected(wal_error_to_database(std::move(opened_wal.error())));
     }
     wal_manager_ = std::move(*opened_wal);
 
-    auto recovered = wal::RecoveryManager::recover(data_directory_, filesystem_, *wal_manager_);
+    auto recovered = wal::RecoveryManager::recover(
+        data_directory_,
+        filesystem_,
+        *wal_manager_,
+        wal_decode_limits_
+    );
     if (!recovered) {
-        return std::unexpected(to_database_error(std::move(recovered.error())));
+        return std::unexpected(wal_error_to_database(std::move(recovered.error())));
     }
     recovered_committed_transactions_ = recovered->committed_transactions;
     replayed_writes_ = recovered->replayed_writes;

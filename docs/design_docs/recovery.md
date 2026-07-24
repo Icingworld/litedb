@@ -48,6 +48,13 @@ checkpoint TransactionId 和 checksum。段内记录为 Begin、FileWrite 和 Co
 
 正常单行 DML 的 WAL 与实际 dirty block 数量相关，不再复制 collection 或 index 全文件。
 WAL 尾部不足完整 record 时启动截断尾部；完整 record checksum 错误时拒绝打开。
+扫描与恢复使用可配置的 `WalDecodeLimits`，默认限制单 record 为 512 MiB、active WAL
+为 4 GiB、record 数量为 2,000,000。超过预算返回 `ResourceLimitExceeded`，不会按磁盘长度
+直接执行无界内存分配；确有更大事务或恢复窗口的嵌入方可以通过 `DatabaseConfig` 显式放宽。
+
+`WalError` 使用统一的 move-only `error::Error`。`WalErrorCode` 保留 WAL 领域分类，
+`WalErrorContext` 携带 operation、path、TransactionId、LSN、generation 和下层 encoded
+error code；跨层传播错误时不得退回仅保留字符串的旧结构。
 
 ## Commit 协议
 

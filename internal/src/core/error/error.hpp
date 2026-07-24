@@ -22,6 +22,7 @@ enum class ErrorCategory : std::uint8_t
     Storage = 4,                ///< 记录存储
     Index = 5,                  ///< 标量索引
     VectorIndex = 6,            ///< 向量索引
+    Wal = 7,                    ///< 预写日志
 };
 
 /**

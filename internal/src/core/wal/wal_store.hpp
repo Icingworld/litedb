@@ -94,7 +94,10 @@ public:
      * @return 扫描结果
      */
     [[nodiscard]]
-    std::expected<WalScanResult, WalError> scan(bool truncate_incomplete_tail = true);
+    std::expected<WalScanResult, WalError> scan(
+        bool truncate_incomplete_tail = true,
+        const WalDecodeLimits & limits = {}
+    );
 
     /**
      * @brief 截断 WAL 尾部

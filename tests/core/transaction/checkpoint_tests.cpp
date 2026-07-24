@@ -76,6 +76,28 @@ void test_automatic_checkpoint_by_wal_size()
     require(rows.rows.size() == 1, "automatic checkpoint restart lost committed data");
 }
 
+void test_database_recovery_uses_configured_wal_limits()
+{
+    const auto directory = std::filesystem::temp_directory_path() / "litedb_wal_limit_config_tests";
+    std::filesystem::remove_all(directory);
+    {
+        auto engine = open_database(directory);
+        database::Session session {*engine};
+        execute_ok(session, "CREATE DATABASE demo;");
+    }
+
+    auto limited = database::DatabaseEngine::open(database::DatabaseConfig {
+        .data_dir = directory,
+        .wal_decode_limits = {
+            .max_record_size_bytes = 1024 * 1024,
+            .max_scan_size_bytes = wal::WalCodec::FileHeaderSize,
+            .max_record_count = 16,
+        },
+    });
+    require(!limited && limited.error().code == database::DatabaseErrorCode::WalError,
+            "Database recovery did not enforce configured WAL limits");
+}
+
 } // namespace
 
 int main()
@@ -127,5 +149,6 @@ int main()
     const auto rows = execute_ok(session, "SELECT id FROM docs;");
     require(rows.rows.size() == 2, "checkpoint restart lost committed rows");
     test_automatic_checkpoint_by_wal_size();
+    test_database_recovery_uses_configured_wal_limits();
     return 0;
 }

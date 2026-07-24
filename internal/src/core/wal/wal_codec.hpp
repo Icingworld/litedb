@@ -64,7 +64,7 @@ public:
      */
     [[nodiscard]]
     static std::expected<WalRecord, WalError> decode_record(
-        std::span<const std::byte> bytes,
+        std::vector<std::byte> bytes,
         transaction::Lsn expected_lsn
     );
 
@@ -82,7 +82,7 @@ public:
      * @return 文件写入记录
      */
     [[nodiscard]]
-    static std::expected<FileWrite, WalError> decode_file_write(std::span<const std::byte> payload);
+    static std::expected<FileWrite, WalError> decode_file_write(std::vector<std::byte> payload);
 };
 
 } // namespace litedb::core::wal

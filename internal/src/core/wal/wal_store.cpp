@@ -20,9 +20,21 @@ namespace
  * @return WAL 错误
  */
 [[nodiscard]]
-WalError fs_error(error::Error value)
+WalError fs_error(
+    error::Error value,
+    WalOperation operation,
+    const std::filesystem::path & path,
+    transaction::TransactionId transaction_id = transaction::InvalidTransactionId,
+    std::optional<transaction::Lsn> lsn = {}
+)
 {
-    return make_error(WalErrorCode::FileSystemError, value.message());
+    return make_error(WalErrorCode::FileSystemError, value.message(), {
+        .operation = operation,
+        .path = path,
+        .transaction_id = transaction_id,
+        .lsn = lsn,
+        .source_code = value.encode_code(),
+    });
 }
 
 /**
@@ -62,7 +74,7 @@ std::expected<WalStore, WalError> WalStore::open(
 )
 {
     if (auto created = filesystem.create_dir_all(path.parent_path()); !created) {
-        return std::unexpected(fs_error(std::move(created.error())));
+        return std::unexpected(fs_error(std::move(created.error()), WalOperation::Open, path));
     }
 
     auto opened = filesystem.open(
@@ -75,12 +87,12 @@ std::expected<WalStore, WalError> WalStore::open(
         }
     );
     if (!opened) {
-        return std::unexpected(fs_error(std::move(opened.error())));
+        return std::unexpected(fs_error(std::move(opened.error()), WalOperation::Open, path));
     }
 
     auto size = opened->size();
     if (!size) {
-        return std::unexpected(fs_error(std::move(size.error())));
+        return std::unexpected(fs_error(std::move(size.error()), WalOperation::Open, path));
     }
 
     if (*size == 0) {
@@ -90,11 +102,11 @@ std::expected<WalStore, WalError> WalStore::open(
         const auto header = WalCodec::encode_file_header(*create_header);
         auto written = opened->write_at(0, header);
         if (!written) {
-            return std::unexpected(fs_error(std::move(written.error())));
+            return std::unexpected(fs_error(std::move(written.error()), WalOperation::Open, path));
         }
         auto synced = opened->sync_all();
         if (!synced) {
-            return std::unexpected(fs_error(std::move(synced.error())));
+            return std::unexpected(fs_error(std::move(synced.error()), WalOperation::Open, path));
         }
     } else if (*size < WalCodec::FileHeaderSize) {
         return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL file header is truncated"));
@@ -102,7 +114,7 @@ std::expected<WalStore, WalError> WalStore::open(
         WalCodec::FileHeader header {};
         auto read = opened->read_at(0, header);
         if (!read) {
-            return std::unexpected(fs_error(std::move(read.error())));
+            return std::unexpected(fs_error(std::move(read.error()), WalOperation::Open, path));
         }
         if (*read != header.size()) {
             return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL file header is truncated"));
@@ -116,7 +128,7 @@ std::expected<WalStore, WalError> WalStore::open(
 
     auto final_size = opened->size();
     if (!final_size) {
-        return std::unexpected(fs_error(std::move(final_size.error())));
+        return std::unexpected(fs_error(std::move(final_size.error()), WalOperation::Open, path));
     }
     return WalStore {std::move(path), std::move(*opened), *create_header, *final_size};
 }
@@ -129,7 +141,7 @@ std::expected<transaction::Lsn, WalError> WalStore::append(
 {
     auto size = file_.size();
     if (!size) {
-        return std::unexpected(fs_error(std::move(size.error())));
+        return std::unexpected(fs_error(std::move(size.error()), WalOperation::Append, path_, transaction_id));
     }
 
     auto encoded = WalCodec::encode_record(type, *size, transaction_id, payload);
@@ -139,7 +151,7 @@ std::expected<transaction::Lsn, WalError> WalStore::append(
 
     auto appended = file_.append(*encoded);
     if (!appended) {
-        return std::unexpected(fs_error(std::move(appended.error())));
+        return std::unexpected(fs_error(std::move(appended.error()), WalOperation::Append, path_, transaction_id, *size));
     }
     size_bytes_ = *size + encoded->size();
     return *size;
@@ -174,7 +186,7 @@ std::expected<void, WalError> WalStore::flush_through(transaction::Lsn lsn)
 {
     auto size = file_.size();
     if (!size) {
-        return std::unexpected(fs_error(std::move(size.error())));
+        return std::unexpected(fs_error(std::move(size.error()), WalOperation::Flush, path_, {}, lsn));
     }
     if (lsn < WalCodec::FileHeaderSize || lsn >= *size) {
         return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Cannot flush through an unknown LSN"));
@@ -182,20 +194,30 @@ std::expected<void, WalError> WalStore::flush_through(transaction::Lsn lsn)
 
     auto synced = file_.sync_data();
     if (!synced) {
-        return std::unexpected(fs_error(std::move(synced.error())));
+        return std::unexpected(fs_error(std::move(synced.error()), WalOperation::Flush, path_, {}, lsn));
     }
     flushed_lsn_ = lsn;
     return {};
 }
 
-std::expected<WalScanResult, WalError> WalStore::scan(bool truncate_incomplete_tail)
+std::expected<WalScanResult, WalError> WalStore::scan(
+    bool truncate_incomplete_tail,
+    const WalDecodeLimits & limits
+)
 {
     auto size = file_.size();
     if (!size) {
-        return std::unexpected(fs_error(std::move(size.error())));
+        return std::unexpected(fs_error(std::move(size.error()), WalOperation::Scan, path_));
     }
     if (*size < WalCodec::FileHeaderSize) {
         return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL file header is truncated"));
+    }
+    if (*size > limits.max_scan_size_bytes) {
+        return std::unexpected(make_error(
+            WalErrorCode::ResourceLimitExceeded,
+            "WAL scan size exceeds the configured resource limit",
+            {.operation = WalOperation::Scan, .path = path_}
+        ));
     }
 
     WalScanResult result {.valid_size = WalCodec::FileHeaderSize};
@@ -210,7 +232,7 @@ std::expected<WalScanResult, WalError> WalStore::scan(bool truncate_incomplete_t
         std::array<std::byte, WalCodec::RecordHeaderSize> header {};
         auto header_read = file_.read_at(offset, header);
         if (!header_read) {
-            return std::unexpected(fs_error(std::move(header_read.error())));
+            return std::unexpected(fs_error(std::move(header_read.error()), WalOperation::Scan, path_, {}, offset));
         }
         if (*header_read != header.size()) {
             result.truncated_tail = true;
@@ -228,18 +250,32 @@ std::expected<WalScanResult, WalError> WalStore::scan(bool truncate_incomplete_t
         if (record_size > std::numeric_limits<std::size_t>::max()) {
             return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record is too large"));
         }
+        if (record_size > limits.max_record_size_bytes) {
+            return std::unexpected(make_error(
+                WalErrorCode::ResourceLimitExceeded,
+                "WAL record size exceeds the configured resource limit",
+                {.operation = WalOperation::Scan, .path = path_, .lsn = offset}
+            ));
+        }
+        if (result.records.size() >= limits.max_record_count) {
+            return std::unexpected(make_error(
+                WalErrorCode::ResourceLimitExceeded,
+                "WAL record count exceeds the configured resource limit",
+                {.operation = WalOperation::Scan, .path = path_, .lsn = offset}
+            ));
+        }
 
         std::vector<std::byte> bytes(static_cast<std::size_t>(record_size));
         auto read = file_.read_at(offset, bytes);
         if (!read) {
-            return std::unexpected(fs_error(std::move(read.error())));
+            return std::unexpected(fs_error(std::move(read.error()), WalOperation::Scan, path_, {}, offset));
         }
         if (*read != bytes.size()) {
             result.truncated_tail = true;
             break;
         }
 
-        auto decoded = WalCodec::decode_record(bytes, offset);
+        auto decoded = WalCodec::decode_record(std::move(bytes), offset);
         if (!decoded) {
             return std::unexpected(std::move(decoded.error()));
         }
@@ -267,13 +303,13 @@ std::expected<void, WalError> WalStore::truncate_tail(std::uint64_t valid_size)
 
     auto truncated = file_.truncate(valid_size);
     if (!truncated) {
-        return std::unexpected(fs_error(std::move(truncated.error())));
+        return std::unexpected(fs_error(std::move(truncated.error()), WalOperation::Truncate, path_, {}, valid_size));
     }
     size_bytes_ = valid_size;
 
     auto synced = file_.sync_data();
     if (!synced) {
-        return std::unexpected(fs_error(std::move(synced.error())));
+        return std::unexpected(fs_error(std::move(synced.error()), WalOperation::Truncate, path_, {}, valid_size));
     }
     return {};
 }
@@ -292,7 +328,7 @@ std::expected<void, WalError> WalStore::flush_all()
 {
     auto synced = file_.sync_all();
     if (!synced) {
-        return std::unexpected(fs_error(std::move(synced.error())));
+        return std::unexpected(fs_error(std::move(synced.error()), WalOperation::Flush, path_));
     }
     return {};
 }

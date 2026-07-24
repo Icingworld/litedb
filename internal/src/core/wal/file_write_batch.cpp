@@ -19,9 +19,13 @@ namespace
  * @return WAL 错误
  */
 [[nodiscard]]
-WalError fs_error(error::Error value)
+WalError fs_error(error::Error value, const std::filesystem::path & path)
 {
-    return make_error(WalErrorCode::FileSystemError, value.message());
+    return make_error(WalErrorCode::FileSystemError, value.message(), {
+        .operation = WalOperation::Apply,
+        .path = path,
+        .source_code = value.encode_code(),
+    });
 }
 
 [[nodiscard]]
@@ -220,7 +224,12 @@ std::expected<void, WalError> FileWriteBatch::apply(
     auto sync_current = [&]() -> std::expected<void, WalError> {
         if (!sync || !current_file) return {};
         auto synced = current_file->sync_data();
-        if (!synced) return std::unexpected(fs_error(std::move(synced.error())));
+        if (!synced) {
+            return std::unexpected(fs_error(
+                std::move(synced.error()),
+                resolve_target(data_directory, *current_target)
+            ));
+        }
         return {};
     };
 
@@ -235,13 +244,13 @@ std::expected<void, WalError> FileWriteBatch::apply(
         current_target = write.target;
         auto exists = filesystem.exists(path);
         if (!exists) {
-            return std::unexpected(fs_error(std::move(exists.error())));
+            return std::unexpected(fs_error(std::move(exists.error()), path));
         }
         if (write.mode == FileWriteMode::Delete) {
             current_file.reset();
             if (*exists) {
                 auto removed = filesystem.remove(path);
-                if (!removed) return std::unexpected(fs_error(std::move(removed.error())));
+                if (!removed) return std::unexpected(fs_error(std::move(removed.error()), path));
             }
             ++applied_count;
             if (applied_hook && applied_hook(applied_count, write)) {
@@ -251,7 +260,7 @@ std::expected<void, WalError> FileWriteBatch::apply(
         }
 
         auto parent_created = filesystem.create_dir_all(path.parent_path());
-        if (!parent_created) return std::unexpected(fs_error(std::move(parent_created.error())));
+        if (!parent_created) return std::unexpected(fs_error(std::move(parent_created.error()), path.parent_path()));
 
         if (!current_file) {
             auto file = filesystem.open(
@@ -264,23 +273,23 @@ std::expected<void, WalError> FileWriteBatch::apply(
                 }
             );
             if (!file) {
-                return std::unexpected(fs_error(std::move(file.error())));
+                return std::unexpected(fs_error(std::move(file.error()), path));
             }
             current_file.emplace(std::move(*file));
         }
 
         if (write.mode == FileWriteMode::Truncate) {
             auto truncated = current_file->truncate(write.offset);
-            if (!truncated) return std::unexpected(fs_error(std::move(truncated.error())));
+            if (!truncated) return std::unexpected(fs_error(std::move(truncated.error()), path));
         } else {
             auto written = current_file->write_at(write.offset, write.after_image);
             if (!written) {
-                return std::unexpected(fs_error(std::move(written.error())));
+                return std::unexpected(fs_error(std::move(written.error()), path));
             }
         }
         if (write.mode == FileWriteMode::Replace) {
             auto truncated = current_file->truncate(write.after_image.size());
-            if (!truncated) return std::unexpected(fs_error(std::move(truncated.error())));
+            if (!truncated) return std::unexpected(fs_error(std::move(truncated.error()), path));
         }
         ++applied_count;
         if (applied_hook && applied_hook(applied_count, write)) {

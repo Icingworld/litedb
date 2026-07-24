@@ -278,7 +278,7 @@ std::expected<void, TransactionError> TransactionManager::checkpoint()
     if (!wal_flushed) {
         finish(false);
         return std::unexpected(error(TransactionErrorCode::WalError, checkpoint_transaction_id,
-                                     "Failed to flush WAL before checkpoint: " + wal_flushed.error().message));
+                                     "Failed to flush WAL before checkpoint: " + wal_flushed.error().message()));
     }
     if (options_.checkpoint_stage_hook) {
         options_.checkpoint_stage_hook(CheckpointStage::AfterWalFlush, checkpoint_transaction_id);
@@ -330,7 +330,7 @@ std::expected<void, TransactionError> TransactionManager::checkpoint()
         recovery_required_.store(true, std::memory_order_release);
         finish(false);
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, checkpoint_transaction_id,
-                                     "WAL rotation outcome is indeterminate: " + rotated.error().message));
+                                     "WAL rotation outcome is indeterminate: " + rotated.error().message()));
     }
 
     const auto after_bytes = wal_->metrics().size_bytes;
@@ -806,7 +806,7 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     if (!begin) {
         transaction.state_ = TransactionState::Aborting;
         (void) abort(transaction);
-        return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), std::move(begin.error().message)));
+        return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), begin.error().message()));
     }
     transaction.note_lsn(*begin);
     if (failpoint(CommitStage::AfterWalBegin, transaction, false)) {
@@ -817,7 +817,7 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         if (!appended) {
             transaction.state_ = TransactionState::Aborting;
             (void) abort(transaction);
-            return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), std::move(appended.error().message)));
+            return std::unexpected(error(TransactionErrorCode::WalError, transaction.id(), appended.error().message()));
         }
         transaction.note_lsn(*appended);
     }
@@ -829,7 +829,7 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(),
-                                     "WAL commit append outcome is indeterminate: " + committed.error().message));
+                                     "WAL commit append outcome is indeterminate: " + committed.error().message()));
     }
     transaction.note_commit_lsn(*committed);
     if (failpoint(CommitStage::AfterWalCommitAppend, transaction, true)) {
@@ -840,7 +840,7 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(),
-                                     "WAL commit durability is indeterminate: " + flushed.error().message));
+                                     "WAL commit durability is indeterminate: " + flushed.error().message()));
     }
     if (!transaction.transition_to(TransactionState::Committed)) {
         recovery_required_.store(true, std::memory_order_release);
@@ -864,7 +864,7 @@ std::expected<void, TransactionError> TransactionManager::commit(TransactionCont
     if (!applied) {
         recovery_required_.store(true, std::memory_order_release);
         transaction.release_writer_guard();
-        return std::unexpected(error(TransactionErrorCode::CommittedApplyFailed, transaction.id(), std::move(applied.error().message)));
+        return std::unexpected(error(TransactionErrorCode::CommittedApplyFailed, transaction.id(), applied.error().message()));
     }
     if (failpoint(CommitStage::AfterApply, transaction, true)) {
         return std::unexpected(error(TransactionErrorCode::RecoveryRequired, transaction.id(), "Injected failure after participant apply"));

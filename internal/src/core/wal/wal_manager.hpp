@@ -73,7 +73,10 @@ public:
     std::expected<void, WalError> flush_all();
 
     [[nodiscard]]
-    std::expected<WalScanResult, WalError> scan(bool truncate_incomplete_tail = true);
+    std::expected<WalScanResult, WalError> scan(
+        bool truncate_incomplete_tail = true,
+        const WalDecodeLimits & limits = {}
+    );
 
     /**
      * @brief 发布下一代空 WAL，并清理旧的正式段

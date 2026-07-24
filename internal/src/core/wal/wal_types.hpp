@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "core/transaction/transaction_id.hpp"
@@ -32,6 +33,18 @@ enum class FileWriteMode : std::uint8_t
     Replace = 1,            ///< 以 after-image 完整替换文件
     Delete = 2,             ///< 删除文件
     Truncate = 3,           ///< 将文件调整为 offset 指定的长度
+};
+
+/**
+ * @brief WAL 扫描与恢复资源预算
+ *
+ * 所有限制都可以由嵌入方显式放宽，但默认值会阻止损坏日志触发无界分配。
+ */
+struct WalDecodeLimits
+{
+    std::uint64_t max_record_size_bytes {512ULL * 1024ULL * 1024ULL};
+    std::uint64_t max_scan_size_bytes {4ULL * 1024ULL * 1024ULL * 1024ULL};
+    std::size_t max_record_count {2'000'000};
 };
 
 /**

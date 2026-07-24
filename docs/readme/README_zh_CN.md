@@ -25,7 +25,7 @@
   - `SHOW INDEXES FROM collection`
 - 通过 `IndexEngine` 在 `INSERT`、`UPDATE`、`DELETE` 时自动维护索引。
 - 对 `INSERT`、`UPDATE`、`DELETE` 与 DDL 提供隐式语句级事务，内核层单写者保护，以及多行语句的原子提交。
-- 带版本号、LSN 与 checksum 的 redo WAL；支持不完整尾部截断、已提交事务 redo，以及对 collection 存储、B+Tree 与 HNSW 文件的幂等启动恢复。
+- 带版本号、LSN 与 checksum 的 redo WAL；支持不完整尾部截断、可配置扫描/恢复资源预算、已提交事务 redo，以及对 collection 存储、B+Tree 与 HNSW 文件的幂等启动恢复。
 - 基础 `DatabaseEngine::observability()` 计数器：当前 WAL 大小、WAL generation、checkpoint 耗时/回收字节、事务计数与提交耗时，以及启动 redo 活动。
 - 同步手动 `DatabaseEngine::checkpoint()`，以及在成功 DDL/DML 后按可选 WAL 大小阈值触发的 checkpoint；包含参与者持久化刷盘、基于 generation 的 WAL 轮换、过期临时段清理，以及各发布边界上的崩溃恢复。
 - 事务性 DDL 发布：覆盖 database、collection、B+Tree 与 HNSW 生命周期变更，包括 Meta 快照 redo，以及幂等的文件替换与删除。
