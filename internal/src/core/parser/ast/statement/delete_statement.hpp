@@ -11,12 +11,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief DELETE 语句节点
- * @details 示例：DELETE FROM <collection> [WHERE <condition>]
  */
 class DeleteStatement final : public StatementNode
 {
 public:
-    DeleteStatement(std::string collection, std::unique_ptr<ExpressionNode> where, AstNodeLocation location) noexcept;
+    DeleteStatement(
+        std::string collection,
+        std::unique_ptr<ExpressionNode> where,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -25,12 +28,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取集合名称

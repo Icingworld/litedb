@@ -21,11 +21,6 @@ AstNodeKind DeleteStatement::kind() const noexcept
     return AstNodeKind::Delete;
 }
 
-void DeleteStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::string & DeleteStatement::collection() const noexcept
 {
     return collection_;

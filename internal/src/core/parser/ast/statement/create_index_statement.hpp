@@ -8,18 +8,7 @@ namespace litedb::core::parser::ast
 {
 
 /**
- * @brief 创建索引方法
- */
-enum class CreateIndexMethod
-{
-    Default,                ///< 默认
-    BTree,                  ///< B+ 树
-};
-
-/**
  * @brief CREATE INDEX 语句节点
- * @details 示例：CREATE INDEX [IF NOT EXISTS] <index_name> ON <collection_name> (<column_name>)
- * @note 暂时先实现单列索引，复合索引暂未实现
  */
 class CreateIndexStatement final : public StatementNode
 {
@@ -29,7 +18,6 @@ public:
         std::string collection_name,
         std::string column_name,
         bool if_not_exists,
-        CreateIndexMethod method,
         AstNodeLocation location
     ) noexcept;
 
@@ -40,12 +28,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取索引名称
@@ -75,19 +57,11 @@ public:
     [[nodiscard]]
     bool if_not_exists() const noexcept;
 
-    /**
-     * @brief 获取创建索引方法
-     * @return 创建索引方法
-     */
-    [[nodiscard]]
-    CreateIndexMethod method() const noexcept;
-
 private:
     std::string index_name_;        ///< 索引名称
     std::string collection_name_;   ///< 集合名称
     std::string column_name_;       ///< 列名称
     bool if_not_exists_;            ///< 是否不存在
-    CreateIndexMethod method_;      ///< 创建索引方法
 };
 
 } // namespace litedb::core::parser::ast

@@ -9,12 +9,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief CREATE DATABASE 语句节点
- * @details 示例：CREATE DATABASE [IF NOT EXISTS] <database_name>
  */
 class CreateDatabaseStatement final : public StatementNode
 {
 public:
-    CreateDatabaseStatement(std::string database, bool if_not_exists, AstNodeLocation location) noexcept;
+    CreateDatabaseStatement(
+        std::string database,
+        bool if_not_exists,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -23,12 +26,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取数据库名称

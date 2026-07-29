@@ -3,8 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "core/parser/ast/visitor.hpp"
-
 namespace litedb::core::parser::ast
 {
 
@@ -89,12 +87,6 @@ public:
      */
     [[nodiscard]]
     virtual AstNodeKind kind() const noexcept = 0;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    virtual void accept(AstNodeVisitor & visitor) const = 0;
 
 private:
     AstNodeLocation location_;  ///< 节点位置

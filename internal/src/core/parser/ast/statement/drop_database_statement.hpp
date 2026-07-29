@@ -9,12 +9,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief DROP DATABASE 语句节点
- * @details 示例：DROP DATABASE [IF EXISTS] <database_name>
  */
 class DropDatabaseStatement final : public StatementNode
 {
 public:
-    DropDatabaseStatement(std::string database_name, bool if_exists, AstNodeLocation location) noexcept;
+    DropDatabaseStatement(
+        std::string database_name,
+        bool if_exists,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -23,12 +26,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取数据库名称

@@ -19,11 +19,6 @@ AstNodeKind DescribeCollectionStatement::kind() const noexcept
     return AstNodeKind::DescribeCollection;
 }
 
-void DescribeCollectionStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::string & DescribeCollectionStatement::collection_name() const noexcept
 {
     return collection_name_;

@@ -11,7 +11,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief CREATE COLLECTION 语句节点
- * @details 示例：CREATE COLLECTION [IF NOT EXISTS] <collection_name> (<column_definition> [, <column_definition>])
  */
 class CreateCollectionStatement final : public StatementNode
 {
@@ -31,12 +30,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取集合名称
@@ -67,10 +60,10 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    std::string collection_;        ///< 集合名称
-    bool if_not_exists_;            ///< 是否不存在
+    std::string collection_;                    ///< 集合名称
+    bool if_not_exists_;                        ///< 是否不存在
     ColumnDefinitionSyntaxList columns_;        ///< 列定义列表
-    std::optional<std::string> comment_;         ///< 集合注释
+    std::optional<std::string> comment_;        ///< 集合注释
 };
 
 } // namespace litedb::core::parser::ast

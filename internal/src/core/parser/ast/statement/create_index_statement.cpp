@@ -10,7 +10,6 @@ CreateIndexStatement::CreateIndexStatement(
     std::string collection_name,
     std::string column_name,
     bool if_not_exists,
-    CreateIndexMethod method,
     AstNodeLocation location
 ) noexcept
     : StatementNode(location)
@@ -18,18 +17,12 @@ CreateIndexStatement::CreateIndexStatement(
     , collection_name_(std::move(collection_name))
     , column_name_(std::move(column_name))
     , if_not_exists_(if_not_exists)
-    , method_(method)
 {
 }
 
 AstNodeKind CreateIndexStatement::kind() const noexcept
 {
     return AstNodeKind::CreateIndex;
-}
-
-void CreateIndexStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const std::string & CreateIndexStatement::index_name() const noexcept
@@ -50,11 +43,6 @@ const std::string & CreateIndexStatement::column_name() const noexcept
 bool CreateIndexStatement::if_not_exists() const noexcept
 {
     return if_not_exists_;
-}
-
-CreateIndexMethod CreateIndexStatement::method() const noexcept
-{
-    return method_;
 }
 
 } // namespace litedb::core::parser::ast

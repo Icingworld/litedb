@@ -21,11 +21,6 @@ AstNodeKind CreateDatabaseStatement::kind() const noexcept
     return AstNodeKind::CreateDatabase;
 }
 
-void CreateDatabaseStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::string & CreateDatabaseStatement::database() const noexcept
 {
     return database_;
