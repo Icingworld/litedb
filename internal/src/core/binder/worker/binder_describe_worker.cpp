@@ -4,7 +4,7 @@
 #include "core/binder/binder_context.hpp"
 #include "core/binder/bound/statement/bound_describe_collection_statement.hpp"
 #include "core/meta/meta.hpp"
-#include "core/parser/ast/statement/describe_statement.hpp"
+#include "core/parser/ast/statement/describe_collection_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
 
 namespace litedb::core::binder
@@ -20,31 +20,23 @@ BinderDescribeWorker::BinderDescribeWorker(const BinderContext & context) noexce
 {
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDescribeWorker::bind_describe(
-    const DescribeStatement & statement
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDescribeWorker::bind_describe_collection(
+    const DescribeCollectionStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
-
-    if (statement.object_type() != SchemaObjectType::Collection) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::UnsupportedStatement,
-            statement.location(),
-            "Only DESCRIBE COLLECTION is supported"
-        ));
-    }
 
     auto database_id = helper.require_database(statement.location());
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.meta().find_collection(*database_id, statement.name());
+    const auto * collection = context_.meta().find_collection(*database_id, statement.collection_name());
     if (collection == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
             statement.location(),
-            "Collection not found: " + statement.name()
+            "Collection not found: " + statement.collection_name()
         ));
     }
 

@@ -26,7 +26,7 @@ public:
 
 public:
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_describe_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_describe_collection_statement();
 
 private:
     ParserContext & context_;   ///< 解析上下文

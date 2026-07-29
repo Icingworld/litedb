@@ -48,7 +48,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
         return std::unexpected(std::move(database_id.error()));
     }
 
-    auto columns = helper.bind_column_definitions(statement.columns(), statement.location());
+    auto columns = helper.bind_column_definitions(statement.columns());
     if (!columns.has_value()) [[unlikely]] {
         return std::unexpected(std::move(columns.error()));
     }

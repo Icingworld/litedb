@@ -34,13 +34,12 @@ public:
     void print(const AstNode & node);
 
 public:
-    void visit(const AlterStatement & node) override;
     void visit(const CreateCollectionStatement & node) override;
     void visit(const CreateDatabaseStatement & node) override;
     void visit(const CreateIndexStatement & node) override;
     void visit(const CreateVectorIndexStatement & node) override;
     void visit(const DeleteStatement & node) override;
-    void visit(const DescribeStatement & node) override;
+    void visit(const DescribeCollectionStatement & node) override;
     void visit(const DropCollectionStatement & node) override;
     void visit(const DropDatabaseStatement & node) override;
     void visit(const DropIndexStatement & node) override;

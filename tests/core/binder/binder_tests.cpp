@@ -312,6 +312,8 @@ void test_ddl_and_metadata_binding()
     require(create_collection->columns()[1].nullable, "CREATE COLLECTION NULL mismatch");
 
     require(bind_error(fixture, "CREATE COLLECTION bad_default (age INTEGER DEFAULT 'old');").is(BinderErrorCode::InvalidType), "default type error mismatch");
+    require(bind_error(fixture, "CREATE COLLECTION bad_varchar (name VARCHAR(0));").is(BinderErrorCode::InvalidType), "VARCHAR length error mismatch");
+    require(bind_error(fixture, "CREATE COLLECTION bad_vector (embedding VECTOR(0));").is(BinderErrorCode::InvalidType), "VECTOR dimension error mismatch");
 }
 
 void test_index_binding()

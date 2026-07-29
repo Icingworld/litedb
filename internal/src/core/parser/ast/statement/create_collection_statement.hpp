@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-#include "core/parser/ast/schema.hpp"
+#include "core/parser/ast/column_definition.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 
 namespace litedb::core::parser::ast
@@ -19,7 +19,7 @@ public:
     CreateCollectionStatement(
         std::string collection,
         bool if_not_exists,
-        ColumnDefinitionList columns,
+        ColumnDefinitionSyntaxList columns,
         std::optional<std::string> comment,
         AstNodeLocation location
     ) noexcept;
@@ -57,7 +57,7 @@ public:
      * @return 列定义列表
      */
     [[nodiscard]]
-    const ColumnDefinitionList & columns() const noexcept;
+    const ColumnDefinitionSyntaxList & columns() const noexcept;
 
     /**
      * @brief 获取集合注释
@@ -69,7 +69,7 @@ public:
 private:
     std::string collection_;        ///< 集合名称
     bool if_not_exists_;            ///< 是否不存在
-    ColumnDefinitionList columns_;              ///< 列定义列表
+    ColumnDefinitionSyntaxList columns_;        ///< 列定义列表
     std::optional<std::string> comment_;         ///< 集合注释
 };
 

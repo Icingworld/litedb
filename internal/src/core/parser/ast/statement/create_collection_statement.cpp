@@ -8,7 +8,7 @@ namespace litedb::core::parser::ast
 CreateCollectionStatement::CreateCollectionStatement(
     std::string collection,
     bool if_not_exists,
-    ColumnDefinitionList columns,
+    ColumnDefinitionSyntaxList columns,
     std::optional<std::string> comment,
     AstNodeLocation location
 ) noexcept
@@ -40,7 +40,7 @@ bool CreateCollectionStatement::if_not_exists() const noexcept
     return if_not_exists_;
 }
 
-const ColumnDefinitionList & CreateCollectionStatement::columns() const noexcept
+const ColumnDefinitionSyntaxList & CreateCollectionStatement::columns() const noexcept
 {
     return columns_;
 }

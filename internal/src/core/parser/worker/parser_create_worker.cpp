@@ -87,7 +87,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserCreateWork
         return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one column definition"));
     }
 
-    ast::ColumnDefinitionList columns;
+    ast::ColumnDefinitionSyntaxList columns;
     while (true) {
         auto column = schema_helper_.parse_column_definition();
         if (!column.has_value()) [[unlikely]] {

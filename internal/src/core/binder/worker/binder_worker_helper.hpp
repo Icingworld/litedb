@@ -12,7 +12,7 @@
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/ast_node.hpp"
-#include "core/parser/ast/schema.hpp"
+#include "core/parser/ast/column_definition.hpp"
 
 namespace litedb::core::parser::ast
 {
@@ -118,24 +118,22 @@ public:
     /**
      * @brief 绑定列定义
      * @param columns 列定义列表
-     * @param location 位置
      * @return 绑定后的列定义列表
      */
     [[nodiscard]]
     std::expected<std::vector<meta::ColumnDefinition>, BinderError> bind_column_definitions(
-        const parser::ast::ColumnDefinitionList & columns,
-        parser::ast::AstNodeLocation location
+        const parser::ast::ColumnDefinitionSyntaxList & columns
     ) const;
 
     /**
-     * @brief 绑定数据类型
+     * @brief 验证声明的数据类型
      * @param data_type 数据类型
      * @param location 位置
-     * @return 绑定后的数据类型
+     * @return 验证后的数据类型
      */
     [[nodiscard]]
-    std::expected<common::LogicalType, BinderError> bind_data_type(
-        const parser::ast::DataType & data_type,
+    std::expected<common::LogicalType, BinderError> validate_data_type(
+        const common::LogicalType & data_type,
         parser::ast::AstNodeLocation location
     ) const;
 

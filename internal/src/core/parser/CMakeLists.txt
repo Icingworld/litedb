@@ -49,10 +49,11 @@ set(PARSER_SOURCES
     ast/statement/show_collections_statement.cpp
     ast/statement/show_indexes_statement.cpp
     ast/statement/show_vector_indexes_statement.cpp
-    ast/statement/describe_statement.cpp
-    ast/statement/alter_statement.cpp
+    ast/statement/describe_collection_statement.cpp
 )
 
 add_library(litedb_parser ${PARSER_SOURCES})
 
 target_include_directories(litedb_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+
+target_link_libraries(litedb_parser PUBLIC litedb_common)

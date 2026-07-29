@@ -74,7 +74,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     case TokenType::Describe:
         [[fallthrough]];
     case TokenType::Desc: {
-        return ParserDescribeWorker(context_).parse_describe_statement();
+        return ParserDescribeWorker(context_).parse_describe_collection_statement();
     }
     case TokenType::Insert: {
         return ParserInsertWorker(context_).parse_insert_statement();

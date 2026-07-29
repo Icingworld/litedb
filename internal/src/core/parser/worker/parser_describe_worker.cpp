@@ -4,7 +4,7 @@
 #include <memory>
 #include <utility>
 
-#include "core/parser/ast/statement/describe_statement.hpp"
+#include "core/parser/ast/statement/describe_collection_statement.hpp"
 #include "core/parser/worker/parser_schema_helper.hpp"
 
 namespace litedb::core::parser
@@ -15,7 +15,7 @@ ParserDescribeWorker::ParserDescribeWorker(ParserContext & context)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDescribeWorker::parse_describe_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDescribeWorker::parse_describe_collection_statement()
 {
     const TokenLocation location = context_.current().location();
     context_.advance();
@@ -31,8 +31,7 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDescribeWo
         return std::unexpected(std::move(collection.error()));
     }
 
-    return std::make_unique<ast::DescribeStatement>(
-        ast::SchemaObjectType::Collection,
+    return std::make_unique<ast::DescribeCollectionStatement>(
         std::move(*collection),
         context_.ast_location(location)
     );

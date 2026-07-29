@@ -2,20 +2,19 @@
 
 #include <string>
 
-#include "core/parser/ast/schema.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 
 namespace litedb::core::parser::ast
 {
 
 /**
- * @brief DESCRIBE 语句节点
+ * @brief DESCRIBE COLLECTION 语句节点
  * @details 示例：DESCRIBE [COLLECTION] <collection_name>
  */
-class DescribeStatement final : public StatementNode
+class DescribeCollectionStatement final : public StatementNode
 {
 public:
-    DescribeStatement(SchemaObjectType object_type, std::string name, AstNodeLocation location) noexcept;
+    DescribeCollectionStatement(std::string collection_name, AstNodeLocation location) noexcept;
 
 public:
     /**
@@ -32,22 +31,14 @@ public:
     void accept(AstNodeVisitor & visitor) const override;
 
     /**
-     * @brief 获取对象类型
-     * @return 对象类型
+     * @brief 获取集合名称
+     * @return 集合名称
      */
     [[nodiscard]]
-    SchemaObjectType object_type() const noexcept;
-
-    /**
-     * @brief 获取名称
-     * @return 名称
-     */
-    [[nodiscard]]
-    const std::string & name() const noexcept;
+    const std::string & collection_name() const noexcept;
 
 private:
-    SchemaObjectType object_type_;      ///< 对象类型
-    std::string name_;                  ///< 名称
+    std::string collection_name_;       ///< 集合名称
 };
 
 } // namespace litedb::core::parser::ast

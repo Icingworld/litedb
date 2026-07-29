@@ -1,3 +1,4 @@
+#include "core/common/logical_type.hpp"
 #include "core/parser/parser.hpp"
 #include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
@@ -15,7 +16,7 @@
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
-#include "core/parser/ast/statement/describe_statement.hpp"
+#include "core/parser/ast/statement/describe_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
@@ -39,6 +40,7 @@ namespace
 
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
+using namespace litedb::core::common;
 
 void require(bool condition, const char * message)
 {
@@ -117,11 +119,13 @@ void test_parse_create_collection_statement()
     require(!create->columns()[0].nullable, "NOT NULL constraint mismatch");
     require(create->columns()[1].unique, "UNIQUE constraint mismatch");
     require(create->columns()[1].comment.has_value(), "COMMENT constraint mismatch");
-    require(create->columns()[1].type.kind == DataTypeKind::Varchar, "VARCHAR type mismatch");
+    require(create->columns()[1].type.id == LogicalTypeId::Varchar, "VARCHAR type mismatch");
     require(create->columns()[1].type.parameter.value() == 64, "VARCHAR length mismatch");
+    require(create->columns()[1].location.line == 1, "column definition line mismatch");
+    require(create->columns()[1].location.column > create->columns()[0].location.column, "column definition column mismatch");
     require(create->columns()[2].nullable, "NULL constraint mismatch");
     require(create->columns()[2].default_value != nullptr, "DEFAULT literal missing");
-    require(create->columns()[4].type.kind == DataTypeKind::Vector, "VECTOR type mismatch");
+    require(create->columns()[4].type.id == LogicalTypeId::Vector, "VECTOR type mismatch");
     require(create->columns()[4].type.parameter.value() == 128, "VECTOR dimension mismatch");
     require(create->columns()[4].default_value->kind() == AstNodeKind::Vector, "VECTOR default mismatch");
 }
@@ -243,15 +247,20 @@ void test_parse_drop_show_describe_statements()
     require(show_vidx->collection_name() == "docs", "SHOW VINDEXES collection name mismatch");
 
     auto describe = parse_ok("DESCRIBE users;");
-    const auto * describe_statement = static_cast<const DescribeStatement *>(describe.get());
-    require(describe_statement->object_type() == SchemaObjectType::Collection, "DESCRIBE object type mismatch");
-    require(describe_statement->name() == "users", "DESCRIBE name mismatch");
+    const auto * describe_statement = static_cast<const DescribeCollectionStatement *>(describe.get());
+    require(describe_statement->collection_name() == "users", "DESCRIBE collection name mismatch");
 
     auto desc = parse_ok("DESC users;");
-    require(desc->kind() == AstNodeKind::Describe, "DESC statement kind mismatch");
+    require(desc->kind() == AstNodeKind::DescribeCollection, "DESC statement kind mismatch");
 
     auto describe_collection = parse_ok("DESCRIBE COLLECTION users;");
-    require(describe_collection->kind() == AstNodeKind::Describe, "DESCRIBE COLLECTION kind mismatch");
+    require(
+        describe_collection->kind() == AstNodeKind::DescribeCollection,
+        "DESCRIBE COLLECTION kind mismatch"
+    );
+    const auto * explicit_collection =
+        static_cast<const DescribeCollectionStatement *>(describe_collection.get());
+    require(explicit_collection->collection_name() == "users", "DESCRIBE COLLECTION name mismatch");
 }
 
 void test_parse_insert_statement()

@@ -15,7 +15,7 @@
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
-#include "core/parser/ast/statement/describe_statement.hpp"
+#include "core/parser/ast/statement/describe_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
@@ -70,8 +70,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_s
         return BinderShowWorker(context_).bind_show_indexes(static_cast<const ShowIndexesStatement &>(statement));
     case AstNodeKind::ShowVectorIndexes:
         return BinderShowWorker(context_).bind_show_vector_indexes(static_cast<const ShowVectorIndexesStatement &>(statement));
-    case AstNodeKind::Describe:
-        return BinderDescribeWorker(context_).bind_describe(static_cast<const DescribeStatement &>(statement));
+    case AstNodeKind::DescribeCollection:
+        return BinderDescribeWorker(context_).bind_describe_collection(
+            static_cast<const DescribeCollectionStatement &>(statement)
+        );
     case AstNodeKind::Insert:
         return BinderInsertWorker(context_).bind_insert(static_cast<const InsertStatement &>(statement));
     case AstNodeKind::Select:

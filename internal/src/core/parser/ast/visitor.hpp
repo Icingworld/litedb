@@ -3,13 +3,12 @@
 namespace litedb::core::parser::ast
 {
 
-class AlterStatement;
 class CreateCollectionStatement;
 class CreateDatabaseStatement;
 class CreateIndexStatement;
 class CreateVectorIndexStatement;
 class DeleteStatement;
-class DescribeStatement;
+class DescribeCollectionStatement;
 class DropCollectionStatement;
 class DropDatabaseStatement;
 class DropIndexStatement;
@@ -44,13 +43,12 @@ public:
     virtual ~AstNodeVisitor() noexcept = default;
 
 public:
-    virtual void visit(const AlterStatement & node) = 0;
     virtual void visit(const CreateCollectionStatement & node) = 0;
     virtual void visit(const CreateDatabaseStatement & node) = 0;
     virtual void visit(const CreateIndexStatement & node) = 0;
     virtual void visit(const CreateVectorIndexStatement & node) = 0;
     virtual void visit(const DeleteStatement & node) = 0;
-    virtual void visit(const DescribeStatement & node) = 0;
+    virtual void visit(const DescribeCollectionStatement & node) = 0;
     virtual void visit(const DropCollectionStatement & node) = 0;
     virtual void visit(const DropDatabaseStatement & node) = 0;
     virtual void visit(const DropIndexStatement & node) = 0;

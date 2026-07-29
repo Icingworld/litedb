@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "core/parser/ast/schema.hpp"
+#include "core/parser/ast/column_definition.hpp"
 #include "core/parser/parser_context.hpp"
 #include "core/parser/parser_error.hpp"
 #include "core/parser/worker/parser_expression_worker.hpp"
@@ -30,10 +30,10 @@ public:
     std::expected<std::size_t, ParserError> parse_integer_value(std::string_view message);
 
     [[nodiscard]]
-    std::expected<ast::DataType, ParserError> parse_data_type();
+    std::expected<common::LogicalType, ParserError> parse_data_type();
 
     [[nodiscard]]
-    std::expected<ast::ColumnDefinition, ParserError> parse_column_definition();
+    std::expected<ast::ColumnDefinitionSyntax, ParserError> parse_column_definition();
 
     [[nodiscard]]
     std::expected<bool, ParserError> parse_if_not_exists();

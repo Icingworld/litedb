@@ -578,7 +578,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelper::bind_column_definitions(
-    const ColumnDefinitionList & columns, AstNodeLocation location
+    const ColumnDefinitionSyntaxList & columns
 ) const
 {
     std::unordered_set<std::string> seen_columns;
@@ -589,11 +589,11 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
         if (!seen_columns.emplace(common::normalize_identifier(column.name)).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,
-                location,
+                column.location,
                 "Duplicate column: " + column.name
             ));
         }
-        auto logical_type = bind_data_type(column.type, location);
+        auto logical_type = validate_data_type(column.type, column.location);
         if (!logical_type.has_value()) [[unlikely]] {
             return std::unexpected(std::move(logical_type.error()));
         }
@@ -634,31 +634,32 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
     return result;
 }
 
-std::expected<LogicalType, BinderError> BinderWorkerHelper::bind_data_type(
-    const DataType & data_type, AstNodeLocation location
+std::expected<LogicalType, BinderError> BinderWorkerHelper::validate_data_type(
+    const LogicalType & data_type, AstNodeLocation location
 ) const
 {
-    switch (data_type.kind) {
-    case DataTypeKind::Integer:
-        return type(LogicalTypeId::Integer);
-    case DataTypeKind::BigInt:
-        return type(LogicalTypeId::BigInt);
-    case DataTypeKind::Float:
-        return type(LogicalTypeId::Float);
-    case DataTypeKind::Double:
-        return type(LogicalTypeId::Double);
-    case DataTypeKind::Boolean:
-        return type(LogicalTypeId::Boolean);
-    case DataTypeKind::Varchar:
+    switch (data_type.id) {
+    case LogicalTypeId::Null:
+        return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "NULL is not a valid column type"));
+    case LogicalTypeId::Integer:
+    case LogicalTypeId::BigInt:
+    case LogicalTypeId::Float:
+    case LogicalTypeId::Double:
+    case LogicalTypeId::Boolean:
+        if (data_type.parameter.has_value()) [[unlikely]] {
+            return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Scalar type cannot have a parameter"));
+        }
+        return data_type;
+    case LogicalTypeId::Varchar:
         if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) [[unlikely]] {
             return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "VARCHAR length must be positive"));
         }
-        return type(LogicalTypeId::Varchar, data_type.parameter);
-    case DataTypeKind::Vector:
+        return data_type;
+    case LogicalTypeId::Vector:
         if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) [[unlikely]] {
             return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "VECTOR dimension must be positive"));
         }
-        return type(LogicalTypeId::Vector, data_type.parameter);
+        return data_type;
     }
     [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, location, "Unsupported data type"));
 }

@@ -110,10 +110,10 @@ void test_create_collection_debug_print()
     require_contains(output, "  collection: users\n");
     require_contains(output, "  comment: user collection\n");
     require_contains(output, "  columns:\n");
-    require_contains(output, "    [0] ColumnDefinition\n");
+    require_contains(output, "    [0] ColumnDefinitionSyntax\n");
     require_contains(output, "      name: id\n");
     require_contains(output, "      nullable: false\n");
-    require_contains(output, "    [1] ColumnDefinition\n");
+    require_contains(output, "    [1] ColumnDefinitionSyntax\n");
     require_contains(output, "      kind: Varchar\n");
     require_contains(output, "      parameter: 64\n");
     require_contains(output, "      unique: true\n");
@@ -145,6 +145,15 @@ void test_insert_update_delete_debug_print()
     require_contains(delete_output, "  where: <none>\n");
 }
 
+void test_describe_collection_debug_print()
+{
+    auto statement = parse_ok("DESC users;");
+    const auto output = print_without_location(*statement);
+
+    require_contains(output, "DescribeCollectionStatement\n");
+    require_contains(output, "  collection_name: users\n");
+}
+
 void test_vector_index_debug_print()
 {
     auto statement = parse_ok(
@@ -174,6 +183,7 @@ int main()
         test_expression_debug_print();
         test_create_collection_debug_print();
         test_insert_update_delete_debug_print();
+        test_describe_collection_debug_print();
         test_vector_index_debug_print();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

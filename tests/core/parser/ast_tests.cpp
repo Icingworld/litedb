@@ -1,3 +1,4 @@
+#include "core/common/logical_type.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/identifier_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
@@ -18,6 +19,7 @@ namespace
 
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
+using namespace litedb::core::common;
 
 void require(bool condition, const char * message)
 {
@@ -73,28 +75,28 @@ void test_create_database_statement()
 
 void test_create_collection_statement()
 {
-    ColumnDefinition id;
+    ColumnDefinitionSyntax id;
     id.name = "id";
-    id.type = DataType {DataTypeKind::BigInt, std::nullopt};
+    id.type = LogicalType {LogicalTypeId::BigInt, std::nullopt};
 
-    ColumnDefinition name;
+    ColumnDefinitionSyntax name;
     name.name = "name";
-    name.type = DataType {DataTypeKind::Varchar, 64};
+    name.type = LogicalType {LogicalTypeId::Varchar, 64};
 
-    ColumnDefinition age;
+    ColumnDefinitionSyntax age;
     age.name = "age";
-    age.type = DataType {DataTypeKind::Integer, std::nullopt};
+    age.type = LogicalType {LogicalTypeId::Integer, std::nullopt};
     age.default_value = std::make_unique<LiteralExpression>(
         TokenType::IntegerLiteral,
         "0",
         AstNodeLocation {4, 25}
     );
 
-    ColumnDefinition embedding;
+    ColumnDefinitionSyntax embedding;
     embedding.name = "embedding";
-    embedding.type = DataType {DataTypeKind::Vector, 128};
+    embedding.type = LogicalType {LogicalTypeId::Vector, 128};
 
-    ColumnDefinitionList columns;
+    ColumnDefinitionSyntaxList columns;
     columns.push_back(std::move(id));
     columns.push_back(std::move(name));
     columns.push_back(std::move(age));
@@ -111,7 +113,7 @@ void test_create_collection_statement()
     require(statement.columns()[1].type.parameter.has_value(), "varchar parameter should exist");
     require(statement.columns()[1].type.parameter.value() == 64, "varchar parameter mismatch");
     require(statement.columns()[2].default_value != nullptr, "default value should exist");
-    require(statement.columns()[3].type.kind == DataTypeKind::Vector, "vector column type mismatch");
+    require(statement.columns()[3].type.id == LogicalTypeId::Vector, "vector column type mismatch");
     require(statement.columns()[3].type.parameter.value() == 128, "vector dimension mismatch");
 }
 

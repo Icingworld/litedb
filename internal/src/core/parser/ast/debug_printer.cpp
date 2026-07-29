@@ -1,5 +1,6 @@
 #include "core/parser/ast/debug_printer.hpp"
 
+#include "core/common/logical_type.hpp"
 #include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
@@ -12,13 +13,12 @@
 #include "core/parser/ast/expression/unary_expression.hpp"
 #include "core/parser/ast/expression/vector_expression.hpp"
 #include "core/parser/ast/expression/wildcard_expression.hpp"
-#include "core/parser/ast/statement/alter_statement.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/create_vector_index_statement.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
-#include "core/parser/ast/statement/describe_statement.hpp"
+#include "core/parser/ast/statement/describe_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
@@ -145,35 +145,21 @@ const char * token_type_name(TokenType type) noexcept
 }
 
 /**
- * @brief 获取 Schema 对象类型名称
- * @param type Schema 对象类型
- * @return Schema 对象类型名称
+ * @brief 获取逻辑类型名称
+ * @param id 逻辑类型 ID
+ * @return 逻辑类型名称
  */
-const char * schema_object_type_name(SchemaObjectType type) noexcept
+const char * logical_type_name(common::LogicalTypeId id) noexcept
 {
-    switch (type) {
-        case SchemaObjectType::Database: return "Database";
-        case SchemaObjectType::Collection: return "Collection";
-    }
-
-    return "Unknown";
-}
-
-/**
- * @brief 获取数据类型类型名称
- * @param kind 数据类型类型
- * @return 数据类型类型名称
- */
-const char * data_type_kind_name(DataTypeKind kind) noexcept
-{
-    switch (kind) {
-        case DataTypeKind::Integer: return "Integer";
-        case DataTypeKind::BigInt: return "BigInt";
-        case DataTypeKind::Float: return "Float";
-        case DataTypeKind::Double: return "Double";
-        case DataTypeKind::Varchar: return "Varchar";
-        case DataTypeKind::Boolean: return "Boolean";
-        case DataTypeKind::Vector: return "Vector";
+    switch (id) {
+        case common::LogicalTypeId::Null: return "Null";
+        case common::LogicalTypeId::Boolean: return "Boolean";
+        case common::LogicalTypeId::Integer: return "Integer";
+        case common::LogicalTypeId::BigInt: return "BigInt";
+        case common::LogicalTypeId::Float: return "Float";
+        case common::LogicalTypeId::Double: return "Double";
+        case common::LogicalTypeId::Varchar: return "Varchar";
+        case common::LogicalTypeId::Vector: return "Vector";
     }
 
     return "Unknown";
@@ -331,14 +317,6 @@ void AstDebugPrinter::write_child_field(const char * name, const AstNode * node)
     node->accept(*this);
 }
 
-void AstDebugPrinter::visit(const AlterStatement & node)
-{
-    write_node_header("AlterStatement", node.location());
-    IndentScope scope(*this);
-    write_field("object_type", schema_object_type_name(node.object_type()));
-    write_field("name", node.name());
-}
-
 void AstDebugPrinter::visit(const CreateCollectionStatement & node)
 {
     write_node_header("CreateCollectionStatement", node.location());
@@ -362,14 +340,14 @@ void AstDebugPrinter::visit(const CreateCollectionStatement & node)
     for (std::size_t index = 0; index < node.columns().size(); ++index) {
         const auto & column = node.columns()[index];
         write_indent();
-        out_ << '[' << index << "] ColumnDefinition\n";
+        out_ << '[' << index << "] ColumnDefinitionSyntax\n";
         IndentScope column_scope(*this);
         write_field("name", column.name);
         write_indent();
         out_ << "type:\n";
         {
             IndentScope type_scope(*this);
-            write_field("kind", data_type_kind_name(column.type.kind));
+            write_field("kind", logical_type_name(column.type.id));
             write_optional_field("parameter", column.type.parameter);
         }
         write_field("unique", column.unique);
@@ -431,12 +409,11 @@ void AstDebugPrinter::visit(const DeleteStatement & node)
     write_child_field("where", node.where());
 }
 
-void AstDebugPrinter::visit(const DescribeStatement & node)
+void AstDebugPrinter::visit(const DescribeCollectionStatement & node)
 {
-    write_node_header("DescribeStatement", node.location());
+    write_node_header("DescribeCollectionStatement", node.location());
     IndentScope scope(*this);
-    write_field("object_type", schema_object_type_name(node.object_type()));
-    write_field("name", node.name());
+    write_field("collection_name", node.collection_name());
 }
 
 void AstDebugPrinter::visit(const DropCollectionStatement & node)
