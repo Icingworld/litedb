@@ -5,7 +5,10 @@
 namespace litedb::core::parser::ast
 {
 
-VectorExpression::VectorExpression(ElementList elements, AstNodeLocation location) noexcept
+VectorExpression::VectorExpression(
+    ElementList elements,
+    AstNodeLocation location
+) noexcept
     : ExpressionNode(location)
     , elements_(std::move(elements))
 {
@@ -14,11 +17,6 @@ VectorExpression::VectorExpression(ElementList elements, AstNodeLocation locatio
 AstNodeKind VectorExpression::kind() const noexcept
 {
     return AstNodeKind::Vector;
-}
-
-void VectorExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const VectorExpression::ElementList & VectorExpression::elements() const noexcept

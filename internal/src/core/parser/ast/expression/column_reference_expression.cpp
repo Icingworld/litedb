@@ -7,12 +7,12 @@ namespace litedb::core::parser::ast
 
 ColumnReferenceExpression::ColumnReferenceExpression(
     std::optional<std::string> qualifier,
-    std::string column,
+    std::string column_name,
     AstNodeLocation location
 ) noexcept
     : ExpressionNode(location)
     , qualifier_(std::move(qualifier))
-    , column_(std::move(column))
+    , column_name_(std::move(column_name))
 {
 }
 
@@ -21,19 +21,14 @@ AstNodeKind ColumnReferenceExpression::kind() const noexcept
     return AstNodeKind::ColumnReference;
 }
 
-void ColumnReferenceExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::optional<std::string> & ColumnReferenceExpression::qualifier() const noexcept
 {
     return qualifier_;
 }
 
-const std::string & ColumnReferenceExpression::column() const noexcept
+const std::string & ColumnReferenceExpression::column_name() const noexcept
 {
-    return column_;
+    return column_name_;
 }
 
 } // namespace litedb::core::parser::ast

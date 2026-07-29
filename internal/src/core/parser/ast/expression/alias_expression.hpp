@@ -10,12 +10,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief AS 表达式节点
- * @details 示例：<expression> AS <alias>
  */
 class AliasExpression final : public ExpressionNode
 {
 public:
-    AliasExpression(std::unique_ptr<ExpressionNode> expression, std::string alias, AstNodeLocation location) noexcept;
+    AliasExpression(
+        std::unique_ptr<ExpressionNode> expression,
+        std::string alias,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -24,12 +27,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取表达式

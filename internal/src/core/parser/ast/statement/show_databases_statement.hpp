@@ -7,7 +7,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief SHOW DATABASES 语句节点
- * @details 示例：SHOW DATABASES
  */
 class ShowDatabasesStatement final : public StatementNode
 {
@@ -21,12 +20,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 };
 
 } // namespace litedb::core::parser::ast

@@ -10,7 +10,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 向量表达式节点
- * @details 示例：[value1, value2, ...]
  */
 class VectorExpression final : public ExpressionNode
 {
@@ -30,12 +29,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取元素列表

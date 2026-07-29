@@ -13,17 +13,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 排序项
- * @note 示例：expression [ASC | DESC]
  */
 struct OrderByItem
 {
-    std::unique_ptr<ExpressionNode> expression;
-    bool ascending {true};
+    std::unique_ptr<ExpressionNode> expression;     ///< 表达式
+    bool ascending {true};                          ///< 是否升序
 };
 
 /**
  * @brief SELECT 语句节点
- * @details 示例：SELECT <select_item> [, <select_item>] FROM <collection_name> [WHERE <expression>] [ORDER BY <expression> [ASC | DESC]] [LIMIT <integer_literal>] [OFFSET <integer_literal>]
  */
 class SelectStatement final : public StatementNode
 {
@@ -34,7 +32,7 @@ public:
 public:
     SelectStatement(
         SelectList select_list,
-        std::string collection,
+        std::string collection_name,
         std::unique_ptr<ExpressionNode> where,
         OrderByList order_by,
         std::optional<std::size_t> limit,
@@ -51,12 +49,6 @@ public:
     AstNodeKind kind() const noexcept override;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
-
-    /**
      * @brief 获取选择列表
      * @return 选择列表
      */
@@ -68,7 +60,7 @@ public:
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection() const noexcept;
+    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 获取条件表达式
@@ -100,7 +92,7 @@ public:
 
 private:
     SelectList select_list_;                    ///< 选择列表
-    std::string collection_;                    ///< 集合名称
+    std::string collection_name_;               ///< 集合名称
     std::unique_ptr<ExpressionNode> where_;     ///< 条件表达式
     OrderByList order_by_;                      ///< 排序列表
     std::optional<std::size_t> limit_;          ///< 限制

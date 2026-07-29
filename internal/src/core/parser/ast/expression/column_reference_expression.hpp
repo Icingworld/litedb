@@ -15,7 +15,11 @@ namespace litedb::core::parser::ast
 class ColumnReferenceExpression final : public ExpressionNode
 {
 public:
-    ColumnReferenceExpression(std::optional<std::string> qualifier, std::string column, AstNodeLocation location) noexcept;
+    ColumnReferenceExpression(
+        std::optional<std::string> qualifier,
+        std::string column_name,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -24,12 +28,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取限定符
@@ -43,11 +41,11 @@ public:
      * @return 列名
      */
     [[nodiscard]]
-    const std::string & column() const noexcept;
+    const std::string & column_name() const noexcept;
 
 private:
     std::optional<std::string> qualifier_;    ///< 限定符
-    std::string column_;                      ///< 列名
+    std::string column_name_;                 ///< 列名
 };
 
 } // namespace litedb::core::parser::ast

@@ -10,7 +10,10 @@ WildcardExpression::WildcardExpression(AstNodeLocation location) noexcept
 {
 }
 
-WildcardExpression::WildcardExpression(std::optional<std::string> qualifier, AstNodeLocation location) noexcept
+WildcardExpression::WildcardExpression(
+    std::optional<std::string> qualifier,
+    AstNodeLocation location
+) noexcept
     : ExpressionNode(location)
     , qualifier_(std::move(qualifier))
 {
@@ -19,11 +22,6 @@ WildcardExpression::WildcardExpression(std::optional<std::string> qualifier, Ast
 AstNodeKind WildcardExpression::kind() const noexcept
 {
     return AstNodeKind::Wildcard;
-}
-
-void WildcardExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const std::optional<std::string> & WildcardExpression::qualifier() const noexcept

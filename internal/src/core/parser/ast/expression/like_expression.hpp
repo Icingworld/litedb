@@ -9,7 +9,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief LIKE 表达式节点
- * @details 示例：expression LIKE pattern
  */
 class LikeExpression final : public ExpressionNode
 {
@@ -27,12 +26,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取表达式

@@ -5,7 +5,11 @@
 namespace litedb::core::parser::ast
 {
 
-UnaryExpression::UnaryExpression(TokenType op, std::unique_ptr<ExpressionNode> operand, AstNodeLocation location) noexcept
+UnaryExpression::UnaryExpression(
+    TokenType op,
+    std::unique_ptr<ExpressionNode> operand,
+    AstNodeLocation location
+) noexcept
     : ExpressionNode(location)
     , op_(op)
     , operand_(std::move(operand))
@@ -15,11 +19,6 @@ UnaryExpression::UnaryExpression(TokenType op, std::unique_ptr<ExpressionNode> o
 AstNodeKind UnaryExpression::kind() const noexcept
 {
     return AstNodeKind::Unary;
-}
-
-void UnaryExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 TokenType UnaryExpression::op() const noexcept

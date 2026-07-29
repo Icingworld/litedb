@@ -9,12 +9,14 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief SHOW VINDEXES 语句节点
- * @details 示例：SHOW VINDEXES FROM <collection_name>
  */
 class ShowVectorIndexesStatement final : public StatementNode
 {
 public:
-    ShowVectorIndexesStatement(std::string collection_name, AstNodeLocation location) noexcept;
+    ShowVectorIndexesStatement(
+        std::string collection_name,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -23,12 +25,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取集合名称

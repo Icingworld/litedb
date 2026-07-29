@@ -11,7 +11,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 函数调用表达式节点
- * @details 示例：function_name(argument1, argument2, ...)
  */
 class FunctionCallExpression final : public ExpressionNode
 {
@@ -19,7 +18,11 @@ public:
     using ArgumentList = std::vector<std::unique_ptr<ExpressionNode>>;
 
 public:
-    FunctionCallExpression(std::string name, ArgumentList arguments, AstNodeLocation location) noexcept;
+    FunctionCallExpression(
+        std::string name,
+        ArgumentList arguments,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -28,12 +31,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取函数名称

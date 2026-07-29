@@ -5,7 +5,10 @@
 namespace litedb::core::parser::ast
 {
 
-ShowVectorIndexesStatement::ShowVectorIndexesStatement(std::string collection_name, AstNodeLocation location) noexcept
+ShowVectorIndexesStatement::ShowVectorIndexesStatement(
+    std::string collection_name,
+    AstNodeLocation location
+) noexcept
     : StatementNode(location)
     , collection_name_(std::move(collection_name))
 {
@@ -14,11 +17,6 @@ ShowVectorIndexesStatement::ShowVectorIndexesStatement(std::string collection_na
 AstNodeKind ShowVectorIndexesStatement::kind() const noexcept
 {
     return AstNodeKind::ShowVectorIndexes;
-}
-
-void ShowVectorIndexesStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const std::string & ShowVectorIndexesStatement::collection_name() const noexcept

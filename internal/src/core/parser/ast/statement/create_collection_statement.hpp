@@ -16,7 +16,7 @@ class CreateCollectionStatement final : public StatementNode
 {
 public:
     CreateCollectionStatement(
-        std::string collection,
+        std::string collection_name,
         bool if_not_exists,
         ColumnDefinitionSyntaxList columns,
         std::optional<std::string> comment,
@@ -36,7 +36,7 @@ public:
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection() const noexcept;
+    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 是否存在
@@ -60,7 +60,7 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    std::string collection_;                    ///< 集合名称
+    std::string collection_name_;               ///< 集合名称
     bool if_not_exists_;                        ///< 是否不存在
     ColumnDefinitionSyntaxList columns_;        ///< 列定义列表
     std::optional<std::string> comment_;        ///< 集合注释

@@ -14,7 +14,7 @@ class CreateDatabaseStatement final : public StatementNode
 {
 public:
     CreateDatabaseStatement(
-        std::string database,
+        std::string database_name,
         bool if_not_exists,
         AstNodeLocation location
     ) noexcept;
@@ -32,7 +32,7 @@ public:
      * @return 数据库名称
      */
     [[nodiscard]]
-    const std::string & database() const noexcept;
+    const std::string & database_name() const noexcept;
 
     /**
      * @brief 是否存在
@@ -42,7 +42,7 @@ public:
     bool if_not_exists() const noexcept;
 
 private:
-    std::string database_;      ///< 数据库名称
+    std::string database_name_; ///< 数据库名称
     bool if_not_exists_;        ///< 是否存在
 };
 

@@ -5,9 +5,12 @@
 namespace litedb::core::parser::ast
 {
 
-UseStatement::UseStatement(std::string database, AstNodeLocation location) noexcept
+UseStatement::UseStatement(
+    std::string database_name,
+    AstNodeLocation location
+) noexcept
     : StatementNode(location)
-    , database_(std::move(database))
+    , database_name_(std::move(database_name))
 {
 }
 
@@ -16,14 +19,9 @@ AstNodeKind UseStatement::kind() const noexcept
     return AstNodeKind::Use;
 }
 
-void UseStatement::accept(AstNodeVisitor & visitor) const
+const std::string & UseStatement::database_name() const noexcept
 {
-    visitor.visit(*this);
-}
-
-const std::string & UseStatement::database() const noexcept
-{
-    return database_;
+    return database_name_;
 }
 
 } // namespace litedb::core::parser::ast

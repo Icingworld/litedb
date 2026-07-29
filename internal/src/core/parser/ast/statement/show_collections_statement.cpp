@@ -19,11 +19,6 @@ AstNodeKind ShowCollectionsStatement::kind() const noexcept
     return AstNodeKind::ShowCollections;
 }
 
-void ShowCollectionsStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::optional<std::string> & ShowCollectionsStatement::database_name() const noexcept
 {
     return database_name_;

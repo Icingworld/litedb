@@ -10,12 +10,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 字面量表达式节点
- * @details 示例：literal_type value
  */
 class LiteralExpression final : public ExpressionNode
 {
 public:
-    LiteralExpression(TokenType literal_type, std::string value, AstNodeLocation location) noexcept;
+    LiteralExpression(
+        TokenType literal_type,
+        std::string value,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -24,12 +27,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取字面量类型

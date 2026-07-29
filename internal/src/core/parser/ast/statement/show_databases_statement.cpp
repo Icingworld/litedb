@@ -3,7 +3,9 @@
 namespace litedb::core::parser::ast
 {
 
-ShowDatabasesStatement::ShowDatabasesStatement(AstNodeLocation location) noexcept
+ShowDatabasesStatement::ShowDatabasesStatement(
+    AstNodeLocation location
+) noexcept
     : StatementNode(location)
 {
 }
@@ -11,11 +13,6 @@ ShowDatabasesStatement::ShowDatabasesStatement(AstNodeLocation location) noexcep
 AstNodeKind ShowDatabasesStatement::kind() const noexcept
 {
     return AstNodeKind::ShowDatabases;
-}
-
-void ShowDatabasesStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 } // namespace litedb::core::parser::ast

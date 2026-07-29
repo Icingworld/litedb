@@ -5,7 +5,10 @@
 namespace litedb::core::parser::ast
 {
 
-IdentifierExpression::IdentifierExpression(std::string name, AstNodeLocation location) noexcept
+IdentifierExpression::IdentifierExpression(
+    std::string name,
+    AstNodeLocation location
+) noexcept
     : ExpressionNode(location)
     , name_(std::move(name))
 {
@@ -14,11 +17,6 @@ IdentifierExpression::IdentifierExpression(std::string name, AstNodeLocation loc
 AstNodeKind IdentifierExpression::kind() const noexcept
 {
     return AstNodeKind::Identifier;
-}
-
-void IdentifierExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const std::string & IdentifierExpression::name() const noexcept

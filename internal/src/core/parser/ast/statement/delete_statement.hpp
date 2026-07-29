@@ -16,7 +16,7 @@ class DeleteStatement final : public StatementNode
 {
 public:
     DeleteStatement(
-        std::string collection,
+        std::string collection_name,
         std::unique_ptr<ExpressionNode> where,
         AstNodeLocation location
     ) noexcept;
@@ -34,7 +34,7 @@ public:
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection() const noexcept;
+    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 获取条件表达式
@@ -44,7 +44,7 @@ public:
     const ExpressionNode * where() const noexcept;
 
 private:
-    std::string collection_;                        ///< 集合名称
+    std::string collection_name_;                   ///< 集合名称
     std::unique_ptr<ExpressionNode> where_;         ///< 条件表达式
 };
 
