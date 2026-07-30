@@ -34,55 +34,55 @@ protected:
      * @return 返回值
      */
     [[nodiscard]]
-    ReturnType dispatch_expression(const ExpressionNode & expression) const noexcept
+    ReturnType dispatch_expression(const ExpressionNode & expression)
     {
         switch (expression.kind()) {
         case AstNodeKind::Identifier:
-            return derived().bind_identifier_expression(
+            return derived().visit_identifier_expression(
                 static_cast<const IdentifierExpression &>(expression)
             );
         case AstNodeKind::Wildcard:
-            return derived().bind_wildcard_expression(
+            return derived().visit_wildcard_expression(
                 static_cast<const WildcardExpression &>(expression)
             );
         case AstNodeKind::Literal:
-            return derived().bind_literal_expression(
+            return derived().visit_literal_expression(
                 static_cast<const LiteralExpression &>(expression)
             );
         case AstNodeKind::FunctionCall:
-            return derived().bind_function_call_expression(
+            return derived().visit_function_call_expression(
                 static_cast<const FunctionCallExpression &>(expression)
             );
         case AstNodeKind::ColumnReference:
-            return derived().bind_column_reference_expression(
+            return derived().visit_column_reference_expression(
                 static_cast<const ColumnReferenceExpression &>(expression)
             );
         case AstNodeKind::Vector:
-            return derived().bind_vector_expression(
+            return derived().visit_vector_expression(
                 static_cast<const VectorExpression &>(expression)
             );
         case AstNodeKind::Binary:
-            return derived().bind_binary_expression(
+            return derived().visit_binary_expression(
                 static_cast<const BinaryExpression &>(expression)
             );
         case AstNodeKind::Unary:
-            return derived().bind_unary_expression(
+            return derived().visit_unary_expression(
                 static_cast<const UnaryExpression &>(expression)
             );
         case AstNodeKind::In:
-            return derived().bind_in_expression(
+            return derived().visit_in_expression(
                 static_cast<const InExpression &>(expression)
             );
         case AstNodeKind::Between:
-            return derived().bind_between_expression(
+            return derived().visit_between_expression(
                 static_cast<const BetweenExpression &>(expression)
             );
         case AstNodeKind::Like:
-            return derived().bind_like_expression(
+            return derived().visit_like_expression(
                 static_cast<const LikeExpression &>(expression)
             );
         case AstNodeKind::Alias:
-            return derived().bind_alias_expression(
+            return derived().visit_alias_expression(
                 static_cast<const AliasExpression &>(expression)
             );
         default:
@@ -96,9 +96,9 @@ private:
      * @return 派生类引用
      */
     [[nodiscard]]
-    const Derived & derived() const noexcept
+    Derived & derived() noexcept
     {
-        return static_cast<const Derived &>(*this);
+        return static_cast<Derived &>(*this);
     }
 };
 

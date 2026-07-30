@@ -1,4 +1,4 @@
-#include "core/parser/ast/debug_printer.hpp"
+#include "core/parser/ast/debug/debug_printer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 
@@ -174,6 +174,35 @@ void test_vector_index_debug_print()
     require_contains(output, "    random_seed: <none>\n");
 }
 
+void test_remaining_statement_debug_print()
+{
+    auto create_index = parse_ok(
+        "CREATE INDEX IF NOT EXISTS idx_age ON users(age) USING BTREE;"
+    );
+    const auto create_index_output = print_without_location(*create_index);
+    require_contains(create_index_output, "CreateIndexStatement\n");
+    require_contains(create_index_output, "  index_name: idx_age\n");
+    require_contains(create_index_output, "  method: BTree\n");
+
+    auto drop_vector_index = parse_ok(
+        "DROP VINDEX IF EXISTS vidx_embedding ON users;"
+    );
+    const auto drop_vector_index_output = print_without_location(*drop_vector_index);
+    require_contains(drop_vector_index_output, "DropVectorIndexStatement\n");
+    require_contains(drop_vector_index_output, "  vector_index_name: vidx_embedding\n");
+    require_contains(drop_vector_index_output, "  if_exists: true\n");
+
+    auto show_collections = parse_ok("SHOW COLLECTIONS;");
+    const auto show_collections_output = print_without_location(*show_collections);
+    require_contains(show_collections_output, "ShowCollectionsStatement\n");
+    require_contains(show_collections_output, "  database_name: <none>\n");
+
+    auto use = parse_ok("USE demo;");
+    const auto use_output = print_without_location(*use);
+    require_contains(use_output, "UseStatement\n");
+    require_contains(use_output, "  database_name: demo\n");
+}
+
 } // namespace
 
 int main()
@@ -185,6 +214,7 @@ int main()
         test_insert_update_delete_debug_print();
         test_describe_collection_debug_print();
         test_vector_index_debug_print();
+        test_remaining_statement_debug_print();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

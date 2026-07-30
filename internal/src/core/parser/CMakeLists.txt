@@ -49,6 +49,8 @@ set(PARSER_SOURCES
     ast/statement/show_indexes_statement.cpp
     ast/statement/show_vector_indexes_statement.cpp
     ast/statement/describe_collection_statement.cpp
+    ast/debug/debug_helper.cpp
+    ast/debug/debug_printer.cpp
 )
 
 add_library(litedb_parser ${PARSER_SOURCES})

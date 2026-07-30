@@ -6,13 +6,13 @@ namespace litedb::core::parser::ast
 {
 
 DropVectorIndexStatement::DropVectorIndexStatement(
-    std::string index_name,
+    std::string vector_index_name,
     std::string collection_name,
     bool if_exists,
     AstNodeLocation location
 ) noexcept
     : StatementNode(location)
-    , index_name_(std::move(index_name))
+    , vector_index_name_(std::move(vector_index_name))
     , collection_name_(std::move(collection_name))
     , if_exists_(if_exists)
 {
@@ -23,9 +23,9 @@ AstNodeKind DropVectorIndexStatement::kind() const noexcept
     return AstNodeKind::DropVectorIndex;
 }
 
-const std::string & DropVectorIndexStatement::index_name() const noexcept
+const std::string & DropVectorIndexStatement::vector_index_name() const noexcept
 {
-    return index_name_;
+    return vector_index_name_;
 }
 
 const std::string & DropVectorIndexStatement::collection_name() const noexcept

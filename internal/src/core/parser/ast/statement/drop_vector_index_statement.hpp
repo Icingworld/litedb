@@ -14,7 +14,7 @@ class DropVectorIndexStatement final : public StatementNode
 {
 public:
     DropVectorIndexStatement(
-        std::string index_name,
+        std::string vector_index_name,
         std::string collection_name,
         bool if_exists,
         AstNodeLocation location
@@ -33,7 +33,7 @@ public:
      * @return 索引名称
      */
     [[nodiscard]]
-    const std::string & index_name() const noexcept;
+    const std::string & vector_index_name() const noexcept;
 
     /**
      * @brief 获取集合名称
@@ -50,7 +50,7 @@ public:
     bool if_exists() const noexcept;
 
 private:
-    std::string index_name_;                ///< 索引名称
+    std::string vector_index_name_;         ///< 向量索引名称
     std::string collection_name_;           ///< 集合名称
     bool if_exists_;                        ///< 是否存在
 };
