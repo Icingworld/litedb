@@ -1,7 +1,5 @@
 #include "core/parser/worker/parser_worker.hpp"
 
-#include <expected>
-#include <memory>
 #include <string_view>
 
 #include "core/parser/ast/statement/statement_node.hpp"
@@ -24,16 +22,27 @@ ParserWorker::ParserWorker(Lexer & lexer)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+ParserWorker::parse()
 {
     context_.initialize();
 
     // 检查是否为空语句或词法错误
     if (context_.current().type() == TokenType::EoF) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyStatement, "Empty statement"));
+        return std::unexpected(
+            context_.make_current_error(
+                ParserErrorCode::EmptyStatement,
+                "Empty statement"
+            )
+        );
     }
     if (context_.current().type() == TokenType::Error) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::LexicalError, "Invalid token"));
+        return std::unexpected(
+            context_.make_current_error(
+                ParserErrorCode::LexicalError,
+                "Invalid token"
+            )
+        );
     }
 
     // 解析语句
@@ -47,17 +56,29 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
 
     // 主工作器统一处理语句后的非法尾随 token
     if (context_.current().type() == TokenType::Error) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::LexicalError, "Invalid token"));
+        return std::unexpected(
+            context_.make_current_error(
+                ParserErrorCode::LexicalError,
+                "Invalid token"
+            )
+        );
     }
     if (context_.current().type() != TokenType::EoF) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::UnexpectedToken, "Unexpected token"));
+        return std::unexpected(
+            context_.make_current_error(
+                ParserErrorCode::UnexpectedToken,
+                "Unexpected token"
+            )
+        );
     }
 
     return statement;
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+ParserWorker::parse_statement()
 {
+    // 根据当前 Token 类型选择对应的解析器
     switch (context_.current().type()) {
     case TokenType::Use: {
         return ParserUseWorker(context_).parse_use_statement();
@@ -89,7 +110,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
         return ParserSelectWorker(context_).parse_select_statement();
     }
     [[unlikely]] default:
-        return std::unexpected(context_.make_current_error(ParserErrorCode::UnexpectedStatement, "Unexpected statement"));
+        return std::unexpected(
+            context_.make_current_error(
+                ParserErrorCode::UnexpectedStatement,
+                "Unexpected statement"
+            )
+        );
     }
 }
 

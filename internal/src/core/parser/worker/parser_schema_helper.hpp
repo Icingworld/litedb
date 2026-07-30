@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <expected>
-#include <memory>
 #include <string>
 #include <string_view>
 
@@ -23,27 +22,59 @@ public:
     explicit ParserSchemaHelper(ParserContext & context);
 
 public:
+    /**
+     * @brief 解析标识符字符串
+     * @param message 错误消息
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::string, ParserError> parse_identifier_string(std::string_view message);
+    std::expected<std::string, ParserError>
+    parse_identifier_string(std::string_view message);
 
+    /**
+     * @brief 解析整数值
+     * @param message 错误消息
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::size_t, ParserError> parse_integer_value(std::string_view message);
+    std::expected<std::size_t, ParserError>
+    parse_integer_value(std::string_view message);
 
+    /**
+     * @brief 解析数据类型
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<common::LogicalType, ParserError> parse_data_type();
+    std::expected<common::LogicalType, ParserError>
+    parse_data_type();
 
+    /**
+     * @brief 解析列定义
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<ast::ColumnDefinitionSyntax, ParserError> parse_column_definition();
+    std::expected<ast::ColumnDefinitionSyntax, ParserError>
+    parse_column_definition();
 
+    /**
+     * @brief 解析 IF NOT EXISTS
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<bool, ParserError> parse_if_not_exists();
+    std::expected<bool, ParserError>
+    parse_if_not_exists();
 
+    /**
+     * @brief 解析 IF EXISTS
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<bool, ParserError> parse_if_exists();
+    std::expected<bool, ParserError>
+    parse_if_exists();
 
 private:
-    ParserContext & context_;
-    ParserExpressionWorker expression_worker_;
+    ParserContext & context_;                   ///< 解析上下文
+    ParserExpressionWorker expression_worker_;  ///< 表达式解析工作器
 };
 
 } // namespace litedb::core::parser

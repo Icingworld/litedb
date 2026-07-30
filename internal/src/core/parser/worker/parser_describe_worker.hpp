@@ -25,8 +25,13 @@ public:
     explicit ParserDescribeWorker(ParserContext & context);
 
 public:
+    /**
+     * @brief 解析 DESCRIBE COLLECTION 语句
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_describe_collection_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_describe_collection_statement();
 
 private:
     ParserContext & context_;   ///< 解析上下文

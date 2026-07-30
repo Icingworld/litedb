@@ -27,25 +27,54 @@ public:
     explicit ParserCreateWorker(ParserContext & context);
 
 public:
+    /**
+     * @brief 解析 CREATE 语句
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_create_statement();
 
 private:
+    /**
+     * @brief 解析 CREATE DATABASE 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_database_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_create_database_statement(TokenLocation location);
 
+    /**
+     * @brief 解析 CREATE COLLECTION 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_collection_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_create_collection_statement(TokenLocation location);
 
+    /**
+     * @brief 解析 CREATE INDEX 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_index_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_create_index_statement(TokenLocation location);
 
+    /**
+     * @brief 解析 CREATE VINDEX 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_vector_index_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_create_vector_index_statement(TokenLocation location);
 
 private:
     ParserContext & context_;                   ///< 解析上下文
-    ParserSchemaHelper schema_helper_;          ///< 模式助手
+    ParserSchemaHelper schema_helper_;          ///< schema 和通用语法解析辅助
 };
 
 } // namespace litedb::core::parser

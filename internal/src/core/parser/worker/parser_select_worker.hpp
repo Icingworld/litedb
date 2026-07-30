@@ -26,12 +26,22 @@ public:
     explicit ParserSelectWorker(ParserContext & context);
 
 public:
+    /**
+     * @brief 解析 SELECT 语句
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_select_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_select_statement();
 
 private:
+    /**
+     * @brief 解析 SELECT 列表项
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> parse_select_item();
+    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+    parse_select_item();
 
 private:
     ParserContext & context_;                   ///< 解析上下文

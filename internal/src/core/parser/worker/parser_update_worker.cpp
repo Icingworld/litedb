@@ -1,7 +1,5 @@
 #include "core/parser/worker/parser_update_worker.hpp"
 
-#include <expected>
-#include <memory>
 #include <utility>
 
 #include "core/parser/ast/statement/update_statement.hpp"
@@ -16,18 +14,23 @@ ParserUpdateWorker::ParserUpdateWorker(ParserContext & context)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUpdateWorker::parse_update_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+ParserUpdateWorker::parse_update_statement()
 {
     const TokenLocation location = context_.current().location();
     context_.advance();
 
     ParserSchemaHelper schema_helper(context_);
-    auto collection = schema_helper.parse_identifier_string("Expected collection name");
+    auto collection = schema_helper.parse_identifier_string(
+        "Expected collection name"
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
-    auto set = context_.consume(TokenType::Set, "Expected SET after collection name");
+    auto set = context_.consume(
+        TokenType::Set, "Expected SET after collection name"
+    );
     if (!set.has_value()) [[unlikely]] {
         return std::unexpected(std::move(set.error()));
     }
@@ -35,12 +38,16 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUpdateWork
     ParserExpressionWorker expression_worker(context_);
     ast::UpdateStatement::AssignmentList assignments;
     while (true) {
-        auto column = schema_helper.parse_identifier_string("Expected column name");
+        auto column = schema_helper.parse_identifier_string(
+            "Expected column name"
+        );
         if (!column.has_value()) [[unlikely]] {
             return std::unexpected(std::move(column.error()));
         }
 
-        auto equal = context_.consume(TokenType::Equal, "Expected '=' after column name");
+        auto equal = context_.consume(
+            TokenType::Equal, "Expected '=' after column name"
+        );
         if (!equal.has_value()) {
             return std::unexpected(std::move(equal.error()));
         }

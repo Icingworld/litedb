@@ -25,8 +25,13 @@ public:
     explicit ParserUpdateWorker(ParserContext & context);
 
 public:
+    /**
+     * @brief 解析 UPDATE 语句
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_update_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_update_statement();
 
 private:
     ParserContext & context_;   ///< 解析上下文

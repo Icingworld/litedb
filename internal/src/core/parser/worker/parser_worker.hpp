@@ -32,7 +32,8 @@ public:
      * @return 解析结果
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse();
 
 private:
     /**
@@ -40,10 +41,11 @@ private:
      * @return 解析结果
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_statement();
 
 private:
-    ParserContext context_;
+    ParserContext context_;         ///< 解析器上下文
 };
 
 } // namespace litedb::core::parser
