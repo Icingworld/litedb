@@ -25,6 +25,10 @@ std::string lower_ascii(std::string_view value);
  * @return 解析器错误
  */
 [[nodiscard]]
-ParserError make_parser_error(ParserErrorCode code, TokenLocation location, std::string_view message);
+ParserError make_parser_error(
+    ParserErrorCode code,
+    TokenLocation location,
+    std::string_view message
+);
 
 } // namespace litedb::core::parser
