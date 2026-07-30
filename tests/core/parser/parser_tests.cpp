@@ -80,7 +80,7 @@ void test_parse_use_statement()
 
     require(statement->kind() == AstNodeKind::Use, "USE statement kind mismatch");
     const auto * use_statement = static_cast<const UseStatement *>(statement.get());
-    require(use_statement->database() == "demo", "USE database name mismatch");
+    require(use_statement->database_name() == "demo", "USE database name mismatch");
     require(use_statement->location().line == 1, "USE statement line mismatch");
     require(use_statement->location().column == 1, "USE statement column mismatch");
 
@@ -94,7 +94,7 @@ void test_parse_create_database_statement()
 
     require(statement->kind() == AstNodeKind::CreateDatabase, "CREATE DATABASE kind mismatch");
     const auto * create = static_cast<const CreateDatabaseStatement *>(statement.get());
-    require(create->database() == "demo", "CREATE DATABASE name mismatch");
+    require(create->database_name() == "demo", "CREATE DATABASE name mismatch");
     require(create->if_not_exists(), "CREATE DATABASE IF NOT EXISTS mismatch");
 }
 
@@ -112,7 +112,7 @@ void test_parse_create_collection_statement()
 
     require(statement->kind() == AstNodeKind::CreateCollection, "CREATE COLLECTION kind mismatch");
     const auto * create = static_cast<const CreateCollectionStatement *>(statement.get());
-    require(create->collection() == "users", "CREATE COLLECTION name mismatch");
+    require(create->collection_name() == "users", "CREATE COLLECTION name mismatch");
     require(create->columns().size() == 5, "CREATE COLLECTION column count mismatch");
     require(create->comment().has_value(), "CREATE COLLECTION comment missing");
     require(create->comment().value() == "user collection", "CREATE COLLECTION comment mismatch");
@@ -218,7 +218,7 @@ void test_parse_drop_show_describe_statements()
     auto drop_vector_index = parse_ok("DROP VINDEX IF EXISTS vidx_embedding ON users;");
     require(drop_vector_index->kind() == AstNodeKind::DropVectorIndex, "DROP VINDEX kind mismatch");
     const auto * drop_vidx = static_cast<const DropVectorIndexStatement *>(drop_vector_index.get());
-    require(drop_vidx->index_name() == "vidx_embedding", "DROP VINDEX name mismatch");
+    require(drop_vidx->vector_index_name() == "vidx_embedding", "DROP VINDEX name mismatch");
     require(drop_vidx->collection_name() == "users", "DROP VINDEX collection mismatch");
     require(drop_vidx->if_exists(), "DROP VINDEX IF EXISTS mismatch");
 
@@ -268,7 +268,7 @@ void test_parse_insert_statement()
     auto with_columns = parse_ok("INSERT INTO users (id, name, age, active) VALUES (1, 'Tom', 18, true);");
     require(with_columns->kind() == AstNodeKind::Insert, "INSERT kind mismatch");
     const auto * insert = static_cast<const InsertStatement *>(with_columns.get());
-    require(insert->collection() == "users", "INSERT collection mismatch");
+    require(insert->collection_name() == "users", "INSERT collection mismatch");
     require(insert->columns().size() == 4, "INSERT column count mismatch");
     require(insert->values().size() == 4, "INSERT value count mismatch");
     require(insert->values()[1]->kind() == AstNodeKind::Literal, "INSERT string value kind mismatch");
@@ -284,7 +284,7 @@ void test_parse_update_delete_statements()
     auto update = parse_ok("UPDATE users SET age = age + 1 WHERE name = 'Tom';");
     require(update->kind() == AstNodeKind::Update, "UPDATE kind mismatch");
     const auto * update_statement = static_cast<const UpdateStatement *>(update.get());
-    require(update_statement->collection() == "users", "UPDATE collection mismatch");
+    require(update_statement->collection_name() == "users", "UPDATE collection mismatch");
     require(update_statement->assignments().size() == 1, "UPDATE assignment count mismatch");
     require(update_statement->assignments()[0].value->kind() == AstNodeKind::Binary, "UPDATE assignment expression mismatch");
     require(update_statement->where() != nullptr, "UPDATE WHERE missing");
@@ -297,7 +297,7 @@ void test_parse_update_delete_statements()
     auto delete_statement = parse_ok("DELETE FROM users WHERE age < 18;");
     require(delete_statement->kind() == AstNodeKind::Delete, "DELETE kind mismatch");
     const auto * del = static_cast<const DeleteStatement *>(delete_statement.get());
-    require(del->collection() == "users", "DELETE collection mismatch");
+    require(del->collection_name() == "users", "DELETE collection mismatch");
     require(del->where() != nullptr, "DELETE WHERE missing");
 
     auto delete_all = parse_ok("DELETE FROM users;");
@@ -312,7 +312,7 @@ void test_parse_select_statement()
     const auto * select = static_cast<const SelectStatement *>(statement.get());
     require(select->select_list().size() == 1, "SELECT list size mismatch");
     require(select->select_list()[0]->kind() == AstNodeKind::Wildcard, "SELECT wildcard mismatch");
-    require(select->collection() == "users", "SELECT collection mismatch");
+    require(select->collection_name() == "users", "SELECT collection mismatch");
     require(select->where() != nullptr, "SELECT WHERE missing");
     require(select->order_by().size() == 1, "SELECT ORDER BY size mismatch");
     require(!select->order_by()[0].ascending, "SELECT ORDER BY direction mismatch");

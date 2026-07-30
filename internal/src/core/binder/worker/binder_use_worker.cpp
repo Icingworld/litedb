@@ -23,12 +23,12 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUseWorker::bin
     const UseStatement & statement
 )
 {
-    const auto * database = context_.meta().find_database(statement.database());
+    const auto * database = context_.meta().find_database(statement.database_name());
     if (database == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::DatabaseNotFound,
             statement.location(),
-            "Database not found: " + statement.database()
+            "Database not found: " + statement.database_name()
         ));
     }
 

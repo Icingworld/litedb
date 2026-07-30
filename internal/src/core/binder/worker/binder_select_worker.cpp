@@ -78,7 +78,9 @@ const ExpressionNode * order_by_alias_target(
         return nullptr;
     }
 
-    const auto it = aliases.find(common::normalize_identifier(column.column()));
+    const auto it = aliases.find(
+        common::normalize_identifier(column.column_name())
+    );
     if (it == aliases.end()) {
         return nullptr;
     }
@@ -102,12 +104,13 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expre
 )
 {
     if (const auto * alias_target = order_by_alias_target(expression, aliases); alias_target != nullptr) {
-        const auto alias_key = common::normalize_identifier(static_cast<const ColumnReferenceExpression &>(expression).column());
+        const auto & column = static_cast<const ColumnReferenceExpression &>(expression);
+        const auto alias_key = common::normalize_identifier(column.column_name());
         if (aliases.at(alias_key).count > 1) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::AmbiguousAlias,
                 expression.location(),
-                "ORDER BY alias is ambiguous: " + static_cast<const ColumnReferenceExpression &>(expression).column()
+                "ORDER BY alias is ambiguous: " + column.column_name()
             ));
         }
         return helper.bind_expression(*alias_target, collection);
@@ -129,7 +132,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
 {
     BinderWorkerHelper helper(context_);
 
-    auto collection = helper.bind_collection(statement.collection(), statement.location());
+    auto collection = helper.bind_collection(
+        statement.collection_name(),
+        statement.location()
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }

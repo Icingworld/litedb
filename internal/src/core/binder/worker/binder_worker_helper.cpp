@@ -168,12 +168,15 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         ));
     }
 
-    const auto * column = context_.meta().find_column(collection.collection->id(), expression.column());
+    const auto * column = context_.meta().find_column(
+        collection.collection->id(),
+        expression.column_name()
+    );
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
             expression.location(),
-            "Column not found: " + expression.column()
+            "Column not found: " + expression.column_name()
         ));
     }
 

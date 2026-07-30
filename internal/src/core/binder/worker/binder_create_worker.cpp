@@ -31,7 +31,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
 )
 {
     return std::make_unique<BoundCreateDatabaseStatement>(
-        statement.database(),
+        statement.database_name(),
         statement.if_not_exists(),
         statement.location()
     );
@@ -55,7 +55,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
 
     return std::make_unique<BoundCreateCollectionStatement>(
         *database_id,
-        statement.collection(),
+        statement.collection_name(),
         statement.if_not_exists(),
         std::move(*columns),
         statement.comment(),

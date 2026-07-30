@@ -60,7 +60,7 @@ void test_select_debug_print()
     require_contains(output, "      column: id\n");
     require_contains(output, "  where:\n");
     require_contains(output, "    BinaryExpression @");
-    require_contains(output, "      op: GreaterEqual\n");
+    require_contains(output, "      op: >=\n");
     require_contains(output, "  order_by: []\n");
     require_contains(output, "  limit: <none>\n");
     require_contains(output, "  offset: <none>\n");

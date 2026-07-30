@@ -58,7 +58,7 @@ void test_statement_nodes()
 
     require(statement.kind() == AstNodeKind::Select, "select statement kind mismatch");
     require(statement.location().line == 1, "select statement line mismatch");
-    require(statement.collection() == "users", "select collection mismatch");
+    require(statement.collection_name() == "users", "select collection mismatch");
     require(statement.select_list().size() == 1, "select list size mismatch");
     require(statement.where() == nullptr, "select where should be empty");
     require(statement.limit().has_value() && statement.limit().value() == 10, "select limit mismatch");
@@ -69,7 +69,7 @@ void test_create_database_statement()
     CreateDatabaseStatement statement("demo", true, AstNodeLocation {1, 1});
 
     require(statement.kind() == AstNodeKind::CreateDatabase, "create database kind mismatch");
-    require(statement.database() == "demo", "create database name mismatch");
+    require(statement.database_name() == "demo", "create database name mismatch");
     require(statement.if_not_exists(), "create database if-not-exists mismatch");
 }
 
@@ -105,7 +105,7 @@ void test_create_collection_statement()
     CreateCollectionStatement statement("users", false, std::move(columns), "user collection", AstNodeLocation {1, 1});
 
     require(statement.kind() == AstNodeKind::CreateCollection, "create collection kind mismatch");
-    require(statement.collection() == "users", "create collection name mismatch");
+    require(statement.collection_name() == "users", "create collection name mismatch");
     require(!statement.if_not_exists(), "create collection if-not-exists mismatch");
     require(statement.columns().size() == 4, "create collection columns size mismatch");
     require(statement.comment().has_value(), "create collection comment missing");

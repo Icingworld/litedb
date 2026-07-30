@@ -27,7 +27,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
 {
     BinderWorkerHelper helper(context_);
 
-    auto collection = helper.bind_collection(statement.collection(), statement.location());
+    auto collection = helper.bind_collection(
+        statement.collection_name(),
+        statement.location()
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -35,21 +38,24 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
     std::vector<BoundAssignment> assignments;
     std::unordered_set<std::string> seen_columns;
     for (const auto & assignment : statement.assignments()) {
-        const auto column_key = common::normalize_identifier(assignment.column);
+        const auto column_key = common::normalize_identifier(assignment.column_name);
         if (!seen_columns.emplace(column_key).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,
                 statement.location(),
-                "Duplicate UPDATE target column: " + assignment.column
+                "Duplicate UPDATE target column: " + assignment.column_name
             ));
         }
 
-        const auto * column = context_.meta().find_column(collection->collection->id(), assignment.column);
+        const auto * column = context_.meta().find_column(
+            collection->collection->id(),
+            assignment.column_name
+        );
         if (column == nullptr) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::ColumnNotFound,
                 statement.location(),
-                "Column not found: " + assignment.column
+                "Column not found: " + assignment.column_name
             ));
         }
 

@@ -25,7 +25,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDeleteWorker::
 {
     BinderWorkerHelper helper(context_);
 
-    auto collection = helper.bind_collection(statement.collection(), statement.location());
+    auto collection = helper.bind_collection(
+        statement.collection_name(),
+        statement.location()
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }

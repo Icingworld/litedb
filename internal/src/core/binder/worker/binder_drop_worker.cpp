@@ -119,12 +119,15 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
         return std::unexpected(std::move(collection.error()));
     }
 
-    const auto * index = context_.meta().find_vector_index(collection->collection->id(), statement.index_name());
+    const auto * index = context_.meta().find_vector_index(
+        collection->collection->id(),
+        statement.vector_index_name()
+    );
     if (index == nullptr && !statement.if_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::IndexNotFound,
             statement.location(),
-            "Vector index not found: " + statement.index_name()
+            "Vector index not found: " + statement.vector_index_name()
         ));
     }
 
@@ -132,7 +135,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bi
         collection->database_id,
         collection->collection->id(),
         collection->collection->name(),
-        statement.index_name(),
+        statement.vector_index_name(),
         statement.if_exists(),
         statement.location()
     );
