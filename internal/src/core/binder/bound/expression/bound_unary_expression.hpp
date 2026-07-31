@@ -3,32 +3,30 @@
 #include <memory>
 
 #include "core/binder/bound/expression/bound_expression.hpp"
-#include "core/parser/token.hpp"
+#include "core/common/types.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief 一元表达式节点
- * @details 示例：op operand
+ * @brief 绑定一元表达式
  */
 class BoundUnaryExpression final : public BoundExpression
 {
 public:
     BoundUnaryExpression(
-        parser::TokenType op,
+        common::UnaryOperator op,
         std::unique_ptr<BoundExpression> operand,
-        common::LogicalType type,
-        parser::ast::AstNodeLocation location
+        common::LogicalType type
     );
 
 public:
     /**
-     * @brief 获取操作符
-     * @return 操作符
+     * @brief 获取一元操作符
+     * @return 一元操作符
      */
     [[nodiscard]]
-    parser::TokenType op() const noexcept;
+    common::UnaryOperator op() const noexcept;
 
     /**
      * @brief 获取操作数
@@ -37,21 +35,8 @@ public:
     [[nodiscard]]
     const BoundExpression & operand() const noexcept;
 
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundExpressionVisitor & visitor) const override;
-
-    /**
-     * @brief 深拷贝表达式
-     * @return 表达式副本
-     */
-    [[nodiscard]]
-    std::unique_ptr<BoundExpression> clone() const override;
-
 private:
-    parser::TokenType op_;                          ///< 操作符
+    common::UnaryOperator op_;                      ///< 一元操作符
     std::unique_ptr<BoundExpression> operand_;      ///< 操作数
 };
 

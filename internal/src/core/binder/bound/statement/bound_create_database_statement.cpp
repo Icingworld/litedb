@@ -6,29 +6,17 @@ namespace litedb::core::binder::bound
 {
 
 BoundCreateDatabaseStatement::BoundCreateDatabaseStatement(
-    std::string database_name,
-    bool if_not_exists,
-    parser::ast::AstNodeLocation location
-)
-    : BoundStatement(BoundStatementKind::CreateDatabase, location)
+    std::optional<std::string> database_name
+) noexcept
+    : BoundStatement(BoundStatementKind::CreateDatabase)
     , database_name_(std::move(database_name))
-    , if_not_exists_(if_not_exists)
 {
 }
 
-const std::string & BoundCreateDatabaseStatement::database_name() const noexcept
+const std::optional<std::string> &
+BoundCreateDatabaseStatement::database_name() const noexcept
 {
     return database_name_;
-}
-
-bool BoundCreateDatabaseStatement::if_not_exists() const noexcept
-{
-    return if_not_exists_;
-}
-
-void BoundCreateDatabaseStatement::accept(BoundStatementVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 } // namespace litedb::core::binder::bound

@@ -3,24 +3,22 @@
 #include <memory>
 
 #include "core/binder/bound/expression/bound_expression.hpp"
-#include "core/parser/token.hpp"
+#include "core/common/types.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief 二元表达式节点
- * @details 示例：left op right
+ * @brief 绑定二元表达式
  */
 class BoundBinaryExpression final : public BoundExpression
 {
 public:
     BoundBinaryExpression(
         std::unique_ptr<BoundExpression> left,
-        parser::TokenType op,
+        common::BinaryOperator op,
         std::unique_ptr<BoundExpression> right,
-        common::LogicalType type,
-        parser::ast::AstNodeLocation location
+        common::LogicalType type
     );
 
 public:
@@ -32,11 +30,11 @@ public:
     const BoundExpression & left() const noexcept;
 
     /**
-     * @brief 获取操作符
-     * @return 操作符
+     * @brief 获取二元操作符
+     * @return 二元操作符
      */
     [[nodiscard]]
-    parser::TokenType op() const noexcept;
+    common::BinaryOperator op() const noexcept;
 
     /**
      * @brief 获取右操作数
@@ -45,22 +43,9 @@ public:
     [[nodiscard]]
     const BoundExpression & right() const noexcept;
 
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundExpressionVisitor & visitor) const override;
-
-    /**
-     * @brief 深拷贝表达式
-     * @return 表达式副本
-     */
-    [[nodiscard]]
-    std::unique_ptr<BoundExpression> clone() const override;
-
 private:
     std::unique_ptr<BoundExpression> left_;     ///< 左操作数
-    parser::TokenType op_;                      ///< 操作符
+    common::BinaryOperator op_;                 ///< 二元操作符
     std::unique_ptr<BoundExpression> right_;    ///< 右操作数
 };
 

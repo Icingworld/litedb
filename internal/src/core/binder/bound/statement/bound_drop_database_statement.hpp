@@ -1,26 +1,22 @@
 #pragma once
 
 #include <optional>
-#include <string>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief DROP DATABASE 语句节点
- * @details 示例：DROP DATABASE [IF EXISTS] database_name
+ * @brief 绑定 DROP DATABASE 语句
  */
 class BoundDropDatabaseStatement final : public BoundStatement
 {
 public:
     BoundDropDatabaseStatement(
-        std::optional<common::DatabaseId> database_id,
-        std::string database_name,
-        bool if_exists,
-        parser::ast::AstNodeLocation location
-    );
+        std::optional<common::DatabaseId> database_id
+    ) noexcept;
 
 public:
     /**
@@ -30,30 +26,8 @@ public:
     [[nodiscard]]
     std::optional<common::DatabaseId> database_id() const noexcept;
 
-    /**
-     * @brief 获取数据库名称
-     * @return 数据库名称
-     */
-    [[nodiscard]]
-    const std::string & database_name() const noexcept;
-
-    /**
-     * @brief 是否存在
-     * @return 是否存在
-     */
-    [[nodiscard]]
-    bool if_exists() const noexcept;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
-
 private:
     std::optional<common::DatabaseId> database_id_;        ///< 数据库 ID
-    std::string database_name_;                            ///< 数据库名称
-    bool if_exists_;                                       ///< 是否存在
 };
 
 } // namespace litedb::core::binder::bound

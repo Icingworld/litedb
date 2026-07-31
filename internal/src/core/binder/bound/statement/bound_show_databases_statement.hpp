@@ -6,20 +6,12 @@ namespace litedb::core::binder::bound
 {
 
 /**
- * @brief SHOW DATABASES 语句节点
- * @details 示例：SHOW DATABASES
+ * @brief 绑定 SHOW DATABASES 语句
  */
 class BoundShowDatabasesStatement final : public BoundStatement
 {
 public:
-    explicit BoundShowDatabasesStatement(parser::ast::AstNodeLocation location);
-
-public:
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
+    BoundShowDatabasesStatement() noexcept;
 };
 
 } // namespace litedb::core::binder::bound

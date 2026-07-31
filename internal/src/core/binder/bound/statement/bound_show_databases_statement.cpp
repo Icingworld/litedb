@@ -3,14 +3,9 @@
 namespace litedb::core::binder::bound
 {
 
-BoundShowDatabasesStatement::BoundShowDatabasesStatement(parser::ast::AstNodeLocation location)
-    : BoundStatement(BoundStatementKind::ShowDatabases, location)
+BoundShowDatabasesStatement::BoundShowDatabasesStatement() noexcept
+    : BoundStatement(BoundStatementKind::ShowDatabases)
 {
-}
-
-void BoundShowDatabasesStatement::accept(BoundStatementVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 } // namespace litedb::core::binder::bound

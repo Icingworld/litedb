@@ -1,54 +1,35 @@
 #pragma once
 
 #include <string>
+#include <optional>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/meta/meta.hpp"
+#include "core/common/ids.hpp"
+#include "core/meta/entry/index_entry.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief CREATE INDEX 语句节点
- * @details 示例：CREATE INDEX [IF NOT EXISTS] <index_name> ON <collection_name> (<column_name>)
+ * @brief 绑定 CREATE INDEX 语句
  */
 class BoundCreateIndexStatement final : public BoundStatement
 {
 public:
     BoundCreateIndexStatement(
-        common::DatabaseId database_id,
-        common::CollectionId collection_id,
-        std::string collection_name,
         common::ColumnId column_id,
-        std::string column_name,
-        std::string index_name,
+        std::optional<std::string> index_name,
         meta::entry::IndexKind index_kind,
-        bool unique,
-        bool if_not_exists,
-        parser::ast::AstNodeLocation location
+        bool unique
     );
 
 public:
     /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
+     * @brief 获取索引名称
+     * @return 索引名称
      */
     [[nodiscard]]
-    common::DatabaseId database_id() const noexcept;
-
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
-    [[nodiscard]]
-    common::CollectionId collection_id() const noexcept;
-
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
-    [[nodiscard]]
-    const std::string & collection_name() const noexcept;
+    const std::optional<std::string> & index_name() const noexcept;
 
     /**
      * @brief 获取列 ID
@@ -56,20 +37,6 @@ public:
      */
     [[nodiscard]]
     common::ColumnId column_id() const noexcept;
-
-    /**
-     * @brief 获取列名称
-     * @return 列名称
-     */
-    [[nodiscard]]
-    const std::string & column_name() const noexcept;
-
-    /**
-     * @brief 获取索引名称
-     * @return 索引名称
-     */
-    [[nodiscard]]
-    const std::string & index_name() const noexcept;
 
     /**
      * @brief 获取索引类型
@@ -85,29 +52,11 @@ public:
     [[nodiscard]]
     bool unique() const noexcept;
 
-    /**
-     * @brief 是否不存在
-     * @return 是否不存在
-     */
-    [[nodiscard]]
-    bool if_not_exists() const noexcept;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
-
 private:
-    common::DatabaseId database_id_;            ///< 数据库 ID
-    common::CollectionId collection_id_;        ///< 集合 ID
-    std::string collection_name_;               ///< 集合名称
     common::ColumnId column_id_;                ///< 列 ID
-    std::string column_name_;                   ///< 列名称
-    std::string index_name_;                    ///< 索引名称
-    meta::entry::IndexKind index_kind_;      ///< 索引类型
+    std::optional<std::string> index_name_;     ///< 索引名称
+    meta::entry::IndexKind index_kind_;         ///< 索引类型
     bool unique_;                               ///< 是否唯一
-    bool if_not_exists_;                        ///< 是否不存在
 };
 
 } // namespace litedb::core::binder::bound

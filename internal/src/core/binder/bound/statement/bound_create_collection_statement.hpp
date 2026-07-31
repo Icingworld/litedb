@@ -5,25 +5,22 @@
 #include <vector>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/meta/meta.hpp"
+#include "core/meta/meta_request.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief CREATE COLLECTION 语句节点
- * @details 示例：CREATE COLLECTION [IF NOT EXISTS] collection_name (<column_definition> [, <column_definition>])
+ * @brief 绑定 CREATE COLLECTION 语句
  */
 class BoundCreateCollectionStatement final : public BoundStatement
 {
 public:
     BoundCreateCollectionStatement(
         common::DatabaseId database_id,
-        std::string collection_name,
-        bool if_not_exists,
+        std::optional<std::string> collection_name,
         std::vector<meta::ColumnDefinition> columns,
-        std::optional<std::string> comment,
-        parser::ast::AstNodeLocation location
+        std::optional<std::string> comment
     );
 
 public:
@@ -39,14 +36,7 @@ public:
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection_name() const noexcept;
-
-    /**
-     * @brief 是否存在
-     * @return 是否存在
-     */
-    [[nodiscard]]
-    bool if_not_exists() const noexcept;
+    const std::optional<std::string> & collection_name() const noexcept;
 
     /**
      * @brief 获取列定义列表
@@ -62,18 +52,11 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & comment() const noexcept;
 
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
-
 private:
-    common::DatabaseId database_id_;                    ///< 数据库 ID
-    std::string collection_name_;                       ///< 集合名称
-    bool if_not_exists_;                                ///< 是否不存在
-    std::vector<meta::ColumnDefinition> columns_;    ///< 列定义列表
-    std::optional<std::string> comment_;                ///< 集合注释
+    common::DatabaseId database_id_;                     ///< 数据库 ID
+    std::optional<std::string> collection_name_;         ///< 集合名称
+    std::vector<meta::ColumnDefinition> columns_;        ///< 列定义列表
+    std::optional<std::string> comment_;                 ///< 集合注释
 };
 
 } // namespace litedb::core::binder::bound

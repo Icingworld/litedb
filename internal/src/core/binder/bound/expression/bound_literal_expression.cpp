@@ -1,6 +1,5 @@
 #include "core/binder/bound/expression/bound_literal_expression.hpp"
 
-#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -8,10 +7,9 @@ namespace litedb::core::binder::bound
 
 BoundLiteralExpression::BoundLiteralExpression(
     common::LogicalType type,
-    std::string value,
-    parser::ast::AstNodeLocation location
+    std::string value
 )
-    : BoundExpression(BoundExpressionKind::Literal, type, location)
+    : BoundExpression(BoundExpressionKind::Literal, type)
     , value_(std::move(value))
 {
 }
@@ -19,16 +17,6 @@ BoundLiteralExpression::BoundLiteralExpression(
 const std::string & BoundLiteralExpression::value() const noexcept
 {
     return value_;
-}
-
-void BoundLiteralExpression::accept(BoundExpressionVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
-std::unique_ptr<BoundExpression> BoundLiteralExpression::clone() const
-{
-    return std::make_unique<BoundLiteralExpression>(type(), value_, location());
 }
 
 } // namespace litedb::core::binder::bound

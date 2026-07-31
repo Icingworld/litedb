@@ -6,20 +6,15 @@ namespace litedb::core::binder::bound
 {
 
 BoundSelectStatement::BoundSelectStatement(
-    common::DatabaseId database_id,
     common::CollectionId collection_id,
-    std::string collection_name,
     std::vector<BoundProjectionItem> projections,
     std::unique_ptr<BoundExpression> where,
     std::vector<BoundOrderByItem> order_by,
     std::optional<std::size_t> limit,
-    std::optional<std::size_t> offset,
-    parser::ast::AstNodeLocation location
+    std::optional<std::size_t> offset
 )
-    : BoundStatement(BoundStatementKind::Select, location)
-    , database_id_(database_id)
+    : BoundStatement(BoundStatementKind::Select)
     , collection_id_(collection_id)
-    , collection_name_(std::move(collection_name))
     , projections_(std::move(projections))
     , where_(std::move(where))
     , order_by_(std::move(order_by))
@@ -28,22 +23,13 @@ BoundSelectStatement::BoundSelectStatement(
 {
 }
 
-common::DatabaseId BoundSelectStatement::database_id() const noexcept
-{
-    return database_id_;
-}
-
 common::CollectionId BoundSelectStatement::collection_id() const noexcept
 {
     return collection_id_;
 }
 
-const std::string & BoundSelectStatement::collection_name() const noexcept
-{
-    return collection_name_;
-}
-
-const std::vector<BoundProjectionItem> & BoundSelectStatement::projections() const noexcept
+const std::vector<BoundProjectionItem> &
+BoundSelectStatement::projections() const noexcept
 {
     return projections_;
 }
@@ -53,7 +39,8 @@ const BoundExpression * BoundSelectStatement::where() const noexcept
     return where_.get();
 }
 
-const std::vector<BoundOrderByItem> & BoundSelectStatement::order_by() const noexcept
+const std::vector<BoundOrderByItem> &
+BoundSelectStatement::order_by() const noexcept
 {
     return order_by_;
 }
@@ -68,7 +55,8 @@ std::optional<std::size_t> BoundSelectStatement::offset() const noexcept
     return offset_;
 }
 
-std::vector<BoundProjectionItem> BoundSelectStatement::take_projections() noexcept
+std::vector<BoundProjectionItem>
+BoundSelectStatement::take_projections() noexcept
 {
     return std::move(projections_);
 }
@@ -81,11 +69,6 @@ std::unique_ptr<BoundExpression> BoundSelectStatement::take_where() noexcept
 std::vector<BoundOrderByItem> BoundSelectStatement::take_order_by() noexcept
 {
     return std::move(order_by_);
-}
-
-void BoundSelectStatement::accept(BoundStatementVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 } // namespace litedb::core::binder::bound

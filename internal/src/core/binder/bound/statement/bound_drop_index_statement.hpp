@@ -1,76 +1,33 @@
 #pragma once
 
-#include <string>
+#include <optional>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief DROP INDEX 语句节点
- * @details 示例：DROP INDEX [IF EXISTS] <index_name> ON <collection_name>
+ * @brief 绑定 DROP INDEX 语句
  */
 class BoundDropIndexStatement final : public BoundStatement
 {
 public:
     BoundDropIndexStatement(
-        common::DatabaseId database_id,
-        common::CollectionId collection_id,
-        std::string collection_name,
-        std::string index_name,
-        bool if_exists,
-        parser::ast::AstNodeLocation location
-    );
+        std::optional<common::IndexId> index_id
+    ) noexcept;
 
 public:
     /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
+     * @brief 获取索引 ID
+     * @return 索引 ID
      */
     [[nodiscard]]
-    common::DatabaseId database_id() const noexcept;
-
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
-    [[nodiscard]]
-    common::CollectionId collection_id() const noexcept;
-
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
-    [[nodiscard]]
-    const std::string & collection_name() const noexcept;
-
-    /**
-     * @brief 获取索引名称
-     * @return 索引名称
-     */
-    [[nodiscard]]
-    const std::string & index_name() const noexcept;
-
-    /**
-     * @brief 是否存在
-     * @return 是否存在
-     */
-    [[nodiscard]]
-    bool if_exists() const noexcept;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
+    std::optional<common::IndexId> index_id() const noexcept;
 
 private:
-    common::DatabaseId database_id_;        ///< 数据库 ID
-    common::CollectionId collection_id_;    ///< 集合 ID
-    std::string collection_name_;           ///< 集合名称
-    std::string index_name_;                ///< 索引名称
-    bool if_exists_;                        ///< 是否存在
+    std::optional<common::IndexId> index_id_;  ///< 索引 ID
 };
 
 } // namespace litedb::core::binder::bound

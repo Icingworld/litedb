@@ -1,12 +1,5 @@
 #pragma once
 
-#include <string>
-
-#include "core/common/ids.hpp"
-#include "core/common/logical_type.hpp"
-#include "core/parser/ast/ast_node.hpp"
-#include "core/binder/bound/statement/bound_statement_visitor.hpp"
-
 namespace litedb::core::binder::bound
 {
 
@@ -36,17 +29,6 @@ enum class BoundStatementKind
 };
 
 /**
- * @brief 绑定列
- */
-struct BoundColumn
-{
-    common::ColumnId column_id {0};     ///< 列 ID
-    std::string name;                   ///< 列名称
-    common::LogicalType type;           ///< 列类型
-    bool nullable {true};               ///< 是否可为 NULL
-};
-
-/**
  * @brief 绑定语句基类
  */
 class BoundStatement
@@ -62,6 +44,9 @@ public:
 
     virtual ~BoundStatement() noexcept = default;
 
+protected:
+    explicit BoundStatement(BoundStatementKind kind) noexcept;
+
 public:
     /**
      * @brief 获取绑定语句类型
@@ -70,25 +55,8 @@ public:
     [[nodiscard]]
     BoundStatementKind kind() const noexcept;
 
-    /**
-     * @brief 获取节点位置
-     * @return 节点位置
-     */
-    [[nodiscard]]
-    parser::ast::AstNodeLocation location() const noexcept;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    virtual void accept(BoundStatementVisitor & visitor) const = 0;
-
-protected:
-    BoundStatement(BoundStatementKind kind, parser::ast::AstNodeLocation location) noexcept;
-
 private:
     BoundStatementKind kind_;                   ///< 绑定语句类型
-    parser::ast::AstNodeLocation location_;     ///< 节点位置
 };
 
 } // namespace litedb::core::binder::bound
