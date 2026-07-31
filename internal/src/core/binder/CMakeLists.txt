@@ -13,6 +13,8 @@ set(BINDER_SOURCES
     worker/binder_insert_worker.cpp
     worker/binder_update_worker.cpp
     worker/binder_delete_worker.cpp
+    bound/debug/debug_helper.cpp
+    bound/debug/debug_printer.cpp
     bound/expression/bound_binary_expression.cpp
     bound/expression/bound_between_expression.cpp
     bound/expression/bound_cast_expression.cpp

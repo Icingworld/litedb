@@ -6,54 +6,50 @@
 #include <string>
 #include <string_view>
 
-#include "core/parser/ast/dispatcher/expression_dispatcher.hpp"
-#include "core/parser/ast/dispatcher/statement_dispatcher.hpp"
+#include "core/binder/bound/dispatcher/expression_dispatcher.hpp"
+#include "core/binder/bound/dispatcher/statement_dispatcher.hpp"
 
-namespace litedb::core::parser::ast
+namespace litedb::core::binder::bound
 {
+
+struct BoundColumn;
 
 /**
- * @brief AST 调试打印器选项
+ * @brief 绑定调试打印器选项
  */
-struct AstDebugPrinterOptions
+struct BoundDebugPrinterOptions
 {
-    bool include_location {true};    ///< 是否包含位置信息
+    bool include_type {true};    ///< 是否包含表达式和列的逻辑类型
 };
 
 /**
- * @brief AST 调试打印器
+ * @brief 绑定调试打印器
  */
-class AstDebugPrinter final
-    : private AstStatementDispatcher<AstDebugPrinter>
-    , private AstExpressionDispatcher<AstDebugPrinter>
+class BoundDebugPrinter final
+    : private BoundStatementDispatcher<BoundDebugPrinter>
+    , private BoundExpressionDispatcher<BoundDebugPrinter>
 {
-    friend class AstStatementDispatcher<AstDebugPrinter>;
-    friend class AstExpressionDispatcher<AstDebugPrinter>;
+    friend class BoundStatementDispatcher<BoundDebugPrinter>;
+    friend class BoundExpressionDispatcher<BoundDebugPrinter>;
 
 public:
-    explicit AstDebugPrinter(
+    explicit BoundDebugPrinter(
         std::ostream & ostream,
-        AstDebugPrinterOptions options = {}
+        BoundDebugPrinterOptions options = {}
     );
 
 public:
     /**
-     * @brief 打印任意 AST 节点
-     * @param node AST 节点
+     * @brief 打印绑定语句
+     * @param statement 绑定语句
      */
-    void print(const AstNode & node);
+    void print(const BoundStatement & statement);
 
     /**
-     * @brief 打印语句
-     * @param statement 语句
+     * @brief 打印绑定表达式
+     * @param expression 绑定表达式
      */
-    void print(const StatementNode & statement);
-
-    /**
-     * @brief 打印表达式
-     * @param expression 表达式
-     */
-    void print(const ExpressionNode & expression);
+    void print(const BoundExpression & expression);
 
 private:
     /**
@@ -61,7 +57,7 @@ private:
      * @param statement CREATE DATABASE 语句
      */
     void visit_create_database_statement(
-        const CreateDatabaseStatement & statement
+        const BoundCreateDatabaseStatement & statement
     );
 
     /**
@@ -69,7 +65,7 @@ private:
      * @param statement CREATE COLLECTION 语句
      */
     void visit_create_collection_statement(
-        const CreateCollectionStatement & statement
+        const BoundCreateCollectionStatement & statement
     );
 
     /**
@@ -77,7 +73,7 @@ private:
      * @param statement CREATE INDEX 语句
      */
     void visit_create_index_statement(
-        const CreateIndexStatement & statement
+        const BoundCreateIndexStatement & statement
     );
 
     /**
@@ -85,7 +81,7 @@ private:
      * @param statement CREATE VINDEX 语句
      */
     void visit_create_vector_index_statement(
-        const CreateVectorIndexStatement & statement
+        const BoundCreateVectorIndexStatement & statement
     );
 
     /**
@@ -93,7 +89,7 @@ private:
      * @param statement DELETE 语句
      */
     void visit_delete_statement(
-        const DeleteStatement & statement
+        const BoundDeleteStatement & statement
     );
 
     /**
@@ -101,7 +97,7 @@ private:
      * @param statement DESCRIBE COLLECTION 语句
      */
     void visit_describe_collection_statement(
-        const DescribeCollectionStatement & statement
+        const BoundDescribeCollectionStatement & statement
     );
 
     /**
@@ -109,7 +105,7 @@ private:
      * @param statement DROP DATABASE 语句
      */
     void visit_drop_database_statement(
-        const DropDatabaseStatement & statement
+        const BoundDropDatabaseStatement & statement
     );
 
     /**
@@ -117,7 +113,7 @@ private:
      * @param statement DROP COLLECTION 语句
      */
     void visit_drop_collection_statement(
-        const DropCollectionStatement & statement
+        const BoundDropCollectionStatement & statement
     );
 
     /**
@@ -125,7 +121,7 @@ private:
      * @param statement DROP INDEX 语句
      */
     void visit_drop_index_statement(
-        const DropIndexStatement & statement
+        const BoundDropIndexStatement & statement
     );
 
     /**
@@ -133,7 +129,7 @@ private:
      * @param statement DROP VINDEX 语句
      */
     void visit_drop_vector_index_statement(
-        const DropVectorIndexStatement & statement
+        const BoundDropVectorIndexStatement & statement
     );
 
     /**
@@ -141,7 +137,7 @@ private:
      * @param statement INSERT 语句
      */
     void visit_insert_statement(
-        const InsertStatement & statement
+        const BoundInsertStatement & statement
     );
 
     /**
@@ -149,7 +145,7 @@ private:
      * @param statement SELECT 语句
      */
     void visit_select_statement(
-        const SelectStatement & statement
+        const BoundSelectStatement & statement
     );
 
     /**
@@ -157,7 +153,7 @@ private:
      * @param statement SHOW DATABASES 语句
      */
     void visit_show_databases_statement(
-        const ShowDatabasesStatement & statement
+        const BoundShowDatabasesStatement & statement
     );
 
     /**
@@ -165,7 +161,7 @@ private:
      * @param statement SHOW COLLECTIONS 语句
      */
     void visit_show_collections_statement(
-        const ShowCollectionsStatement & statement
+        const BoundShowCollectionsStatement & statement
     );
 
     /**
@@ -173,7 +169,7 @@ private:
      * @param statement SHOW INDEXES 语句
      */
     void visit_show_indexes_statement(
-        const ShowIndexesStatement & statement
+        const BoundShowIndexesStatement & statement
     );
 
     /**
@@ -181,7 +177,7 @@ private:
      * @param statement SHOW VINDEXES 语句
      */
     void visit_show_vector_indexes_statement(
-        const ShowVectorIndexesStatement & statement
+        const BoundShowVectorIndexesStatement & statement
     );
 
     /**
@@ -189,7 +185,7 @@ private:
      * @param statement UPDATE 语句
      */
     void visit_update_statement(
-        const UpdateStatement & statement
+        const BoundUpdateStatement & statement
     );
 
     /**
@@ -197,23 +193,7 @@ private:
      * @param statement USE 语句
      */
     void visit_use_statement(
-        const UseStatement & statement
-    );
-
-    /**
-     * @brief 访问标识符表达式
-     * @param expression 标识符表达式
-     */
-    void visit_identifier_expression(
-        const IdentifierExpression & expression
-    );
-
-    /**
-     * @brief 访问通配符表达式
-     * @param expression 通配符表达式
-     */
-    void visit_wildcard_expression(
-        const WildcardExpression & expression
+        const BoundUseStatement & statement
     );
 
     /**
@@ -221,39 +201,23 @@ private:
      * @param expression 字面量表达式
      */
     void visit_literal_expression(
-        const LiteralExpression & expression
+        const BoundLiteralExpression & expression
     );
 
     /**
-     * @brief 访问函数调用表达式
-     * @param expression 函数调用表达式
+     * @brief 访问空值表达式
+     * @param expression 空值表达式
      */
-    void visit_function_call_expression(
-        const FunctionCallExpression & expression
+    void visit_null_expression(
+        const BoundNullExpression & expression
     );
 
     /**
      * @brief 访问列引用表达式
      * @param expression 列引用表达式
      */
-    void visit_column_reference_expression(
-        const ColumnReferenceExpression & expression
-    );
-
-    /**
-     * @brief 访问向量表达式
-     * @param expression 向量表达式
-     */
-    void visit_vector_expression(
-        const VectorExpression & expression
-    );
-
-    /**
-     * @brief 访问二元表达式
-     * @param expression 二元表达式
-     */
-    void visit_binary_expression(
-        const BinaryExpression & expression
+    void visit_column_ref_expression(
+        const BoundColumnRefExpression & expression
     );
 
     /**
@@ -261,7 +225,31 @@ private:
      * @param expression 一元表达式
      */
     void visit_unary_expression(
-        const UnaryExpression & expression
+        const BoundUnaryExpression & expression
+    );
+
+    /**
+     * @brief 访问二元表达式
+     * @param expression 二元表达式
+     */
+    void visit_binary_expression(
+        const BoundBinaryExpression & expression
+    );
+
+    /**
+     * @brief 访问向量表达式
+     * @param expression 向量表达式
+     */
+    void visit_vector_expression(
+        const BoundVectorExpression & expression
+    );
+
+    /**
+     * @brief 访问函数表达式
+     * @param expression 函数表达式
+     */
+    void visit_function_expression(
+        const BoundFunctionExpression & expression
     );
 
     /**
@@ -269,7 +257,7 @@ private:
      * @param expression IN 表达式
      */
     void visit_in_expression(
-        const InExpression & expression
+        const BoundInExpression & expression
     );
 
     /**
@@ -277,7 +265,7 @@ private:
      * @param expression BETWEEN 表达式
      */
     void visit_between_expression(
-        const BetweenExpression & expression
+        const BoundBetweenExpression & expression
     );
 
     /**
@@ -285,15 +273,15 @@ private:
      * @param expression LIKE 表达式
      */
     void visit_like_expression(
-        const LikeExpression & expression
+        const BoundLikeExpression & expression
     );
 
     /**
-     * @brief 访问别名表达式
-     * @param expression 别名表达式
+     * @brief 访问类型转换表达式
+     * @param expression 类型转换表达式
      */
-    void visit_alias_expression(
-        const AliasExpression & expression
+    void visit_cast_expression(
+        const BoundCastExpression & expression
     );
 
     /**
@@ -304,9 +292,8 @@ private:
     /**
      * @brief 写入节点头
      * @param name 节点名称
-     * @param location 节点位置
      */
-    void write_node_header(std::string_view name, AstNodeLocation location);
+    void write_node_header(std::string_view name);
 
     /**
      * @brief 写入字段
@@ -350,13 +337,29 @@ private:
     );
 
     /**
+     * @brief 写入逻辑类型字段
+     * @param name 字段名称
+     * @param type 逻辑类型
+     */
+    void write_type_field(
+        std::string_view name,
+        const common::LogicalType & type
+    );
+
+    /**
+     * @brief 写入绑定列
+     * @param column 绑定列
+     */
+    void write_bound_column(const BoundColumn & column);
+
+    /**
      * @brief 写入表达式子字段
      * @param name 字段名称
      * @param expression 表达式，允许为空
      */
     void write_child_field(
         std::string_view name,
-        const ExpressionNode * expression
+        const BoundExpression * expression
     );
 
     /**
@@ -366,78 +369,51 @@ private:
 
 private:
     std::ostream & ostream_;              ///< 输出流
-    AstDebugPrinterOptions options_;      ///< 打印选项
+    BoundDebugPrinterOptions options_;    ///< 打印选项
     std::size_t indent_;                  ///< 缩进
     std::string pending_str_;             ///< 待处理的节点前缀
 };
 
 /**
- * @brief 打印 AST 节点
- * @param node AST 节点
- * @param options 打印选项
+ * @brief 打印绑定语句
+ * @param statement 绑定语句
  * @return 打印结果
  */
 std::string debug_print(
-    const AstNode & node,
-    AstDebugPrinterOptions options = {}
+    const BoundStatement & statement,
+    BoundDebugPrinterOptions options = {}
 );
 
 /**
- * @brief 打印语句
- * @param statement 语句
- * @param options 打印选项
+ * @brief 打印绑定表达式
+ * @param expression 绑定表达式
  * @return 打印结果
  */
 std::string debug_print(
-    const StatementNode & statement,
-    AstDebugPrinterOptions options = {}
+    const BoundExpression & expression,
+    BoundDebugPrinterOptions options = {}
 );
 
 /**
- * @brief 打印表达式
- * @param expression 表达式
- * @param options 打印选项
- * @return 打印结果
- */
-std::string debug_print(
-    const ExpressionNode & expression,
-    AstDebugPrinterOptions options = {}
-);
-
-/**
- * @brief 打印 AST 节点
+ * @brief 将绑定语句打印到输出流
  * @param ostream 输出流
- * @param node AST 节点
- * @param options 打印选项
+ * @param statement 绑定语句
  */
 void debug_print(
     std::ostream & ostream,
-    const AstNode & node,
-    AstDebugPrinterOptions options = {}
+    const BoundStatement & statement,
+    BoundDebugPrinterOptions options = {}
 );
 
 /**
- * @brief 打印语句
+ * @brief 将绑定表达式打印到输出流
  * @param ostream 输出流
- * @param statement 语句
- * @param options 打印选项
+ * @param expression 绑定表达式
  */
 void debug_print(
     std::ostream & ostream,
-    const StatementNode & statement,
-    AstDebugPrinterOptions options = {}
+    const BoundExpression & expression,
+    BoundDebugPrinterOptions options = {}
 );
 
-/**
- * @brief 打印表达式
- * @param ostream 输出流
- * @param expression 表达式
- * @param options 打印选项
- */
-void debug_print(
-    std::ostream & ostream,
-    const ExpressionNode & expression,
-    AstDebugPrinterOptions options = {}
-);
-
-} // namespace litedb::core::parser::ast
+} // namespace litedb::core::binder::bound

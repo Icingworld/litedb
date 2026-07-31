@@ -35,6 +35,8 @@ AstDebugPrinter::AstDebugPrinter(
 )
     : ostream_(ostream)
     , options_(options)
+    , indent_(0)
+    , pending_str_()
 {
 }
 
@@ -609,7 +611,10 @@ void AstDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
+    write_field(
+        name,
+        value ? std::string_view(*value) : std::string_view("<none>")
+    );
 }
 
 void AstDebugPrinter::write_optional_field(

@@ -1,5 +1,5 @@
 #include "core/binder/binder.hpp"
-#include "core/binder/bound/debug_printer.hpp"
+#include "core/binder/bound/debug/debug_printer.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/executor/executor.hpp"
 #include "core/index/index_engine.hpp"

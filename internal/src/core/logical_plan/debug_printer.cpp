@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-#include "core/binder/bound/debug_printer.hpp"
+#include "core/binder/bound/debug/debug_printer.hpp"
 #include "core/logical_plan/node/logical_filter.hpp"
 #include "core/logical_plan/node/logical_limit.hpp"
 #include "core/logical_plan/node/logical_order_by.hpp"
@@ -132,11 +132,12 @@ void LogicalDebugPrinter::write_bound_expression_field(
     write_indent();
     out_ << name << ":\n";
 
-    binder::bound::BoundDebugPrinterOptions bound_options {
-        .include_location = options_.include_location,
-        .include_type = options_.include_expression_type,
-    };
-    const auto printed = binder::bound::debug_print(expression, bound_options);
+    const auto printed = binder::bound::debug_print(
+        expression,
+        binder::bound::BoundDebugPrinterOptions {
+            .include_type = options_.include_expression_type,
+        }
+    );
     write_indented_lines(out_, indent_ + 1, printed);
 }
 
@@ -216,9 +217,7 @@ void LogicalDebugPrinter::visit(const LogicalProjection & node)
         out_ << '[' << index << "] ProjectionItem\n";
         IndentScope item_scope {*this};
         const auto & projection = node.projections()[index];
-        if (projection.alias.has_value()) {
-            write_field("alias", projection.alias.value());
-        }
+        write_field("output_name", projection.output_name);
         write_bound_expression_field("expression", *projection.expression);
     }
     write_child_field("child", node.child());
