@@ -20,12 +20,12 @@ namespace litedb::core::parser::ast
 {
 
 /**
- * @brief 表达式调度器
+ * @brief AST 表达式调度器
  * @tparam Derived 派生类
  * @tparam ReturnType 返回类型，默认为 void
  */
 template <typename Derived, typename ReturnType = void>
-class ExpressionDispatcher
+class AstExpressionDispatcher
 {
 protected:
     /**
