@@ -41,7 +41,8 @@ public:
      * @param statement CREATE DATABASE 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_create_database(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_create_database(
         const parser::ast::CreateDatabaseStatement & statement
     );
 
@@ -50,7 +51,8 @@ public:
      * @param statement CREATE COLLECTION 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_create_collection(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_create_collection(
         const parser::ast::CreateCollectionStatement & statement
     );
 
@@ -59,7 +61,8 @@ public:
      * @param statement CREATE INDEX 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_create_index(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_create_index(
         const parser::ast::CreateIndexStatement & statement
     );
 
@@ -68,7 +71,8 @@ public:
      * @param statement CREATE VINDEX 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_create_vector_index(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_create_vector_index(
         const parser::ast::CreateVectorIndexStatement & statement
     );
 

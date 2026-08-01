@@ -41,9 +41,11 @@ using ParserError = error::Error;
 
 namespace litedb::core::error
 {
+
 template <>
 struct ErrorTraits<parser::ParserErrorCode>
 {
     static constexpr ErrorCategory category = ErrorCategory::Parser;
 };
+
 } // namespace litedb::core::error

@@ -6,7 +6,6 @@
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_create_vector_index_statement.hpp"
-#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
@@ -26,26 +25,53 @@ BinderCreateWorker::BinderCreateWorker(const BinderContext & context) noexcept
 {
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::bind_create_database(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderCreateWorker::bind_create_database(
     const CreateDatabaseStatement & statement
 )
 {
+    // 查找数据库
+    const auto * database = context_.meta().find_database(
+        statement.database_name()
+    );
+    if (database != nullptr && !statement.if_not_exists()) [[unlikely]] {
+        // 数据库已存在，且用户未指定 if_not_exists 选项
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::DatabaseAlreadyExists,
+            "Database already exists: " + statement.database_name()
+        ));
+    }
+
     return std::make_unique<BoundCreateDatabaseStatement>(
-        statement.database_name(),
-        statement.if_not_exists(),
-        statement.location()
+        database == nullptr ?
+            std::optional<std::string>(statement.database_name()) : std::nullopt
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::bind_create_collection(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderCreateWorker::bind_create_collection(
     const CreateCollectionStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
 
-    auto database_id = helper.require_database(statement.location());
+    // 通过 Helper 获取当前会话数据库
+    auto database_id = helper.require_database();
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
+    }
+
+    // 查找集合
+    const auto * collection = context_.meta().find_collection(
+        *database_id,
+        statement.collection_name()
+    );
+    if (collection != nullptr && !statement.if_not_exists()) [[unlikely]] {
+        // 集合已存在，且用户未指定 if_not_exists 选项
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::CollectionAlreadyExists,
+            "Collection already exists: " + statement.collection_name()
+        ));
     }
 
     auto columns = helper.bind_column_definitions(statement.columns());
@@ -55,31 +81,47 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
 
     return std::make_unique<BoundCreateCollectionStatement>(
         *database_id,
-        statement.collection_name(),
-        statement.if_not_exists(),
+        collection == nullptr ?
+            std::optional<std::string>(statement.collection_name()) : std::nullopt,
         std::move(*columns),
-        statement.comment(),
-        statement.location()
+        statement.comment()
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::bind_create_index(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderCreateWorker::bind_create_index(
     const CreateIndexStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
-    
-    auto collection = helper.bind_collection(statement.collection_name(), statement.location());
+
+    // 通过 Helper 绑定集合
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
+    // 查找索引
+    const auto * index = context_.meta().find_index(
+        collection->collection->id(),
+        statement.index_name()
+    );
+    if (index != nullptr && !statement.if_not_exists()) [[unlikely]] {
+        // 索引已存在，且用户未指定 if_not_exists 选项
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::IndexAlreadyExists,
+            "Index already exists: " + statement.index_name()
+        ));
+    }
+
     // 查找列
-    const auto * column = context_.meta().find_column(collection->collection->id(), statement.column_name());
+    const auto * column = context_.meta().find_column(
+        collection->collection->id(),
+        statement.column_name()
+    );
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
-            statement.location(),
             "Column not found: " + statement.column_name()
         ));
     }
@@ -88,54 +130,92 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
     if (column->type().id == LogicalTypeId::Vector) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
-            statement.location(),
             "Scalar index cannot be created on VECTOR column: " + column->name()
         ));
     }
 
+    // 绑定索引类型
+    meta::entry::IndexKind index_kind = meta::entry::IndexKind::BTree;
+    switch (statement.method()) {
+    case CreateIndexMethod::Default:
+        [[fallthrough]];
+    case CreateIndexMethod::BTree:
+        index_kind = meta::entry::IndexKind::BTree;
+        break;
+    }
+
     return std::make_unique<BoundCreateIndexStatement>(
-        collection->database_id,
-        collection->collection->id(),
-        collection->collection->name(),
         column->id(),
-        column->name(),
-        statement.index_name(),
-        meta_index_kind(statement.method()),
-        false,
-        statement.if_not_exists(),
-        statement.location()
+        index == nullptr ?
+            std::optional<std::string>(statement.index_name()) : std::nullopt,
+        index_kind,
+        statement.unique()
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::bind_create_vector_index(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderCreateWorker::bind_create_vector_index(
     const CreateVectorIndexStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
-    
-    auto collection = helper.bind_collection(statement.collection_name(), statement.location());
+
+    // 通过 Helper 绑定集合
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
-    const auto * column = context_.meta().find_column(collection->collection->id(), statement.column_name());
+    // 查找向量索引
+    const auto * index = context_.meta().find_vector_index(
+        collection->collection->id(),
+        statement.index_name()
+    );
+    if (index != nullptr && !statement.if_not_exists()) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::VectorIndexAlreadyExists,
+            "Vector index already exists: " + statement.index_name()
+        ));
+    }
+
+    // 查找列
+    const auto * column = context_.meta().find_column(
+        collection->collection->id(),
+        statement.column_name()
+    );
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
-            statement.location(),
             "Column not found: " + statement.column_name()
         ));
     }
 
     // 检查列类型是否为向量，并且维度大于 0
-    if (column->type().id != LogicalTypeId::Vector || !column->type().parameter.has_value() || column->type().parameter.value() == 0) [[unlikely]] {
+    // 理论上不会出现 dimension <= 0 的情况
+    if (column->type().id != LogicalTypeId::Vector
+        || !column->type().parameter.has_value()
+        || column->type().parameter.value() == 0) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
-            statement.location(),
             "Vector index can only be created on VECTOR(n) column: " + column->name()
         ));
     }
 
+    // 验证向量索引选项
+    const auto max_neighbors = statement.options().max_neighbors.value_or(16);
+    const auto ef_construction = statement.options().ef_construction.value_or(200);
+    const auto ef_search = statement.options().ef_search.value_or(64);
+    if (max_neighbors == 0
+        || ef_construction < max_neighbors
+        || ef_search == 0) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::InvalidIndexOptions,
+            "HNSW options require max_neighbors > 0, "
+            "ef_construction >= max_neighbors, and ef_search > 0"
+        ));
+    }
+
+    // 绑定向量距离度量
     meta::entry::VectorDistanceMetric metric = meta::entry::VectorDistanceMetric::L2;
     switch (statement.options().metric) {
     case VectorIndexMetric::Default:
@@ -153,20 +233,15 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
     }
 
     return std::make_unique<BoundCreateVectorIndexStatement>(
-        collection->database_id,
-        collection->collection->id(),
-        collection->collection->name(),
         column->id(),
-        column->name(),
-        statement.index_name(),
+        index == nullptr ?
+            std::optional<std::string>(statement.index_name()) : std::nullopt,
         meta::entry::VectorIndexKind::Hnsw,
         metric,
-        statement.options().max_neighbors.value_or(16),
-        statement.options().ef_construction.value_or(200),
-        statement.options().ef_search.value_or(64),
-        statement.options().random_seed.value_or(0),
-        statement.if_not_exists(),
-        statement.location()
+        max_neighbors,
+        ef_construction,
+        ef_search,
+        statement.options().random_seed.value_or(0)
     );
 }
 

@@ -41,7 +41,8 @@ public:
      * @param statement DROP DATABASE 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_database(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_drop_database(
         const parser::ast::DropDatabaseStatement & statement
     );
     
@@ -50,7 +51,8 @@ public:
      * @param statement DROP COLLECTION 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_collection(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_drop_collection(
         const parser::ast::DropCollectionStatement & statement
     );
     
@@ -59,7 +61,8 @@ public:
      * @param statement DROP INDEX 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_index(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_drop_index(
         const parser::ast::DropIndexStatement & statement
     );
     
@@ -68,7 +71,8 @@ public:
      * @param statement DROP VINDEX 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_vector_index(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_drop_vector_index(
         const parser::ast::DropVectorIndexStatement & statement
     );
 

@@ -27,6 +27,7 @@ public:
         std::string collection_name,
         std::string column_name,
         bool if_not_exists,
+        bool unique,
         CreateIndexMethod method,
         AstNodeLocation location
     ) noexcept;
@@ -68,6 +69,13 @@ public:
     bool if_not_exists() const noexcept;
 
     /**
+     * @brief 是否为唯一索引
+     * @return 是否为唯一索引
+     */
+    [[nodiscard]]
+    bool unique() const noexcept;
+
+    /**
      * @brief 获取创建索引方法
      * @return 创建索引方法
      */
@@ -79,6 +87,7 @@ private:
     std::string collection_name_;   ///< 集合名称
     std::string column_name_;       ///< 列名称
     bool if_not_exists_;            ///< 是否不存在
+    bool unique_;                   ///< 是否为唯一索引
     CreateIndexMethod method_;      ///< 创建索引方法
 };
 

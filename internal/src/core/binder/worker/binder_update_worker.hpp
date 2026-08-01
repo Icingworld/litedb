@@ -38,7 +38,8 @@ public:
      * @param statement UPDATE 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_update(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_update(
         const parser::ast::UpdateStatement & statement
     );
 

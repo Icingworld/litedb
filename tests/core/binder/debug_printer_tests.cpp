@@ -1,4 +1,5 @@
 #include "core/binder/bound/debug/debug_printer.hpp"
+#include "core/function/builtin/builtin_functions.hpp"
 
 #include <exception>
 #include <iostream>
@@ -98,21 +99,25 @@ void test_expression_debug_print()
     require_contains(output, "    [0] BoundLiteralExpression\n");
     require_contains(output, "    [1] BoundLiteralExpression\n");
 
-    auto function = std::make_shared<function::ScalarFunction>(
-        "identity",
-        std::vector<function::FunctionSignature> {},
-        nullptr
+    auto function_binding = function::builtin::builtin_function_registry().bind_scalar(
+        "l2_distance",
+        {
+            type(common::LogicalTypeId::Vector, 3),
+            type(common::LogicalTypeId::Vector, 3),
+        }
     );
+    require(function_binding.has_value(), "builtin function binding missing");
     std::vector<std::unique_ptr<BoundExpression>> arguments;
     arguments.push_back(literal(common::LogicalTypeId::Integer, "1"));
+    arguments.push_back(literal(common::LogicalTypeId::Integer, "2"));
     BoundFunctionExpression function_expression(
-        std::move(function),
+        std::move(function_binding->function),
         std::move(arguments),
-        type(common::LogicalTypeId::Integer)
+        function_binding->signature.return_type
     );
     output = debug_print(function_expression);
     require_contains(output, "BoundFunctionExpression\n");
-    require_contains(output, "  name: identity\n");
+    require_contains(output, "  name: l2_distance\n");
     require_contains(output, "    [0] BoundLiteralExpression\n");
 
     std::vector<std::unique_ptr<BoundExpression>> values;

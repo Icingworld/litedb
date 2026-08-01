@@ -12,7 +12,10 @@ namespace litedb::core::binder
 class BinderContext
 {
 public:
-    BinderContext(meta::CatalogView meta, const SessionContext & session) noexcept;
+    BinderContext(
+        meta::CatalogView meta,
+        const SessionContext & session
+    ) noexcept;
 
 public:
     /**

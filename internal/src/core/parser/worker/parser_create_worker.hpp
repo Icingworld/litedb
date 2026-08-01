@@ -57,11 +57,12 @@ private:
     /**
      * @brief 解析 CREATE INDEX 语句
      * @param location 语句位置
+     * @param unique 是否为唯一索引
      * @return 解析结果
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_create_index_statement(TokenLocation location);
+    parse_create_index_statement(TokenLocation location, bool unique);
 
     /**
      * @brief 解析 CREATE VINDEX 语句

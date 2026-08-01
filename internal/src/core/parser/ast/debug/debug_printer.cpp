@@ -180,6 +180,7 @@ void AstDebugPrinter::visit_create_index_statement(
     write_field("collection_name", statement.collection_name());
     write_field("column_name", statement.column_name());
     write_field("if_not_exists", statement.if_not_exists());
+    write_field("unique", statement.unique());
     write_field("method", create_index_method_name(statement.method()));
 }
 

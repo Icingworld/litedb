@@ -177,11 +177,12 @@ void test_vector_index_debug_print()
 void test_remaining_statement_debug_print()
 {
     auto create_index = parse_ok(
-        "CREATE INDEX IF NOT EXISTS idx_age ON users(age) USING BTREE;"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_age ON users(age) USING BTREE;"
     );
     const auto create_index_output = print_without_location(*create_index);
     require_contains(create_index_output, "CreateIndexStatement\n");
     require_contains(create_index_output, "  index_name: idx_age\n");
+    require_contains(create_index_output, "  unique: true\n");
     require_contains(create_index_output, "  method: BTree\n");
 
     auto drop_vector_index = parse_ok(

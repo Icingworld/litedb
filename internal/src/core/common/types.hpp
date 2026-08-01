@@ -25,6 +25,16 @@ enum class BinaryOperator : std::uint8_t
     Divide,           ///< 除法
     Modulus,          ///< 取模
     Power,            ///< 幂运算
+    Equal,            ///< 等于
+    NotEqual,         ///< 不等于
+    LessThan,         ///< 小于
+    LessThanOrEqual,  ///< 小于等于
+    GreaterThan,      ///< 大于
+    GreaterThanOrEqual, ///< 大于等于
+    And,              ///< 与
+    Or,               ///< 或
+    Xor,              ///< 异或
+    Like,             ///< 模糊匹配
 };
 
 } // namespace litedb::core::common

@@ -38,7 +38,8 @@ public:
      * @param statement DESCRIBE COLLECTION 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_describe_collection(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_describe_collection(
         const parser::ast::DescribeCollectionStatement & statement
     );
 

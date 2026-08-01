@@ -1,6 +1,6 @@
 #include "core/binder/worker/binder_worker.hpp"
 
-#include "core/binder/binder_helper.hpp"
+#include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/binder/worker/binder_create_worker.hpp"
 #include "core/binder/worker/binder_delete_worker.hpp"
 #include "core/binder/worker/binder_describe_worker.hpp"
@@ -10,25 +10,6 @@
 #include "core/binder/worker/binder_show_worker.hpp"
 #include "core/binder/worker/binder_update_worker.hpp"
 #include "core/binder/worker/binder_use_worker.hpp"
-#include "core/parser/ast/statement/create_collection_statement.hpp"
-#include "core/parser/ast/statement/create_database_statement.hpp"
-#include "core/parser/ast/statement/create_index_statement.hpp"
-#include "core/parser/ast/statement/create_vector_index_statement.hpp"
-#include "core/parser/ast/statement/delete_statement.hpp"
-#include "core/parser/ast/statement/describe_collection_statement.hpp"
-#include "core/parser/ast/statement/drop_collection_statement.hpp"
-#include "core/parser/ast/statement/drop_database_statement.hpp"
-#include "core/parser/ast/statement/drop_index_statement.hpp"
-#include "core/parser/ast/statement/drop_vector_index_statement.hpp"
-#include "core/parser/ast/statement/insert_statement.hpp"
-#include "core/parser/ast/statement/select_statement.hpp"
-#include "core/parser/ast/statement/show_collections_statement.hpp"
-#include "core/parser/ast/statement/show_databases_statement.hpp"
-#include "core/parser/ast/statement/show_indexes_statement.hpp"
-#include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
-#include "core/parser/ast/statement/statement_node.hpp"
-#include "core/parser/ast/statement/update_statement.hpp"
-#include "core/parser/ast/statement/use_statement.hpp"
 
 namespace litedb::core::binder
 {
@@ -41,54 +22,156 @@ BinderWorker::BinderWorker(const BinderContext & context)
 {
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_statement(const StatementNode & statement)
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::bind_statement(
+    const StatementNode & statement
+)
 {
-    switch (statement.kind()) {
-    case AstNodeKind::Use:
-        return BinderUseWorker(context_).bind_use(static_cast<const UseStatement &>(statement));
-    case AstNodeKind::CreateDatabase:
-        return BinderCreateWorker(context_).bind_create_database(static_cast<const CreateDatabaseStatement &>(statement));
-    case AstNodeKind::CreateCollection:
-        return BinderCreateWorker(context_).bind_create_collection(static_cast<const CreateCollectionStatement &>(statement));
-    case AstNodeKind::CreateIndex:
-        return BinderCreateWorker(context_).bind_create_index(static_cast<const CreateIndexStatement &>(statement));
-    case AstNodeKind::CreateVectorIndex:
-        return BinderCreateWorker(context_).bind_create_vector_index(static_cast<const CreateVectorIndexStatement &>(statement));
-    case AstNodeKind::DropDatabase:
-        return BinderDropWorker(context_).bind_drop_database(static_cast<const DropDatabaseStatement &>(statement));
-    case AstNodeKind::DropCollection:
-        return BinderDropWorker(context_).bind_drop_collection(static_cast<const DropCollectionStatement &>(statement));
-    case AstNodeKind::DropIndex:
-        return BinderDropWorker(context_).bind_drop_index(static_cast<const DropIndexStatement &>(statement));
-    case AstNodeKind::DropVectorIndex:
-        return BinderDropWorker(context_).bind_drop_vector_index(static_cast<const DropVectorIndexStatement &>(statement));
-    case AstNodeKind::ShowDatabases:
-        return BinderShowWorker(context_).bind_show_databases(static_cast<const ShowDatabasesStatement &>(statement));
-    case AstNodeKind::ShowCollections:
-        return BinderShowWorker(context_).bind_show_collections(static_cast<const ShowCollectionsStatement &>(statement));
-    case AstNodeKind::ShowIndexes:
-        return BinderShowWorker(context_).bind_show_indexes(static_cast<const ShowIndexesStatement &>(statement));
-    case AstNodeKind::ShowVectorIndexes:
-        return BinderShowWorker(context_).bind_show_vector_indexes(static_cast<const ShowVectorIndexesStatement &>(statement));
-    case AstNodeKind::DescribeCollection:
-        return BinderDescribeWorker(context_).bind_describe_collection(
-            static_cast<const DescribeCollectionStatement &>(statement)
-        );
-    case AstNodeKind::Insert:
-        return BinderInsertWorker(context_).bind_insert(static_cast<const InsertStatement &>(statement));
-    case AstNodeKind::Select:
-        return BinderSelectWorker(context_).bind_select(static_cast<const SelectStatement &>(statement));
-    case AstNodeKind::Update:
-        return BinderUpdateWorker(context_).bind_update(static_cast<const UpdateStatement &>(statement));
-    case AstNodeKind::Delete:
-        return BinderDeleteWorker(context_).bind_delete(static_cast<const DeleteStatement &>(statement));
-    [[unlikely]] default:
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::UnsupportedStatement,
-            statement.location(),
-            "Unsupported statement"
-        ));
-    }
+    return dispatch_statement(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_create_database_statement(
+    const CreateDatabaseStatement & statement
+)
+{
+    return BinderCreateWorker(context_).bind_create_database(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_create_collection_statement(
+    const CreateCollectionStatement & statement
+)
+{
+    return BinderCreateWorker(context_).bind_create_collection(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_create_index_statement(
+    const CreateIndexStatement & statement
+)
+{
+    return BinderCreateWorker(context_).bind_create_index(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_create_vector_index_statement(
+    const CreateVectorIndexStatement & statement
+)
+{
+    return BinderCreateWorker(context_).bind_create_vector_index(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_delete_statement(
+    const DeleteStatement & statement
+)
+{
+    return BinderDeleteWorker(context_).bind_delete(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_describe_collection_statement(
+    const DescribeCollectionStatement & statement
+)
+{
+    return BinderDescribeWorker(context_).bind_describe_collection(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_drop_database_statement(
+    const DropDatabaseStatement & statement
+)
+{
+    return BinderDropWorker(context_).bind_drop_database(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_drop_collection_statement(
+    const DropCollectionStatement & statement
+)
+{
+    return BinderDropWorker(context_).bind_drop_collection(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_drop_index_statement(
+    const DropIndexStatement & statement
+)
+{
+    return BinderDropWorker(context_).bind_drop_index(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_drop_vector_index_statement(
+    const DropVectorIndexStatement & statement
+)
+{
+    return BinderDropWorker(context_).bind_drop_vector_index(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_insert_statement(
+    const InsertStatement & statement
+)
+{
+    return BinderInsertWorker(context_).bind_insert(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_select_statement(
+    const SelectStatement & statement
+)
+{
+    return BinderSelectWorker(context_).bind_select(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_show_databases_statement(
+    const ShowDatabasesStatement & statement
+)
+{
+    return BinderShowWorker(context_).bind_show_databases(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_show_collections_statement(
+    const ShowCollectionsStatement & statement
+)
+{
+    return BinderShowWorker(context_).bind_show_collections(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_show_indexes_statement(
+    const ShowIndexesStatement & statement
+)
+{
+    return BinderShowWorker(context_).bind_show_indexes(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_show_vector_indexes_statement(
+    const ShowVectorIndexesStatement & statement
+)
+{
+    return BinderShowWorker(context_).bind_show_vector_indexes(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_update_statement(
+    const UpdateStatement & statement
+)
+{
+    return BinderUpdateWorker(context_).bind_update(statement);
+}
+
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderWorker::visit_use_statement(
+    const UseStatement & statement
+)
+{
+    return BinderUseWorker(context_).bind_use(statement);
 }
 
 } // namespace litedb::core::binder

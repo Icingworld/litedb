@@ -8,10 +8,8 @@
 #include "core/binder/binder_error.hpp"
 #include "core/binder/binder_context.hpp"
 #include "core/schema/default_expression.hpp"
-#include "core/meta/meta.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
-#include "core/parser/ast/ast_node.hpp"
 #include "core/parser/ast/column_definition.hpp"
 
 namespace litedb::core::parser::ast
@@ -61,22 +59,19 @@ public:
 public:
     /**
      * @brief 要求数据库
-     * @param location 位置
      * @return 数据库 ID
      */
     [[nodiscard]]
-    std::expected<common::DatabaseId, BinderError> require_database(parser::ast::AstNodeLocation location) const;
+    std::expected<common::DatabaseId, BinderError> require_database() const;
 
     /**
      * @brief 绑定集合
      * @param collection_name 集合名称
-     * @param location 位置
      * @return 绑定后的集合
      */
     [[nodiscard]]
     std::expected<BindingCollection, BinderError> bind_collection(
-        const std::string & collection_name,
-        parser::ast::AstNodeLocation location
+        const std::string & collection_name
     ) const;
 
     /**
@@ -106,13 +101,11 @@ public:
     /**
      * @brief 绑定默认表达式
      * @param expression 默认表达式
-     * @param location 位置
      * @return 绑定后的表达式
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<bound::BoundExpression>, BinderError> bind_default_expression(
-        const schema::DefaultExpression & expression,
-        parser::ast::AstNodeLocation location
+        const schema::DefaultExpression & expression
     ) const;
 
     /**
@@ -128,13 +121,11 @@ public:
     /**
      * @brief 验证声明的数据类型
      * @param data_type 数据类型
-     * @param location 位置
      * @return 验证后的数据类型
      */
     [[nodiscard]]
     std::expected<common::LogicalType, BinderError> validate_data_type(
-        const common::LogicalType & data_type,
-        parser::ast::AstNodeLocation location
+        const common::LogicalType & data_type
     ) const;
 
     /**

@@ -1,20 +1,32 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "core/binder/binder_error.hpp"
+#include "core/binder/bound/bound_column.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
-#include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/meta/meta.hpp"
 #include "core/common/logical_type.hpp"
-#include "core/parser/ast/ast_node.hpp"
-#include "core/parser/ast/statement/create_index_statement.hpp"
-#include "core/parser/token.hpp"
+#include "core/common/types.hpp"
+#include "core/meta/entry/column_entry.hpp"
 
 namespace litedb::core::binder
 {
+
+/**
+ * @brief 创建绑定错误
+ * @param code 错误码
+ * @param message 错误消息
+ * @return 绑定错误
+ */
+[[nodiscard]]
+BinderError make_binder_error(
+    BinderErrorCode code,
+    std::string_view message
+);
 
 /**
  * @brief 创建绑定错误
@@ -24,7 +36,11 @@ namespace litedb::core::binder
  * @return 绑定错误
  */
 [[nodiscard]]
-BinderError make_binder_error(BinderErrorCode code, parser::ast::AstNodeLocation location, std::string message);
+BinderError make_binder_error(
+    BinderErrorCode code,
+    parser::ast::AstNodeLocation location,
+    std::string_view message
+);
 
 /**
  * @brief 创建逻辑类型
@@ -33,7 +49,10 @@ BinderError make_binder_error(BinderErrorCode code, parser::ast::AstNodeLocation
  * @return 逻辑类型
  */
 [[nodiscard]]
-common::LogicalType type(common::LogicalTypeId id, std::optional<std::size_t> parameter = std::nullopt);
+common::LogicalType type(
+    common::LogicalTypeId id,
+    std::optional<std::size_t> parameter = std::nullopt
+) noexcept;
 
 /**
  * @brief 判断两个逻辑类型是否相同
@@ -42,7 +61,10 @@ common::LogicalType type(common::LogicalTypeId id, std::optional<std::size_t> pa
  * @return 是否相同
  */
 [[nodiscard]]
-bool same_type(const common::LogicalType & left, const common::LogicalType & right);
+bool same_type(
+    const common::LogicalType & left,
+    const common::LogicalType & right
+) noexcept;
 
 /**
  * @brief 判断逻辑类型是否为数值类型
@@ -50,7 +72,7 @@ bool same_type(const common::LogicalType & left, const common::LogicalType & rig
  * @return 是否为数值类型
  */
 [[nodiscard]]
-bool is_numeric(const common::LogicalType & value);
+bool is_numeric(const common::LogicalType & value) noexcept;
 
 /**
  * @brief 判断逻辑类型是否为布尔类型
@@ -58,7 +80,7 @@ bool is_numeric(const common::LogicalType & value);
  * @return 是否为布尔类型
  */
 [[nodiscard]]
-bool is_boolean(const common::LogicalType & value);
+bool is_boolean(const common::LogicalType & value) noexcept;
 
 /**
  * @brief 判断逻辑类型是否为字符串类型
@@ -66,7 +88,7 @@ bool is_boolean(const common::LogicalType & value);
  * @return 是否为字符串类型
  */
 [[nodiscard]]
-bool is_varchar(const common::LogicalType & value);
+bool is_varchar(const common::LogicalType & value) noexcept;
 
 /**
  * @brief 获取逻辑类型名称
@@ -82,7 +104,7 @@ std::string type_name(const common::LogicalType & value);
  * @return 数字排名
  */
 [[nodiscard]]
-int numeric_rank(const common::LogicalType & value);
+int numeric_rank(const common::LogicalType & value) noexcept;
 
 /**
  * @brief 判断是否可以转换逻辑类型
@@ -91,7 +113,10 @@ int numeric_rank(const common::LogicalType & value);
  * @return 是否可以转换
  */
 [[nodiscard]]
-bool can_cast(const common::LogicalType & source, const common::LogicalType & target);
+bool can_cast(
+    const common::LogicalType & source,
+    const common::LogicalType & target
+) noexcept;
 
 /**
  * @brief 获取公共数值类型
@@ -100,7 +125,10 @@ bool can_cast(const common::LogicalType & source, const common::LogicalType & ta
  * @return 公共数值类型
  */
 [[nodiscard]]
-common::LogicalType common_numeric_type(const common::LogicalType & left, const common::LogicalType & right);
+common::LogicalType common_numeric_type(
+    const common::LogicalType & left,
+    const common::LogicalType & right
+) noexcept;
 
 /**
  * @brief 判断是否可以比较逻辑类型
@@ -110,7 +138,11 @@ common::LogicalType common_numeric_type(const common::LogicalType & left, const 
  * @return 是否可以比较
  */
 [[nodiscard]]
-bool can_compare(const common::LogicalType & left, const common::LogicalType & right, parser::TokenType op);
+bool can_compare(
+    const common::LogicalType & left,
+    const common::LogicalType & right,
+    common::BinaryOperator op
+) noexcept;
 
 /**
  * @brief 判断是否需要转换逻辑类型
@@ -131,13 +163,5 @@ std::unique_ptr<bound::BoundExpression> cast_if_needed(
  */
 [[nodiscard]]
 bound::BoundColumn bound_column_from_entry(const meta::entry::ColumnEntry & column);
-
-/**
- * @brief 获取索引类型
- * @param method 索引方法
- * @return 索引类型
- */
-[[nodiscard]]
-meta::entry::IndexKind meta_index_kind(parser::ast::CreateIndexMethod method);
 
 } // namespace litedb::core::binder

@@ -140,7 +140,17 @@ void test_parse_create_index_statement()
     require(create->collection_name() == "users", "CREATE INDEX collection mismatch");
     require(create->column_name() == "age", "CREATE INDEX column mismatch");
     require(create->if_not_exists(), "CREATE INDEX IF NOT EXISTS mismatch");
+    require(!create->unique(), "CREATE INDEX should not be unique by default");
     require(create->method() == CreateIndexMethod::BTree, "CREATE INDEX BTREE method mismatch");
+
+    auto unique_statement = parse_ok(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_email ON users(email) USING BTREE;"
+    );
+    const auto * unique_create = static_cast<const CreateIndexStatement *>(unique_statement.get());
+    require(unique_create->index_name() == "idx_email", "CREATE UNIQUE INDEX name mismatch");
+    require(unique_create->if_not_exists(), "CREATE UNIQUE INDEX IF NOT EXISTS mismatch");
+    require(unique_create->unique(), "CREATE UNIQUE INDEX flag mismatch");
+    require(unique_create->method() == CreateIndexMethod::BTree, "CREATE UNIQUE INDEX method mismatch");
 
     auto btree_statement = parse_ok("CREATE INDEX idx_name ON users(name) USING BTREE;");
     const auto * btree_create = static_cast<const CreateIndexStatement *>(btree_statement.get());
@@ -148,7 +158,14 @@ void test_parse_create_index_statement()
 
     auto default_statement = parse_ok("CREATE INDEX idx_id ON users(id);");
     const auto * default_create = static_cast<const CreateIndexStatement *>(default_statement.get());
+    require(!default_create->unique(), "CREATE INDEX default unique flag mismatch");
     require(default_create->method() == CreateIndexMethod::Default, "CREATE INDEX default method mismatch");
+
+    require(
+        parse_error("CREATE UNIQUE VINDEX vidx_embedding ON users(embedding) USING HNSW;")
+            .is(ParserErrorCode::ExpectedToken),
+        "CREATE UNIQUE VINDEX should be rejected"
+    );
 }
 
 void test_parse_create_vector_index_statement()

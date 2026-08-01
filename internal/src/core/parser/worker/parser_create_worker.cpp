@@ -33,8 +33,19 @@ ParserCreateWorker::parse_create_statement()
         return parse_create_collection_statement(location);
     }
 
+    // 判断是否有 UNIQUE 关键字
+    if (context_.match(TokenType::Unique)) {
+        auto index = context_.consume(
+            TokenType::Index, "Expected INDEX after UNIQUE"
+        );
+        if (!index.has_value()) [[unlikely]] {
+            return std::unexpected(std::move(index.error()));
+        }
+        return parse_create_index_statement(location, true);
+    }
+
     if (context_.match(TokenType::Index)) {
-        return parse_create_index_statement(location);
+        return parse_create_index_statement(location, false);
     }
 
     if (context_.match(TokenType::VIndex)) {
@@ -137,7 +148,10 @@ ParserCreateWorker::parse_create_collection_statement(TokenLocation location)
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-ParserCreateWorker::parse_create_index_statement(TokenLocation location)
+ParserCreateWorker::parse_create_index_statement(
+    TokenLocation location,
+    bool unique
+)
 {
     auto if_not_exists = schema_helper_.parse_if_not_exists();
     if (!if_not_exists.has_value()) [[unlikely]] {
@@ -204,6 +218,7 @@ ParserCreateWorker::parse_create_index_statement(TokenLocation location)
         std::move(*collection_name),
         std::move(*column_name),
         *if_not_exists,
+        unique,
         method,
         context_.ast_location(location)
     );
