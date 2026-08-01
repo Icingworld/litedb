@@ -6,7 +6,7 @@
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_engine.hpp"
-#include "core/physical_plan/statement/physical_statement_plan.hpp"
+#include "core/physical_planner/statement/physical_statement_plan.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"

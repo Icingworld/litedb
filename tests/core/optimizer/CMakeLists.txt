@@ -7,7 +7,7 @@ target_link_libraries(optimizer_tests PRIVATE
     litedb_filesystem
     litedb_executor
     litedb_index
-    litedb_physical_plan
+    litedb_physical_planner
     litedb_storage
 )
 

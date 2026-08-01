@@ -7,7 +7,7 @@
 
 #include "core/meta/meta_engine.hpp"
 #include "core/optimizer/optimizer_error.hpp"
-#include "core/logical_plan/statement/logical_statement_plan.hpp"
+#include "core/logical_planner/statement/logical_statement_plan.hpp"
 
 namespace litedb::core::optimizer
 {

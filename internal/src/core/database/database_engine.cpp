@@ -9,7 +9,7 @@
 
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/executor/executor.hpp"
-#include "core/physical_plan/statement/physical_command_plan.hpp"
+#include "core/physical_planner/statement/physical_command_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/wal/recovery_manager.hpp"
 

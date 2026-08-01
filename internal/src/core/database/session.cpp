@@ -10,8 +10,8 @@
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
-#include "core/physical_plan/physical_planner.hpp"
-#include "core/logical_plan/logical_planner.hpp"
+#include "core/physical_planner/physical_planner.hpp"
+#include "core/logical_planner/logical_planner.hpp"
 
 namespace litedb::core::database
 {
