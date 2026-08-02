@@ -12,24 +12,24 @@
 #include "core/logical_planner/logical_planner.hpp"
 #include "core/logical_planner/node/logical_projection.hpp"
 #include "core/logical_planner/node/logical_scan.hpp"
-#include "core/logical_planner/statement/command/create_collection_plan.hpp"
-#include "core/logical_planner/statement/command/create_database_plan.hpp"
-#include "core/logical_planner/statement/command/create_index_plan.hpp"
-#include "core/logical_planner/statement/command/create_vector_index_plan.hpp"
-#include "core/logical_planner/statement/mutation/delete_plan.hpp"
-#include "core/logical_planner/statement/command/describe_collection_plan.hpp"
-#include "core/logical_planner/statement/command/drop_collection_plan.hpp"
-#include "core/logical_planner/statement/command/drop_database_plan.hpp"
-#include "core/logical_planner/statement/command/drop_index_plan.hpp"
-#include "core/logical_planner/statement/command/drop_vector_index_plan.hpp"
-#include "core/logical_planner/statement/mutation/insert_plan.hpp"
-#include "core/logical_planner/statement/query/query_plan.hpp"
-#include "core/logical_planner/statement/command/show_collections_plan.hpp"
-#include "core/logical_planner/statement/command/show_indexes_plan.hpp"
-#include "core/logical_planner/statement/command/show_vector_indexes_plan.hpp"
-#include "core/logical_planner/statement/logical_statement_plan.hpp"
-#include "core/logical_planner/statement/mutation/update_plan.hpp"
-#include "core/logical_planner/statement/command/use_plan.hpp"
+#include "core/logical_planner/plan/command/create_collection_plan.hpp"
+#include "core/logical_planner/plan/command/create_database_plan.hpp"
+#include "core/logical_planner/plan/command/create_index_plan.hpp"
+#include "core/logical_planner/plan/command/create_vector_index_plan.hpp"
+#include "core/logical_planner/plan/mutation/delete_plan.hpp"
+#include "core/logical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/logical_planner/plan/command/drop_collection_plan.hpp"
+#include "core/logical_planner/plan/command/drop_database_plan.hpp"
+#include "core/logical_planner/plan/command/drop_index_plan.hpp"
+#include "core/logical_planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/logical_planner/plan/mutation/insert_plan.hpp"
+#include "core/logical_planner/plan/query/query_plan.hpp"
+#include "core/logical_planner/plan/command/show_collections_plan.hpp"
+#include "core/logical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/logical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/logical_planner/plan/logical_statement_plan.hpp"
+#include "core/logical_planner/plan/mutation/update_plan.hpp"
+#include "core/logical_planner/plan/command/use_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
@@ -54,7 +54,8 @@ using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::parser;
 using namespace litedb::core::planner;
-using namespace litedb::core::planner::plan;
+using namespace litedb::core::logical_planner;
+using namespace litedb::core::logical_planner::plan;
 using namespace litedb::core::planner::logical;
 using namespace litedb::core::storage;
 

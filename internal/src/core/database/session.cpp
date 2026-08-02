@@ -104,7 +104,7 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
         return std::unexpected(from_binder_error(std::move(bound.error())));
     }
 
-    planner::logical::LogicalPlanner planner;
+    logical_planner::LogicalPlanner planner;
     auto planned = planner.plan(std::move(*bound));
     if (!planned.has_value()) {
         return std::unexpected(from_planner_error(std::move(planned.error())));

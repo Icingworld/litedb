@@ -43,6 +43,7 @@ using namespace litedb::core::parser::ast;
 using namespace litedb::core::physical_plan;
 using namespace litedb::core::planner;
 using namespace litedb::core::planner::logical;
+using namespace litedb::core::logical_planner;
 using namespace litedb::core::schema;
 using namespace litedb::core::storage;
 

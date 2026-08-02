@@ -1,6 +1,6 @@
 #include "core/logical_planner/logical_planner_helper.hpp"
 
-namespace litedb::core::planner
+namespace litedb::core::logical_planner
 {
 
 [[nodiscard]]
@@ -10,7 +10,25 @@ PlannerError make_planner_error(
     std::string message
 )
 {
-    return PlannerError {code, message, PlannerErrorContext {location}};
+    return PlannerError {
+        code,
+        message,
+        PlannerErrorContext {
+            location
+        }
+    };
 }
 
-} // namespace litedb::core::planner
+[[nodiscard]]
+PlannerError make_planner_error(
+    PlannerErrorCode code,
+    std::string message
+)
+{
+    return PlannerError {
+        code,
+        message,
+    };
+}
+
+} // namespace litedb::core::logical_planner

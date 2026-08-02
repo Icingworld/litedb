@@ -25,26 +25,26 @@
 #include "core/logical_planner/node/logical_order_by.hpp"
 #include "core/logical_planner/node/logical_projection.hpp"
 #include "core/logical_planner/node/logical_scan.hpp"
-#include "core/logical_planner/statement/command/create_collection_plan.hpp"
-#include "core/logical_planner/statement/command/create_database_plan.hpp"
-#include "core/logical_planner/statement/command/create_index_plan.hpp"
-#include "core/logical_planner/statement/command/create_vector_index_plan.hpp"
-#include "core/logical_planner/statement/command/describe_collection_plan.hpp"
-#include "core/logical_planner/statement/command/drop_collection_plan.hpp"
-#include "core/logical_planner/statement/command/drop_database_plan.hpp"
-#include "core/logical_planner/statement/command/drop_index_plan.hpp"
-#include "core/logical_planner/statement/command/drop_vector_index_plan.hpp"
-#include "core/logical_planner/statement/command/show_collections_plan.hpp"
-#include "core/logical_planner/statement/command/show_databases_plan.hpp"
-#include "core/logical_planner/statement/command/show_indexes_plan.hpp"
-#include "core/logical_planner/statement/command/show_vector_indexes_plan.hpp"
-#include "core/logical_planner/statement/command/use_plan.hpp"
-#include "core/logical_planner/statement/mutation/delete_plan.hpp"
-#include "core/logical_planner/statement/mutation/insert_plan.hpp"
-#include "core/logical_planner/statement/mutation/update_plan.hpp"
-#include "core/logical_planner/statement/query/query_plan.hpp"
+#include "core/logical_planner/plan/command/create_collection_plan.hpp"
+#include "core/logical_planner/plan/command/create_database_plan.hpp"
+#include "core/logical_planner/plan/command/create_index_plan.hpp"
+#include "core/logical_planner/plan/command/create_vector_index_plan.hpp"
+#include "core/logical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/logical_planner/plan/command/drop_collection_plan.hpp"
+#include "core/logical_planner/plan/command/drop_database_plan.hpp"
+#include "core/logical_planner/plan/command/drop_index_plan.hpp"
+#include "core/logical_planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/logical_planner/plan/command/show_collections_plan.hpp"
+#include "core/logical_planner/plan/command/show_databases_plan.hpp"
+#include "core/logical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/logical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/logical_planner/plan/command/use_plan.hpp"
+#include "core/logical_planner/plan/mutation/delete_plan.hpp"
+#include "core/logical_planner/plan/mutation/insert_plan.hpp"
+#include "core/logical_planner/plan/mutation/update_plan.hpp"
+#include "core/logical_planner/plan/query/query_plan.hpp"
 
-namespace litedb::core::planner::logical
+namespace litedb::core::logical_planner
 {
 
 namespace
@@ -173,35 +173,23 @@ std::expected<std::unique_ptr<LogicalStatementPlan>, PlannerError> LogicalPlanne
     case BoundStatementKind::CreateIndex: {
         auto & create = static_cast<BoundCreateIndexStatement &>(*statement);
         return std::make_unique<CreateIndexPlan>(
-            create.database_id(),
-            create.collection_id(),
-            create.collection_name(),
             create.column_id(),
-            create.column_name(),
             create.index_name(),
             create.index_kind(),
-            create.unique(),
-            create.if_not_exists(),
-            create.location()
+            create.unique()
         );
     }
     case BoundStatementKind::CreateVectorIndex: {
         auto & create = static_cast<BoundCreateVectorIndexStatement &>(*statement);
         return std::make_unique<CreateVectorIndexPlan>(
-            create.database_id(),
-            create.collection_id(),
-            create.collection_name(),
             create.column_id(),
-            create.column_name(),
-            create.index_name(),
-            create.index_kind(),
+            create.vector_index_name(),
+            create.vector_index_kind(),
             create.metric(),
             create.max_neighbors(),
             create.ef_construction(),
             create.ef_search_default(),
-            create.random_seed(),
-            create.if_not_exists(),
-            create.location()
+            create.random_seed()
         );
     }
     case BoundStatementKind::DropDatabase: {
@@ -361,4 +349,4 @@ std::unique_ptr<LogicalPlanNode> LogicalPlanner::plan_delete_input(BoundDeleteSt
     return apply_optional_filter(std::move(current), statement.take_where(), statement.location());
 }
 
-} // namespace litedb::core::planner::logical
+} // namespace litedb::core::logical_planner

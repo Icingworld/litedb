@@ -1,34 +1,33 @@
 set(LOGICAL_PLANNER_SOURCES
-    debug_printer.cpp
     logical_planner.cpp
     logical_planner_helper.cpp
-    node/logical_filter.cpp
-    node/logical_limit.cpp
-    node/logical_order_by.cpp
-    node/logical_plan_node.cpp
-    node/logical_projection.cpp
-    node/logical_scan.cpp
-    node/logical_unary_node.cpp
-    node/logical_vector_search.cpp
-    statement/command/create_collection_plan.cpp
-    statement/command/create_database_plan.cpp
-    statement/command/create_index_plan.cpp
-    statement/command/create_vector_index_plan.cpp
-    statement/command/describe_collection_plan.cpp
-    statement/command/drop_collection_plan.cpp
-    statement/command/drop_database_plan.cpp
-    statement/command/drop_index_plan.cpp
-    statement/command/drop_vector_index_plan.cpp
-    statement/command/show_collections_plan.cpp
-    statement/command/show_databases_plan.cpp
-    statement/command/show_indexes_plan.cpp
-    statement/command/show_vector_indexes_plan.cpp
-    statement/command/use_plan.cpp
-    statement/mutation/delete_plan.cpp
-    statement/mutation/insert_plan.cpp
-    statement/mutation/update_plan.cpp
-    statement/query/query_plan.cpp
-    statement/logical_statement_plan.cpp
+    operator/debug/debug_printer.cpp
+    operator/logical_filter_operator.cpp
+    operator/logical_limit_operator.cpp
+    operator/logical_order_by_operator.cpp
+    operator/logical_plan_operator.cpp
+    operator/logical_projection_operator.cpp
+    operator/logical_scan_operator.cpp
+    operator/logical_unary_operator.cpp
+    plan/command/create_collection_plan.cpp
+    plan/command/create_database_plan.cpp
+    plan/command/create_index_plan.cpp
+    plan/command/create_vector_index_plan.cpp
+    plan/command/describe_collection_plan.cpp
+    plan/command/drop_collection_plan.cpp
+    plan/command/drop_database_plan.cpp
+    plan/command/drop_index_plan.cpp
+    plan/command/drop_vector_index_plan.cpp
+    plan/command/show_collections_plan.cpp
+    plan/command/show_databases_plan.cpp
+    plan/command/show_indexes_plan.cpp
+    plan/command/show_vector_indexes_plan.cpp
+    plan/command/use_plan.cpp
+    plan/mutation/delete_plan.cpp
+    plan/mutation/insert_plan.cpp
+    plan/mutation/update_plan.cpp
+    plan/query/query_plan.cpp
+    plan/logical_statement_plan.cpp
 )
 
 add_library(litedb_logical_planner ${LOGICAL_PLANNER_SOURCES})
@@ -39,4 +38,3 @@ target_link_libraries(litedb_logical_planner PUBLIC
     litedb_binder
     litedb_index
 )
-

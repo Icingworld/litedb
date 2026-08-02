@@ -7,7 +7,7 @@
 
 #include "core/meta/meta_engine.hpp"
 #include "core/optimizer/optimizer_error.hpp"
-#include "core/logical_planner/statement/logical_statement_plan.hpp"
+#include "core/logical_planner/plan/logical_statement_plan.hpp"
 
 namespace litedb::core::optimizer
 {
@@ -42,8 +42,8 @@ public:
      * @return 优化后的 statement plan
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<planner::plan::LogicalStatementPlan>, OptimizerError> optimize(
-        std::unique_ptr<planner::plan::LogicalStatementPlan> plan
+    std::expected<std::unique_ptr<logical_planner::plan::LogicalStatementPlan>, OptimizerError> optimize(
+        std::unique_ptr<logical_planner::plan::LogicalStatementPlan> plan
     ) const;
 
 private:

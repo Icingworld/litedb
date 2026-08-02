@@ -9,9 +9,9 @@
 #include "core/binder/bound/statement/bound_update_statement.hpp"
 #include "core/logical_planner/logical_planner_error.hpp"
 #include "core/logical_planner/node/logical_plan_node.hpp"
-#include "core/logical_planner/statement/logical_statement_plan.hpp"
+#include "core/logical_planner/plan/logical_statement_plan.hpp"
 
-namespace litedb::core::planner::logical
+namespace litedb::core::logical_planner
 {
 
 /**
@@ -54,4 +54,4 @@ public:
     std::unique_ptr<LogicalPlanNode> plan_delete_input(binder::bound::BoundDeleteStatement & statement) const;
 };
 
-} // namespace litedb::core::planner::logical
+} // namespace litedb::core::logical_planner

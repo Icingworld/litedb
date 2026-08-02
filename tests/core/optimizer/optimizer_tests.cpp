@@ -15,11 +15,11 @@
 #include "core/logical_planner/node/logical_projection.hpp"
 #include "core/logical_planner/node/logical_scan.hpp"
 #include "core/logical_planner/node/logical_vector_search.hpp"
-#include "core/logical_planner/statement/command/show_databases_plan.hpp"
-#include "core/logical_planner/statement/mutation/delete_plan.hpp"
-#include "core/logical_planner/statement/mutation/insert_plan.hpp"
-#include "core/logical_planner/statement/mutation/update_plan.hpp"
-#include "core/logical_planner/statement/query/query_plan.hpp"
+#include "core/logical_planner/plan/command/show_databases_plan.hpp"
+#include "core/logical_planner/plan/mutation/delete_plan.hpp"
+#include "core/logical_planner/plan/mutation/insert_plan.hpp"
+#include "core/logical_planner/plan/mutation/update_plan.hpp"
+#include "core/logical_planner/plan/query/query_plan.hpp"
 #include "core/logical_planner/logical_planner.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
@@ -48,7 +48,8 @@ using namespace litedb::core::optimizer;
 using namespace litedb::core::parser;
 using namespace litedb::core::planner;
 using namespace litedb::core::planner::logical;
-using namespace litedb::core::planner::plan;
+using namespace litedb::core::logical_planner;
+using namespace litedb::core::logical_planner::plan;
 using namespace litedb::core::storage;
 
 void require(bool condition, const char * message)

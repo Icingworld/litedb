@@ -35,9 +35,9 @@
 #include "core/logical_planner/node/logical_projection.hpp"
 #include "core/logical_planner/node/logical_scan.hpp"
 #include "core/logical_planner/node/logical_vector_search.hpp"
-#include "core/logical_planner/statement/mutation/delete_plan.hpp"
-#include "core/logical_planner/statement/mutation/update_plan.hpp"
-#include "core/logical_planner/statement/query/query_plan.hpp"
+#include "core/logical_planner/plan/mutation/delete_plan.hpp"
+#include "core/logical_planner/plan/mutation/update_plan.hpp"
+#include "core/logical_planner/plan/query/query_plan.hpp"
 #include "core/common/record.hpp"
 #include "core/common/value.hpp"
 
@@ -75,11 +75,11 @@ using planner::logical::LogicalProjection;
 using planner::logical::LogicalScan;
 using planner::logical::LogicalScanIndexHint;
 using planner::logical::LogicalVectorSearch;
-using planner::plan::DeletePlan;
-using planner::plan::QueryPlan;
-using planner::plan::LogicalStatementPlan;
-using planner::plan::LogicalStatementPlanKind;
-using planner::plan::UpdatePlan;
+using logical_planner::plan::DeletePlan;
+using logical_planner::plan::QueryPlan;
+using logical_planner::plan::LogicalStatementPlan;
+using logical_planner::plan::LogicalStatementPlanKind;
+using logical_planner::plan::UpdatePlan;
 using parser::TokenType;
 
 struct ExpressionRewriteResult

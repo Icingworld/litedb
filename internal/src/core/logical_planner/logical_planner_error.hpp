@@ -5,7 +5,7 @@
 #include "core/error/error.hpp"
 #include "core/parser/ast/ast_node.hpp"
 
-namespace litedb::core::planner
+namespace litedb::core::logical_planner
 {
 
 /**
@@ -13,8 +13,8 @@ namespace litedb::core::planner
  */
 enum class PlannerErrorCode : std::uint8_t
 {
-    InvalidArgument,                ///< 无效参数
-    UnsupportedStatement,           ///< 不支持的语句
+    InvalidArgument = 0,                ///< 无效参数
+    UnsupportedStatement = 1,           ///< 不支持的语句
 };
 
 /**
@@ -27,13 +27,15 @@ struct PlannerErrorContext
 
 using PlannerError = error::Error;
 
-} // namespace litedb::core::planner
+} // namespace litedb::core::logical_planner
 
 namespace litedb::core::error
 {
+
 template <>
-struct ErrorTraits<planner::PlannerErrorCode>
+struct ErrorTraits<logical_planner::PlannerErrorCode>
 {
     static constexpr ErrorCategory category = ErrorCategory::Planner;
 };
+
 } // namespace litedb::core::error
