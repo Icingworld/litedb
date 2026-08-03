@@ -3,21 +3,13 @@
 #include <memory>
 #include <vector>
 
-#include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/binder/bound/bound_assignment.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
+#include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
-
-/**
- * @brief 绑定赋值
- */
-struct BoundAssignment
-{
-    common::ColumnId column_id;                     ///< 列
-    std::unique_ptr<BoundExpression> value;         ///< 值
-};
 
 /**
  * @brief 绑定 UPDATE 语句

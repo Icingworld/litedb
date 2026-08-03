@@ -5,7 +5,7 @@
 
 #include "core/logical_planner/operator/logical_plan_operator.hpp"
 #include "core/common/ids.hpp"
-#include "core/binder/bound/statement/bound_update_statement.hpp"
+#include "core/binder/bound/bound_assignment.hpp"
 #include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan

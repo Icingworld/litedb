@@ -2,33 +2,16 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <vector>
 
-#include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/binder/bound/bound_order_by_item.hpp"
+#include "core/binder/bound/bound_projection_item.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
+#include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
-
-/**
- * @brief 排序项
- */
-struct BoundOrderByItem
-{
-    std::unique_ptr<BoundExpression> expression;    ///< 排序表达式
-    bool ascending {true};                          ///< 是否升序
-};
-
-/**
- * @brief 投影项
- */
-struct BoundProjectionItem
-{
-    std::unique_ptr<BoundExpression> expression;    ///< 投影表达式
-    std::string output_name;                        ///< 投影输出名称
-};
 
 /**
  * @brief 绑定 SELECT 语句

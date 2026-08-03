@@ -3,7 +3,7 @@
 #include <memory>
 #include <vector>
 
-#include "core/binder/bound/statement/bound_select_statement.hpp"
+#include "core/binder/bound/bound_order_by_item.hpp"
 #include "core/logical_planner/operator/logical_unary_operator.hpp"
 
 namespace litedb::core::logical_planner::op
