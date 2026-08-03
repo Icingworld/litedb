@@ -99,7 +99,7 @@ private:
     [[nodiscard]]
     std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
     visit_delete_statement(
-        const binder::bound::BoundDeleteStatement & statement
+        binder::bound::BoundDeleteStatement & statement
     );
 
     /**

@@ -39,7 +39,7 @@ public:
     [[nodiscard]]
     std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
     plan_delete(
-        const binder::bound::BoundDeleteStatement & statement
+        binder::bound::BoundDeleteStatement & statement
     );
 };
 

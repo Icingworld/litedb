@@ -58,7 +58,7 @@ LogicalPlannerWorker::visit_create_vector_index_statement(
 
 std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
 LogicalPlannerWorker::visit_delete_statement(
-    const BoundDeleteStatement & statement
+    BoundDeleteStatement & statement
 )
 {
     return LogicalPlannerDeleteWorker().plan_delete(statement);
