@@ -96,12 +96,9 @@ std::unique_ptr<PhysicalStatementPlan> plan_ok(
     (void) index_engine;
     LogicalPlanner planner;
     auto planned = planner.plan(std::move(*bound));
-    if (!planned.has_value()) {
-        throw std::runtime_error(planned.error().message());
-    }
 
     Optimizer optimizer {{}, catalog.view()};
-    auto optimized = optimizer.optimize(std::move(*planned));
+    auto optimized = optimizer.optimize(std::move(planned));
     if (!optimized.has_value()) {
         throw std::runtime_error(optimized.error().message());
     }

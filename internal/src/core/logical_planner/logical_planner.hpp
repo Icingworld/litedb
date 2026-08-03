@@ -1,9 +1,6 @@
 #pragma once
 
-#include <expected>
 #include <memory>
-
-#include "core/logical_planner/logical_planner_error.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -32,12 +29,13 @@ public:
      * @brief 生成逻辑计划
      * @param statement 绑定语句
      * @return 逻辑计划
-     * @warning 该成员函数可能会移动消费 statement 的成员变量
+     * @pre statement != nullptr
+     * @warning 该成员函数会消费 statement 的所有权
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan(
-        binder::bound::BoundStatement & statement
+        std::unique_ptr<binder::bound::BoundStatement> statement
     ) const;
 };
 

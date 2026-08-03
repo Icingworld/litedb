@@ -54,15 +54,6 @@ SessionError from_binder_error(binder::BinderError error)
 }
 
 [[nodiscard]]
-SessionError from_planner_error(planner::PlannerError error)
-{
-    const auto * context = error.context<planner::PlannerErrorContext>();
-    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
-    auto message = error.message();
-    return SessionError {SessionErrorCode::PlannerError, message, SessionErrorContext {location}, std::move(error)};
-}
-
-[[nodiscard]]
 SessionError from_optimizer_error(optimizer::OptimizerError error)
 {
     const auto * context = error.context<optimizer::OptimizerErrorContext>();
@@ -106,12 +97,9 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
 
     logical_planner::LogicalPlanner planner;
     auto planned = planner.plan(std::move(*bound));
-    if (!planned.has_value()) {
-        return std::unexpected(from_planner_error(std::move(planned.error())));
-    }
 
     optimizer::Optimizer optimizer {{}, engine_->meta()};
-    auto optimized = optimizer.optimize(std::move(*planned));
+    auto optimized = optimizer.optimize(std::move(planned));
     if (!optimized.has_value()) {
         return std::unexpected(from_optimizer_error(std::move(optimized.error())));
     }

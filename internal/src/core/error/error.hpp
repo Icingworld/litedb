@@ -27,17 +27,16 @@ enum class ErrorCategory : std::uint8_t
     Transaction = 8,            ///< 事务协调
     Parser = 9,                 ///< 解析器
     Binder = 10,                ///< 绑定器
-    LogicalPlanner = 11,        ///< 逻辑计划器
-    Optimizer = 12,             ///< 优化器
-    PhysicalPlanner = 13,       ///< 物理计划器
-    Function = 14,              ///< 函数
-    Evaluation = 15,            ///< 评估
-    Execution = 16,             ///< 执行
-    Database = 17,              ///< 数据库
-    Protocol = 18,              ///< 协议
-    Network = 19,               ///< 网络
-    Server = 20,                ///< 服务器
-    Client = 21,                ///< 客户端
+    Optimizer = 11,             ///< 优化器
+    PhysicalPlanner = 12,       ///< 物理计划器
+    Function = 13,              ///< 函数
+    Evaluation = 14,            ///< 评估
+    Execution = 15,             ///< 执行
+    Database = 16,              ///< 数据库
+    Protocol = 17,              ///< 协议
+    Network = 18,               ///< 网络
+    Server = 19,                ///< 服务器
+    Client = 20,                ///< 客户端
 };
 
 /**

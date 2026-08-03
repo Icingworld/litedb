@@ -144,11 +144,7 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 std::unique_ptr<LogicalStatementPlan> plan_ok(Fixture & fixture, std::string_view sql)
 {
     LogicalPlanner planner;
-    auto result = planner.plan(bind_ok(fixture, sql));
-    if (!result.has_value()) {
-        throw std::runtime_error(result.error().message());
-    }
-    return std::move(*result);
+    return planner.plan(bind_ok(fixture, sql));
 }
 
 std::unique_ptr<LogicalStatementPlan> optimize_ok(std::unique_ptr<LogicalStatementPlan> plan, OptimizerOptions options = {})

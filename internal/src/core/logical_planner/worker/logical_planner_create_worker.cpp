@@ -16,7 +16,7 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerCreateWorker::plan_create_database(
     const BoundCreateDatabaseStatement & statement
 )
@@ -26,7 +26,7 @@ LogicalPlannerCreateWorker::plan_create_database(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerCreateWorker::plan_create_collection(
     const BoundCreateCollectionStatement & statement
 )
@@ -39,7 +39,7 @@ LogicalPlannerCreateWorker::plan_create_collection(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerCreateWorker::plan_create_index(
     const BoundCreateIndexStatement & statement
 )
@@ -52,7 +52,7 @@ LogicalPlannerCreateWorker::plan_create_index(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerCreateWorker::plan_create_vector_index(
     const BoundCreateVectorIndexStatement & statement
 )

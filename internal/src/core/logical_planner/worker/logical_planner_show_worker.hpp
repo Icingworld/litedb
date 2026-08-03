@@ -1,9 +1,6 @@
 #pragma once
 
-#include <expected>
 #include <memory>
-
-#include "core/logical_planner/logical_planner_error.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -40,7 +37,7 @@ public:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan_show_databases(
         const binder::bound::BoundShowDatabasesStatement & statement
     );
@@ -51,7 +48,7 @@ public:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan_show_collections(
         const binder::bound::BoundShowCollectionsStatement & statement
     );
@@ -62,7 +59,7 @@ public:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan_show_indexes(
         const binder::bound::BoundShowIndexesStatement & statement
     );
@@ -73,7 +70,7 @@ public:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan_show_vector_indexes(
         const binder::bound::BoundShowVectorIndexesStatement & statement
     );

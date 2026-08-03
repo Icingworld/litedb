@@ -1,9 +1,6 @@
 #pragma once
 
-#include <expected>
 #include <memory>
-
-#include "core/logical_planner/logical_planner_error.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -38,7 +35,7 @@ public:
      * @warning 该成员函数将会移动消费 statement 的成员变量
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan_insert(
         binder::bound::BoundInsertStatement & statement
     );

@@ -10,7 +10,7 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerUseWorker::plan_use(
     const BoundUseStatement & statement
 )

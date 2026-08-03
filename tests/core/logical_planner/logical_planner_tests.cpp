@@ -161,11 +161,7 @@ std::unique_ptr<LogicalPlan> plan_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = bind_ok(fixture, sql);
     LogicalPlanner planner;
-    auto result = planner.plan(*statement);
-    if (!result.has_value()) {
-        throw std::runtime_error(result.error().message());
-    }
-    return std::move(*result);
+    return planner.plan(std::move(statement));
 }
 
 const LogicalPlanOperator & query_root(const LogicalPlan & plan)
@@ -444,6 +440,12 @@ void test_admin_and_ddl_plans()
 void test_ownership_transfer_interfaces()
 {
     Fixture fixture;
+
+    auto bound = bind_ok(fixture, "SELECT id FROM users;");
+    LogicalPlanner planner;
+    auto consumed_plan = planner.plan(std::move(bound));
+    require(bound == nullptr, "logical planner should consume bound statement ownership");
+    require(consumed_plan != nullptr, "logical planner should return a plan");
 
     auto query = plan_ok(
         fixture,

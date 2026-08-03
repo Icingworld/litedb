@@ -16,7 +16,7 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerShowWorker::plan_show_databases(
     const BoundShowDatabasesStatement & /* statement */
 )
@@ -24,7 +24,7 @@ LogicalPlannerShowWorker::plan_show_databases(
     return std::make_unique<plan::ShowDatabasesPlan>();
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerShowWorker::plan_show_collections(
     const BoundShowCollectionsStatement & statement
 )
@@ -34,7 +34,7 @@ LogicalPlannerShowWorker::plan_show_collections(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerShowWorker::plan_show_indexes(
     const BoundShowIndexesStatement & statement
 )
@@ -44,7 +44,7 @@ LogicalPlannerShowWorker::plan_show_indexes(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerShowWorker::plan_show_vector_indexes(
     const BoundShowVectorIndexesStatement & statement
 )

@@ -1,6 +1,5 @@
 set(LOGICAL_PLANNER_SOURCES
     logical_planner.cpp
-    logical_planner_helper.cpp
     worker/logical_planner_create_worker.cpp
     worker/logical_planner_delete_worker.cpp
     worker/logical_planner_describe_worker.cpp

@@ -1,9 +1,6 @@
 #pragma once
 
-#include <expected>
 #include <memory>
-
-#include "core/logical_planner/logical_planner_error.hpp"
 
 #include "core/binder/bound/dispatcher/statement_dispatcher.hpp"
 
@@ -23,12 +20,12 @@ namespace litedb::core::logical_planner
 class LogicalPlannerWorker
     : private binder::bound::BoundStatementDispatcher<
           LogicalPlannerWorker,
-          std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+          std::unique_ptr<plan::LogicalPlan>
       >
 {
     friend class binder::bound::BoundStatementDispatcher<
         LogicalPlannerWorker,
-        std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+        std::unique_ptr<plan::LogicalPlan>
     >;
 
 public:
@@ -41,7 +38,7 @@ public:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     plan_statement(
         binder::bound::BoundStatement & statement
     );
@@ -53,7 +50,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_create_database_statement(
         const binder::bound::BoundCreateDatabaseStatement & statement
     );
@@ -64,7 +61,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_create_collection_statement(
         const binder::bound::BoundCreateCollectionStatement & statement
     );
@@ -75,7 +72,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_create_index_statement(
         const binder::bound::BoundCreateIndexStatement & statement
     );
@@ -86,7 +83,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_create_vector_index_statement(
         const binder::bound::BoundCreateVectorIndexStatement & statement
     );
@@ -97,7 +94,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_delete_statement(
         binder::bound::BoundDeleteStatement & statement
     );
@@ -108,7 +105,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_describe_collection_statement(
         const binder::bound::BoundDescribeCollectionStatement & statement
     );
@@ -119,7 +116,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_drop_database_statement(
         const binder::bound::BoundDropDatabaseStatement & statement
     );
@@ -130,7 +127,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_drop_collection_statement(
         const binder::bound::BoundDropCollectionStatement & statement
     );
@@ -141,7 +138,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_drop_index_statement(
         const binder::bound::BoundDropIndexStatement & statement
     );
@@ -152,7 +149,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_drop_vector_index_statement(
         const binder::bound::BoundDropVectorIndexStatement & statement
     );
@@ -164,7 +161,7 @@ private:
      * @warning 该成员函数将会移动消费 statement 的成员变量
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_insert_statement(
         binder::bound::BoundInsertStatement & statement
     );
@@ -176,7 +173,7 @@ private:
      * @warning 该成员函数将会移动消费 statement 的成员变量
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_select_statement(
         binder::bound::BoundSelectStatement & statement
     );
@@ -187,7 +184,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_show_databases_statement(
         const binder::bound::BoundShowDatabasesStatement & statement
     );
@@ -198,7 +195,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_show_collections_statement(
         const binder::bound::BoundShowCollectionsStatement & statement
     );
@@ -209,7 +206,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_show_indexes_statement(
         const binder::bound::BoundShowIndexesStatement & statement
     );
@@ -220,7 +217,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_show_vector_indexes_statement(
         const binder::bound::BoundShowVectorIndexesStatement & statement
     );
@@ -232,7 +229,7 @@ private:
      * @warning 该成员函数将会移动消费 statement 的成员变量
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_update_statement(
         binder::bound::BoundUpdateStatement & statement
     );
@@ -243,7 +240,7 @@ private:
      * @return 逻辑计划
      */
     [[nodiscard]]
-    std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+    std::unique_ptr<plan::LogicalPlan>
     visit_use_statement(
         const binder::bound::BoundUseStatement & statement
     );

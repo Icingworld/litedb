@@ -16,7 +16,7 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerDropWorker::plan_drop_database(
     const BoundDropDatabaseStatement & statement
 )
@@ -26,7 +26,7 @@ LogicalPlannerDropWorker::plan_drop_database(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerDropWorker::plan_drop_collection(
     const BoundDropCollectionStatement & statement
 )
@@ -36,7 +36,7 @@ LogicalPlannerDropWorker::plan_drop_collection(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerDropWorker::plan_drop_index(
     const BoundDropIndexStatement & statement
 )
@@ -46,7 +46,7 @@ LogicalPlannerDropWorker::plan_drop_index(
     );
 }
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerDropWorker::plan_drop_vector_index(
     const BoundDropVectorIndexStatement & statement
 )

@@ -13,11 +13,10 @@ namespace litedb::core::database
  */
 enum class SessionErrorCode : std::uint8_t
 {
-    ParserError,        ///< 解析错误
-    BinderError,        ///< 绑定错误
-    PlannerError,       ///< 计划错误
-    OptimizerError,     ///< 优化错误
-    ExecutionError,     ///< 执行错误
+    ParserError = 0,        ///< 解析错误
+    BinderError = 1,        ///< 绑定错误
+    OptimizerError = 3,     ///< 优化错误
+    ExecutionError = 4,     ///< 执行错误
 };
 
 /**

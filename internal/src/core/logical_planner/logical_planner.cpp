@@ -6,12 +6,12 @@
 namespace litedb::core::logical_planner
 {
 
-std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
+std::unique_ptr<plan::LogicalPlan>
 LogicalPlanner::plan(
-    binder::bound::BoundStatement & statement
+    std::unique_ptr<binder::bound::BoundStatement> statement
 ) const
 {
-    return LogicalPlannerWorker().plan_statement(statement);
+    return LogicalPlannerWorker().plan_statement(*statement);
 }
 
 } // namespace litedb::core::logical_planner
