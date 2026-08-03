@@ -1,11 +1,10 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
+#include "core/logical_planner/operator/logical_plan_operator.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
-#include "core/logical_planner/node/logical_plan_node.hpp"
-#include "core/logical_planner/plan/logical_statement_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -13,31 +12,21 @@ namespace litedb::core::logical_planner::plan
 /**
  * @brief DELETE 语句计划
  */
-class DeletePlan final : public LogicalStatementPlan
+class DeletePlan final : public LogicalPlan
 {
 public:
     DeletePlan(
-        std::unique_ptr<logical::LogicalPlanNode> input,
-        common::DatabaseId database_id,
         common::CollectionId collection_id,
-        std::string collection_name,
-        parser::ast::AstNodeLocation location
+        std::unique_ptr<op::LogicalPlanOperator> root_operator
     );
 
 public:
     /**
-     * @brief 获取输入
-     * @return 输入
+     * @brief 获取根算子
+     * @return 根算子
      */
     [[nodiscard]]
-    const logical::LogicalPlanNode & input() const noexcept;
-
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
-    [[nodiscard]]
-    common::DatabaseId database_id() const noexcept;
+    const op::LogicalPlanOperator & root_operator() const noexcept;
 
     /**
      * @brief 获取集合 ID
@@ -46,18 +35,10 @@ public:
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
-    [[nodiscard]]
-    const std::string & collection_name() const noexcept;
-
 private:
-    std::unique_ptr<logical::LogicalPlanNode> input_;       ///< 输入
-    common::DatabaseId database_id_;                        ///< 数据库 ID
-    common::CollectionId collection_id_;                    ///< 集合 ID
-    std::string collection_name_;                           ///< 集合名称
+    // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销
+    common::CollectionId collection_id_;                        ///< 集合 ID
+    std::unique_ptr<op::LogicalPlanOperator> root_operator_;    ///< 根算子
 };
 
 } // namespace litedb::core::logical_planner::plan

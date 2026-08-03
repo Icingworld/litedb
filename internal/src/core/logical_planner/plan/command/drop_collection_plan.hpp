@@ -14,7 +14,7 @@ namespace litedb::core::logical_planner::plan
 class DropCollectionPlan final : public LogicalPlan
 {
 public:
-    DropCollectionPlan(
+    explicit DropCollectionPlan(
         std::optional<common::CollectionId> collection_id
     ) noexcept;
 

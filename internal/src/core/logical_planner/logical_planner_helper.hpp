@@ -13,8 +13,8 @@ namespace litedb::core::logical_planner
  * @return 计划器错误
  */
 [[nodiscard]]
-PlannerError make_planner_error(
-    PlannerErrorCode code,
+LogicalPlannerError make_planner_error(
+    LogicalPlannerErrorCode code,
     parser::ast::AstNodeLocation location,
     std::string message
 );
@@ -26,8 +26,8 @@ PlannerError make_planner_error(
  * @return 计划器错误
  */
 [[nodiscard]]
-PlannerError make_planner_error(
-    PlannerErrorCode code,
+LogicalPlannerError make_planner_error(
+    LogicalPlannerErrorCode code,
     std::string message
 );
 

@@ -14,7 +14,7 @@ namespace litedb::core::logical_planner::plan
 class DropIndexPlan final : public LogicalPlan
 {
 public:
-    DropIndexPlan(
+    explicit DropIndexPlan(
         std::optional<common::IndexId> index_id
     ) noexcept;
 

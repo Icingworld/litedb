@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include "core/logical_planner/node/logical_plan_node.hpp"
-#include "core/logical_planner/plan/logical_statement_plan.hpp"
+#include "core/logical_planner/operator/logical_plan_operator.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -11,21 +11,21 @@ namespace litedb::core::logical_planner::plan
 /**
  * @brief QUERY 语句计划
  */
-class QueryPlan final : public LogicalStatementPlan
+class QueryPlan final : public LogicalPlan
 {
 public:
-    QueryPlan(std::unique_ptr<logical::LogicalPlanNode> root, parser::ast::AstNodeLocation location);
+    explicit QueryPlan(std::unique_ptr<op::LogicalPlanOperator> root_operator);
 
 public:
     /**
-     * @brief 获取根节点
-     * @return 根节点
+     * @brief 获取根算子
+     * @return 根算子
      */
     [[nodiscard]]
-    const logical::LogicalPlanNode & root() const noexcept;
+    const op::LogicalPlanOperator & root_operator() const noexcept;
 
 private:
-    std::unique_ptr<logical::LogicalPlanNode> root_;             ///< 根节点
+    std::unique_ptr<op::LogicalPlanOperator> root_operator_;   ///< 根算子
 };
 
 } // namespace litedb::core::logical_planner::plan

@@ -5,7 +5,6 @@
 #include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
 
-
 namespace litedb::core::logical_planner::plan
 {
 
@@ -15,7 +14,7 @@ namespace litedb::core::logical_planner::plan
 class DropVectorIndexPlan final : public LogicalPlan
 {
 public:
-    DropVectorIndexPlan(
+    explicit DropVectorIndexPlan(
         std::optional<common::VIndexId> vector_index_id
     ) noexcept;
 

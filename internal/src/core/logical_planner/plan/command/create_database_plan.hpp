@@ -14,7 +14,9 @@ namespace litedb::core::logical_planner::plan
 class CreateDatabasePlan final : public LogicalPlan
 {
 public:
-    CreateDatabasePlan(std::optional<std::string> database_name);
+    explicit CreateDatabasePlan(
+        std::optional<std::string> database_name
+    );
 
 public:
     /**

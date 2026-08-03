@@ -12,9 +12,7 @@ namespace litedb::core::logical_planner::plan
 class ShowIndexesPlan final : public LogicalPlan
 {
 public:
-    ShowIndexesPlan(
-        common::CollectionId collection_id
-    ) noexcept;
+    explicit ShowIndexesPlan(common::CollectionId collection_id) noexcept;
 
 public:
     /**

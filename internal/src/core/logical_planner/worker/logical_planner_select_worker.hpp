@@ -8,7 +8,7 @@
 namespace litedb::core::binder::bound
 {
 
-class BoundStatement;
+class BoundSelectStatement;
 
 } // namespace litedb::core::binder::bound
 
@@ -23,22 +23,25 @@ namespace litedb::core::logical_planner
 {
 
 /**
- * @brief 逻辑计划器
+ * @brief SELECT 语句逻辑计划工作器
  */
-class LogicalPlanner
+class LogicalPlannerSelectWorker
 {
 public:
+    LogicalPlannerSelectWorker() = default;
+
+public:
     /**
-     * @brief 生成逻辑计划
-     * @param statement 绑定语句
+     * @brief 规划 SELECT 语句
+     * @param statement SELECT 语句
      * @return 逻辑计划
-     * @warning 该成员函数可能会移动消费 statement 的成员变量
+     * @warning 该成员函数将会移动消费 statement 的成员变量
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
-    plan(
-        binder::bound::BoundStatement & statement
-    ) const;
+    plan_select(
+        binder::bound::BoundSelectStatement & statement
+    );
 };
 
 } // namespace litedb::core::logical_planner

@@ -15,7 +15,9 @@ namespace litedb::core::logical_planner::plan
 class DropDatabasePlan final : public LogicalPlan
 {
 public:
-    DropDatabasePlan(std::optional<common::DatabaseId> database_id) noexcept;
+    explicit DropDatabasePlan(
+        std::optional<common::DatabaseId> database_id
+    ) noexcept;
 
 public:
     /**

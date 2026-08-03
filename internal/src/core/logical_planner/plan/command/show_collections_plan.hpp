@@ -12,7 +12,7 @@ namespace litedb::core::logical_planner::plan
 class ShowCollectionsPlan final : public LogicalPlan
 {
 public:
-    ShowCollectionsPlan(common::DatabaseId database_id) noexcept;
+    explicit ShowCollectionsPlan(common::DatabaseId database_id) noexcept;
 
 public:
     /**

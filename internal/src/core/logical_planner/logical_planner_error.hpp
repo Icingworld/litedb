@@ -9,23 +9,21 @@ namespace litedb::core::logical_planner
 {
 
 /**
- * @brief 计划错误码
+ * @brief 逻辑计划器错误码
  */
-enum class PlannerErrorCode : std::uint8_t
+enum class LogicalPlannerErrorCode : std::uint8_t
 {
-    InvalidArgument = 0,                ///< 无效参数
-    UnsupportedStatement = 1,           ///< 不支持的语句
 };
 
 /**
- * @brief 计划错误
+ * @brief 逻辑计划器错误
  */
-struct PlannerErrorContext
+struct LogicalPlannerErrorContext
 {
     parser::ast::AstNodeLocation location;      ///< 错误位置
 };
 
-using PlannerError = error::Error;
+using LogicalPlannerError = error::Error;
 
 } // namespace litedb::core::logical_planner
 
@@ -33,9 +31,9 @@ namespace litedb::core::error
 {
 
 template <>
-struct ErrorTraits<logical_planner::PlannerErrorCode>
+struct ErrorTraits<logical_planner::LogicalPlannerErrorCode>
 {
-    static constexpr ErrorCategory category = ErrorCategory::Planner;
+    static constexpr ErrorCategory category = ErrorCategory::LogicalPlanner;
 };
 
 } // namespace litedb::core::error

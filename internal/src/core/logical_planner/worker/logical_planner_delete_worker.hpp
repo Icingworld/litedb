@@ -8,7 +8,7 @@
 namespace litedb::core::binder::bound
 {
 
-class BoundStatement;
+class BoundDeleteStatement;
 
 } // namespace litedb::core::binder::bound
 
@@ -23,22 +23,24 @@ namespace litedb::core::logical_planner
 {
 
 /**
- * @brief 逻辑计划器
+ * @brief DELETE 语句逻辑计划工作器
  */
-class LogicalPlanner
+class LogicalPlannerDeleteWorker
 {
 public:
+    LogicalPlannerDeleteWorker() = default;
+
+public:
     /**
-     * @brief 生成逻辑计划
-     * @param statement 绑定语句
+     * @brief 规划 DELETE 语句
+     * @param statement DELETE 语句
      * @return 逻辑计划
-     * @warning 该成员函数可能会移动消费 statement 的成员变量
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<plan::LogicalPlan>, LogicalPlannerError>
-    plan(
-        binder::bound::BoundStatement & statement
-    ) const;
+    plan_delete(
+        const binder::bound::BoundDeleteStatement & statement
+    );
 };
 
 } // namespace litedb::core::logical_planner

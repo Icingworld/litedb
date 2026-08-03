@@ -1,6 +1,16 @@
 set(LOGICAL_PLANNER_SOURCES
     logical_planner.cpp
     logical_planner_helper.cpp
+    worker/logical_planner_create_worker.cpp
+    worker/logical_planner_delete_worker.cpp
+    worker/logical_planner_describe_worker.cpp
+    worker/logical_planner_drop_worker.cpp
+    worker/logical_planner_insert_worker.cpp
+    worker/logical_planner_select_worker.cpp
+    worker/logical_planner_show_worker.cpp
+    worker/logical_planner_update_worker.cpp
+    worker/logical_planner_use_worker.cpp
+    worker/logical_planner_worker.cpp
     operator/debug/debug_printer.cpp
     operator/logical_filter_operator.cpp
     operator/logical_limit_operator.cpp
@@ -23,11 +33,12 @@ set(LOGICAL_PLANNER_SOURCES
     plan/command/show_indexes_plan.cpp
     plan/command/show_vector_indexes_plan.cpp
     plan/command/use_plan.cpp
+    plan/debug/debug_printer.cpp
+    plan/logical_plan.cpp
     plan/mutation/delete_plan.cpp
     plan/mutation/insert_plan.cpp
     plan/mutation/update_plan.cpp
     plan/query/query_plan.cpp
-    plan/logical_statement_plan.cpp
 )
 
 add_library(litedb_logical_planner ${LOGICAL_PLANNER_SOURCES})

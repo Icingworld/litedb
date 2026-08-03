@@ -1,13 +1,12 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <vector>
 
-#include "core/binder/bound/statement/bound_update_statement.hpp"
+#include "core/logical_planner/operator/logical_plan_operator.hpp"
 #include "core/common/ids.hpp"
-#include "core/logical_planner/node/logical_plan_node.hpp"
-#include "core/logical_planner/plan/logical_statement_plan.hpp"
+#include "core/binder/bound/statement/bound_update_statement.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -15,32 +14,22 @@ namespace litedb::core::logical_planner::plan
 /**
  * @brief UPDATE 语句计划
  */
-class UpdatePlan final : public LogicalStatementPlan
+class UpdatePlan final : public LogicalPlan
 {
 public:
     UpdatePlan(
-        std::unique_ptr<logical::LogicalPlanNode> input,
-        common::DatabaseId database_id,
         common::CollectionId collection_id,
-        std::string collection_name,
         std::vector<binder::bound::BoundAssignment> assignments,
-        parser::ast::AstNodeLocation location
+        std::unique_ptr<op::LogicalPlanOperator> root_operator
     );
 
 public:
     /**
-     * @brief 获取输入
-     * @return 输入
+     * @brief 获取根算子
+     * @return 根算子
      */
     [[nodiscard]]
-    const logical::LogicalPlanNode & input() const noexcept;
-
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
-    [[nodiscard]]
-    common::DatabaseId database_id() const noexcept;
+    const op::LogicalPlanOperator & root_operator() const noexcept;
 
     /**
      * @brief 获取集合 ID
@@ -50,25 +39,18 @@ public:
     common::CollectionId collection_id() const noexcept;
 
     /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
-    [[nodiscard]]
-    const std::string & collection_name() const noexcept;
-
-    /**
      * @brief 获取赋值
      * @return 赋值
      */
     [[nodiscard]]
-    const std::vector<binder::bound::BoundAssignment> & assignments() const noexcept;
+    const std::vector<binder::bound::BoundAssignment> &
+    assignments() const noexcept;
 
 private:
-    std::unique_ptr<logical::LogicalPlanNode> input_;               ///< 输入
-    common::DatabaseId database_id_;                                ///< 数据库 ID
+    // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销
     common::CollectionId collection_id_;                            ///< 集合 ID
-    std::string collection_name_;                                   ///< 集合名称
     std::vector<binder::bound::BoundAssignment> assignments_;       ///< 赋值
+    std::unique_ptr<op::LogicalPlanOperator> root_operator_;        ///< 根算子
 };
 
 } // namespace litedb::core::logical_planner::plan

@@ -12,7 +12,9 @@ namespace litedb::core::logical_planner::plan
 class DescribeCollectionPlan final : public LogicalPlan
 {
 public:
-    DescribeCollectionPlan(common::CollectionId collection_id) noexcept;
+    explicit DescribeCollectionPlan(
+        common::CollectionId collection_id
+    ) noexcept;
 
 public:
     /**

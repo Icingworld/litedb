@@ -3,7 +3,6 @@
 #include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
 
-
 namespace litedb::core::logical_planner::plan
 {
 
@@ -13,7 +12,7 @@ namespace litedb::core::logical_planner::plan
 class UsePlan final : public LogicalPlan
 {
 public:
-    UsePlan(common::DatabaseId database_id) noexcept;
+    explicit UsePlan(common::DatabaseId database_id) noexcept;
 
 public:
     /**
