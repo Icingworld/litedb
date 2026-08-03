@@ -29,6 +29,14 @@ public:
     const std::vector<binder::bound::BoundOrderByItem> &
     order_by() const noexcept;
 
+    /**
+     * @brief 移出排序项
+     * @return 排序项所有权
+     */
+    [[nodiscard]]
+    std::vector<binder::bound::BoundOrderByItem>
+    take_order_by() noexcept;
+
 private:
     std::vector<binder::bound::BoundOrderByItem> order_by_;   ///< 排序项
 };

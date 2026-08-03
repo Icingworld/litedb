@@ -23,4 +23,10 @@ LogicalProjectionOperator::projections() const noexcept
     return projections_;
 }
 
+std::vector<binder::bound::BoundProjectionItem>
+LogicalProjectionOperator::take_projections() noexcept
+{
+    return std::move(projections_);
+}
+
 } // namespace litedb::core::logical_planner::op

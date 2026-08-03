@@ -29,6 +29,14 @@ public:
     const std::vector<binder::bound::BoundProjectionItem> &
     projections() const noexcept;
 
+    /**
+     * @brief 移出投影项
+     * @return 投影项所有权
+     */
+    [[nodiscard]]
+    std::vector<binder::bound::BoundProjectionItem>
+    take_projections() noexcept;
+
 private:
     std::vector<binder::bound::BoundProjectionItem> projections_;   ///< 投影项
 };

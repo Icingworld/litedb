@@ -19,4 +19,10 @@ const LogicalPlanOperator & LogicalUnaryOperator::child() const noexcept
     return *child_;
 }
 
+std::unique_ptr<LogicalPlanOperator>
+LogicalUnaryOperator::take_child() noexcept
+{
+    return std::move(child_);
+}
+
 } // namespace litedb::core::logical_planner::op

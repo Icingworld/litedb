@@ -16,4 +16,10 @@ const op::LogicalPlanOperator & QueryPlan::root_operator() const noexcept
     return *root_operator_;
 }
 
+std::unique_ptr<op::LogicalPlanOperator>
+QueryPlan::take_root_operator() noexcept
+{
+    return std::move(root_operator_);
+}
+
 } // namespace litedb::core::logical_planner::plan

@@ -25,4 +25,10 @@ InsertPlan::values() const noexcept
     return values_;
 }
 
+std::vector<std::unique_ptr<binder::bound::BoundExpression>>
+InsertPlan::take_values() noexcept
+{
+    return std::move(values_);
+}
+
 } // namespace litedb::core::logical_planner::plan

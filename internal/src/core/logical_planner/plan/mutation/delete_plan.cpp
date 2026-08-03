@@ -20,6 +20,12 @@ const op::LogicalPlanOperator & DeletePlan::root_operator() const noexcept
     return *root_operator_;
 }
 
+std::unique_ptr<op::LogicalPlanOperator>
+DeletePlan::take_root_operator() noexcept
+{
+    return std::move(root_operator_);
+}
+
 common::CollectionId DeletePlan::collection_id() const noexcept
 {
     return collection_id_;

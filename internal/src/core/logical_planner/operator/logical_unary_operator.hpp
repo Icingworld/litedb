@@ -27,6 +27,14 @@ public:
     [[nodiscard]]
     const LogicalPlanOperator & child() const noexcept;
 
+    /**
+     * @brief 移出子算子
+     * @return 子算子所有权
+     * @warning 调用后不可再调用 child()
+     */
+    [[nodiscard]]
+    std::unique_ptr<LogicalPlanOperator> take_child() noexcept;
+
 private:
     std::unique_ptr<LogicalPlanOperator> child_;   ///< 子算子
 };

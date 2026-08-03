@@ -23,4 +23,10 @@ LogicalFilterOperator::predicate() const noexcept
     return *predicate_;
 }
 
+std::unique_ptr<binder::bound::BoundExpression>
+LogicalFilterOperator::take_predicate() noexcept
+{
+    return std::move(predicate_);
+}
+
 } // namespace litedb::core::logical_planner::op

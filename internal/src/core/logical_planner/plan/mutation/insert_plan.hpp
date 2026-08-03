@@ -37,6 +37,14 @@ public:
     const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
     values() const noexcept;
 
+    /**
+     * @brief 移出插入值
+     * @return 插入值所有权
+     */
+    [[nodiscard]]
+    std::vector<std::unique_ptr<binder::bound::BoundExpression>>
+    take_values() noexcept;
+
 private:
     common::CollectionId collection_id_;                                        ///< 集合 ID
     std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;       ///< 值

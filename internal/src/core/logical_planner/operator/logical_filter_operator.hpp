@@ -27,6 +27,14 @@ public:
     [[nodiscard]]
     const binder::bound::BoundExpression & predicate() const noexcept;
 
+    /**
+     * @brief 移出谓词
+     * @return 谓词所有权
+     * @warning 调用后不可再调用 predicate()
+     */
+    [[nodiscard]]
+    std::unique_ptr<binder::bound::BoundExpression> take_predicate() noexcept;
+
 private:
     std::unique_ptr<binder::bound::BoundExpression> predicate_;   ///< 谓词
 };

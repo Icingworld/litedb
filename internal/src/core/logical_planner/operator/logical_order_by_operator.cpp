@@ -23,4 +23,10 @@ LogicalOrderByOperator::order_by() const noexcept
     return order_by_;
 }
 
+std::vector<binder::bound::BoundOrderByItem>
+LogicalOrderByOperator::take_order_by() noexcept
+{
+    return std::move(order_by_);
+}
+
 } // namespace litedb::core::logical_planner::op

@@ -441,6 +441,60 @@ void test_admin_and_ddl_plans()
     require(describe_node.collection_id() == fixture.users_id, "DESCRIBE collection id mismatch");
 }
 
+void test_ownership_transfer_interfaces()
+{
+    Fixture fixture;
+
+    auto query = plan_ok(
+        fixture,
+        "SELECT id, name FROM users WHERE age >= 18 ORDER BY id DESC LIMIT 10;"
+    );
+    auto & query_plan = static_cast<QueryPlan &>(*query);
+    auto root = query_plan.take_root_operator();
+    require(root != nullptr, "query root ownership transfer failed");
+    require(root->kind() == LogicalPlanOperatorKind::Limit, "transferred query root should be limit");
+
+    auto order_by_node = static_cast<LogicalLimitOperator &>(*root).take_child();
+    require(order_by_node != nullptr, "limit child ownership transfer failed");
+    auto & order_by = static_cast<LogicalOrderByOperator &>(*order_by_node);
+    auto order_by_items = order_by.take_order_by();
+    require(order_by_items.size() == 1, "order by ownership transfer count mismatch");
+    require(order_by_items[0].expression != nullptr, "order by expression ownership transfer failed");
+
+    auto projection_node = order_by.take_child();
+    require(projection_node != nullptr, "order by child ownership transfer failed");
+    auto & projection = static_cast<LogicalProjectionOperator &>(*projection_node);
+    auto projections = projection.take_projections();
+    require(projections.size() == 2, "projection ownership transfer count mismatch");
+    require(projections[0].expression != nullptr, "projection expression ownership transfer failed");
+
+    auto filter_node = projection.take_child();
+    require(filter_node != nullptr, "projection child ownership transfer failed");
+    auto & filter = static_cast<LogicalFilterOperator &>(*filter_node);
+    auto predicate = filter.take_predicate();
+    require(predicate != nullptr, "predicate ownership transfer failed");
+    auto scan = filter.take_child();
+    require(scan != nullptr, "filter child ownership transfer failed");
+    require(scan->kind() == LogicalPlanOperatorKind::Scan, "transferred filter child should be scan");
+
+    auto update = plan_ok(fixture, "UPDATE users SET age = 21 WHERE id = 1;");
+    auto & update_plan = static_cast<UpdatePlan &>(*update);
+    auto assignments = update_plan.take_assignments();
+    require(assignments.size() == 1, "update assignment ownership transfer failed");
+    require(assignments[0].value != nullptr, "update assignment expression ownership transfer failed");
+    require(update_plan.take_root_operator() != nullptr, "update root ownership transfer failed");
+
+    auto delete_statement = plan_ok(fixture, "DELETE FROM users WHERE id = 1;");
+    auto & delete_plan = static_cast<DeletePlan &>(*delete_statement);
+    require(delete_plan.take_root_operator() != nullptr, "delete root ownership transfer failed");
+
+    auto insert = plan_ok(fixture, "INSERT INTO users VALUES (1, 'Alice', 20, [1.0, 2.0, 3.0]);");
+    auto values = static_cast<InsertPlan &>(*insert).take_values();
+    require(values.size() == 4, "insert values ownership transfer failed");
+    require(values[0] != nullptr, "insert expression ownership transfer failed");
+
+}
+
 } // namespace
 
 int main()
@@ -452,6 +506,7 @@ int main()
         test_update_delete_plans();
         test_indexes_do_not_change_logical_scan();
         test_admin_and_ddl_plans();
+        test_ownership_transfer_interfaces();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

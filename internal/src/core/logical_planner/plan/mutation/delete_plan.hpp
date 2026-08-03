@@ -29,6 +29,14 @@ public:
     const op::LogicalPlanOperator & root_operator() const noexcept;
 
     /**
+     * @brief 移出根算子
+     * @return 根算子所有权
+     * @warning 调用后不可再调用 root_operator()
+     */
+    [[nodiscard]]
+    std::unique_ptr<op::LogicalPlanOperator> take_root_operator() noexcept;
+
+    /**
      * @brief 获取集合 ID
      * @return 集合 ID
      */
