@@ -235,8 +235,7 @@ std::optional<std::unique_ptr<BoundExpression>> try_fold_constant(
         return std::nullopt;
     }
 
-    evaluator::ExpressionEvaluator evaluator;
-    auto value = evaluator.evaluate(expression, common::Record {});
+    auto value = evaluator::ExpressionEvaluator::evaluate_constant(expression);
     if (!value.has_value()) {
         return std::nullopt;
     }
@@ -251,8 +250,7 @@ std::optional<index::ScalarIndexKey> expression_to_index_key(const BoundExpressi
         return std::nullopt;
     }
 
-    evaluator::ExpressionEvaluator evaluator;
-    auto value = evaluator.evaluate(expression, common::Record {});
+    auto value = evaluator::ExpressionEvaluator::evaluate_constant(expression);
     if (!value.has_value()) {
         return std::nullopt;
     }

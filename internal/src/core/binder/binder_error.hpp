@@ -32,6 +32,7 @@ enum class BinderErrorCode : std::uint8_t
     NotNullable = 16,              ///< 不能为 NULL
     VectorIndexNotFound = 17,      ///< 向量索引不存在
     InvalidIndexOptions = 18,      ///< 无效的索引选项
+    InvalidLiteral = 19,           ///< 无效的字面量
 };
 
 /**

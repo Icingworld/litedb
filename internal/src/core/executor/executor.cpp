@@ -37,7 +37,6 @@ namespace litedb::core::executor
 namespace
 {
 
-using binder::bound::BoundColumnRefExpression;
 using binder::bound::BoundExpression;
 using common::LogicalType;
 using common::LogicalTypeId;
@@ -77,7 +76,6 @@ constexpr AstNodeLocation internal_location {0, 0};
 struct PipelineRow
 {
     common::Record source_record;
-    common::Record evaluation_record;
     std::vector<common::Value> output_values;
 };
 
@@ -164,10 +162,11 @@ ExecutionError from_transaction_error(transaction::TransactionError error, AstNo
 }
 
 [[nodiscard]]
-ExecutionError from_evaluation_error(evaluator::EvaluationError error)
+ExecutionError from_evaluation_error(
+    evaluator::EvaluationError error,
+    AstNodeLocation location
+)
 {
-    const auto * context = error.context<evaluator::EvaluationErrorContext>();
-    const auto location = context == nullptr ? internal_location : context->location;
     auto message = error.message();
     return make_error(
         ExecutionErrorCode::EvaluationError,
@@ -268,42 +267,6 @@ std::string vector_metric_name(meta::entry::VectorDistanceMetric metric)
 }
 
 [[nodiscard]]
-common::Record make_empty_record()
-{
-    return common::Record {.record_id = 0, .data = common::RecordData {}};
-}
-
-[[nodiscard]]
-common::Record make_evaluation_record(
-    const schema::CollectionSchema & collection_schema,
-    const common::Record & source_record
-)
-{
-    common::ColumnId max_column_id = 0;
-    for (const auto & column : collection_schema.columns()) {
-        max_column_id = std::max(max_column_id, column.column_id());
-    }
-
-    common::Record evaluation_record;
-    evaluation_record.record_id = source_record.record_id;
-    evaluation_record.data.values.resize(static_cast<std::size_t>(max_column_id), common::Value::null());
-
-    for (std::size_t ordinal = 0; ordinal < collection_schema.columns().size(); ++ordinal) {
-        if (ordinal >= source_record.data.values.size()) {
-            continue;
-        }
-
-        const auto column_id = collection_schema.columns()[ordinal].column_id();
-        if (column_id == 0) {
-            continue;
-        }
-        evaluation_record.data.values[static_cast<std::size_t>(column_id - 1)] = source_record.data.values[ordinal];
-    }
-
-    return evaluation_record;
-}
-
-[[nodiscard]]
 std::expected<void, ExecutionError> find_storage(
     storage::StorageEngine & storage,
     common::CollectionId collection_id,
@@ -345,14 +308,11 @@ std::expected<PipelineResult, ExecutionError> execute_physical(
 
 void append_pipeline_row(
     PipelineResult & result,
-    const schema::CollectionSchema & collection_schema,
     common::Record record
 )
 {
-    auto evaluation_record = make_evaluation_record(collection_schema, record);
     result.rows.push_back(PipelineRow {
         .source_record = std::move(record),
-        .evaluation_record = std::move(evaluation_record),
         .output_values = {},
     });
     result.rows.back().output_values = result.rows.back().source_record.data.values;
@@ -394,7 +354,7 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
         auto next = cursor->next();
         if (!next) return std::unexpected(from_storage_error(std::move(next.error()), scan.location()));
         if (!*next) break;
-        append_pipeline_row(result, *collection_schema, std::move(**next));
+        append_pipeline_row(result, std::move(**next));
     }
 
     return result;
@@ -494,7 +454,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
             if (!record.has_value()) {
                 return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
             }
-            append_pipeline_row(result, *collection_schema, std::move(*record));
+            append_pipeline_row(result, std::move(*record));
         }
         return result;
     }
@@ -509,7 +469,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
         if (!record.has_value()) {
             return std::unexpected(from_storage_error(std::move(record.error()), scan.location()));
         }
-        append_pipeline_row(result, *collection_schema, std::move(*record));
+        append_pipeline_row(result, std::move(*record));
     }
 
     return result;
@@ -518,20 +478,23 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 [[nodiscard]]
 std::expected<void, ExecutionError> apply_predicate(
     PipelineResult & input,
-    const BoundExpression * predicate
+    const BoundExpression * predicate,
+    AstNodeLocation location
 )
 {
     if (predicate == nullptr) {
         return {};
     }
 
-    evaluator::ExpressionEvaluator evaluator;
     std::vector<PipelineRow> rows;
     rows.reserve(input.rows.size());
     for (auto & row : input.rows) {
-        auto matched = evaluator.evaluate_predicate(*predicate, row.evaluation_record);
+        evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
+            .input_values = row.source_record.data.values,
+        }};
+        auto matched = evaluator.evaluate_filter(*predicate);
         if (!matched.has_value()) {
-            return std::unexpected(from_evaluation_error(std::move(matched.error())));
+            return std::unexpected(from_evaluation_error(std::move(matched.error()), location));
         }
         if (*matched) {
             rows.push_back(std::move(row));
@@ -571,9 +534,9 @@ std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
         if (!next->has_value()) {
             break;
         }
-        append_pipeline_row(result, *collection_schema, std::move(**next));
+        append_pipeline_row(result, std::move(**next));
     }
-    auto filtered = apply_predicate(result, search.predicate());
+    auto filtered = apply_predicate(result, search.predicate(), search.location());
     if (!filtered.has_value()) {
         return std::unexpected(std::move(filtered.error()));
     }
@@ -620,11 +583,9 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    evaluator::ExpressionEvaluator evaluator;
-    const auto empty_record = make_empty_record();
-    auto query_value = evaluator.evaluate(search.query_vector(), empty_record);
+    auto query_value = evaluator::ExpressionEvaluator::evaluate_constant(search.query_vector());
     if (!query_value.has_value()) {
-        return std::unexpected(from_evaluation_error(std::move(query_value.error())));
+        return std::unexpected(from_evaluation_error(std::move(query_value.error()), search.location()));
     }
     auto query_key = vindex::VectorIndexKey::from_value(*query_value);
     if (!query_key.has_value()) {
@@ -674,9 +635,9 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
             if (!record.has_value()) {
                 return std::unexpected(from_storage_error(std::move(record.error()), search.location()));
             }
-            append_pipeline_row(result, *collection_schema, std::move(*record));
+            append_pipeline_row(result, std::move(*record));
         }
-        auto filtered = apply_predicate(result, search.predicate());
+        auto filtered = apply_predicate(result, search.predicate(), search.location());
         if (!filtered.has_value()) {
             return std::unexpected(std::move(filtered.error()));
         }
@@ -704,12 +665,14 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
         return std::unexpected(std::move(input.error()));
     }
 
-    evaluator::ExpressionEvaluator evaluator;
     std::vector<PipelineRow> rows;
     for (auto & row : input->rows) {
-        auto predicate = evaluator.evaluate_predicate(filter.predicate(), row.evaluation_record);
+        evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
+            .input_values = row.source_record.data.values,
+        }};
+        auto predicate = evaluator.evaluate_filter(filter.predicate());
         if (!predicate.has_value()) {
-            return std::unexpected(from_evaluation_error(std::move(predicate.error())));
+            return std::unexpected(from_evaluation_error(std::move(predicate.error()), filter.location()));
         }
 
         if (*predicate) {
@@ -722,22 +685,11 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
 }
 
 [[nodiscard]]
-std::string projection_name(const BoundExpression & expression, std::size_t index)
-{
-    if (expression.kind() == binder::bound::BoundExpressionKind::ColumnRef) {
-        const auto & column = static_cast<const BoundColumnRefExpression &>(expression);
-        return column.column_name();
-    }
-    return "expr" + std::to_string(index + 1);
-}
-
-[[nodiscard]]
 std::string projection_name(const binder::bound::BoundProjectionItem & projection, std::size_t index)
 {
-    if (projection.alias.has_value()) {
-        return projection.alias.value();
-    }
-    return projection_name(*projection.expression, index);
+    return projection.output_name.empty()
+        ? "expr" + std::to_string(index + 1)
+        : projection.output_name;
 }
 
 [[nodiscard]]
@@ -764,14 +716,16 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
         });
     }
 
-    evaluator::ExpressionEvaluator evaluator;
     for (auto & row : input->rows) {
+        evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
+            .input_values = row.source_record.data.values,
+        }};
         std::vector<common::Value> values;
         values.reserve(projections.size());
         for (const auto & projection : projections) {
-            auto value = evaluator.evaluate(*projection.expression, row.evaluation_record);
+            auto value = evaluator.evaluate(*projection.expression);
             if (!value.has_value()) {
-                return std::unexpected(from_evaluation_error(std::move(value.error())));
+                return std::unexpected(from_evaluation_error(std::move(value.error()), projection.location()));
             }
             values.push_back(std::move(*value));
         }
@@ -827,13 +781,15 @@ std::expected<std::vector<common::Value>, ExecutionError> evaluate_order_keys(
     const PipelineRow & row
 )
 {
-    evaluator::ExpressionEvaluator evaluator;
+    evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
+        .input_values = row.source_record.data.values,
+    }};
     std::vector<common::Value> keys;
     keys.reserve(order_by.order_by().size());
     for (const auto & item : order_by.order_by()) {
-        auto value = evaluator.evaluate(*item.expression, row.evaluation_record);
+        auto value = evaluator.evaluate(*item.expression);
         if (!value.has_value()) {
-            return std::unexpected(from_evaluation_error(std::move(value.error())));
+            return std::unexpected(from_evaluation_error(std::move(value.error()), order_by.location()));
         }
         keys.push_back(std::move(*value));
     }
@@ -1020,14 +976,12 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    evaluator::ExpressionEvaluator evaluator;
-    const auto empty_record = make_empty_record();
     common::RecordData record_data;
     record_data.values.reserve(plan.values().size());
     for (const auto & expression : plan.values()) {
-        auto value = evaluator.evaluate(*expression, empty_record);
+        auto value = evaluator::ExpressionEvaluator::evaluate_constant(*expression);
         if (!value.has_value()) {
-            return std::unexpected(from_evaluation_error(std::move(value.error())));
+            return std::unexpected(from_evaluation_error(std::move(value.error()), plan.location()));
         }
         record_data.values.push_back(std::move(*value));
     }
@@ -1119,7 +1073,6 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    evaluator::ExpressionEvaluator evaluator;
     auto transaction = transaction_manager.begin_implicit();
     if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error()), plan.location()));
     for (const auto & row : rows->rows) {
@@ -1136,10 +1089,13 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
                 ));
             }
 
-            auto value = evaluator.evaluate(*assignment.value, row.evaluation_record);
+            evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
+                .input_values = row.source_record.data.values,
+            }};
+            auto value = evaluator.evaluate(*assignment.value);
             if (!value.has_value()) {
                 (void) transaction_manager.abort(*transaction);
-                return std::unexpected(from_evaluation_error(std::move(value.error())));
+                return std::unexpected(from_evaluation_error(std::move(value.error()), plan.location()));
             }
             record_data.values[*ordinal] = std::move(*value);
         }

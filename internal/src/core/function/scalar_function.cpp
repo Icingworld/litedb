@@ -23,11 +23,10 @@ const std::vector<FunctionSignature> & ScalarFunction::signatures() const noexce
 
 std::expected<common::Value, FunctionError> ScalarFunction::evaluate(
     const std::vector<common::Value> & arguments,
-    const ScalarFunctionContext & context,
-    parser::ast::AstNodeLocation location
+    const ScalarFunctionContext & context
 ) const
 {
-    return eval_(arguments, context, location);
+    return eval_(arguments, context);
 }
 
 } // namespace litedb::core::function

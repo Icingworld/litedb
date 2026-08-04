@@ -2,6 +2,7 @@
 #include "core/function/builtin/builtin_functions.hpp"
 
 #include <exception>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -46,7 +47,21 @@ std::unique_ptr<BoundExpression> literal(
     std::string value
 )
 {
-    return std::make_unique<BoundLiteralExpression>(type(id), std::move(value));
+    common::Value typed_value;
+    switch (id) {
+    case common::LogicalTypeId::Integer:
+        typed_value = common::Value {common::ValueData {static_cast<std::int32_t>(std::stoi(value))}};
+        break;
+    case common::LogicalTypeId::Double:
+        typed_value = common::Value {common::ValueData {std::stod(value)}};
+        break;
+    case common::LogicalTypeId::Varchar:
+        typed_value = common::Value {common::ValueData {std::move(value)}};
+        break;
+    default:
+        throw std::runtime_error("unsupported debug literal type");
+    }
+    return std::make_unique<BoundLiteralExpression>(type(id), std::move(typed_value));
 }
 
 void test_expression_debug_print()

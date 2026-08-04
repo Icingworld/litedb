@@ -10,9 +10,29 @@
 namespace litedb::core::common
 {
 
+/**
+ * @brief 空值类型
+ */
 using NullValue = std::monostate;
+
+/**
+ * @brief 向量值类型
+ */
 using VectorValue = std::vector<double>;
-using ValueData = std::variant<NullValue, bool, std::int32_t, std::int64_t, float, double, std::string, VectorValue>;
+
+/**
+ * @brief 值数据类型
+ */
+using ValueData = std::variant<
+    NullValue,
+    bool,
+    std::int32_t,
+    std::int64_t,
+    float,
+    double,
+    std::string,
+    VectorValue
+    >;
 
 /**
  * @brief 逻辑值
@@ -57,5 +77,13 @@ public:
 private:
     ValueData data_;     ///< 值数据
 };
+
+/**
+ * @brief 将值转换为字符串
+ * @param value 值
+ * @return 字符串
+ */
+[[nodiscard]]
+std::string value_to_string(const Value & value);
 
 } // namespace litedb::core::common

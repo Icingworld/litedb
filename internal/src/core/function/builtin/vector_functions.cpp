@@ -28,22 +28,20 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
 [[nodiscard]]
 FunctionError make_error(
     FunctionErrorCode code,
-    parser::ast::AstNodeLocation location,
     std::string message
 )
 {
-    return FunctionError {code, message, FunctionErrorContext {location}};
+    return FunctionError {code, message};
 }
 
 [[nodiscard]]
 std::expected<common::Value, FunctionError> vector_binary_distance(
     const std::vector<common::Value> & arguments,
-    parser::ast::AstNodeLocation location,
     double (*distance)(const common::VectorValue &, const common::VectorValue &)
 )
 {
     if (arguments.size() != 2) {
-        return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, location, "Vector distance expects 2 arguments"));
+        return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, "Vector distance expects 2 arguments"));
     }
     if (arguments[0].is_null() || arguments[1].is_null()) {
         return common::Value::null();
@@ -52,10 +50,10 @@ std::expected<common::Value, FunctionError> vector_binary_distance(
     const auto * left = std::get_if<common::VectorValue>(&arguments[0].data());
     const auto * right = std::get_if<common::VectorValue>(&arguments[1].data());
     if (left == nullptr || right == nullptr) {
-        return std::unexpected(make_error(FunctionErrorCode::InvalidType, location, "Vector distance expects VECTOR arguments"));
+        return std::unexpected(make_error(FunctionErrorCode::InvalidType, "Vector distance expects VECTOR arguments"));
     }
     if (left->size() != right->size()) {
-        return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, location, "Vector dimensions must match"));
+        return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, "Vector dimensions must match"));
     }
 
     return common::Value {distance(*left, *right)};
@@ -119,27 +117,24 @@ void register_vector_functions(FunctionRegistry & registry)
         "l2_distance",
         vector_distance_signatures("l2_distance"),
         [](const std::vector<common::Value> & arguments,
-           const ScalarFunctionContext &,
-           parser::ast::AstNodeLocation location) {
-            return vector_binary_distance(arguments, location, l2_distance_impl);
+           const ScalarFunctionContext &) {
+            return vector_binary_distance(arguments, l2_distance_impl);
         }
     ));
     registry.register_function(std::make_shared<ScalarFunction>(
         "inner_product",
         vector_distance_signatures("inner_product"),
         [](const std::vector<common::Value> & arguments,
-           const ScalarFunctionContext &,
-           parser::ast::AstNodeLocation location) {
-            return vector_binary_distance(arguments, location, inner_product_impl);
+           const ScalarFunctionContext &) {
+            return vector_binary_distance(arguments, inner_product_impl);
         }
     ));
     registry.register_function(std::make_shared<ScalarFunction>(
         "cosine_distance",
         vector_distance_signatures("cosine_distance"),
         [](const std::vector<common::Value> & arguments,
-           const ScalarFunctionContext &,
-           parser::ast::AstNodeLocation location) {
-            return vector_binary_distance(arguments, location, cosine_distance_impl);
+           const ScalarFunctionContext &) {
+            return vector_binary_distance(arguments, cosine_distance_impl);
         }
     ));
 }

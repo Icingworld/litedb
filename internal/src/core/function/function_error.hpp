@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include "core/error/error.hpp"
-#include "core/parser/ast/ast_node.hpp"
 
 namespace litedb::core::function
 {
@@ -15,14 +14,6 @@ enum class FunctionErrorCode : std::uint8_t
 {
     InvalidArgument,        ///< 无效参数
     InvalidType,            ///< 无效类型
-};
-
-/**
- * @brief 函数错误
- */
-struct FunctionErrorContext
-{
-    parser::ast::AstNodeLocation location;      ///< 位置
 };
 
 using FunctionError = error::Error;

@@ -10,6 +10,7 @@
 #include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 #include "core/binder/bound/expression/bound_like_expression.hpp"
+#include "core/binder/bound/expression/bound_literal_expression.hpp"
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 
@@ -36,6 +37,24 @@ void test_column_reference_identity()
     const auto & age = static_cast<const BoundColumnRefExpression &>(projection(*select, 1));
     require(age.column_id() == fixture.age_column_id, "age column id mismatch");
     require(age.column_ordinal() == 2, "age ordinal mismatch");
+}
+
+void test_literals_are_typed_during_binding()
+{
+    Fixture fixture;
+    auto select = bind_ok<BoundSelectStatement>(
+        fixture,
+        "SELECT 1, 1.5, 'name', TRUE FROM users;"
+    );
+
+    const auto & integer = static_cast<const BoundLiteralExpression &>(projection(*select, 0));
+    require(std::get<std::int32_t>(integer.value().data()) == 1, "INTEGER literal value mismatch");
+    const auto & number = static_cast<const BoundLiteralExpression &>(projection(*select, 1));
+    require(std::get<double>(number.value().data()) == 1.5, "DOUBLE literal value mismatch");
+    const auto & string = static_cast<const BoundLiteralExpression &>(projection(*select, 2));
+    require(std::get<std::string>(string.value().data()) == "name", "VARCHAR literal value mismatch");
+    const auto & boolean = static_cast<const BoundLiteralExpression &>(projection(*select, 3));
+    require(std::get<bool>(boolean.value().data()), "BOOLEAN literal value mismatch");
 }
 
 void test_unary_binary_and_numeric_coercion()
@@ -124,6 +143,7 @@ void test_invalid_expression_context()
 void run_suite()
 {
     test_column_reference_identity();
+    test_literals_are_typed_during_binding();
     test_unary_binary_and_numeric_coercion();
     test_predicates_and_string_compatibility();
     test_function_binding_and_vector_dimension();

@@ -46,8 +46,7 @@ public:
     [[nodiscard]]
     virtual std::expected<void, FunctionError> update(
         AggregateState & state,
-        const std::vector<common::Value> & arguments,
-        parser::ast::AstNodeLocation location
+        const std::vector<common::Value> & arguments
     ) const = 0;
 
     /**
@@ -58,8 +57,7 @@ public:
      */
     [[nodiscard]]
     virtual std::expected<common::Value, FunctionError> finalize(
-        const AggregateState & state,
-        parser::ast::AstNodeLocation location
+        const AggregateState & state
     ) const = 0;
 };
 

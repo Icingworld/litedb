@@ -1,7 +1,11 @@
 #include "core/binder/worker/binder_worker_helper.hpp"
 
 #include <expected>
+#include <cstdint>
+#include <exception>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -76,6 +80,67 @@ common::BinaryOperator binary_operator(TokenType op)
     default:
         std::unreachable();
     }
+}
+
+[[nodiscard]]
+std::optional<common::Value> parse_literal_value(
+    common::LogicalTypeId type_id,
+    const std::string & text
+)
+{
+    try {
+        std::size_t parsed = 0;
+        switch (type_id) {
+        case LogicalTypeId::Boolean:
+            if (text == "true" || text == "TRUE") {
+                return common::Value {common::ValueData {true}};
+            }
+            if (text == "false" || text == "FALSE") {
+                return common::Value {common::ValueData {false}};
+            }
+            break;
+        case LogicalTypeId::Integer: {
+            const auto value = std::stoll(text, &parsed);
+            if (parsed == text.size()
+                && value >= std::numeric_limits<std::int32_t>::min()
+                && value <= std::numeric_limits<std::int32_t>::max()) {
+                return common::Value {
+                    common::ValueData {static_cast<std::int32_t>(value)}
+                };
+            }
+            break;
+        }
+        case LogicalTypeId::BigInt: {
+            const auto value = std::stoll(text, &parsed);
+            if (parsed == text.size()) {
+                return common::Value {common::ValueData {static_cast<std::int64_t>(value)}};
+            }
+            break;
+        }
+        case LogicalTypeId::Float: {
+            const auto value = std::stof(text, &parsed);
+            if (parsed == text.size()) {
+                return common::Value {common::ValueData {value}};
+            }
+            break;
+        }
+        case LogicalTypeId::Double: {
+            const auto value = std::stod(text, &parsed);
+            if (parsed == text.size()) {
+                return common::Value {common::ValueData {value}};
+            }
+            break;
+        }
+        case LogicalTypeId::Varchar:
+            return common::Value {common::ValueData {text}};
+        case LogicalTypeId::Null:
+            return common::Value::null();
+        case LogicalTypeId::Vector:
+            break;
+        }
+    } catch (const std::exception &) {
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -168,18 +233,34 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
     const LiteralExpression & expression
 ) const
 {
+    auto make_literal = [&expression](LogicalTypeId type_id)
+        -> std::expected<std::unique_ptr<BoundExpression>, BinderError> {
+        auto value = parse_literal_value(type_id, expression.value());
+        if (!value.has_value()) {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidLiteral,
+                expression.location(),
+                "Invalid literal: " + expression.value()
+            ));
+        }
+        return std::make_unique<BoundLiteralExpression>(
+            type(type_id),
+            std::move(*value)
+        );
+    };
+
     switch (expression.literal_type()) {
     case TokenType::Null:
         return std::make_unique<BoundNullExpression>(type(LogicalTypeId::Null));
     case TokenType::True:
     case TokenType::False:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Boolean), expression.value());
+        return make_literal(LogicalTypeId::Boolean);
     case TokenType::IntegerLiteral:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Integer), expression.value());
+        return make_literal(LogicalTypeId::Integer);
     case TokenType::FloatLiteral:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Double), expression.value());
+        return make_literal(LogicalTypeId::Double);
     case TokenType::StringLiteral:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Varchar), expression.value());
+        return make_literal(LogicalTypeId::Varchar);
     [[unlikely]] default:
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
@@ -612,17 +693,32 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         );
     }
 
+    auto make_literal = [&expression](LogicalTypeId type_id)
+        -> std::expected<std::unique_ptr<BoundExpression>, BinderError> {
+        auto value = parse_literal_value(type_id, expression.value);
+        if (!value.has_value()) {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidLiteral,
+                "Invalid default literal: " + expression.value
+            ));
+        }
+        return std::make_unique<BoundLiteralExpression>(
+            type(type_id),
+            std::move(*value)
+        );
+    };
+
     switch (expression.literal_kind) {
     case schema::DefaultLiteralKind::Null:
         return std::make_unique<BoundNullExpression>(type(LogicalTypeId::Null));
     case schema::DefaultLiteralKind::Boolean:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Boolean), expression.value);
+        return make_literal(LogicalTypeId::Boolean);
     case schema::DefaultLiteralKind::Integer:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Integer), expression.value);
+        return make_literal(LogicalTypeId::Integer);
     case schema::DefaultLiteralKind::Float:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Double), expression.value);
+        return make_literal(LogicalTypeId::Double);
     case schema::DefaultLiteralKind::String:
-        return std::make_unique<BoundLiteralExpression>(type(LogicalTypeId::Varchar), expression.value);
+        return make_literal(LogicalTypeId::Varchar);
     }
 
     [[unlikely]] return std::unexpected(make_binder_error(

@@ -28,8 +28,7 @@ public:
      */
     using EvalFn = std::expected<common::Value, FunctionError> (*)(
         const std::vector<common::Value> & arguments,
-        const ScalarFunctionContext & context,
-        parser::ast::AstNodeLocation location
+        const ScalarFunctionContext & context
     );
 
 public:
@@ -57,8 +56,7 @@ public:
     [[nodiscard]]
     std::expected<common::Value, FunctionError> evaluate(
         const std::vector<common::Value> & arguments,
-        const ScalarFunctionContext & context,
-        parser::ast::AstNodeLocation location
+        const ScalarFunctionContext & context
     ) const;
 
 private:

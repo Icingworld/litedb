@@ -1,8 +1,7 @@
 #pragma once
 
-#include <string>
-
 #include "core/binder/bound/expression/bound_expression.hpp"
+#include "core/common/value.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -15,7 +14,7 @@ class BoundLiteralExpression final : public BoundExpression
 public:
     BoundLiteralExpression(
         common::LogicalType type,
-        std::string value
+        common::Value value
     );
 
 public:
@@ -24,10 +23,10 @@ public:
      * @return 常量值
      */
     [[nodiscard]]
-    const std::string & value() const noexcept;
+    const common::Value & value() const noexcept;
 
 private:
-    std::string value_;     ///< 常量值
+    common::Value value_;     ///< 常量值
 };
 
 } // namespace litedb::core::binder::bound

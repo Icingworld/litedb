@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
+#include "core/common/type_rules.hpp"
 
 namespace litedb::core::binder
 {
@@ -15,7 +16,10 @@ BinderError make_binder_error(
     std::string_view message
 )
 {
-    return BinderError {code, message};
+    return BinderError {
+        code,
+        message
+    };
 }
 
 BinderError make_binder_error(
@@ -24,87 +28,57 @@ BinderError make_binder_error(
     std::string_view message
 )
 {
-    return BinderError {code, message, BinderErrorContext {location}};
+    return BinderError {
+        code,
+        message,
+        BinderErrorContext {
+            location
+        }
+    };
 }
 
-LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter) noexcept
+LogicalType type(
+    LogicalTypeId id,
+    std::optional<std::size_t> parameter
+) noexcept
 {
-    return LogicalType {id, parameter};
+    return LogicalType {
+        id,
+        parameter
+    };
 }
 
-bool same_type(const LogicalType & left, const LogicalType & right) noexcept
+bool same_type(
+    const LogicalType & left,
+    const LogicalType & right
+) noexcept
 {
-    return left.id == right.id && left.parameter == right.parameter;
+    return common::same_type(left, right);
 }
 
 bool is_numeric(const LogicalType & value) noexcept
 {
-    return value.id == LogicalTypeId::Integer
-        || value.id == LogicalTypeId::BigInt
-        || value.id == LogicalTypeId::Float
-        || value.id == LogicalTypeId::Double;
+    return common::is_numeric(value);
 }
 
 bool is_boolean(const LogicalType & value) noexcept
 {
-    return value.id == LogicalTypeId::Boolean;
+    return common::is_boolean(value);
 }
 
 bool is_varchar(const LogicalType & value) noexcept
 {
-    return value.id == LogicalTypeId::Varchar;
+    return common::is_varchar(value);
 }
 
 std::string type_name(const LogicalType & value)
 {
-    std::string name;
-    switch (value.id) {
-    case LogicalTypeId::Null:
-        name = "NULL";
-        break;
-    case LogicalTypeId::Boolean:
-        name = "BOOLEAN";
-        break;
-    case LogicalTypeId::Integer:
-        name = "INTEGER";
-        break;
-    case LogicalTypeId::BigInt:
-        name = "BIGINT";
-        break;
-    case LogicalTypeId::Float:
-        name = "FLOAT";
-        break;
-    case LogicalTypeId::Double:
-        name = "DOUBLE";
-        break;
-    case LogicalTypeId::Varchar:
-        name = "VARCHAR";
-        break;
-    case LogicalTypeId::Vector:
-        name = "VECTOR";
-        break;
-    }
-
-    if (value.parameter.has_value()) {
-        name += "(" + std::to_string(value.parameter.value()) + ")";
-    }
-    return name;
+    return common::type_name(value);
 }
 
 int numeric_rank(const LogicalType & value) noexcept
 {
-    switch (value.id) {
-    case LogicalTypeId::Integer:
-        return 1;
-    case LogicalTypeId::BigInt:
-        return 2;
-    case LogicalTypeId::Float:
-        return 3;
-    case LogicalTypeId::Double:
-        return 4;
-    default:
-        return 0;
-    }
+    return common::numeric_rank(value);
 }
 
 LogicalType common_numeric_type(
@@ -112,36 +86,15 @@ LogicalType common_numeric_type(
     const LogicalType & right
 ) noexcept
 {
-    return numeric_rank(left) >= numeric_rank(right) ? left : right;
+    return common::common_numeric_type(left, right);
 }
 
-bool can_cast(const LogicalType & source, const LogicalType & target) noexcept
+bool can_cast(
+    const LogicalType & source,
+    const LogicalType & target
+) noexcept
 {
-    if (source.id == LogicalTypeId::Null) {
-        return true;
-    }
-
-    if (same_type(source, target)) {
-        return true;
-    }
-
-    if (is_numeric(source) && is_numeric(target)) {
-        return numeric_rank(source) <= numeric_rank(target);
-    }
-
-    if (source.id == LogicalTypeId::Varchar
-        && target.id == LogicalTypeId::Varchar) {
-        return true;
-    }
-
-    if (source.id == LogicalTypeId::Vector
-        && target.id == LogicalTypeId::Vector) {
-        return !source.parameter.has_value()
-            || !target.parameter.has_value()
-            || source.parameter.value() == target.parameter.value();
-    }
-
-    return false;
+    return common::can_implicitly_cast(source, target);
 }
 
 bool can_compare(
@@ -150,22 +103,7 @@ bool can_compare(
     BinaryOperator op
 ) noexcept
 {
-    const bool equality = op == BinaryOperator::Equal
-        || op == BinaryOperator::NotEqual;
-    const bool ordered = op == BinaryOperator::LessThan
-        || op == BinaryOperator::LessThanOrEqual
-        || op == BinaryOperator::GreaterThan
-        || op == BinaryOperator::GreaterThanOrEqual;
-
-    if (equality) {
-        return same_type(left, right)
-            || (is_numeric(left) && is_numeric(right))
-            || (is_varchar(left) && is_varchar(right));
-    }
-
-    return ordered
-        && ((is_numeric(left) && is_numeric(right))
-            || (is_varchar(left) && is_varchar(right)));
+    return common::can_compare(left, right, op);
 }
 
 std::unique_ptr<BoundExpression> cast_if_needed(
@@ -173,7 +111,7 @@ std::unique_ptr<BoundExpression> cast_if_needed(
     LogicalType target_type
 )
 {
-    if (same_type(expression->type(), target_type)) {
+    if (common::same_type(expression->type(), target_type)) {
         return expression;
     }
     return std::make_unique<BoundCastExpression>(

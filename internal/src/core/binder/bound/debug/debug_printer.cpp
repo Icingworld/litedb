@@ -328,7 +328,7 @@ void BoundDebugPrinter::visit_literal_expression(
     write_node_header("BoundLiteralExpression");
     IndentScope scope(*this);
     write_type_field("type", expression.type());
-    write_field("value", expression.value());
+    write_field("value", common::value_to_string(expression.value()));
 }
 
 void BoundDebugPrinter::visit_null_expression(
