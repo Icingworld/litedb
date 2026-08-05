@@ -35,6 +35,13 @@ public:
     [[nodiscard]]
     const BoundExpression & operand() const noexcept;
 
+    /**
+     * @brief 移出操作数
+     * @return 操作数所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_operand() noexcept;
+
 private:
     common::UnaryOperator op_;                      ///< 一元操作符
     std::unique_ptr<BoundExpression> operand_;      ///< 操作数

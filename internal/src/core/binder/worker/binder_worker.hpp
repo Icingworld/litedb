@@ -21,15 +21,18 @@ namespace litedb::core::binder
  * @brief 绑定工作器
  */
 class BinderWorker
-    : private parser::ast::AstStatementDispatcher<
+    : private parser::ast::ConstAstStatementDispatcher<
           BinderWorker,
           std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
       >
 {
     friend class parser::ast::AstStatementDispatcher<
         BinderWorker,
-        std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+        std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>,
+        true
     >;
+
+
 
 public:
     explicit BinderWorker(const BinderContext & context);

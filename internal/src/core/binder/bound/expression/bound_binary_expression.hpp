@@ -30,6 +30,13 @@ public:
     const BoundExpression & left() const noexcept;
 
     /**
+     * @brief 移出左操作数
+     * @return 左操作数所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_left() noexcept;
+
+    /**
      * @brief 获取二元操作符
      * @return 二元操作符
      */
@@ -42,6 +49,13 @@ public:
      */
     [[nodiscard]]
     const BoundExpression & right() const noexcept;
+
+    /**
+     * @brief 移出右操作数
+     * @return 右操作数所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_right() noexcept;
 
 private:
     std::unique_ptr<BoundExpression> left_;     ///< 左操作数

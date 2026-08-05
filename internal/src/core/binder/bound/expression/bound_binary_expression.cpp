@@ -23,6 +23,11 @@ const BoundExpression & BoundBinaryExpression::left() const noexcept
     return *left_;
 }
 
+std::unique_ptr<BoundExpression> BoundBinaryExpression::take_left() noexcept
+{
+    return std::move(left_);
+}
+
 common::BinaryOperator BoundBinaryExpression::op() const noexcept
 {
     return op_;
@@ -31,6 +36,11 @@ common::BinaryOperator BoundBinaryExpression::op() const noexcept
 const BoundExpression & BoundBinaryExpression::right() const noexcept
 {
     return *right_;
+}
+
+std::unique_ptr<BoundExpression> BoundBinaryExpression::take_right() noexcept
+{
+    return std::move(right_);
 }
 
 } // namespace litedb::core::binder::bound

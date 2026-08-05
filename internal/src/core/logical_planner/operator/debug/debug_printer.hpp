@@ -16,9 +16,15 @@ namespace litedb::core::logical_planner::op
  * @brief 逻辑算子调试打印器
  */
 class LogicalPlanOperatorDebugPrinter
-    : private LogicalOperatorDispatcher<LogicalPlanOperatorDebugPrinter>
+    : private ConstLogicalOperatorDispatcher<
+          LogicalPlanOperatorDebugPrinter,
+          void
+      >
 {
-    friend class LogicalOperatorDispatcher<LogicalPlanOperatorDebugPrinter>;
+    friend ConstLogicalOperatorDispatcher<
+        LogicalPlanOperatorDebugPrinter,
+        void
+    >;
 
 public:
     explicit LogicalPlanOperatorDebugPrinter(std::ostream & ostream);

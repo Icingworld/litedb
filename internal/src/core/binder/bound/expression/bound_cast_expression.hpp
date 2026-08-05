@@ -26,6 +26,13 @@ public:
     [[nodiscard]]
     const BoundExpression & expression() const noexcept;
 
+    /**
+     * @brief 移出 CAST 内部表达式
+     * @return 内部表达式所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_expression() noexcept;
+
 private:
     std::unique_ptr<BoundExpression> expression_;    ///< 表达式
 };

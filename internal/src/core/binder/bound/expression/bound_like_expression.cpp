@@ -26,9 +26,19 @@ const BoundExpression & BoundLikeExpression::expression() const noexcept
     return *expression_;
 }
 
+std::unique_ptr<BoundExpression> BoundLikeExpression::take_expression() noexcept
+{
+    return std::move(expression_);
+}
+
 const BoundExpression & BoundLikeExpression::pattern() const noexcept
 {
     return *pattern_;
+}
+
+std::unique_ptr<BoundExpression> BoundLikeExpression::take_pattern() noexcept
+{
+    return std::move(pattern_);
 }
 
 } // namespace litedb::core::binder::bound

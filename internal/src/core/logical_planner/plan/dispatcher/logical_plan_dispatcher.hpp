@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <type_traits>
 
 #include "core/logical_planner/plan/command/create_collection_plan.hpp"
 #include "core/logical_planner/plan/command/create_database_plan.hpp"
@@ -28,11 +29,27 @@ namespace litedb::core::logical_planner::plan
 /**
  * @brief 逻辑计划调度器
  * @tparam Derived 派生类
- * @tparam ReturnType 返回类型，默认为 void
+ * @tparam ReturnType 返回类型
+ * @tparam IsConst 是否为常量
  */
-template <typename Derived, typename ReturnType = void>
+template <
+    typename Derived,
+    typename ReturnType,
+    bool IsConst
+>
 class LogicalPlanDispatcher
 {
+protected:
+    /**
+     * @brief 引用类型
+     */
+    template <typename T>
+    using ReferenceType = std::conditional_t<
+        IsConst,
+        const T &,
+        T &
+    >;
+
 protected:
     /**
      * @brief 调度逻辑计划
@@ -40,85 +57,85 @@ protected:
      * @return 返回值
      */
     [[nodiscard]]
-    ReturnType dispatch_plan(const LogicalPlan & plan)
+    ReturnType dispatch_plan(ReferenceType<LogicalPlan> plan)
     {
         switch (plan.kind()) {
         // command
         case LogicalPlanKind::Use:
             return derived().visit_use_plan(
-                static_cast<const UsePlan &>(plan)
+                static_cast<ReferenceType<UsePlan>>(plan)
             );
         case LogicalPlanKind::CreateDatabase:
             return derived().visit_create_database_plan(
-                static_cast<const CreateDatabasePlan &>(plan)
+                static_cast<ReferenceType<CreateDatabasePlan>>(plan)
             );
         case LogicalPlanKind::CreateCollection:
             return derived().visit_create_collection_plan(
-                static_cast<const CreateCollectionPlan &>(plan)
+                static_cast<ReferenceType<CreateCollectionPlan>>(plan)
             );
         case LogicalPlanKind::CreateIndex:
             return derived().visit_create_index_plan(
-                static_cast<const CreateIndexPlan &>(plan)
+                static_cast<ReferenceType<CreateIndexPlan>>(plan)
             );
         case LogicalPlanKind::CreateVectorIndex:
             return derived().visit_create_vector_index_plan(
-                static_cast<const CreateVectorIndexPlan &>(plan)
+                static_cast<ReferenceType<CreateVectorIndexPlan>>(plan)
             );
         case LogicalPlanKind::DropDatabase:
             return derived().visit_drop_database_plan(
-                static_cast<const DropDatabasePlan &>(plan)
+                static_cast<ReferenceType<DropDatabasePlan>>(plan)
             );
         case LogicalPlanKind::DropCollection:
             return derived().visit_drop_collection_plan(
-                static_cast<const DropCollectionPlan &>(plan)
+                static_cast<ReferenceType<DropCollectionPlan>>(plan)
             );
         case LogicalPlanKind::DropIndex:
             return derived().visit_drop_index_plan(
-                static_cast<const DropIndexPlan &>(plan)
+                static_cast<ReferenceType<DropIndexPlan>>(plan)
             );
         case LogicalPlanKind::DropVectorIndex:
             return derived().visit_drop_vector_index_plan(
-                static_cast<const DropVectorIndexPlan &>(plan)
+                static_cast<ReferenceType<DropVectorIndexPlan>>(plan)
             );
         case LogicalPlanKind::ShowDatabases:
             return derived().visit_show_databases_plan(
-                static_cast<const ShowDatabasesPlan &>(plan)
+                static_cast<ReferenceType<ShowDatabasesPlan>>(plan)
             );
         case LogicalPlanKind::ShowCollections:
             return derived().visit_show_collections_plan(
-                static_cast<const ShowCollectionsPlan &>(plan)
+                static_cast<ReferenceType<ShowCollectionsPlan>>(plan)
             );
         case LogicalPlanKind::ShowIndexes:
             return derived().visit_show_indexes_plan(
-                static_cast<const ShowIndexesPlan &>(plan)
+                static_cast<ReferenceType<ShowIndexesPlan>>(plan)
             );
         case LogicalPlanKind::ShowVectorIndexes:
             return derived().visit_show_vector_indexes_plan(
-                static_cast<const ShowVectorIndexesPlan &>(plan)
+                static_cast<ReferenceType<ShowVectorIndexesPlan>>(plan)
             );
         case LogicalPlanKind::DescribeCollection:
             return derived().visit_describe_collection_plan(
-                static_cast<const DescribeCollectionPlan &>(plan)
+                static_cast<ReferenceType<DescribeCollectionPlan>>(plan)
             );
 
         // mutation
         case LogicalPlanKind::Insert:
             return derived().visit_insert_plan(
-                static_cast<const InsertPlan &>(plan)
+                static_cast<ReferenceType<InsertPlan>>(plan)
             );
         case LogicalPlanKind::Update:
             return derived().visit_update_plan(
-                static_cast<const UpdatePlan &>(plan)
+                static_cast<ReferenceType<UpdatePlan>>(plan)
             );
         case LogicalPlanKind::Delete:
             return derived().visit_delete_plan(
-                static_cast<const DeletePlan &>(plan)
+                static_cast<ReferenceType<DeletePlan>>(plan)
             );
 
         // query
         case LogicalPlanKind::Query:
             return derived().visit_query_plan(
-                static_cast<const QueryPlan &>(plan)
+                static_cast<ReferenceType<QueryPlan>>(plan)
             );
         default:
             std::unreachable();
@@ -136,5 +153,29 @@ private:
         return static_cast<Derived &>(*this);
     }
 };
+
+/**
+ * @brief 常量逻辑计划调度器
+ * @tparam Derived 派生类
+ * @tparam ReturnType 返回类型
+ */
+template <typename Derived, typename ReturnType>
+using ConstLogicalPlanDispatcher = LogicalPlanDispatcher<
+    Derived,
+    ReturnType,
+    true
+>;
+
+/**
+ * @brief 可变逻辑计划调度器
+ * @tparam Derived 派生类
+ * @tparam ReturnType 返回类型
+ */
+template <typename Derived, typename ReturnType>
+using MutableLogicalPlanDispatcher = LogicalPlanDispatcher<
+    Derived,
+    ReturnType,
+    false
+>;
 
 } // namespace litedb::core::logical_planner::plan

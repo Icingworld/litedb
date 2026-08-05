@@ -26,11 +26,11 @@ struct BoundDebugPrinterOptions
  * @brief 绑定调试打印器
  */
 class BoundDebugPrinter final
-    : private BoundStatementDispatcher<BoundDebugPrinter>
-    , private BoundExpressionDispatcher<BoundDebugPrinter>
+    : private ConstBoundStatementDispatcher<BoundDebugPrinter, void>
+    , private ConstBoundExpressionDispatcher<BoundDebugPrinter, void>
 {
-    friend class BoundStatementDispatcher<BoundDebugPrinter>;
-    friend class BoundExpressionDispatcher<BoundDebugPrinter>;
+    friend ConstBoundStatementDispatcher<BoundDebugPrinter, void>;
+    friend ConstBoundExpressionDispatcher<BoundDebugPrinter, void>;
 
 public:
     explicit BoundDebugPrinter(

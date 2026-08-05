@@ -27,4 +27,9 @@ const BoundExpression & BoundUnaryExpression::operand() const noexcept
     return *operand_;
 }
 
+std::unique_ptr<BoundExpression> BoundUnaryExpression::take_operand() noexcept
+{
+    return std::move(operand_);
+}
+
 } // namespace litedb::core::binder::bound

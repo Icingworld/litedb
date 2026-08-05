@@ -18,12 +18,12 @@ namespace litedb::core::logical_planner
  * @brief 逻辑计划工作器
  */
 class LogicalPlannerWorker
-    : private binder::bound::BoundStatementDispatcher<
+    : private binder::bound::MutableBoundStatementDispatcher<
           LogicalPlannerWorker,
           std::unique_ptr<plan::LogicalPlan>
       >
 {
-    friend class binder::bound::BoundStatementDispatcher<
+    friend binder::bound::MutableBoundStatementDispatcher<
         LogicalPlannerWorker,
         std::unique_ptr<plan::LogicalPlan>
     >;
@@ -52,7 +52,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_create_database_statement(
-        const binder::bound::BoundCreateDatabaseStatement & statement
+        binder::bound::BoundCreateDatabaseStatement & statement
     );
 
     /**
@@ -63,7 +63,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_create_collection_statement(
-        const binder::bound::BoundCreateCollectionStatement & statement
+        binder::bound::BoundCreateCollectionStatement & statement
     );
 
     /**
@@ -74,7 +74,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_create_index_statement(
-        const binder::bound::BoundCreateIndexStatement & statement
+        binder::bound::BoundCreateIndexStatement & statement
     );
 
     /**
@@ -85,7 +85,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_create_vector_index_statement(
-        const binder::bound::BoundCreateVectorIndexStatement & statement
+        binder::bound::BoundCreateVectorIndexStatement & statement
     );
 
     /**
@@ -107,7 +107,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_describe_collection_statement(
-        const binder::bound::BoundDescribeCollectionStatement & statement
+        binder::bound::BoundDescribeCollectionStatement & statement
     );
 
     /**
@@ -118,7 +118,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_drop_database_statement(
-        const binder::bound::BoundDropDatabaseStatement & statement
+        binder::bound::BoundDropDatabaseStatement & statement
     );
 
     /**
@@ -129,7 +129,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_drop_collection_statement(
-        const binder::bound::BoundDropCollectionStatement & statement
+        binder::bound::BoundDropCollectionStatement & statement
     );
 
     /**
@@ -140,7 +140,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_drop_index_statement(
-        const binder::bound::BoundDropIndexStatement & statement
+        binder::bound::BoundDropIndexStatement & statement
     );
 
     /**
@@ -151,7 +151,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_drop_vector_index_statement(
-        const binder::bound::BoundDropVectorIndexStatement & statement
+        binder::bound::BoundDropVectorIndexStatement & statement
     );
 
     /**
@@ -186,7 +186,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_show_databases_statement(
-        const binder::bound::BoundShowDatabasesStatement & statement
+        binder::bound::BoundShowDatabasesStatement & statement
     );
 
     /**
@@ -197,7 +197,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_show_collections_statement(
-        const binder::bound::BoundShowCollectionsStatement & statement
+        binder::bound::BoundShowCollectionsStatement & statement
     );
 
     /**
@@ -208,7 +208,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_show_indexes_statement(
-        const binder::bound::BoundShowIndexesStatement & statement
+        binder::bound::BoundShowIndexesStatement & statement
     );
 
     /**
@@ -219,7 +219,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_show_vector_indexes_statement(
-        const binder::bound::BoundShowVectorIndexesStatement & statement
+        binder::bound::BoundShowVectorIndexesStatement & statement
     );
 
     /**
@@ -242,7 +242,7 @@ private:
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     visit_use_statement(
-        const binder::bound::BoundUseStatement & statement
+        binder::bound::BoundUseStatement & statement
     );
 };
 

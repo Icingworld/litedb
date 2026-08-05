@@ -27,6 +27,13 @@ public:
     const std::vector<std::unique_ptr<BoundExpression>> &
     elements() const noexcept;
 
+    /**
+     * @brief 移出向量元素
+     * @return 向量元素所有权
+     */
+    [[nodiscard]]
+    std::vector<std::unique_ptr<BoundExpression>> take_elements() noexcept;
+
 private:
     std::vector<std::unique_ptr<BoundExpression>> elements_;      ///< 元素列表
 };

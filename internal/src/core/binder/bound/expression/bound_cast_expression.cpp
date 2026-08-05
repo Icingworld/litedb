@@ -19,4 +19,9 @@ const BoundExpression & BoundCastExpression::expression() const noexcept
     return *expression_;
 }
 
+std::unique_ptr<BoundExpression> BoundCastExpression::take_expression() noexcept
+{
+    return std::move(expression_);
+}
+
 } // namespace litedb::core::binder::bound

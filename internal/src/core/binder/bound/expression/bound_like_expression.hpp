@@ -27,11 +27,25 @@ public:
     const BoundExpression & expression() const noexcept;
 
     /**
+     * @brief 移出 LIKE 目标表达式
+     * @return 目标表达式所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_expression() noexcept;
+
+    /**
      * @brief 获取模式
      * @return 模式
      */
     [[nodiscard]]
     const BoundExpression & pattern() const noexcept;
+
+    /**
+     * @brief 移出 LIKE 模式
+     * @return 模式表达式所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_pattern() noexcept;
 
 private:
     std::unique_ptr<BoundExpression> expression_;   ///< 表达式

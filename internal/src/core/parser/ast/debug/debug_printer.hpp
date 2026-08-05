@@ -24,11 +24,11 @@ struct AstDebugPrinterOptions
  * @brief AST 调试打印器
  */
 class AstDebugPrinter final
-    : private AstStatementDispatcher<AstDebugPrinter>
-    , private AstExpressionDispatcher<AstDebugPrinter>
+    : private ConstAstStatementDispatcher<AstDebugPrinter, void>
+    , private ConstAstExpressionDispatcher<AstDebugPrinter, void>
 {
-    friend class AstStatementDispatcher<AstDebugPrinter>;
-    friend class AstExpressionDispatcher<AstDebugPrinter>;
+    friend ConstAstStatementDispatcher<AstDebugPrinter, void>;
+    friend ConstAstExpressionDispatcher<AstDebugPrinter, void>;
 
 public:
     explicit AstDebugPrinter(

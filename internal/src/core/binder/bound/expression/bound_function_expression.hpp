@@ -36,6 +36,13 @@ public:
     const std::vector<std::unique_ptr<BoundExpression>> &
     arguments() const noexcept;
 
+    /**
+     * @brief 移出函数参数
+     * @return 参数所有权
+     */
+    [[nodiscard]]
+    std::vector<std::unique_ptr<BoundExpression>> take_arguments() noexcept;
+
 private:
     function::BoundScalarFunction function_;                    ///< 已绑定函数
     std::vector<std::unique_ptr<BoundExpression>> arguments_;   ///< 参数列表

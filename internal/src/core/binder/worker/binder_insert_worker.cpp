@@ -30,9 +30,11 @@ namespace
  * @brief 插入值表达式验证器
  */
 class InsertValueExpressionValidator final
-    : private AstExpressionDispatcher<InsertValueExpressionValidator, bool>
+    : private ConstAstExpressionDispatcher<InsertValueExpressionValidator, bool>
 {
-    friend class AstExpressionDispatcher<InsertValueExpressionValidator, bool>;
+    friend class AstExpressionDispatcher<InsertValueExpressionValidator, bool, true>;
+
+
 
 public:
     /**

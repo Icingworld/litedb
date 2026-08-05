@@ -13,12 +13,12 @@ namespace litedb::core::evaluator
  * @brief 表达式评估器
  */
 class ExpressionEvaluator final
-    : private binder::bound::BoundExpressionDispatcher<
+    : private binder::bound::ConstBoundExpressionDispatcher<
           ExpressionEvaluator,
           std::expected<common::Value, EvaluationError>
       >
 {
-    friend class binder::bound::BoundExpressionDispatcher<
+    friend binder::bound::ConstBoundExpressionDispatcher<
         ExpressionEvaluator,
         std::expected<common::Value, EvaluationError>
     >;

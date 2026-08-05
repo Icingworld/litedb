@@ -26,7 +26,7 @@ LogicalPlannerWorker::plan_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_create_database_statement(
-    const BoundCreateDatabaseStatement & statement
+    BoundCreateDatabaseStatement & statement
 )
 {
     return LogicalPlannerCreateWorker().plan_create_database(statement);
@@ -34,7 +34,7 @@ LogicalPlannerWorker::visit_create_database_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_create_collection_statement(
-    const BoundCreateCollectionStatement & statement
+    BoundCreateCollectionStatement & statement
 )
 {
     return LogicalPlannerCreateWorker().plan_create_collection(statement);
@@ -42,7 +42,7 @@ LogicalPlannerWorker::visit_create_collection_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_create_index_statement(
-    const BoundCreateIndexStatement & statement
+    BoundCreateIndexStatement & statement
 )
 {
     return LogicalPlannerCreateWorker().plan_create_index(statement);
@@ -50,7 +50,7 @@ LogicalPlannerWorker::visit_create_index_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_create_vector_index_statement(
-    const BoundCreateVectorIndexStatement & statement
+    BoundCreateVectorIndexStatement & statement
 )
 {
     return LogicalPlannerCreateWorker().plan_create_vector_index(statement);
@@ -66,7 +66,7 @@ LogicalPlannerWorker::visit_delete_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_describe_collection_statement(
-    const BoundDescribeCollectionStatement & statement
+    BoundDescribeCollectionStatement & statement
 )
 {
     return LogicalPlannerDescribeWorker().plan_describe_collection(statement);
@@ -74,7 +74,7 @@ LogicalPlannerWorker::visit_describe_collection_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_drop_database_statement(
-    const BoundDropDatabaseStatement & statement
+    BoundDropDatabaseStatement & statement
 )
 {
     return LogicalPlannerDropWorker().plan_drop_database(statement);
@@ -82,7 +82,7 @@ LogicalPlannerWorker::visit_drop_database_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_drop_collection_statement(
-    const BoundDropCollectionStatement & statement
+    BoundDropCollectionStatement & statement
 )
 {
     return LogicalPlannerDropWorker().plan_drop_collection(statement);
@@ -90,7 +90,7 @@ LogicalPlannerWorker::visit_drop_collection_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_drop_index_statement(
-    const BoundDropIndexStatement & statement
+    BoundDropIndexStatement & statement
 )
 {
     return LogicalPlannerDropWorker().plan_drop_index(statement);
@@ -98,7 +98,7 @@ LogicalPlannerWorker::visit_drop_index_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_drop_vector_index_statement(
-    const BoundDropVectorIndexStatement & statement
+    BoundDropVectorIndexStatement & statement
 )
 {
     return LogicalPlannerDropWorker().plan_drop_vector_index(statement);
@@ -122,7 +122,7 @@ LogicalPlannerWorker::visit_select_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_show_databases_statement(
-    const BoundShowDatabasesStatement & statement
+    BoundShowDatabasesStatement & statement
 )
 {
     return LogicalPlannerShowWorker().plan_show_databases(statement);
@@ -130,7 +130,7 @@ LogicalPlannerWorker::visit_show_databases_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_show_collections_statement(
-    const BoundShowCollectionsStatement & statement
+    BoundShowCollectionsStatement & statement
 )
 {
     return LogicalPlannerShowWorker().plan_show_collections(statement);
@@ -138,7 +138,7 @@ LogicalPlannerWorker::visit_show_collections_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_show_indexes_statement(
-    const BoundShowIndexesStatement & statement
+    BoundShowIndexesStatement & statement
 )
 {
     return LogicalPlannerShowWorker().plan_show_indexes(statement);
@@ -146,7 +146,7 @@ LogicalPlannerWorker::visit_show_indexes_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_show_vector_indexes_statement(
-    const BoundShowVectorIndexesStatement & statement
+    BoundShowVectorIndexesStatement & statement
 )
 {
     return LogicalPlannerShowWorker().plan_show_vector_indexes(statement);
@@ -162,7 +162,7 @@ LogicalPlannerWorker::visit_update_statement(
 
 std::unique_ptr<plan::LogicalPlan>
 LogicalPlannerWorker::visit_use_statement(
-    const BoundUseStatement & statement
+    BoundUseStatement & statement
 )
 {
     return LogicalPlannerUseWorker().plan_use(statement);

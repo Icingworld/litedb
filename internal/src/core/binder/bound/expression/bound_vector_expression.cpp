@@ -25,4 +25,10 @@ BoundVectorExpression::elements() const noexcept
     return elements_;
 }
 
+std::vector<std::unique_ptr<BoundExpression>>
+BoundVectorExpression::take_elements() noexcept
+{
+    return std::move(elements_);
+}
+
 } // namespace litedb::core::binder::bound

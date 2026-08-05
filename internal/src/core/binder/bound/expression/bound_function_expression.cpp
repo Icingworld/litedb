@@ -27,4 +27,10 @@ BoundFunctionExpression::arguments() const noexcept
     return arguments_;
 }
 
+std::vector<std::unique_ptr<BoundExpression>>
+BoundFunctionExpression::take_arguments() noexcept
+{
+    return std::move(arguments_);
+}
+
 } // namespace litedb::core::binder::bound

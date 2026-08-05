@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <type_traits>
 
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
@@ -28,11 +29,27 @@ namespace litedb::core::parser::ast
 /**
  * @brief AST 语句调度器
  * @tparam Derived 派生类
- * @tparam ReturnType 返回类型，默认为 void
+ * @tparam ReturnType 返回类型
+ * @tparam IsConst 是否为常量
  */
-template <typename Derived, typename ReturnType = void>
+template <
+    typename Derived,
+    typename ReturnType,
+    bool IsConst
+>
 class AstStatementDispatcher
 {
+protected:
+    /**
+     * @brief 引用类型
+     */
+    template <typename T>
+    using ReferenceType = std::conditional_t<
+        IsConst,
+        const T &,
+        T &
+    >;
+
 protected:
     /**
      * @brief 调度语句
@@ -40,80 +57,80 @@ protected:
      * @return 返回值
      */
     [[nodiscard]]
-    ReturnType dispatch_statement(const StatementNode & statement)
+    ReturnType dispatch_statement(ReferenceType<StatementNode> statement)
     {
         switch (statement.kind()) {
         case AstNodeKind::CreateDatabase:
             return derived().visit_create_database_statement(
-                static_cast<const CreateDatabaseStatement &>(statement)
+                static_cast<ReferenceType<CreateDatabaseStatement>>(statement)
             );
         case AstNodeKind::CreateCollection:
             return derived().visit_create_collection_statement(
-                static_cast<const CreateCollectionStatement &>(statement)
+                static_cast<ReferenceType<CreateCollectionStatement>>(statement)
             );
         case AstNodeKind::CreateIndex:
             return derived().visit_create_index_statement(
-                static_cast<const CreateIndexStatement &>(statement)
+                static_cast<ReferenceType<CreateIndexStatement>>(statement)
             );
         case AstNodeKind::CreateVectorIndex:
             return derived().visit_create_vector_index_statement(
-                static_cast<const CreateVectorIndexStatement &>(statement)
+                static_cast<ReferenceType<CreateVectorIndexStatement>>(statement)
             );
         case AstNodeKind::Delete:
             return derived().visit_delete_statement(
-                static_cast<const DeleteStatement &>(statement)
+                static_cast<ReferenceType<DeleteStatement>>(statement)
             );
         case AstNodeKind::DescribeCollection:
             return derived().visit_describe_collection_statement(
-                static_cast<const DescribeCollectionStatement &>(statement)
+                static_cast<ReferenceType<DescribeCollectionStatement>>(statement)
             );
         case AstNodeKind::DropDatabase:
             return derived().visit_drop_database_statement(
-                static_cast<const DropDatabaseStatement &>(statement)
+                static_cast<ReferenceType<DropDatabaseStatement>>(statement)
             );
         case AstNodeKind::DropCollection:
             return derived().visit_drop_collection_statement(
-                static_cast<const DropCollectionStatement &>(statement)
+                static_cast<ReferenceType<DropCollectionStatement>>(statement)
             );
         case AstNodeKind::DropIndex:
             return derived().visit_drop_index_statement(
-                static_cast<const DropIndexStatement &>(statement)
+                static_cast<ReferenceType<DropIndexStatement>>(statement)
             );
         case AstNodeKind::DropVectorIndex:
             return derived().visit_drop_vector_index_statement(
-                static_cast<const DropVectorIndexStatement &>(statement)
+                static_cast<ReferenceType<DropVectorIndexStatement>>(statement)
             );
         case AstNodeKind::Insert:
             return derived().visit_insert_statement(
-                static_cast<const InsertStatement &>(statement)
+                static_cast<ReferenceType<InsertStatement>>(statement)
             );
         case AstNodeKind::Select:
             return derived().visit_select_statement(
-                static_cast<const SelectStatement &>(statement)
+                static_cast<ReferenceType<SelectStatement>>(statement)
             );
         case AstNodeKind::ShowDatabases:
             return derived().visit_show_databases_statement(
-                static_cast<const ShowDatabasesStatement &>(statement)
+                static_cast<ReferenceType<ShowDatabasesStatement>>(statement)
             );
         case AstNodeKind::ShowCollections:
             return derived().visit_show_collections_statement(
-                static_cast<const ShowCollectionsStatement &>(statement)
+                static_cast<ReferenceType<ShowCollectionsStatement>>(statement)
             );
         case AstNodeKind::ShowIndexes:
             return derived().visit_show_indexes_statement(
-                static_cast<const ShowIndexesStatement &>(statement)
+                static_cast<ReferenceType<ShowIndexesStatement>>(statement)
             );
         case AstNodeKind::ShowVectorIndexes:
             return derived().visit_show_vector_indexes_statement(
-                static_cast<const ShowVectorIndexesStatement &>(statement)
+                static_cast<ReferenceType<ShowVectorIndexesStatement>>(statement)
             );
         case AstNodeKind::Update:
             return derived().visit_update_statement(
-                static_cast<const UpdateStatement &>(statement)
+                static_cast<ReferenceType<UpdateStatement>>(statement)
             );
         case AstNodeKind::Use:
             return derived().visit_use_statement(
-                static_cast<const UseStatement &>(statement)
+                static_cast<ReferenceType<UseStatement>>(statement)
             );
         default:
             std::unreachable();
@@ -131,5 +148,29 @@ private:
         return static_cast<Derived &>(*this);
     }
 };
+
+/**
+ * @brief 常量 AST 语句调度器
+ * @tparam Derived 派生类
+ * @tparam ReturnType 返回类型
+ */
+template <typename Derived, typename ReturnType>
+using ConstAstStatementDispatcher = AstStatementDispatcher<
+    Derived,
+    ReturnType,
+    true
+>;
+
+/**
+ * @brief 可变 AST 语句调度器
+ * @tparam Derived 派生类
+ * @tparam ReturnType 返回类型
+ */
+template <typename Derived, typename ReturnType>
+using MutableAstStatementDispatcher = AstStatementDispatcher<
+    Derived,
+    ReturnType,
+    false
+>;
 
 } // namespace litedb::core::parser::ast

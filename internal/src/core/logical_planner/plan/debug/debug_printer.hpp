@@ -15,9 +15,9 @@ namespace litedb::core::logical_planner::plan
  * @brief 逻辑计划调试打印器
  */
 class LogicalPlanDebugPrinter
-    : private LogicalPlanDispatcher<LogicalPlanDebugPrinter>
+    : private ConstLogicalPlanDispatcher<LogicalPlanDebugPrinter, void>
 {
-    friend class LogicalPlanDispatcher<LogicalPlanDebugPrinter>;
+    friend ConstLogicalPlanDispatcher<LogicalPlanDebugPrinter, void>;
 
 public:
     explicit LogicalPlanDebugPrinter(std::ostream & ostream);
