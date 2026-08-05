@@ -114,15 +114,27 @@ void test_function_binding_and_vector_dimension()
     require(function.type().id == LogicalTypeId::Double, "function return type mismatch");
     require(function.arguments().size() == 2, "function argument count mismatch");
 
-    require_error(
+    auto vector_error = require_error(
         fixture,
         "SELECT l2_distance(embedding, [0.1, 0.2]) FROM users;",
         BinderErrorCode::InvalidType
     );
-    require_error(
+    require(vector_error.context<BinderErrorContext>() != nullptr, "function constraint location missing");
+    require(vector_error.cause() != nullptr, "function constraint cause missing");
+    require(
+        vector_error.cause()->is(litedb::core::function::FunctionErrorCode::ConstraintViolation),
+        "function constraint cause code mismatch"
+    );
+    auto missing_error = require_error(
         fixture,
         "SELECT missing_function(age) FROM users;",
-        BinderErrorCode::UnsupportedExpression
+        BinderErrorCode::FunctionNotFound
+    );
+    require(missing_error.context<BinderErrorContext>() != nullptr, "unknown function location missing");
+    require(missing_error.cause() != nullptr, "unknown function cause missing");
+    require(
+        missing_error.cause()->is(litedb::core::function::FunctionErrorCode::FunctionNotFound),
+        "unknown function cause code mismatch"
     );
 }
 

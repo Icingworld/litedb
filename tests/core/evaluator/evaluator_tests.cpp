@@ -20,6 +20,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -259,10 +260,13 @@ void test_in_between_like_and_cast()
 
 void test_scalar_function_and_errors()
 {
-    auto registry = litedb::core::function::builtin::make_builtin_function_registry();
-    auto binding = registry.bind_scalar(
+    const std::vector<LogicalType> argument_types {
+        type(LogicalTypeId::Vector, 3),
+        type(LogicalTypeId::Vector, 3),
+    };
+    auto binding = litedb::core::function::builtin::builtin_function_catalog().bind_scalar(
         "l2_distance",
-        {type(LogicalTypeId::Vector, 3), type(LogicalTypeId::Vector, 3)}
+        argument_types
     );
     require(binding.has_value(), "l2_distance binding missing");
 
@@ -270,9 +274,8 @@ void test_scalar_function_and_errors()
     arguments.push_back(literal(LogicalTypeId::Vector, VectorValue {1.0, 2.0, 3.0}));
     arguments.push_back(literal(LogicalTypeId::Vector, VectorValue {1.0, 2.0, 5.0}));
     BoundFunctionExpression function {
-        binding->function,
+        std::move(*binding),
         std::move(arguments),
-        type(LogicalTypeId::Double),
     };
     auto result = ExpressionEvaluator::evaluate_constant(function);
     require(result.has_value() && get_value<double>(*result) == 2.0, "scalar function failed");
@@ -812,8 +815,9 @@ void test_cast_matrix_and_vector_validation()
 }
 
 std::expected<Value, litedb::core::function::FunctionError> failing_function(
-    const std::vector<Value> &,
-    const litedb::core::function::ScalarFunctionContext &
+    std::span<const Value>,
+    const litedb::core::function::ScalarFunctionContext &,
+    const litedb::core::function::FunctionBindData *
 )
 {
     return std::unexpected(litedb::core::function::FunctionError {
@@ -823,16 +827,18 @@ std::expected<Value, litedb::core::function::FunctionError> failing_function(
 }
 
 std::expected<Value, litedb::core::function::FunctionError> wrong_type_function(
-    const std::vector<Value> &,
-    const litedb::core::function::ScalarFunctionContext &
+    std::span<const Value>,
+    const litedb::core::function::ScalarFunctionContext &,
+    const litedb::core::function::FunctionBindData *
 )
 {
     return Value {ValueData {std::int32_t {1}}};
 }
 
 std::expected<Value, litedb::core::function::FunctionError> invalid_type_function(
-    const std::vector<Value> &,
-    const litedb::core::function::ScalarFunctionContext &
+    std::span<const Value>,
+    const litedb::core::function::ScalarFunctionContext &,
+    const litedb::core::function::FunctionBindData *
 )
 {
     return std::unexpected(litedb::core::function::FunctionError {
@@ -841,17 +847,41 @@ std::expected<Value, litedb::core::function::FunctionError> invalid_type_functio
     });
 }
 
+litedb::core::function::BoundScalarFunction make_test_binding(
+    std::string name,
+    LogicalType return_type,
+    litedb::core::function::ScalarFunctionOverload::EvalFn evaluate
+)
+{
+    litedb::core::function::FunctionCatalogBuilder builder;
+    auto registered = builder.register_scalar(
+        name,
+        litedb::core::function::ScalarFunctionOverload {
+            .parameters = {},
+            .return_type = return_type,
+            .bind = nullptr,
+            .evaluate = evaluate,
+            .properties = {},
+        }
+    );
+    require(registered.has_value(), "test function registration failed");
+    auto catalog = std::move(builder).build();
+    require(catalog.has_value(), "test function catalog build failed");
+    auto binding = catalog->bind_scalar(name, {});
+    require(binding.has_value(), "test function binding failed");
+    return std::move(*binding);
+}
+
 void test_function_error_propagation_and_runtime_validation()
 {
-    auto failing = std::make_shared<const litedb::core::function::ScalarFunction>(
+    auto failing = make_test_binding(
         "failing",
-        std::vector<litedb::core::function::FunctionSignature> {},
+        type(LogicalTypeId::Integer),
         failing_function
     );
     BoundFunctionExpression failing_expression {
         std::move(failing),
         {},
-        type(LogicalTypeId::Integer),
     };
     auto failure = ExpressionEvaluator::evaluate_constant(failing_expression);
     require(!failure.has_value(), "function error must be propagated");
@@ -866,15 +896,14 @@ void test_function_error_propagation_and_runtime_validation()
     require(failure.error().message() == "intentional function failure", "function error message must be preserved");
     require(failure.error().cause() == nullptr, "propagated function error must not be wrapped");
 
-    auto invalid_type = std::make_shared<const litedb::core::function::ScalarFunction>(
+    auto invalid_type = make_test_binding(
         "invalid_type",
-        std::vector<litedb::core::function::FunctionSignature> {},
+        type(LogicalTypeId::Integer),
         invalid_type_function
     );
     BoundFunctionExpression invalid_type_expression {
         std::move(invalid_type),
         {},
-        type(LogicalTypeId::Integer),
     };
     auto invalid_type_result = ExpressionEvaluator::evaluate_constant(invalid_type_expression);
     require(!invalid_type_result.has_value(), "function InvalidType must be propagated");
@@ -892,15 +921,14 @@ void test_function_error_propagation_and_runtime_validation()
     );
     require(invalid_type_result.error().cause() == nullptr, "propagated function InvalidType must not be wrapped");
 
-    auto wrong_type = std::make_shared<const litedb::core::function::ScalarFunction>(
+    auto wrong_type = make_test_binding(
         "wrong_type",
-        std::vector<litedb::core::function::FunctionSignature> {},
+        type(LogicalTypeId::Double),
         wrong_type_function
     );
     BoundFunctionExpression wrong_type_expression {
         std::move(wrong_type),
         {},
-        type(LogicalTypeId::Double),
     };
     require_error(
         ExpressionEvaluator::evaluate_constant(wrong_type_expression),

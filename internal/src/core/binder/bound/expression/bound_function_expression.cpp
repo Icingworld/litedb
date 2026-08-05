@@ -6,20 +6,19 @@ namespace litedb::core::binder::bound
 {
 
 BoundFunctionExpression::BoundFunctionExpression(
-    std::shared_ptr<const function::ScalarFunction> function,
-    std::vector<std::unique_ptr<BoundExpression>> arguments,
-    common::LogicalType return_type
+    function::BoundScalarFunction function,
+    std::vector<std::unique_ptr<BoundExpression>> arguments
 )
-    : BoundExpression(BoundExpressionKind::Function, return_type)
+    : BoundExpression(BoundExpressionKind::Function, function.return_type())
     , function_(std::move(function))
     , arguments_(std::move(arguments))
 {
 }
 
-const function::ScalarFunction &
+const function::BoundScalarFunction &
 BoundFunctionExpression::function() const noexcept
 {
-    return *function_;
+    return function_;
 }
 
 const std::vector<std::unique_ptr<BoundExpression>> &

@@ -1,9 +1,11 @@
 #include "core/binder/binder.hpp"
+#include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 #include "core/index/index_engine.hpp"
 #include "core/logical_planner/logical_planner.hpp"
+#include "core/function/builtin/builtin_functions.hpp"
 #include "core/logical_planner/operator/debug/debug_printer.hpp"
 #include "core/logical_planner/operator/logical_filter_operator.hpp"
 #include "core/logical_planner/operator/logical_limit_operator.hpp"
@@ -148,7 +150,11 @@ std::unique_ptr<BoundStatement> bind_ok(Fixture & fixture, std::string_view sql)
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = fixture.database_id};
-    BinderContext context {fixture.catalog.view(), session};
+    BinderContext context {
+        fixture.catalog.view(),
+        session,
+        litedb::core::function::builtin::builtin_function_catalog(),
+    };
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
@@ -255,6 +261,25 @@ void test_select_minimal_chain()
     const auto plan_text = plan::debug_print(*plan);
     require(plan_text.find("QueryPlan") != std::string::npos, "plan debug print should include query");
     require(plan_text.find("LogicalProjectionOperator") != std::string::npos, "plan debug print should include root operator");
+}
+
+void test_function_binding_survives_logical_planning()
+{
+    Fixture fixture;
+    auto plan = plan_ok(
+        fixture,
+        "SELECT l2_distance(embedding, [0.1, 0.2, 0.3]) FROM users;"
+    );
+    const auto & projection = static_cast<const LogicalProjectionOperator &>(query_root(*plan));
+    require(projection.projections().size() == 1, "function projection count mismatch");
+    const auto & expression = *projection.projections()[0].expression;
+    require(expression.kind() == BoundExpressionKind::Function, "function expression was not retained");
+    const auto & function = static_cast<const BoundFunctionExpression &>(expression);
+    require(function.function().name() == "l2_distance", "planned function name mismatch");
+    require(
+        function.function().properties().semantic_tag == litedb::core::function::FunctionSemanticTag::VectorL2Distance,
+        "planned function semantic tag mismatch"
+    );
 }
 
 void test_insert_plan()
@@ -504,6 +529,7 @@ int main()
     try {
         test_select_full_chain();
         test_select_minimal_chain();
+        test_function_binding_survives_logical_planning();
         test_insert_plan();
         test_update_delete_plans();
         test_indexes_do_not_change_logical_scan();

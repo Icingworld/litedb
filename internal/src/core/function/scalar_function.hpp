@@ -1,67 +1,160 @@
 #pragma once
 
 #include <expected>
+#include <memory>
+#include <span>
+#include <string>
 #include <vector>
 
-#include "core/function/function.hpp"
-#include "core/function/function_error.hpp"
+#include "core/common/logical_type.hpp"
 #include "core/common/value.hpp"
+#include "core/function/function_error.hpp"
+#include "core/function/function_properties.hpp"
+#include "core/function/function_parameters.hpp"
 
 namespace litedb::core::function
 {
 
 /**
  * @brief 标量函数上下文
+ * @details 用于存储标量函数执行时所需的环境和状态
+ * 未来可以放入事务、时间、时区等等，目前不需要，所以是空的
  */
 struct ScalarFunctionContext
 {
 };
 
 /**
- * @brief 标量函数
+ * @brief 函数绑定数据
+ * @details 用于存储函数绑定时所提前准备的数据
+ * 例如，提前编译正则表达式，提前计算哈希值等等
  */
-class ScalarFunction final : public Function
+class FunctionBindData
 {
 public:
+    virtual ~FunctionBindData() noexcept = default;
+};
+
+/**
+ * @brief 函数绑定结果
+ * @details 描述一次函数调用所需要的参数类型、返回类型和绑定数据
+ */
+struct ScalarBindResult
+{
+    std::vector<common::LogicalType> argument_types;     ///< 参数类型
+    common::LogicalType return_type;                     ///< 返回类型
+    std::shared_ptr<const FunctionBindData> bind_data;   ///< 绑定数据
+};
+
+/**
+ * @brief 函数重载定义
+ * @details 描述一个函数可以接受哪些参数类型，返回什么类型，以及如何绑定和执行
+ * 在函数注册阶段，需要提供重载定义
+ */
+struct ScalarFunctionOverload
+{
     /**
-     * @brief 评估函数
+     * @brief 绑定函数类型
+     * @details 该函数在 binder 阶段调用，直接收类型，返回绑定结果
+     * 在绑定过程中，可能会执行参数验证、返回值推断、绑定数据提前计算等等
+     */
+    using BindFn = std::expected<ScalarBindResult, FunctionError> (*)(
+        std::span<const common::LogicalType> argument_types
+    );
+
+    /**
+     * @brief 执行函数类型
+     * @details 该函数用于实际执行函数，返回结果值
      */
     using EvalFn = std::expected<common::Value, FunctionError> (*)(
-        const std::vector<common::Value> & arguments,
-        const ScalarFunctionContext & context
+        std::span<const common::Value> arguments,
+        const ScalarFunctionContext & context,
+        const FunctionBindData * bind_data
     );
 
+    FunctionParameters parameters;                    ///< 参数类型
+    common::LogicalType return_type;                  ///< 返回类型
+    BindFn bind {nullptr};                            ///< 绑定函数
+    EvalFn evaluate {nullptr};                        ///< 执行函数
+    FunctionProperties properties {};                 ///< 函数属性
+};
+
+/**
+ * @brief 已绑定函数
+ * @details 在 binder 阶段，选定了某一个函数重载作为具体函数，并完成类型解析
+ */
+class BoundScalarFunction final
+{
 public:
-    ScalarFunction(
+    BoundScalarFunction(
         std::string name,
-        std::vector<FunctionSignature> signatures,
-        EvalFn eval
+        std::shared_ptr<const ScalarFunctionOverload> overload,
+        std::vector<common::LogicalType> argument_types,
+        common::LogicalType return_type,
+        std::shared_ptr<const FunctionBindData> bind_data,
+        std::size_t match_cost
     );
 
 public:
     /**
-     * @brief 获取函数签名
-     * @return 函数签名
+     * @brief 获取函数重载
+     * @details 获取函数重载定义
      */
     [[nodiscard]]
-    const std::vector<FunctionSignature> & signatures() const noexcept override;
+    const ScalarFunctionOverload & overload() const noexcept;
 
     /**
-     * @brief 评估函数
-     * @param arguments 参数
-     * @param context 上下文
-     * @param location 位置
-     * @return 评估结果
+     * @brief 获取函数名称
+     * @details 获取函数名称
+     */
+    [[nodiscard]]
+    const std::string & name() const noexcept;
+
+    /**
+     * @brief 获取参数类型
+     * @details 获取参数类型
+     */
+    [[nodiscard]]
+    const std::vector<common::LogicalType> & argument_types() const noexcept;
+
+    /**
+     * @brief 获取返回类型
+     * @details 获取返回类型
+     */
+    [[nodiscard]]
+    const common::LogicalType & return_type() const noexcept;
+
+    /**
+     * @brief 获取函数属性
+     * @details 获取函数属性
+     */
+    [[nodiscard]]
+    const FunctionProperties & properties() const noexcept;
+
+    /**
+     * @brief 获取匹配成本
+     * @details 获取匹配成本
+     */
+    [[nodiscard]]
+    std::size_t match_cost() const noexcept;
+
+    /**
+     * @brief 执行函数
+     * @details 执行函数，返回结果值
      */
     [[nodiscard]]
     std::expected<common::Value, FunctionError> evaluate(
-        const std::vector<common::Value> & arguments,
+        std::span<const common::Value> arguments,
         const ScalarFunctionContext & context
     ) const;
 
 private:
-    std::vector<FunctionSignature> signatures_;     ///< 函数签名
-    EvalFn eval_;                                   ///< 评估函数
+    std::string name_;                                          ///< 函数名称
+    std::shared_ptr<const ScalarFunctionOverload> overload_;    ///< 函数重载定义
+    std::vector<common::LogicalType> argument_types_;           ///< 参数类型
+    common::LogicalType return_type_;                           ///< 返回类型
+    std::shared_ptr<const FunctionBindData> bind_data_;         ///< 绑定数据
+    std::size_t match_cost_;                                    ///< 匹配成本
 };
 
 } // namespace litedb::core::function

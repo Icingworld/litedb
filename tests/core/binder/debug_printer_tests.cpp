@@ -114,21 +114,21 @@ void test_expression_debug_print()
     require_contains(output, "    [0] BoundLiteralExpression\n");
     require_contains(output, "    [1] BoundLiteralExpression\n");
 
-    auto function_binding = function::builtin::builtin_function_registry().bind_scalar(
+    const std::vector<common::LogicalType> function_argument_types {
+        type(common::LogicalTypeId::Vector, 3),
+        type(common::LogicalTypeId::Vector, 3),
+    };
+    auto function_binding = function::builtin::builtin_function_catalog().bind_scalar(
         "l2_distance",
-        {
-            type(common::LogicalTypeId::Vector, 3),
-            type(common::LogicalTypeId::Vector, 3),
-        }
+        function_argument_types
     );
     require(function_binding.has_value(), "builtin function binding missing");
     std::vector<std::unique_ptr<BoundExpression>> arguments;
     arguments.push_back(literal(common::LogicalTypeId::Integer, "1"));
     arguments.push_back(literal(common::LogicalTypeId::Integer, "2"));
     BoundFunctionExpression function_expression(
-        std::move(function_binding->function),
-        std::move(arguments),
-        function_binding->signature.return_type
+        std::move(*function_binding),
+        std::move(arguments)
     );
     output = debug_print(function_expression);
     require_contains(output, "BoundFunctionExpression\n");

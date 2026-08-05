@@ -70,22 +70,37 @@ bool can_implicitly_cast(
     const LogicalType & target
 ) noexcept
 {
-    if (source.id == LogicalTypeId::Null || same_type(source, target)) {
-        return true;
+    return implicit_cast_cost(source, target).has_value();
+}
+
+std::optional<std::size_t> implicit_cast_cost(
+    const LogicalType & source,
+    const LogicalType & target
+) noexcept
+{
+    if (same_type(source, target)) {
+        return 0;
     }
-    if (is_numeric(source) && is_numeric(target)) {
-        return numeric_rank(source) <= numeric_rank(target);
+    if (source.id == LogicalTypeId::Null) {
+        return 1;
+    }
+    if (source.id == LogicalTypeId::Vector && target.id == LogicalTypeId::Vector) {
+        if (!source.parameter.has_value()
+            || !target.parameter.has_value()
+            || source.parameter.value() == target.parameter.value()) {
+            return 1;
+        }
+        return std::nullopt;
+    }
+    if (is_numeric(source) && is_numeric(target)
+        && numeric_rank(source) <= numeric_rank(target)) {
+        return static_cast<std::size_t>(10 + numeric_rank(target) - numeric_rank(source));
     }
     if (source.id == LogicalTypeId::Varchar
         && target.id == LogicalTypeId::Varchar) {
-        return true;
+        return 1;
     }
-    if (source.id == LogicalTypeId::Vector && target.id == LogicalTypeId::Vector) {
-        return !source.parameter.has_value()
-            || !target.parameter.has_value()
-            || source.parameter.value() == target.parameter.value();
-    }
-    return false;
+    return std::nullopt;
 }
 
 bool can_compare(

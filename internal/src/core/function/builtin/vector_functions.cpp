@@ -2,13 +2,10 @@
 
 #include <cmath>
 #include <expected>
-#include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
-#include <vector>
-
-#include "core/function/scalar_function.hpp"
 
 namespace litedb::core::function::builtin
 {
@@ -19,58 +16,83 @@ namespace
 using common::LogicalType;
 using common::LogicalTypeId;
 
-[[nodiscard]]
 LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::nullopt)
 {
     return LogicalType {id, parameter};
 }
 
-[[nodiscard]]
-FunctionError make_error(
-    FunctionErrorCode code,
-    std::string message
-)
+FunctionError make_error(FunctionErrorCode code, std::string message)
 {
-    return FunctionError {code, message};
+    return FunctionError {code, std::move(message)};
 }
 
-[[nodiscard]]
-std::expected<common::Value, FunctionError> vector_binary_distance(
-    const std::vector<common::Value> & arguments,
-    double (*distance)(const common::VectorValue &, const common::VectorValue &)
+std::expected<ScalarBindResult, FunctionError> bind_vector_distance(
+    std::span<const LogicalType> argument_types
+)
+{
+    if (argument_types.size() != 2
+        || argument_types[0].id != LogicalTypeId::Vector
+        || argument_types[1].id != LogicalTypeId::Vector) {
+        return std::unexpected(make_error(
+            FunctionErrorCode::ConstraintViolation,
+            "Vector distance expects two VECTOR arguments"
+        ));
+    }
+    if (argument_types[0].parameter.has_value()
+        && argument_types[1].parameter.has_value()
+        && argument_types[0].parameter != argument_types[1].parameter) {
+        return std::unexpected(make_error(
+            FunctionErrorCode::ConstraintViolation,
+            "Vector function arguments must have the same dimension"
+        ));
+    }
+    return ScalarBindResult {
+        .argument_types = {argument_types[0], argument_types[1]},
+        .return_type = type(LogicalTypeId::Double),
+        .bind_data = nullptr,
+    };
+}
+
+using DistanceFn = double (*)(const common::VectorValue &, const common::VectorValue &);
+
+std::expected<common::Value, FunctionError> evaluate_vector_distance(
+    std::span<const common::Value> arguments,
+    DistanceFn distance
 )
 {
     if (arguments.size() != 2) {
-        return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, "Vector distance expects 2 arguments"));
+        return std::unexpected(make_error(
+            FunctionErrorCode::InvalidArgument,
+            "Vector distance expects two arguments"
+        ));
     }
-    if (arguments[0].is_null() || arguments[1].is_null()) {
-        return common::Value::null();
-    }
-
     const auto * left = std::get_if<common::VectorValue>(&arguments[0].data());
     const auto * right = std::get_if<common::VectorValue>(&arguments[1].data());
     if (left == nullptr || right == nullptr) {
-        return std::unexpected(make_error(FunctionErrorCode::InvalidType, "Vector distance expects VECTOR arguments"));
+        return std::unexpected(make_error(
+            FunctionErrorCode::InvalidType,
+            "Vector distance expects VECTOR values"
+        ));
     }
     if (left->size() != right->size()) {
-        return std::unexpected(make_error(FunctionErrorCode::InvalidArgument, "Vector dimensions must match"));
+        return std::unexpected(make_error(
+            FunctionErrorCode::InvalidArgument,
+            "Vector dimensions must match"
+        ));
     }
-
     return common::Value {distance(*left, *right)};
 }
 
-[[nodiscard]]
 double l2_distance_impl(const common::VectorValue & left, const common::VectorValue & right)
 {
     double sum = 0.0;
     for (std::size_t index = 0; index < left.size(); ++index) {
-        const double diff = left[index] - right[index];
-        sum += diff * diff;
+        const double difference = left[index] - right[index];
+        sum += difference * difference;
     }
     return std::sqrt(sum);
 }
 
-[[nodiscard]]
 double inner_product_impl(const common::VectorValue & left, const common::VectorValue & right)
 {
     double result = 0.0;
@@ -80,7 +102,6 @@ double inner_product_impl(const common::VectorValue & left, const common::Vector
     return result;
 }
 
-[[nodiscard]]
 double cosine_distance_impl(const common::VectorValue & left, const common::VectorValue & right)
 {
     double dot = 0.0;
@@ -97,46 +118,74 @@ double cosine_distance_impl(const common::VectorValue & left, const common::Vect
     return 1.0 - (dot / (std::sqrt(left_norm) * std::sqrt(right_norm)));
 }
 
-[[nodiscard]]
-std::vector<FunctionSignature> vector_distance_signatures(std::string name)
+std::expected<common::Value, FunctionError> evaluate_l2(
+    std::span<const common::Value> arguments,
+    const ScalarFunctionContext &,
+    const FunctionBindData *
+)
 {
-    return {
-        FunctionSignature {
-            .name = std::move(name),
-            .argument_types = {type(LogicalTypeId::Vector), type(LogicalTypeId::Vector)},
-            .return_type = type(LogicalTypeId::Double),
+    return evaluate_vector_distance(arguments, l2_distance_impl);
+}
+
+std::expected<common::Value, FunctionError> evaluate_inner_product(
+    std::span<const common::Value> arguments,
+    const ScalarFunctionContext &,
+    const FunctionBindData *
+)
+{
+    return evaluate_vector_distance(arguments, inner_product_impl);
+}
+
+std::expected<common::Value, FunctionError> evaluate_cosine(
+    std::span<const common::Value> arguments,
+    const ScalarFunctionContext &,
+    const FunctionBindData *
+)
+{
+    return evaluate_vector_distance(arguments, cosine_distance_impl);
+}
+
+ScalarFunctionOverload overload(
+    ScalarFunctionOverload::EvalFn evaluate,
+    FunctionSemanticTag semantic_tag
+)
+{
+    return ScalarFunctionOverload {
+        .parameters = FunctionParameters {
+            .fixed = {type(LogicalTypeId::Vector), type(LogicalTypeId::Vector)},
+            .variadic = std::nullopt,
+        },
+        .return_type = type(LogicalTypeId::Double),
+        .bind = bind_vector_distance,
+        .evaluate = evaluate,
+        .properties = FunctionProperties {
+            .volatility = FunctionVolatility::Immutable,
+            .null_handling = FunctionNullHandling::PropagateNull,
+            .has_side_effects = false,
+            .semantic_tag = semantic_tag,
         },
     };
 }
 
 } // namespace
 
-void register_vector_functions(FunctionRegistry & registry)
+std::expected<void, FunctionError> register_vector_functions(FunctionCatalogBuilder & builder)
 {
-    registry.register_function(std::make_shared<ScalarFunction>(
-        "l2_distance",
-        vector_distance_signatures("l2_distance"),
-        [](const std::vector<common::Value> & arguments,
-           const ScalarFunctionContext &) {
-            return vector_binary_distance(arguments, l2_distance_impl);
-        }
-    ));
-    registry.register_function(std::make_shared<ScalarFunction>(
-        "inner_product",
-        vector_distance_signatures("inner_product"),
-        [](const std::vector<common::Value> & arguments,
-           const ScalarFunctionContext &) {
-            return vector_binary_distance(arguments, inner_product_impl);
-        }
-    ));
-    registry.register_function(std::make_shared<ScalarFunction>(
+    if (auto result = builder.register_scalar(
+            "l2_distance",
+            overload(evaluate_l2, FunctionSemanticTag::VectorL2Distance));
+        !result.has_value()) {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = builder.register_scalar(
+            "inner_product",
+            overload(evaluate_inner_product, FunctionSemanticTag::VectorInnerProduct));
+        !result.has_value()) {
+        return std::unexpected(std::move(result.error()));
+    }
+    return builder.register_scalar(
         "cosine_distance",
-        vector_distance_signatures("cosine_distance"),
-        [](const std::vector<common::Value> & arguments,
-           const ScalarFunctionContext &) {
-            return vector_binary_distance(arguments, cosine_distance_impl);
-        }
-    ));
+        overload(evaluate_cosine, FunctionSemanticTag::VectorCosineDistance));
 }
 
 } // namespace litedb::core::function::builtin

@@ -16,9 +16,8 @@ class BoundFunctionExpression final : public BoundExpression
 {
 public:
     BoundFunctionExpression(
-        std::shared_ptr<const function::ScalarFunction> function,
-        std::vector<std::unique_ptr<BoundExpression>> arguments,
-        common::LogicalType return_type
+        function::BoundScalarFunction function,
+        std::vector<std::unique_ptr<BoundExpression>> arguments
     );
 
 public:
@@ -27,7 +26,7 @@ public:
      * @return 函数
      */
     [[nodiscard]]
-    const function::ScalarFunction & function() const noexcept;
+    const function::BoundScalarFunction & function() const noexcept;
 
     /**
      * @brief 获取参数列表
@@ -38,7 +37,7 @@ public:
     arguments() const noexcept;
 
 private:
-    std::shared_ptr<const function::ScalarFunction> function_;  ///< 函数
+    function::BoundScalarFunction function_;                    ///< 已绑定函数
     std::vector<std::unique_ptr<BoundExpression>> arguments_;   ///< 参数列表
 };
 

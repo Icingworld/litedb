@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <cstddef>
+#include <optional>
 
 #include "core/common/logical_type.hpp"
 #include "core/common/types.hpp"
@@ -80,6 +82,17 @@ LogicalType common_numeric_type(
  */
 [[nodiscard]]
 bool can_implicitly_cast(
+    const LogicalType & source,
+    const LogicalType & target
+) noexcept;
+
+/**
+ * @brief 获取隐式转换代价
+ *
+ * 返回空值表示不能进行隐式转换。代价越低，表示匹配越精确。
+ */
+[[nodiscard]]
+std::optional<std::size_t> implicit_cast_cost(
     const LogicalType & source,
     const LogicalType & target
 ) noexcept;

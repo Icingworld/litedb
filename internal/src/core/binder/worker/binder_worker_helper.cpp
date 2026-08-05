@@ -24,7 +24,6 @@
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/common/identifier.hpp"
 #include "core/schema/default_expression.hpp"
-#include "core/function/builtin/builtin_functions.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -318,36 +317,27 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         arguments.push_back(std::move(*bound_argument));
     }
 
-    const auto & registry = function::builtin::builtin_function_registry();
-    auto binding = registry.bind_scalar(expression.name(), argument_types);
+    auto binding = context_.functions().bind_scalar(expression.name(), argument_types);
     if (!binding.has_value()) [[unlikely]] {
-        const auto found = registry.find(expression.name());
-        return std::unexpected(make_binder_error(
-            found == nullptr ? BinderErrorCode::UnsupportedExpression : BinderErrorCode::InvalidType,
-            expression.location(),
-            found == nullptr ? "Unknown function: " + expression.name() : "Function arguments do not match any overload: " + expression.name()
-        ));
-    }
-
-    if ((function::normalize_function_name(expression.name()) == "l2_distance"
-        || function::normalize_function_name(expression.name()) == "cosine_distance"
-        || function::normalize_function_name(expression.name()) == "inner_product")
-        && argument_types.size() == 2
-        && argument_types[0].id == LogicalTypeId::Vector
-        && argument_types[1].id == LogicalTypeId::Vector
-        && argument_types[0].parameter.has_value()
-        && argument_types[1].parameter.has_value()
-        && argument_types[0].parameter.value() != argument_types[1].parameter.value()) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::InvalidType,
-            expression.location(),
-            "Vector function arguments must have the same dimension"
-        ));
+        const auto code = binding.error().is(function::FunctionErrorCode::FunctionNotFound)
+            ? BinderErrorCode::FunctionNotFound
+            : binding.error().is(function::FunctionErrorCode::AmbiguousOverload)
+                ? BinderErrorCode::AmbiguousFunctionCall
+                : binding.error().is(function::FunctionErrorCode::ConstraintViolation)
+                    ? BinderErrorCode::InvalidType
+                    : BinderErrorCode::NoMatchingFunctionOverload;
+        const auto message = binding.error().message();
+        auto cause = std::move(binding.error());
+        return std::unexpected(BinderError {
+            code,
+            message,
+            BinderErrorContext {expression.location()},
+            std::move(cause),
+        });
     }
 
     for (std::size_t index = 0; index < arguments.size(); ++index) {
-        const auto signature_index = std::min(index, binding->signature.argument_types.size() - 1);
-        const auto & target_type = binding->signature.argument_types[signature_index];
+        const auto & target_type = binding->argument_types()[index];
         if (!can_cast(arguments[index]->type(), target_type)) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
@@ -356,15 +346,16 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
                     + " cannot be cast to " + type_name(target_type)
             ));
         }
-        if (!(arguments[index]->type().id == LogicalTypeId::Vector && target_type.id == LogicalTypeId::Vector && !target_type.parameter.has_value())) {
+        if (!(arguments[index]->type().id == LogicalTypeId::Vector
+            && target_type.id == LogicalTypeId::Vector
+            && !target_type.parameter.has_value())) {
             arguments[index] = cast_if_needed(std::move(arguments[index]), target_type);
         }
     }
 
     return std::make_unique<BoundFunctionExpression>(
-        std::move(binding->function),
-        std::move(arguments),
-        binding->signature.return_type
+        std::move(*binding),
+        std::move(arguments)
     );
 }
 

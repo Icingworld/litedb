@@ -1,7 +1,6 @@
 set(FUNCTION_SOURCES
-    aggregate_function.cpp
-    function.cpp
-    function_registry.cpp
+    function_helper.cpp
+    function_catalog.cpp
     scalar_function.cpp
     builtin/builtin_functions.cpp
     builtin/vector_functions.cpp

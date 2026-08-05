@@ -1,28 +1,21 @@
 #pragma once
 
-#include "core/function/function_registry.hpp"
+#include <expected>
+
+#include "core/function/function_catalog.hpp"
 
 namespace litedb::core::function::builtin
 {
 
-/**
- * @brief 注册内置函数
- * @param registry 函数注册表
- */
-void register_builtin_functions(FunctionRegistry & registry);
-
-/**
- * @brief 创建内置函数注册表
- * @return 内置函数注册表
- */
 [[nodiscard]]
-FunctionRegistry make_builtin_function_registry();
+std::expected<void, FunctionError> register_builtin_functions(
+    FunctionCatalogBuilder & builder
+);
 
-/**
- * @brief 获取共享的内置函数注册表
- * @return 内置函数注册表
- */
 [[nodiscard]]
-const FunctionRegistry & builtin_function_registry();
+std::expected<FunctionCatalog, FunctionError> make_builtin_function_catalog();
+
+[[nodiscard]]
+const FunctionCatalog & builtin_function_catalog();
 
 } // namespace litedb::core::function::builtin

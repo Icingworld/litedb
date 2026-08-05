@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/binder/session_context.hpp"
+#include "core/function/function_catalog.hpp"
 #include "core/meta/meta_engine.hpp"
 
 namespace litedb::core::binder
@@ -14,7 +15,8 @@ class BinderContext
 public:
     BinderContext(
         meta::CatalogView meta,
-        const SessionContext & session
+        const SessionContext & session,
+        const function::FunctionCatalog & functions
     ) noexcept;
 
 public:
@@ -32,9 +34,13 @@ public:
     [[nodiscard]]
     const SessionContext & session() const noexcept;
 
+    [[nodiscard]]
+    const function::FunctionCatalog & functions() const noexcept;
+
 private:
     meta::CatalogView meta_;              ///< 元数据视图
     const SessionContext & session_;            ///< 会话上下文
+    const function::FunctionCatalog & functions_; ///< 函数目录
 };
 
 } // namespace litedb::core::binder

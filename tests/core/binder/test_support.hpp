@@ -13,6 +13,7 @@
 #include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
+#include "core/function/builtin/builtin_functions.hpp"
 #include "core/meta/meta_engine.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
@@ -131,7 +132,11 @@ inline std::unique_ptr<BoundStatement> bind_statement(
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = current_database};
-    BinderContext context {fixture.catalog.view(), session};
+    BinderContext context {
+        fixture.catalog.view(),
+        session,
+        core::function::builtin::builtin_function_catalog(),
+    };
     Binder binder {context};
     auto result = binder.bind(*statement);
     if (!result.has_value()) {
@@ -168,7 +173,11 @@ inline BinderError bind_error(
 {
     auto statement = parse_ok(sql);
     SessionContext session {.current_database_id = current_database};
-    BinderContext context {fixture.catalog.view(), session};
+    BinderContext context {
+        fixture.catalog.view(),
+        session,
+        core::function::builtin::builtin_function_catalog(),
+    };
     Binder binder {context};
     auto result = binder.bind(*statement);
     require(!result.has_value(), "statement should fail to bind");

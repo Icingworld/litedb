@@ -33,6 +33,9 @@ enum class BinderErrorCode : std::uint8_t
     VectorIndexNotFound = 17,      ///< 向量索引不存在
     InvalidIndexOptions = 18,      ///< 无效的索引选项
     InvalidLiteral = 19,           ///< 无效的字面量
+    FunctionNotFound = 20,         ///< 函数不存在
+    NoMatchingFunctionOverload = 21, ///< 没有匹配的函数重载
+    AmbiguousFunctionCall = 22,    ///< 函数调用存在歧义
 };
 
 /**
