@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <utility>
 
 #include "core/physical_planner/operator/physical_operator.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
@@ -9,27 +8,24 @@
 namespace litedb::core::physical_planner::plan
 {
 
+/**
+ * @brief QUERY 语句计划
+ */
 class QueryPlan final : public PhysicalPlan
 {
 public:
-    explicit QueryPlan(std::unique_ptr<op::PhysicalOperator> root)
-        : PhysicalPlan(PhysicalPlanKind::Query)
-        , root_(std::move(root))
-    {
-    }
+    explicit QueryPlan(std::unique_ptr<op::PhysicalOperator> root_operator);
 
-    [[nodiscard]] const op::PhysicalOperator & root() const noexcept
-    {
-        return *root_;
-    }
-
-    [[nodiscard]] const op::PhysicalOperator * root_ptr() const noexcept
-    {
-        return root_.get();
-    }
+public:
+    /**
+     * @brief 获取根算子
+     * @return 根算子
+     */
+    [[nodiscard]]
+    const op::PhysicalOperator & root_operator() const noexcept;
 
 private:
-    std::unique_ptr<op::PhysicalOperator> root_;
+    std::unique_ptr<op::PhysicalOperator> root_operator_;   ///< 根算子
 };
 
 } // namespace litedb::core::physical_planner::plan

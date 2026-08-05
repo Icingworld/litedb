@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -23,7 +24,20 @@
 #include "core/physical_planner/operator/physical_seq_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_sort_operator.hpp"
 #include "core/physical_planner/operator/physical_vector_search_operator.hpp"
-#include "core/physical_planner/plan/command/command_plans.hpp"
+#include "core/physical_planner/plan/command/create_collection_plan.hpp"
+#include "core/physical_planner/plan/command/create_database_plan.hpp"
+#include "core/physical_planner/plan/command/create_index_plan.hpp"
+#include "core/physical_planner/plan/command/create_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_database_plan.hpp"
+#include "core/physical_planner/plan/command/drop_index_plan.hpp"
+#include "core/physical_planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/show_collections_plan.hpp"
+#include "core/physical_planner/plan/command/show_databases_plan.hpp"
+#include "core/physical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/use_plan.hpp"
 #include "core/physical_planner/plan/mutation/insert_plan.hpp"
 #include "core/physical_planner/plan/query/query_plan.hpp"
 #include "core/physical_planner/plan/mutation/update_plan.hpp"
@@ -472,10 +486,10 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 [[nodiscard]]
 std::expected<void, ExecutionError> apply_predicate(
     PipelineResult & input,
-    const BoundExpression * predicate
+    std::optional<std::reference_wrapper<const BoundExpression>> predicate
 )
 {
-    if (predicate == nullptr) {
+    if (!predicate.has_value()) {
         return {};
     }
 
@@ -485,7 +499,7 @@ std::expected<void, ExecutionError> apply_predicate(
         evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
             .input_values = row.source_record.data.values,
         }};
-        auto matched = evaluator.evaluate_filter(*predicate);
+        auto matched = evaluator.evaluate_filter(predicate->get());
         if (!matched.has_value()) {
             return std::unexpected(from_evaluation_error(std::move(matched.error())));
         }
@@ -576,13 +590,6 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         return std::unexpected(std::move(collection_storage.error()));
     }
 
-    if (search.query_vector_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical vector search query expression is missing"
-        ));
-    }
-
     auto query_value = evaluator::ExpressionEvaluator::evaluate_constant(search.query_vector());
     if (!query_value.has_value()) {
         return std::unexpected(from_evaluation_error(std::move(query_value.error())));
@@ -615,7 +622,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         return full_scan();
     }
 
-    auto candidate_count = search.predicate() == nullptr
+    auto candidate_count = !search.predicate().has_value()
         ? search.required_count()
         : std::min(view->entry_count, std::max(search.required_count(), saturating_multiply(search.required_count(), 4)));
 
@@ -644,7 +651,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         if (result.rows.size() >= search.required_count()) {
             return result;
         }
-        if (search.predicate() == nullptr || candidate_count >= view->entry_count) {
+        if (!search.predicate().has_value() || candidate_count >= view->entry_count) {
             return full_scan();
         }
         candidate_count = std::min(view->entry_count, saturating_multiply(candidate_count, 2));
@@ -660,13 +667,7 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    if (filter.child_ptr() == nullptr || filter.predicate_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical filter is missing its child or predicate"
-        ));
-    }
-    auto input = execute_physical(*filter.child_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto input = execute_physical(filter.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -676,7 +677,7 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
         evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
             .input_values = row.source_record.data.values,
         }};
-        auto predicate = evaluator.evaluate_filter(*filter.predicate_ptr());
+        auto predicate = evaluator.evaluate_filter(filter.predicate());
         if (!predicate.has_value()) {
             return std::unexpected(from_evaluation_error(std::move(predicate.error())));
         }
@@ -707,13 +708,7 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    if (projection.child_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical projection is missing its child"
-        ));
-    }
-    auto input = execute_physical(*projection.child_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto input = execute_physical(projection.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -829,13 +824,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    if (order_by.child_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical sort is missing its child"
-        ));
-    }
-    auto input = execute_physical(*order_by.child_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto input = execute_physical(order_by.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -907,13 +896,7 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    if (limit.child_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical limit is missing its child"
-        ));
-    }
-    auto input = execute_physical(*limit.child_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto input = execute_physical(limit.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -976,13 +959,7 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    if (plan.root_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical query is missing its root operator"
-        ));
-    }
-    auto pipeline = execute_physical(*plan.root_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto pipeline = execute_physical(plan.root_operator(), catalog, storage, index_engine, vector_index_engine);
     if (!pipeline.has_value()) {
         return std::unexpected(std::move(pipeline.error()));
     }
@@ -1067,13 +1044,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
     transaction::TransactionManager & transaction_manager
 )
 {
-    if (plan.input_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical DELETE is missing its input operator"
-        ));
-    }
-    auto rows = execute_physical(*plan.input_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto rows = execute_physical(plan.root_operator(), catalog, storage, index_engine, vector_index_engine);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }
@@ -1127,13 +1098,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
         return std::unexpected(std::move(collection_schema.error()));
     }
 
-    if (plan.input_ptr() == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "Physical UPDATE is missing its input operator"
-        ));
-    }
-    auto rows = execute_physical(*plan.input_ptr(), catalog, storage, index_engine, vector_index_engine);
+    auto rows = execute_physical(plan.root_operator(), catalog, storage, index_engine, vector_index_engine);
     if (!rows.has_value()) {
         return std::unexpected(std::move(rows.error()));
     }

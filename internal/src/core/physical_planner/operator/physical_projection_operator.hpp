@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <vector>
-#include <utility>
 
 #include "core/binder/bound/bound_projection_item.hpp"
 #include "core/physical_planner/operator/physical_unary_operator.hpp"
@@ -10,26 +9,28 @@
 namespace litedb::core::physical_planner::op
 {
 
+/**
+ * @brief 投影算子
+ */
 class ProjectionOperator final : public PhysicalUnaryOperator
 {
 public:
     ProjectionOperator(
         std::unique_ptr<PhysicalOperator> child,
         std::vector<binder::bound::BoundProjectionItem> projections
-    ) noexcept
-        : PhysicalUnaryOperator(PhysicalOperatorKind::Projection, std::move(child))
-        , projections_(std::move(projections))
-    {
-    }
+    ) noexcept;
 
-    [[nodiscard]] const std::vector<binder::bound::BoundProjectionItem> &
-    projections() const noexcept
-    {
-        return projections_;
-    }
+public:
+    /**
+     * @brief 获取投影项
+     * @return 投影项
+     */
+    [[nodiscard]]
+    const std::vector<binder::bound::BoundProjectionItem> &
+    projections() const noexcept;
 
 private:
-    std::vector<binder::bound::BoundProjectionItem> projections_;
+    std::vector<binder::bound::BoundProjectionItem> projections_;   ///< 投影项
 };
 
 } // namespace litedb::core::physical_planner::op

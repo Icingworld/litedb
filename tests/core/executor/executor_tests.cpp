@@ -17,7 +17,20 @@
 #include "core/physical_planner/operator/physical_seq_scan_operator.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 #include "core/physical_planner/plan/query/query_plan.hpp"
-#include "core/physical_planner/plan/command/command_plans.hpp"
+#include "core/physical_planner/plan/command/create_collection_plan.hpp"
+#include "core/physical_planner/plan/command/create_database_plan.hpp"
+#include "core/physical_planner/plan/command/create_index_plan.hpp"
+#include "core/physical_planner/plan/command/create_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_database_plan.hpp"
+#include "core/physical_planner/plan/command/drop_index_plan.hpp"
+#include "core/physical_planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/show_collections_plan.hpp"
+#include "core/physical_planner/plan/command/show_databases_plan.hpp"
+#include "core/physical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/use_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
@@ -261,12 +274,6 @@ void test_invalid_use_and_missing_scan()
     auto query_result = executor.execute(*query);
     require(!query_result.has_value(), "scan of missing collection should fail");
     require(query_result.error().is(executor::ExecutionErrorCode::SchemaError), "scan error code mismatch");
-
-    physical_planner::plan::QueryPlan invalid_query {nullptr};
-    auto invalid_result = executor.execute(invalid_query);
-    require(!invalid_result.has_value(), "query without a root should fail");
-    require(invalid_result.error().is(executor::ExecutionErrorCode::InvalidPlan),
-            "missing query root error code mismatch");
 }
 
 void test_ddl_is_delegated()

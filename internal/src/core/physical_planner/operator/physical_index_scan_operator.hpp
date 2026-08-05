@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <utility>
 
 #include "core/common/ids.hpp"
 #include "core/index/scalar_index_key.hpp"
@@ -10,25 +9,37 @@
 namespace litedb::core::physical_planner::op
 {
 
+/**
+ * @brief 索引查找类型
+ */
 enum class IndexLookupKind
 {
-    Equal,
-    Range,
+    Equal,              ///< 等值查找
+    Range,              ///< 范围查找
 };
 
+/**
+ * @brief 索引边界
+ */
 struct IndexBound
 {
-    index::ScalarIndexKey key;
-    bool inclusive {true};
+    index::ScalarIndexKey key;                      ///< 边界键
+    bool inclusive {true};                          ///< 是否包含边界
 };
 
+/**
+ * @brief 索引查找条件
+ */
 struct IndexLookup
 {
-    IndexLookupKind kind {IndexLookupKind::Equal};
-    std::optional<IndexBound> lower;
-    std::optional<IndexBound> upper;
+    IndexLookupKind kind {IndexLookupKind::Equal};   ///< 查找类型
+    std::optional<IndexBound> lower;                 ///< 下界
+    std::optional<IndexBound> upper;                 ///< 上界
 };
 
+/**
+ * @brief 索引扫描算子
+ */
 class IndexScanOperator final : public PhysicalOperator
 {
 public:
@@ -36,33 +47,34 @@ public:
         common::CollectionId collection_id,
         common::IndexId index_id,
         IndexLookup lookup
-    ) noexcept
-        : PhysicalOperator(PhysicalOperatorKind::IndexScan)
-        , collection_id_(collection_id)
-        , index_id_(index_id)
-        , lookup_(std::move(lookup))
-    {
-    }
+    ) noexcept;
 
-    [[nodiscard]] common::CollectionId collection_id() const noexcept
-    {
-        return collection_id_;
-    }
+public:
+    /**
+     * @brief 获取集合 ID
+     * @return 集合 ID
+     */
+    [[nodiscard]]
+    common::CollectionId collection_id() const noexcept;
 
-    [[nodiscard]] common::IndexId index_id() const noexcept
-    {
-        return index_id_;
-    }
+    /**
+     * @brief 获取索引 ID
+     * @return 索引 ID
+     */
+    [[nodiscard]]
+    common::IndexId index_id() const noexcept;
 
-    [[nodiscard]] const IndexLookup & lookup() const noexcept
-    {
-        return lookup_;
-    }
+    /**
+     * @brief 获取查找条件
+     * @return 查找条件
+     */
+    [[nodiscard]]
+    const IndexLookup & lookup() const noexcept;
 
 private:
-    common::CollectionId collection_id_;
-    common::IndexId index_id_;
-    IndexLookup lookup_;
+    common::CollectionId collection_id_;            ///< 集合 ID
+    common::IndexId index_id_;                      ///< 索引 ID
+    IndexLookup lookup_;                            ///< 查找条件
 };
 
 } // namespace litedb::core::physical_planner::op

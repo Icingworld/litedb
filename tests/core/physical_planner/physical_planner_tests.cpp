@@ -42,7 +42,20 @@
 #include "core/physical_planner/operator/physical_sort_operator.hpp"
 #include "core/physical_planner/operator/physical_vector_search_operator.hpp"
 #include "core/physical_planner/physical_planner.hpp"
-#include "core/physical_planner/plan/command/command_plans.hpp"
+#include "core/physical_planner/plan/command/create_collection_plan.hpp"
+#include "core/physical_planner/plan/command/create_database_plan.hpp"
+#include "core/physical_planner/plan/command/create_index_plan.hpp"
+#include "core/physical_planner/plan/command/create_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_database_plan.hpp"
+#include "core/physical_planner/plan/command/drop_index_plan.hpp"
+#include "core/physical_planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/show_collections_plan.hpp"
+#include "core/physical_planner/plan/command/show_databases_plan.hpp"
+#include "core/physical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/use_plan.hpp"
 #include "core/physical_planner/plan/debug/debug_printer.hpp"
 #include "core/physical_planner/plan/mutation/delete_plan.hpp"
 #include "core/physical_planner/plan/mutation/insert_plan.hpp"
@@ -249,8 +262,8 @@ void test_lower_operator_chain()
     auto physical = planner.plan(std::move(logical));
     require(physical->kind() == physical_planner::plan::PhysicalPlanKind::Query, "query kind mismatch");
     const auto & query = static_cast<const physical_planner::plan::QueryPlan &>(*physical);
-    require(query.root().kind() == physical_planner::op::PhysicalOperatorKind::Limit, "limit lowering mismatch");
-    const auto & limit = static_cast<const physical_planner::op::LimitOperator &>(query.root());
+    require(query.root_operator().kind() == physical_planner::op::PhysicalOperatorKind::Limit, "limit lowering mismatch");
+    const auto & limit = static_cast<const physical_planner::op::LimitOperator &>(query.root_operator());
     require(limit.child().kind() == physical_planner::op::PhysicalOperatorKind::Sort, "sort lowering mismatch");
     const auto & sort = static_cast<const physical_planner::op::SortOperator &>(limit.child());
     require(sort.child().kind() == physical_planner::op::PhysicalOperatorKind::Projection, "projection lowering mismatch");
@@ -285,7 +298,7 @@ void test_scalar_index_selection_and_fallback()
                                    physical_planner::op::IndexLookupKind lookup_kind) {
         auto physical = plan_filter(std::move(predicate));
         const auto & query = static_cast<const physical_planner::plan::QueryPlan &>(*physical);
-        const auto & filter = static_cast<const physical_planner::op::FilterOperator &>(query.root());
+        const auto & filter = static_cast<const physical_planner::op::FilterOperator &>(query.root_operator());
         const auto & scan = static_cast<const physical_planner::op::IndexScanOperator &>(filter.child());
         require(scan.index_id() == fixture.first_age_index_id, "scalar index selection was not deterministic");
         require(scan.lookup().kind == lookup_kind, "scalar lookup kind mismatch");
@@ -327,7 +340,7 @@ void test_scalar_index_selection_and_fallback()
 
     auto non_constant = plan_filter(scalar_predicate(*age, BinaryOperator::Equal, column_ref(*age)));
     const auto & non_constant_query = static_cast<const physical_planner::plan::QueryPlan &>(*non_constant);
-    const auto & non_constant_filter = static_cast<const physical_planner::op::FilterOperator &>(non_constant_query.root());
+    const auto & non_constant_filter = static_cast<const physical_planner::op::FilterOperator &>(non_constant_query.root_operator());
     require(non_constant_filter.child().kind() == physical_planner::op::PhysicalOperatorKind::SeqScan,
             "non-constant scalar predicate should fall back to SeqScan");
 
@@ -337,7 +350,7 @@ void test_scalar_index_selection_and_fallback()
         literal(LogicalTypeId::Null, Value::null())
     ));
     const auto & null_query = static_cast<const physical_planner::plan::QueryPlan &>(*null_constant);
-    const auto & null_filter = static_cast<const physical_planner::op::FilterOperator &>(null_query.root());
+    const auto & null_filter = static_cast<const physical_planner::op::FilterOperator &>(null_query.root_operator());
     require(null_filter.child().kind() == physical_planner::op::PhysicalOperatorKind::SeqScan,
             "invalid scalar key should fall back to SeqScan");
 }
@@ -383,12 +396,12 @@ void test_vector_top_k_selection_and_fallback()
                                     std::size_t offset) {
         auto physical = planner.plan(make_query(function_name, ascending, limit, offset));
         const auto & query = static_cast<const physical_planner::plan::QueryPlan &>(*physical);
-        const auto & root = static_cast<const physical_planner::op::LimitOperator &>(query.root());
+        const auto & root = static_cast<const physical_planner::op::LimitOperator &>(query.root_operator());
         const auto & projection = static_cast<const physical_planner::op::ProjectionOperator &>(root.child());
         const auto & search = static_cast<const physical_planner::op::VectorSearchOperator &>(projection.child());
         require(search.index_id() == expected_index, "vector index selection mismatch");
         require(search.required_count() == limit + offset, "vector required count mismatch");
-        require(search.predicate() != nullptr, "vector filter predicate was not preserved");
+        require(search.predicate().has_value(), "vector filter predicate was not preserved");
         require(search.metric() == (function_name == "l2_distance"
                                         ? meta::entry::VectorDistanceMetric::L2
                                         : function_name == "cosine_distance"
@@ -403,7 +416,7 @@ void test_vector_top_k_selection_and_fallback()
 
     auto wrong_direction = planner.plan(make_query("l2_distance", false, 2, 0));
     const auto & wrong_direction_query = static_cast<const physical_planner::plan::QueryPlan &>(*wrong_direction);
-    const auto & wrong_direction_root = static_cast<const physical_planner::op::LimitOperator &>(wrong_direction_query.root());
+    const auto & wrong_direction_root = static_cast<const physical_planner::op::LimitOperator &>(wrong_direction_query.root_operator());
     require(wrong_direction_root.child().kind() == physical_planner::op::PhysicalOperatorKind::Sort,
             "incompatible vector sort direction should fall back to Sort");
 
@@ -414,7 +427,7 @@ void test_vector_top_k_selection_and_fallback()
         1
     ));
     const auto & overflowing_query = static_cast<const physical_planner::plan::QueryPlan &>(*overflowing);
-    const auto & overflowing_root = static_cast<const physical_planner::op::LimitOperator &>(overflowing_query.root());
+    const auto & overflowing_root = static_cast<const physical_planner::op::LimitOperator &>(overflowing_query.root_operator());
     require(overflowing_root.child().kind() == physical_planner::op::PhysicalOperatorKind::Sort,
             "overflowing vector limit should fall back to Sort");
 
@@ -422,7 +435,7 @@ void test_vector_top_k_selection_and_fallback()
     physical_planner::PhysicalPlanner no_index_planner {empty_catalog.view()};
     auto no_index = no_index_planner.plan(make_query("l2_distance", true, 2, 0));
     const auto & no_index_query = static_cast<const physical_planner::plan::QueryPlan &>(*no_index);
-    const auto & no_index_root = static_cast<const physical_planner::op::LimitOperator &>(no_index_query.root());
+    const auto & no_index_root = static_cast<const physical_planner::op::LimitOperator &>(no_index_query.root_operator());
     require(no_index_root.child().kind() == physical_planner::op::PhysicalOperatorKind::Sort,
             "missing vector index should fall back to Sort");
 }

@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <vector>
-#include <utility>
 
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/common/ids.hpp"
@@ -11,30 +10,36 @@
 namespace litedb::core::physical_planner::plan
 {
 
+/**
+ * @brief INSERT 语句计划
+ */
 class InsertPlan final : public PhysicalPlan
 {
 public:
     InsertPlan(
         common::CollectionId collection_id,
         std::vector<std::unique_ptr<binder::bound::BoundExpression>> values
-    )
-        : PhysicalPlan(PhysicalPlanKind::Insert)
-        , collection_id_(collection_id)
-        , values_(std::move(values))
-    {
-    }
+    );
 
-    [[nodiscard]] common::CollectionId collection_id() const noexcept { return collection_id_; }
+public:
+    /**
+     * @brief 获取集合 ID
+     * @return 集合 ID
+     */
+    [[nodiscard]]
+    common::CollectionId collection_id() const noexcept;
 
-    [[nodiscard]] const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
-    values() const noexcept
-    {
-        return values_;
-    }
+    /**
+     * @brief 获取插入值
+     * @return 插入值
+     */
+    [[nodiscard]]
+    const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
+    values() const noexcept;
 
 private:
-    common::CollectionId collection_id_;
-    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;
+    common::CollectionId collection_id_;                                        ///< 集合 ID
+    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;       ///< 插入值
 };
 
 } // namespace litedb::core::physical_planner::plan
