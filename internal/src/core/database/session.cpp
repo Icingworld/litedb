@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "core/binder/binder.hpp"
+#include "core/function/builtin/builtin_functions.hpp"
 #include "core/executor/executor.hpp"
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
@@ -33,8 +34,8 @@ SessionError from_parser_error(parser::ParserError error)
 {
     const auto * context = error.context<parser::ParserErrorContext>();
     const auto location = context == nullptr
-        ? parser::ast::AstNodeLocation {}
-        : location_from_token(context->location);
+        ? std::optional<parser::ast::AstNodeLocation> {}
+        : std::optional<parser::ast::AstNodeLocation> {location_from_token(context->location)};
     auto message = error.message();
     return SessionError {
         SessionErrorCode::ParserError,
@@ -48,27 +49,23 @@ SessionError from_parser_error(parser::ParserError error)
 SessionError from_binder_error(binder::BinderError error)
 {
     const auto * context = error.context<binder::BinderErrorContext>();
-    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
+    const auto location = context == nullptr
+        ? std::optional<parser::ast::AstNodeLocation> {}
+        : std::optional<parser::ast::AstNodeLocation> {context->location};
     auto message = error.message();
     return SessionError {SessionErrorCode::BinderError, message, SessionErrorContext {location}, std::move(error)};
 }
 
 [[nodiscard]]
-SessionError from_optimizer_error(optimizer::OptimizerError error)
-{
-    const auto * context = error.context<optimizer::OptimizerErrorContext>();
-    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
-    auto message = error.message();
-    return SessionError {SessionErrorCode::OptimizerError, message, SessionErrorContext {location}, std::move(error)};
-}
-
-[[nodiscard]]
 SessionError from_execution_error(executor::ExecutionError error)
 {
-    const auto * context = error.context<executor::ExecutionErrorContext>();
-    const auto location = context == nullptr ? parser::ast::AstNodeLocation {} : context->location;
     auto message = error.message();
-    return SessionError {SessionErrorCode::ExecutionError, message, SessionErrorContext {location}, std::move(error)};
+    return SessionError {
+        SessionErrorCode::ExecutionError,
+        message,
+        SessionErrorContext {std::nullopt},
+        std::move(error)
+    };
 }
 
 } // namespace
@@ -88,7 +85,7 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
         return std::unexpected(from_parser_error(std::move(parsed.error())));
     }
 
-    binder::BinderContext context {engine_->meta(), session_};
+    binder::BinderContext context {engine_->meta(), session_, function::builtin::builtin_function_catalog()};
     binder::Binder binder {context};
     auto bound = binder.bind(**parsed);
     if (!bound.has_value()) {
@@ -98,14 +95,11 @@ std::expected<executor::ExecutionResult, SessionError> Session::execute_sql(std:
     logical_planner::LogicalPlanner planner;
     auto planned = planner.plan(std::move(*bound));
 
-    optimizer::Optimizer optimizer {{}, engine_->meta()};
+    optimizer::Optimizer optimizer {};
     auto optimized = optimizer.optimize(std::move(planned));
-    if (!optimized.has_value()) {
-        return std::unexpected(from_optimizer_error(std::move(optimized.error())));
-    }
 
-    physical_plan::PhysicalPlanner physical_planner;
-    auto physical = physical_planner.plan(**optimized);
+    physical_planner::PhysicalPlanner physical_planner {engine_->meta()};
+    auto physical = physical_planner.plan(std::move(optimized));
 
     auto executed = engine_->execute(*physical);
     if (!executed.has_value()) {

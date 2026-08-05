@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
 #include "core/error/error.hpp"
 #include "core/parser/ast/ast_node.hpp"
@@ -8,23 +9,16 @@
 namespace litedb::core::database
 {
 
-/**
- * @brief Session 错误码
- */
 enum class SessionErrorCode : std::uint8_t
 {
-    ParserError = 0,        ///< 解析错误
-    BinderError = 1,        ///< 绑定错误
-    OptimizerError = 3,     ///< 优化错误
-    ExecutionError = 4,     ///< 执行错误
+    ParserError = 0,
+    BinderError = 1,
+    ExecutionError = 4,
 };
 
-/**
- * @brief Session 错误
- */
 struct SessionErrorContext
 {
-    parser::ast::AstNodeLocation location;      ///< 错误位置
+    std::optional<parser::ast::AstNodeLocation> location;
 };
 
 using SessionError = error::Error;

@@ -23,20 +23,20 @@
 #include "core/vindex/vector_index_engine.hpp"
 #include "core/wal/wal_manager.hpp"
 
-namespace litedb::core::physical_plan
+namespace litedb::core::physical_planner::plan
 {
 
-class PhysicalStatementPlan;
-class PhysicalCreateCollectionPlan;
-class PhysicalCreateDatabasePlan;
-class PhysicalCreateIndexPlan;
-class PhysicalCreateVectorIndexPlan;
-class PhysicalDropCollectionPlan;
-class PhysicalDropDatabasePlan;
-class PhysicalDropIndexPlan;
-class PhysicalDropVectorIndexPlan;
+class PhysicalPlan;
+class CreateCollectionPlan;
+class CreateDatabasePlan;
+class CreateIndexPlan;
+class CreateVectorIndexPlan;
+class DropCollectionPlan;
+class DropDatabasePlan;
+class DropIndexPlan;
+class DropVectorIndexPlan;
 
-} // namespace litedb::core::physical_plan
+} // namespace litedb::core::physical_planner::plan
 
 namespace litedb::core::database
 {
@@ -155,7 +155,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute(
-        const physical_plan::PhysicalStatementPlan & plan
+        const physical_planner::plan::PhysicalPlan & plan
     );
 
     void maybe_run_automatic_checkpoint();
@@ -167,7 +167,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_database(
-        const physical_plan::PhysicalCreateDatabasePlan & plan
+        const physical_planner::plan::CreateDatabasePlan & plan
     );
 
     /**
@@ -177,7 +177,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_collection(
-        const physical_plan::PhysicalCreateCollectionPlan & plan
+        const physical_planner::plan::CreateCollectionPlan & plan
     );
 
     /**
@@ -187,7 +187,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_index(
-        const physical_plan::PhysicalCreateIndexPlan & plan
+        const physical_planner::plan::CreateIndexPlan & plan
     );
 
     /**
@@ -197,7 +197,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_create_vector_index(
-        const physical_plan::PhysicalCreateVectorIndexPlan & plan
+        const physical_planner::plan::CreateVectorIndexPlan & plan
     );
 
     /**
@@ -207,7 +207,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_database(
-        const physical_plan::PhysicalDropDatabasePlan & plan
+        const physical_planner::plan::DropDatabasePlan & plan
     );
 
     /**
@@ -217,7 +217,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_collection(
-        const physical_plan::PhysicalDropCollectionPlan & plan
+        const physical_planner::plan::DropCollectionPlan & plan
     );
 
     /**
@@ -227,7 +227,7 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_index(
-        const physical_plan::PhysicalDropIndexPlan & plan
+        const physical_planner::plan::DropIndexPlan & plan
     );
 
     /**
@@ -237,14 +237,13 @@ private:
      */
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> execute_drop_vector_index(
-        const physical_plan::PhysicalDropVectorIndexPlan & plan
+        const physical_planner::plan::DropVectorIndexPlan & plan
     );
 
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> commit_catalog_transaction(
         meta::MetaSnapshot snapshot,
-        std::size_t affected_rows,
-        parser::ast::AstNodeLocation location
+        std::size_t affected_rows
     );
 
     /**
@@ -257,55 +256,46 @@ private:
     /**
      * @brief 从 meta 错误创建执行错误
      * @param error meta 错误
-     * @param location 位置
      * @return 执行错误
      */
     [[nodiscard]]
     static executor::ExecutionError from_meta_error(
-        meta::MetaError error,
-        parser::ast::AstNodeLocation location
+        meta::MetaError error
     );
 
     /**
      * @brief 从 schema 错误创建执行错误
      * @param error schema 错误
-     * @param location 位置
      * @return 执行错误
      */
     [[nodiscard]]
     static executor::ExecutionError from_schema_error(
-        storage::SchemaLoadError error,
-        parser::ast::AstNodeLocation location
+        storage::SchemaLoadError error
     );
 
     /**
      * @brief 从存储错误创建执行错误
      * @param error 存储错误
-     * @param location 位置
      * @return 执行错误
      */
     [[nodiscard]]
     static executor::ExecutionError from_storage_error(
-        storage::StorageError error,
-        parser::ast::AstNodeLocation location
+        storage::StorageError error
     );
 
     /**
      * @brief 从索引错误创建执行错误
      * @param error 索引错误
-     * @param location 位置
      * @return 执行错误
      */
     [[nodiscard]]
     static executor::ExecutionError from_index_error(
-        index::IndexError error,
-        parser::ast::AstNodeLocation location
+        index::IndexError error
     );
 
     [[nodiscard]]
     static executor::ExecutionError from_vector_index_error(
-        vindex::VectorIndexError error,
-        parser::ast::AstNodeLocation location
+        vindex::VectorIndexError error
     );
 
 private:
