@@ -1,4 +1,6 @@
 set(PHYSICAL_PLANNER_SOURCES
+    access/scalar_access_path_selector.cpp
+    access/vector_top_k_selector.cpp
     operator/debug/debug_printer.cpp
     operator/physical_filter_operator.cpp
     operator/physical_index_scan_operator.cpp
@@ -28,6 +30,11 @@ set(PHYSICAL_PLANNER_SOURCES
     plan/mutation/insert_plan.cpp
     plan/mutation/update_plan.cpp
     plan/query/query_plan.cpp
+    worker/physical_command_worker.cpp
+    worker/physical_mutation_worker.cpp
+    worker/physical_operator_worker.cpp
+    worker/physical_planner_worker.cpp
+    worker/physical_query_worker.cpp
     physical_planner.cpp
 )
 
