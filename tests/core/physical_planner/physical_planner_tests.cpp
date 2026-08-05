@@ -397,11 +397,18 @@ void test_vector_top_k_selection_and_fallback()
         auto physical = planner.plan(make_query(function_name, ascending, limit, offset));
         const auto & query = static_cast<const physical_planner::plan::QueryPlan &>(*physical);
         const auto & root = static_cast<const physical_planner::op::LimitOperator &>(query.root_operator());
-        const auto & projection = static_cast<const physical_planner::op::ProjectionOperator &>(root.child());
+        require(root.child().kind() == physical_planner::op::PhysicalOperatorKind::Sort,
+                "vector TopK must retain exact result ordering");
+        const auto & sort = static_cast<const physical_planner::op::SortOperator &>(root.child());
+        require(sort.order_by().size() == 1 && sort.order_by().front().ascending == ascending,
+                "vector TopK sort contract mismatch");
+        const auto & projection = static_cast<const physical_planner::op::ProjectionOperator &>(sort.child());
         const auto & search = static_cast<const physical_planner::op::VectorSearchOperator &>(projection.child());
         require(search.index_id() == expected_index, "vector index selection mismatch");
         require(search.required_count() == limit + offset, "vector required count mismatch");
         require(search.predicate().has_value(), "vector filter predicate was not preserved");
+        require(search.query_vector().kind() == BoundExpressionKind::Literal,
+                "vector query constant should be materialized independently from the retained sort expression");
         require(search.metric() == (function_name == "l2_distance"
                                         ? meta::entry::VectorDistanceMetric::L2
                                         : function_name == "cosine_distance"

@@ -10,6 +10,7 @@
 #include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/binder/bound/expression/bound_function_expression.hpp"
+#include "core/binder/bound/expression/bound_literal_expression.hpp"
 #include "core/common/identifier.hpp"
 #include "core/common/types.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
@@ -763,6 +764,18 @@ std::unique_ptr<op::PhysicalOperator> PhysicalPlanner::visit_limit_operator(
         if (offset <= std::numeric_limits<std::size_t>::max() - owned->limit().value()) {
             const auto index_id = choose_vector_index(catalog_, *match);
             if (index_id.has_value()) {
+                auto query_value = evaluate_constant(
+                    *match->distance->arguments()[match->query_argument_index]
+                );
+                if (!query_value.has_value()) {
+                    auto child = lower_operator(owned->take_child());
+                    return std::make_unique<op::LimitOperator>(
+                        std::move(child),
+                        owned->limit(),
+                        owned->offset()
+                    );
+                }
+
                 auto order = std::unique_ptr<logical_planner::op::LogicalOrderByOperator>(
                     static_cast<logical_planner::op::LogicalOrderByOperator *>(
                         owned->take_child().release()
@@ -797,8 +810,11 @@ std::unique_ptr<op::PhysicalOperator> PhysicalPlanner::visit_limit_operator(
                 auto & distance = static_cast<binder::bound::BoundFunctionExpression &>(
                     *order_items.front().expression
                 );
-                auto arguments = distance.take_arguments();
-                auto query_vector = std::move(arguments[match->query_argument_index]);
+                const auto query_type = distance.arguments()[match->query_argument_index]->type();
+                auto query_vector = std::make_unique<binder::bound::BoundLiteralExpression>(
+                    query_type,
+                    std::move(*query_value)
+                );
 
                 auto projection_items = projection->take_projections();
                 auto search = std::make_unique<op::VectorSearchOperator>(
@@ -814,8 +830,12 @@ std::unique_ptr<op::PhysicalOperator> PhysicalPlanner::visit_limit_operator(
                     std::move(search),
                     std::move(projection_items)
                 );
-                return std::make_unique<op::LimitOperator>(
+                auto sorted = std::make_unique<op::SortOperator>(
                     std::move(projected),
+                    std::move(order_items)
+                );
+                return std::make_unique<op::LimitOperator>(
+                    std::move(sorted),
                     owned->limit(),
                     owned->offset()
                 );
