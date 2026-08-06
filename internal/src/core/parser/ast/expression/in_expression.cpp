@@ -5,7 +5,11 @@
 namespace litedb::core::parser::ast
 {
 
-InExpression::InExpression(std::unique_ptr<ExpressionNode> expression, ValueList values, AstNodeLocation location) noexcept
+InExpression::InExpression(
+    std::unique_ptr<ExpressionNode> expression,
+    ValueList values,
+    AstNodeLocation location
+) noexcept
     : ExpressionNode(location)
     , expression_(std::move(expression))
     , values_(std::move(values))
@@ -15,11 +19,6 @@ InExpression::InExpression(std::unique_ptr<ExpressionNode> expression, ValueList
 AstNodeKind InExpression::kind() const noexcept
 {
     return AstNodeKind::In;
-}
-
-void InExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const ExpressionNode & InExpression::expression() const noexcept

@@ -1,44 +1,17 @@
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 
-#include <memory>
-#include <utility>
-
 namespace litedb::core::binder::bound
 {
 
 BoundColumnRefExpression::BoundColumnRefExpression(
-    common::DatabaseId database_id,
-    common::CollectionId collection_id,
-    std::string collection_name,
     common::ColumnId column_id,
-    std::string column_name,
-    common::LogicalType type,
-    bool nullable,
-    parser::ast::AstNodeLocation location
+    std::size_t column_ordinal,
+    common::LogicalType type
 )
-    : BoundExpression(BoundExpressionKind::ColumnRef, type, location)
-    , database_id_(database_id)
-    , collection_id_(collection_id)
-    , collection_name_(std::move(collection_name))
+    : BoundExpression(BoundExpressionKind::ColumnRef, type)
     , column_id_(column_id)
-    , column_name_(std::move(column_name))
-    , nullable_(nullable)
+    , column_ordinal_(column_ordinal)
 {
-}
-
-common::DatabaseId BoundColumnRefExpression::database_id() const noexcept
-{
-    return database_id_;
-}
-
-common::CollectionId BoundColumnRefExpression::collection_id() const noexcept
-{
-    return collection_id_;
-}
-
-const std::string & BoundColumnRefExpression::collection_name() const noexcept
-{
-    return collection_name_;
 }
 
 common::ColumnId BoundColumnRefExpression::column_id() const noexcept
@@ -46,33 +19,9 @@ common::ColumnId BoundColumnRefExpression::column_id() const noexcept
     return column_id_;
 }
 
-const std::string & BoundColumnRefExpression::column_name() const noexcept
+std::size_t BoundColumnRefExpression::column_ordinal() const noexcept
 {
-    return column_name_;
-}
-
-bool BoundColumnRefExpression::nullable() const noexcept
-{
-    return nullable_;
-}
-
-void BoundColumnRefExpression::accept(BoundExpressionVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
-std::unique_ptr<BoundExpression> BoundColumnRefExpression::clone() const
-{
-    return std::make_unique<BoundColumnRefExpression>(
-        database_id_,
-        collection_id_,
-        collection_name_,
-        column_id_,
-        column_name_,
-        type(),
-        nullable_,
-        location()
-    );
+    return column_ordinal_;
 }
 
 } // namespace litedb::core::binder::bound

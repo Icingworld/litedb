@@ -38,7 +38,8 @@ public:
      * @param statement DELETE 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_delete(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_delete(
         const parser::ast::DeleteStatement & statement
     );
 

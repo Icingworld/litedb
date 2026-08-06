@@ -1,5 +1,9 @@
 #include "core/common/value.hpp"
 
+#include <iomanip>
+#include <limits>
+#include <sstream>
+#include <type_traits>
 #include <utility>
 
 namespace litedb::core::common
@@ -53,6 +57,39 @@ bool Value::matches_type(const LogicalType & type) const noexcept
     }
 
     return false;
+}
+
+std::string value_to_string(const Value & value)
+{
+    return std::visit(
+        [](const auto & data) -> std::string {
+            using T = std::decay_t<decltype(data)>;
+            if constexpr (std::is_same_v<T, NullValue>) {
+                return "NULL";
+            } else if constexpr (std::is_same_v<T, bool>) {
+                return data ? "true" : "false";
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                return data;
+            } else if constexpr (std::is_same_v<T, VectorValue>) {
+                std::ostringstream out;
+                out << '[';
+                for (std::size_t index = 0; index < data.size(); ++index) {
+                    if (index != 0) out << ", ";
+                    out << std::setprecision(std::numeric_limits<double>::max_digits10)
+                        << data[index];
+                }
+                out << ']';
+                return out.str();
+            } else if constexpr (std::is_floating_point_v<T>) {
+                std::ostringstream out;
+                out << std::setprecision(std::numeric_limits<T>::max_digits10) << data;
+                return out.str();
+            } else {
+                return std::to_string(data);
+            }
+        },
+        value.data()
+    );
 }
 
 } // namespace litedb::core::common

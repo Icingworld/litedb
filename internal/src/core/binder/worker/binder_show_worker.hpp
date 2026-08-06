@@ -41,7 +41,8 @@ public:
      * @param statement SHOW DATABASES 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_databases(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_show_databases(
         const parser::ast::ShowDatabasesStatement & statement
     );
 
@@ -50,7 +51,8 @@ public:
      * @param statement SHOW COLLECTIONS 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_collections(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_show_collections(
         const parser::ast::ShowCollectionsStatement & statement
     );
 
@@ -59,7 +61,8 @@ public:
      * @param statement SHOW INDEXES 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_indexes(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_show_indexes(
         const parser::ast::ShowIndexesStatement & statement
     );
 
@@ -68,7 +71,8 @@ public:
      * @param statement SHOW VECTOR INDEXES 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_vector_indexes(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_show_vector_indexes(
         const parser::ast::ShowVectorIndexesStatement & statement
     );
 

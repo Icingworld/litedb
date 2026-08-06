@@ -21,11 +21,6 @@ AstNodeKind AliasExpression::kind() const noexcept
     return AstNodeKind::Alias;
 }
 
-void AliasExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const ExpressionNode & AliasExpression::expression() const noexcept
 {
     return *expression_;

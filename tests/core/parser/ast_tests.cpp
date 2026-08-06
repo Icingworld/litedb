@@ -1,3 +1,4 @@
+#include "core/common/logical_type.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/identifier_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
@@ -18,6 +19,7 @@ namespace
 
 using namespace litedb::core::parser;
 using namespace litedb::core::parser::ast;
+using namespace litedb::core::common;
 
 void require(bool condition, const char * message)
 {
@@ -56,7 +58,7 @@ void test_statement_nodes()
 
     require(statement.kind() == AstNodeKind::Select, "select statement kind mismatch");
     require(statement.location().line == 1, "select statement line mismatch");
-    require(statement.collection() == "users", "select collection mismatch");
+    require(statement.collection_name() == "users", "select collection mismatch");
     require(statement.select_list().size() == 1, "select list size mismatch");
     require(statement.where() == nullptr, "select where should be empty");
     require(statement.limit().has_value() && statement.limit().value() == 10, "select limit mismatch");
@@ -67,34 +69,34 @@ void test_create_database_statement()
     CreateDatabaseStatement statement("demo", true, AstNodeLocation {1, 1});
 
     require(statement.kind() == AstNodeKind::CreateDatabase, "create database kind mismatch");
-    require(statement.database() == "demo", "create database name mismatch");
+    require(statement.database_name() == "demo", "create database name mismatch");
     require(statement.if_not_exists(), "create database if-not-exists mismatch");
 }
 
 void test_create_collection_statement()
 {
-    ColumnDefinition id;
+    ColumnDefinitionSyntax id;
     id.name = "id";
-    id.type = DataType {DataTypeKind::BigInt, std::nullopt};
+    id.type = LogicalType {LogicalTypeId::BigInt, std::nullopt};
 
-    ColumnDefinition name;
+    ColumnDefinitionSyntax name;
     name.name = "name";
-    name.type = DataType {DataTypeKind::Varchar, 64};
+    name.type = LogicalType {LogicalTypeId::Varchar, 64};
 
-    ColumnDefinition age;
+    ColumnDefinitionSyntax age;
     age.name = "age";
-    age.type = DataType {DataTypeKind::Integer, std::nullopt};
+    age.type = LogicalType {LogicalTypeId::Integer, std::nullopt};
     age.default_value = std::make_unique<LiteralExpression>(
         TokenType::IntegerLiteral,
         "0",
         AstNodeLocation {4, 25}
     );
 
-    ColumnDefinition embedding;
+    ColumnDefinitionSyntax embedding;
     embedding.name = "embedding";
-    embedding.type = DataType {DataTypeKind::Vector, 128};
+    embedding.type = LogicalType {LogicalTypeId::Vector, 128};
 
-    ColumnDefinitionList columns;
+    ColumnDefinitionSyntaxList columns;
     columns.push_back(std::move(id));
     columns.push_back(std::move(name));
     columns.push_back(std::move(age));
@@ -103,7 +105,7 @@ void test_create_collection_statement()
     CreateCollectionStatement statement("users", false, std::move(columns), "user collection", AstNodeLocation {1, 1});
 
     require(statement.kind() == AstNodeKind::CreateCollection, "create collection kind mismatch");
-    require(statement.collection() == "users", "create collection name mismatch");
+    require(statement.collection_name() == "users", "create collection name mismatch");
     require(!statement.if_not_exists(), "create collection if-not-exists mismatch");
     require(statement.columns().size() == 4, "create collection columns size mismatch");
     require(statement.comment().has_value(), "create collection comment missing");
@@ -111,7 +113,7 @@ void test_create_collection_statement()
     require(statement.columns()[1].type.parameter.has_value(), "varchar parameter should exist");
     require(statement.columns()[1].type.parameter.value() == 64, "varchar parameter mismatch");
     require(statement.columns()[2].default_value != nullptr, "default value should exist");
-    require(statement.columns()[3].type.kind == DataTypeKind::Vector, "vector column type mismatch");
+    require(statement.columns()[3].type.id == LogicalTypeId::Vector, "vector column type mismatch");
     require(statement.columns()[3].type.parameter.value() == 128, "vector dimension mismatch");
 }
 

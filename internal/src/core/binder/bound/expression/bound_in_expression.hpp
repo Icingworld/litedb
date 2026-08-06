@@ -9,16 +9,14 @@ namespace litedb::core::binder::bound
 {
 
 /**
- * @brief IN 表达式节点
- * @details 示例：expression IN (value1, value2, ...)
+ * @brief 绑定 IN 表达式
  */
 class BoundInExpression final : public BoundExpression
 {
 public:
     BoundInExpression(
         std::unique_ptr<BoundExpression> expression,
-        std::vector<std::unique_ptr<BoundExpression>> values,
-        parser::ast::AstNodeLocation location
+        std::vector<std::unique_ptr<BoundExpression>> values
     );
 
 public:
@@ -30,6 +28,13 @@ public:
     const BoundExpression & expression() const noexcept;
 
     /**
+     * @brief 移出 IN 目标表达式
+     * @return 目标表达式所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_expression() noexcept;
+
+    /**
      * @brief 获取值列表
      * @return 值列表
      */
@@ -37,17 +42,11 @@ public:
     const std::vector<std::unique_ptr<BoundExpression>> & values() const noexcept;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundExpressionVisitor & visitor) const override;
-
-    /**
-     * @brief 深拷贝表达式
-     * @return 表达式副本
+     * @brief 移出 IN 值列表
+     * @return 值列表所有权
      */
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> clone() const override;
+    std::vector<std::unique_ptr<BoundExpression>> take_values() noexcept;
 
 private:
     std::unique_ptr<BoundExpression> expression_;               ///< 表达式

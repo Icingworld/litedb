@@ -10,7 +10,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief IN 表达式节点
- * @details 示例：expression IN (value1, value2, ...)
  */
 class InExpression final : public ExpressionNode
 {
@@ -18,7 +17,11 @@ public:
     using ValueList = std::vector<std::unique_ptr<ExpressionNode>>;
 
 public:
-    InExpression(std::unique_ptr<ExpressionNode> expression, ValueList values, AstNodeLocation location) noexcept;
+    InExpression(
+        std::unique_ptr<ExpressionNode> expression,
+        ValueList values,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -27,12 +30,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取表达式

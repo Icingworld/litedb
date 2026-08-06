@@ -7,7 +7,7 @@ namespace litedb::core::parser::ast
 
 SelectStatement::SelectStatement(
     SelectList select_list,
-    std::string collection,
+    std::string collection_name,
     std::unique_ptr<ExpressionNode> where,
     OrderByList order_by,
     std::optional<std::size_t> limit,
@@ -16,7 +16,7 @@ SelectStatement::SelectStatement(
 ) noexcept
     : StatementNode(location)
     , select_list_(std::move(select_list))
-    , collection_(std::move(collection))
+    , collection_name_(std::move(collection_name))
     , where_(std::move(where))
     , order_by_(std::move(order_by))
     , limit_(limit)
@@ -29,19 +29,14 @@ AstNodeKind SelectStatement::kind() const noexcept
     return AstNodeKind::Select;
 }
 
-void SelectStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const SelectStatement::SelectList & SelectStatement::select_list() const noexcept
 {
     return select_list_;
 }
 
-const std::string & SelectStatement::collection() const noexcept
+const std::string & SelectStatement::collection_name() const noexcept
 {
-    return collection_;
+    return collection_name_;
 }
 
 const ExpressionNode * SelectStatement::where() const noexcept

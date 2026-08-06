@@ -271,13 +271,31 @@ void test_vector_index_query_pipeline()
     require(get_value<std::int64_t>(filtered.rows[0].values[0]) == 1, "filtered vector first row mismatch");
     require(get_value<std::int64_t>(filtered.rows[1].values[0]) == 3, "filtered vector second row mismatch");
 
-    auto nullable_fallback = execute_ok(
+    execute_ok(engine, "INSERT INTO docs VALUES (7, 9, [0.3, 0.0, 0.0]);");
+    auto filtered_fallback = execute_ok(
         engine,
         "SELECT id FROM docs WHERE category = 9 "
-        "ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 1;"
+        "ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 2;"
     );
-    require(nullable_fallback.rows.size() == 1, "nullable fallback should preserve result row");
-    require(get_value<std::int64_t>(nullable_fallback.rows[0].values[0]) == 5, "nullable fallback row mismatch");
+    require(filtered_fallback.rows.size() == 2, "filtered fallback should preserve all result rows");
+    require(get_value<std::int64_t>(filtered_fallback.rows[0].values[0]) == 7,
+            "filtered fallback must retain distance ordering");
+    require(get_value<std::int64_t>(filtered_fallback.rows[1].values[0]) == 5,
+            "filtered fallback must place NULL distance last");
+
+    auto short_index_fallback = execute_ok(
+        engine,
+        "SELECT id FROM docs "
+        "ORDER BY l2_distance(embedding, [0.1, 0.0, 0.0]) ASC LIMIT 3 OFFSET 3;"
+    );
+    require(short_index_fallback.rows.size() == 3,
+            "short-index fallback OFFSET row count mismatch");
+    require(get_value<std::int64_t>(short_index_fallback.rows[0].values[0]) == 2,
+            "short-index fallback first row mismatch");
+    require(get_value<std::int64_t>(short_index_fallback.rows[1].values[0]) == 4,
+            "short-index fallback second row mismatch");
+    require(get_value<std::int64_t>(short_index_fallback.rows[2].values[0]) == 5,
+            "short-index fallback must place NULL distance last");
 
     execute_ok(engine, "INSERT INTO docs VALUES (6, 1, [0.1, 0.0, 0.0]);");
     auto after_insert = execute_ok(

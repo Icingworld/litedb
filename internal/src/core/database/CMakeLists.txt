@@ -11,9 +11,9 @@ target_include_directories(litedb_database PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_link_libraries(litedb_database PUBLIC
     litedb_parser
     litedb_binder
-    litedb_logical_plan
+    litedb_logical_planner
     litedb_optimizer
-    litedb_physical_plan
+    litedb_physical_planner
     litedb_executor
     litedb_filesystem
     litedb_io

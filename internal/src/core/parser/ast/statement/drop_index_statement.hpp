@@ -9,7 +9,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief DROP INDEX 语句节点
- * @details 示例：DROP INDEX [IF EXISTS] <index_name> ON <collection_name>
  */
 class DropIndexStatement final : public StatementNode
 {
@@ -28,12 +27,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取索引名称

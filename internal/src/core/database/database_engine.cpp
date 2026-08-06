@@ -9,7 +9,22 @@
 
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/executor/executor.hpp"
-#include "core/physical_plan/statement/physical_command_plan.hpp"
+#include "core/physical_planner/plan/dispatcher/physical_plan_dispatcher.hpp"
+#include "core/physical_planner/plan/command/create_collection_plan.hpp"
+#include "core/physical_planner/plan/command/create_database_plan.hpp"
+#include "core/physical_planner/plan/command/create_index_plan.hpp"
+#include "core/physical_planner/plan/command/create_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_collection_plan.hpp"
+#include "core/physical_planner/plan/command/drop_database_plan.hpp"
+#include "core/physical_planner/plan/command/drop_index_plan.hpp"
+#include "core/physical_planner/plan/command/drop_vector_index_plan.hpp"
+#include "core/physical_planner/plan/command/show_collections_plan.hpp"
+#include "core/physical_planner/plan/command/show_databases_plan.hpp"
+#include "core/physical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/use_plan.hpp"
+#include "core/physical_planner/plan/physical_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/wal/recovery_manager.hpp"
 
@@ -20,9 +35,9 @@ namespace
 {
 
 /**
- * @brief 从 manifest 错误创建数据库错误
- * @param error manifest 错误
- * @return 数据库错误
+ * @brief 浠?manifest 閿欒鍒涘缓鏁版嵁搴撻敊璇?
+ * @param error manifest 閿欒
+ * @return 鏁版嵁搴撻敊璇?
  */
 DatabaseError wrap_database_error(DatabaseErrorCode code, error::Error error)
 {
@@ -36,9 +51,9 @@ DatabaseError manifest_error_to_database(ManifestError error)
 }
 
 /**
- * @brief 从 meta 引擎错误创建数据库错误
- * @param error meta 引擎错误
- * @return 数据库错误
+ * @brief 浠?meta 寮曟搸閿欒鍒涘缓鏁版嵁搴撻敊璇?
+ * @param error meta 寮曟搸閿欒
+ * @return 鏁版嵁搴撻敊璇?
  */
 DatabaseError meta_error_to_database(meta::MetaError error)
 {
@@ -46,9 +61,9 @@ DatabaseError meta_error_to_database(meta::MetaError error)
 }
 
 /**
- * @brief 从存储引擎错误创建数据库错误
- * @param error 存储引擎错误
- * @return 数据库错误
+ * @brief 浠庡瓨鍌ㄥ紩鎿庨敊璇垱寤烘暟鎹簱閿欒
+ * @param error 瀛樺偍寮曟搸閿欒
+ * @return 鏁版嵁搴撻敊璇?
  */
 DatabaseError storage_error_to_database(storage::StorageError error)
 {
@@ -56,9 +71,9 @@ DatabaseError storage_error_to_database(storage::StorageError error)
 }
 
 /**
- * @brief 从索引引擎错误创建数据库错误
- * @param error 索引引擎错误
- * @return 数据库错误
+ * @brief 浠庣储寮曞紩鎿庨敊璇垱寤烘暟鎹簱閿欒
+ * @param error 绱㈠紩寮曟搸閿欒
+ * @return 鏁版嵁搴撻敊璇?
  */
 DatabaseError index_error_to_database(index::IndexError error)
 {
@@ -76,9 +91,9 @@ DatabaseError wal_error_to_database(wal::WalError error)
 }
 
 /**
- * @brief 创建命令执行结果
- * @param affected_rows 受影响的行数
- * @return 命令执行结果
+ * @brief 鍒涘缓鍛戒护鎵ц缁撴灉
+ * @param affected_rows 鍙楀奖鍝嶇殑琛屾暟
+ * @return 鍛戒护鎵ц缁撴灉
  */
 executor::ExecutionResult command_result(std::size_t affected_rows)
 {
@@ -88,35 +103,158 @@ executor::ExecutionResult command_result(std::size_t affected_rows)
     return result;
 }
 
-bool writes_wal(physical_plan::PhysicalStatementPlanKind kind) noexcept
+bool writes_wal(physical_planner::plan::PhysicalPlanKind kind) noexcept
 {
-    using physical_plan::PhysicalStatementPlanKind;
+    using physical_planner::plan::PhysicalPlanKind;
     switch (kind) {
-    case PhysicalStatementPlanKind::CreateDatabase:
-    case PhysicalStatementPlanKind::CreateCollection:
-    case PhysicalStatementPlanKind::CreateIndex:
-    case PhysicalStatementPlanKind::CreateVectorIndex:
-    case PhysicalStatementPlanKind::DropDatabase:
-    case PhysicalStatementPlanKind::DropCollection:
-    case PhysicalStatementPlanKind::DropIndex:
-    case PhysicalStatementPlanKind::DropVectorIndex:
-    case PhysicalStatementPlanKind::Insert:
-    case PhysicalStatementPlanKind::Update:
-    case PhysicalStatementPlanKind::Delete:
+    case PhysicalPlanKind::CreateDatabase:
+    case PhysicalPlanKind::CreateCollection:
+    case PhysicalPlanKind::CreateIndex:
+    case PhysicalPlanKind::CreateVectorIndex:
+    case PhysicalPlanKind::DropDatabase:
+    case PhysicalPlanKind::DropCollection:
+    case PhysicalPlanKind::DropIndex:
+    case PhysicalPlanKind::DropVectorIndex:
+    case PhysicalPlanKind::Insert:
+    case PhysicalPlanKind::Update:
+    case PhysicalPlanKind::Delete:
         return true;
-    case PhysicalStatementPlanKind::Use:
-    case PhysicalStatementPlanKind::ShowDatabases:
-    case PhysicalStatementPlanKind::ShowCollections:
-    case PhysicalStatementPlanKind::ShowIndexes:
-    case PhysicalStatementPlanKind::ShowVectorIndexes:
-    case PhysicalStatementPlanKind::DescribeCollection:
-    case PhysicalStatementPlanKind::Query:
+    case PhysicalPlanKind::Use:
+    case PhysicalPlanKind::ShowDatabases:
+    case PhysicalPlanKind::ShowCollections:
+    case PhysicalPlanKind::ShowIndexes:
+    case PhysicalPlanKind::ShowVectorIndexes:
+    case PhysicalPlanKind::DescribeCollection:
+    case PhysicalPlanKind::Query:
         return false;
     }
     return false;
 }
 
 } // namespace
+
+class DatabaseEngine::PlanExecutionDispatcher final
+    : private physical_planner::plan::ConstPhysicalPlanDispatcher<
+          DatabaseEngine::PlanExecutionDispatcher,
+          std::expected<executor::ExecutionResult, executor::ExecutionError>
+      >
+{
+    using Result = std::expected<executor::ExecutionResult, executor::ExecutionError>;
+    using Dispatcher = physical_planner::plan::ConstPhysicalPlanDispatcher<
+        PlanExecutionDispatcher,
+        Result
+    >;
+
+    friend Dispatcher;
+
+public:
+    PlanExecutionDispatcher(DatabaseEngine & database, executor::Executor & executor) noexcept
+        : database_(database)
+        , executor_(executor)
+    {
+    }
+
+    [[nodiscard]]
+    Result dispatch(const physical_planner::plan::PhysicalPlan & plan)
+    {
+        return dispatch_plan(plan);
+    }
+
+private:
+    Result visit_use_plan(const physical_planner::plan::UsePlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_create_database_plan(const physical_planner::plan::CreateDatabasePlan & plan)
+    {
+        return database_.execute_create_database(plan);
+    }
+
+    Result visit_create_collection_plan(const physical_planner::plan::CreateCollectionPlan & plan)
+    {
+        return database_.execute_create_collection(plan);
+    }
+
+    Result visit_create_index_plan(const physical_planner::plan::CreateIndexPlan & plan)
+    {
+        return database_.execute_create_index(plan);
+    }
+
+    Result visit_create_vector_index_plan(const physical_planner::plan::CreateVectorIndexPlan & plan)
+    {
+        return database_.execute_create_vector_index(plan);
+    }
+
+    Result visit_drop_database_plan(const physical_planner::plan::DropDatabasePlan & plan)
+    {
+        return database_.execute_drop_database(plan);
+    }
+
+    Result visit_drop_collection_plan(const physical_planner::plan::DropCollectionPlan & plan)
+    {
+        return database_.execute_drop_collection(plan);
+    }
+
+    Result visit_drop_index_plan(const physical_planner::plan::DropIndexPlan & plan)
+    {
+        return database_.execute_drop_index(plan);
+    }
+
+    Result visit_drop_vector_index_plan(const physical_planner::plan::DropVectorIndexPlan & plan)
+    {
+        return database_.execute_drop_vector_index(plan);
+    }
+
+    Result visit_show_databases_plan(const physical_planner::plan::ShowDatabasesPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_show_collections_plan(const physical_planner::plan::ShowCollectionsPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_show_indexes_plan(const physical_planner::plan::ShowIndexesPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_show_vector_indexes_plan(const physical_planner::plan::ShowVectorIndexesPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_describe_collection_plan(const physical_planner::plan::DescribeCollectionPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_insert_plan(const physical_planner::plan::InsertPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_update_plan(const physical_planner::plan::UpdatePlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_delete_plan(const physical_planner::plan::DeletePlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_query_plan(const physical_planner::plan::QueryPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+private:
+    DatabaseEngine & database_;
+    executor::Executor & executor_;
+};
 
 DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     : data_directory_(std::move(config.data_dir))
@@ -158,8 +296,7 @@ const vindex::VectorIndexEngine & DatabaseEngine::vector_index_engine() const no
 }
 
 executor::ExecutionError from_transaction_error(
-    transaction::TransactionError error,
-    parser::ast::AstNodeLocation location
+    transaction::TransactionError error
 )
 {
     const auto * context = error.context<transaction::TransactionErrorContext>();
@@ -172,7 +309,7 @@ executor::ExecutionError from_transaction_error(
     return executor::ExecutionError {
         executor::ExecutionErrorCode::TransactionError,
         message,
-        executor::ExecutionErrorContext {location},
+
         std::move(error),
     };
 }
@@ -305,42 +442,33 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute(
-    const physical_plan::PhysicalStatementPlan & plan
+    const physical_planner::plan::PhysicalPlan & plan
 )
 {
-    using physical_plan::PhysicalStatementPlanKind;
-
-    if (transaction_manager_ != nullptr && transaction_manager_->recovery_required()) {
+    if (transaction_manager_ == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::TransactionError,
+            "Database transaction manager is not initialized",
+        });
+    }
+    if (transaction_manager_->recovery_required()) {
         return std::unexpected(executor::ExecutionError {
             executor::ExecutionErrorCode::TransactionError,
             "Database requires WAL recovery before accepting more requests",
-            executor::ExecutionErrorContext {plan.location()},
         });
     }
 
-    auto executed = [&]() -> std::expected<executor::ExecutionResult, executor::ExecutionError> {
-        switch (plan.kind()) {
-        case PhysicalStatementPlanKind::CreateDatabase:
-            return execute_create_database(static_cast<const physical_plan::PhysicalCreateDatabasePlan &>(plan));
-        case PhysicalStatementPlanKind::CreateCollection:
-            return execute_create_collection(static_cast<const physical_plan::PhysicalCreateCollectionPlan &>(plan));
-        case PhysicalStatementPlanKind::CreateIndex:
-            return execute_create_index(static_cast<const physical_plan::PhysicalCreateIndexPlan &>(plan));
-        case PhysicalStatementPlanKind::CreateVectorIndex:
-            return execute_create_vector_index(static_cast<const physical_plan::PhysicalCreateVectorIndexPlan &>(plan));
-        case PhysicalStatementPlanKind::DropDatabase:
-            return execute_drop_database(static_cast<const physical_plan::PhysicalDropDatabasePlan &>(plan));
-        case PhysicalStatementPlanKind::DropCollection:
-            return execute_drop_collection(static_cast<const physical_plan::PhysicalDropCollectionPlan &>(plan));
-        case PhysicalStatementPlanKind::DropIndex:
-            return execute_drop_index(static_cast<const physical_plan::PhysicalDropIndexPlan &>(plan));
-        case PhysicalStatementPlanKind::DropVectorIndex:
-            return execute_drop_vector_index(static_cast<const physical_plan::PhysicalDropVectorIndexPlan &>(plan));
-        default:
-            executor::Executor executor {meta(), storage_, index_engine_, vector_index_engine_, *transaction_manager_};
-            return executor.execute(plan);
-        }
-    }();
+    executor::Executor executor {
+        executor::ExecutionContext {
+            .catalog = meta(),
+            .storage = storage_,
+            .index_engine = index_engine_,
+            .vector_index_engine = vector_index_engine_,
+            .transaction_manager = *transaction_manager_,
+        },
+    };
+    PlanExecutionDispatcher dispatcher {*this, executor};
+    auto executed = dispatcher.dispatch(plan);
     if (executed && writes_wal(plan.kind())) {
         maybe_run_automatic_checkpoint();
     }
@@ -349,123 +477,149 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::commit_catalog_transaction(
     meta::MetaSnapshot snapshot,
-    std::size_t affected_rows,
-    parser::ast::AstNodeLocation location
+    std::size_t affected_rows
 )
 {
     auto transaction = transaction_manager_->begin_implicit();
-    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error()), location));
+    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error())));
     auto staged = transaction_manager_->stage_catalog(*transaction, std::move(snapshot));
     if (!staged) {
         (void) transaction_manager_->abort(*transaction);
-        return std::unexpected(from_transaction_error(std::move(staged.error()), location));
+        return std::unexpected(from_transaction_error(std::move(staged.error())));
     }
     auto committed = transaction_manager_->commit(*transaction);
-    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error()), location));
+    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error())));
     return command_result(affected_rows);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_database(
-    const physical_plan::PhysicalCreateDatabasePlan & plan
+    const physical_planner::plan::CreateDatabasePlan & plan
 )
 {
-    const auto existed = meta().find_database(plan.database_name()) != nullptr;
+    if (!plan.database_name().has_value()) {
+        return command_result(0);
+    }
+    const auto existed = meta().find_database(*plan.database_name()) != nullptr;
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto created = staged.create_database(meta::CreateDatabaseRequest {
-        .name = plan.database_name(),
-        .if_not_exists = plan.if_not_exists(),
+        .name = *plan.database_name(),
+        .if_not_exists = false,
     });
     if (!created.has_value()) {
-        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error())));
     }
     if (existed) return command_result(0);
-    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_collection(
-    const physical_plan::PhysicalCreateCollectionPlan & plan
+    const physical_planner::plan::CreateCollectionPlan & plan
 )
 {
-    const auto * existing = meta().find_collection(plan.database_id(), plan.collection_name());
+    if (!plan.collection_name().has_value()) {
+        return command_result(0);
+    }
+    const auto * existing = meta().find_collection(plan.database_id(), *plan.collection_name());
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto created = staged.create_collection(meta::CreateCollectionRequest {
         .database_id = plan.database_id(),
-        .name = plan.collection_name(),
-        .if_not_exists = plan.if_not_exists(),
+        .name = *plan.collection_name(),
+        .if_not_exists = false,
         .columns = plan.columns(),
         .comment = plan.comment(),
     });
     if (!created.has_value()) {
-        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error())));
     }
 
-    const auto collection_id = *created;
     if (existing != nullptr) {
         return command_result(0);
     }
 
-    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_index(
-    const physical_plan::PhysicalCreateIndexPlan & plan
+    const physical_planner::plan::CreateIndexPlan & plan
 )
 {
-    const auto * existing = meta().find_index(plan.collection_id(), plan.index_name());
+    if (!plan.index_name().has_value()) {
+        return command_result(0);
+    }
+    const auto * column = meta().find_column(plan.column_id());
+    if (column == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "CREATE INDEX column was not found",
+        });
+    }
+    const auto collection_id = column->collection_id();
+    const auto * existing = meta().find_index(collection_id, *plan.index_name());
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto created = staged.create_index(meta::CreateIndexRequest {
-        .collection_id = plan.collection_id(),
+        .collection_id = collection_id,
         .column_ids = {plan.column_id()},
-        .name = plan.index_name(),
+        .name = *plan.index_name(),
         .kind = plan.index_kind(),
         .unique = plan.unique(),
-        .if_not_exists = plan.if_not_exists(),
+        .if_not_exists = false,
     });
     if (!created.has_value()) {
-        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error())));
     }
 
     if (existing != nullptr) {
         return command_result(0);
     }
 
-    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_vector_index(
-    const physical_plan::PhysicalCreateVectorIndexPlan & plan
+    const physical_planner::plan::CreateVectorIndexPlan & plan
 )
 {
-    const auto * existing = meta().find_vector_index(plan.collection_id(), plan.index_name());
+    if (!plan.index_name().has_value()) {
+        return command_result(0);
+    }
+    const auto * column = meta().find_column(plan.column_id());
+    if (column == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "CREATE VECTOR INDEX column was not found",
+        });
+    }
+    const auto collection_id = column->collection_id();
+    const auto * existing = meta().find_vector_index(collection_id, *plan.index_name());
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto created = staged.create_vector_index(meta::CreateVectorIndexRequest {
-        .collection_id = plan.collection_id(),
+        .collection_id = collection_id,
         .column_id = plan.column_id(),
-        .name = plan.index_name(),
+        .name = *plan.index_name(),
         .kind = plan.index_kind(),
         .metric = plan.metric(),
         .hnsw_options = {
@@ -474,121 +628,147 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
             .ef_search_default = plan.ef_search_default(),
             .random_seed = plan.random_seed(),
         },
-        .if_not_exists = plan.if_not_exists(),
+        .if_not_exists = false,
     });
     if (!created.has_value()) {
-        return std::unexpected(from_meta_error(std::move(created.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(created.error())));
     }
 
     if (existing != nullptr) {
         return command_result(0);
     }
 
-    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_database(
-    const physical_plan::PhysicalDropDatabasePlan & plan
+    const physical_planner::plan::DropDatabasePlan & plan
 )
 {
     if (!plan.database_id().has_value()) {
         return command_result(0);
     }
+    const auto * database = meta().find_database(*plan.database_id());
+    if (database == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "DROP DATABASE target was not found",
+        });
+    }
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto dropped = staged.drop_database(meta::DropDatabaseRequest {
-        .name = plan.database_name(),
-        .if_exists = plan.if_exists(),
+        .name = database->name(),
+        .if_exists = false,
     });
     if (!dropped.has_value()) {
-        return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped.error())));
     }
 
-    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_collection(
-    const physical_plan::PhysicalDropCollectionPlan & plan
+    const physical_planner::plan::DropCollectionPlan & plan
 )
 {
     if (!plan.collection_id().has_value()) {
         return command_result(0);
     }
+    const auto * collection = meta().find_collection(*plan.collection_id());
+    if (collection == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "DROP COLLECTION target was not found",
+        });
+    }
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto dropped = staged.drop_collection(meta::DropCollectionRequest {
-        .database_id = plan.database_id(),
-        .name = plan.collection_name(),
-        .if_exists = plan.if_exists(),
+        .database_id = collection->database_id(),
+        .name = collection->name(),
+        .if_exists = false,
     });
     if (!dropped.has_value()) {
-        return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped.error())));
     }
 
-    return commit_catalog_transaction(staged.snapshot(), 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_index(
-    const physical_plan::PhysicalDropIndexPlan & plan
+    const physical_planner::plan::DropIndexPlan & plan
 )
 {
-    const auto * existing = meta().find_index(plan.collection_id(), plan.index_name());
-    if (existing == nullptr && plan.if_exists()) {
+    if (!plan.index_id().has_value()) {
         return command_result(0);
+    }
+    const auto * existing = meta().find_index(*plan.index_id());
+    if (existing == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "DROP INDEX target was not found",
+        });
     }
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto dropped = staged.drop_index(meta::DropIndexRequest {
-        .collection_id = plan.collection_id(),
-        .name = plan.index_name(),
-        .if_exists = plan.if_exists(),
+        .collection_id = existing->collection_id(),
+        .name = existing->name(),
+        .if_exists = false,
     });
     if (!dropped.has_value()) {
-        return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped.error())));
     }
 
-    return commit_catalog_transaction(staged.snapshot(), existing == nullptr ? 0 : 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), existing == nullptr ? 0 : 1);
 }
 
 std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_vector_index(
-    const physical_plan::PhysicalDropVectorIndexPlan & plan
+    const physical_planner::plan::DropVectorIndexPlan & plan
 )
 {
-    const auto * existing = meta().find_vector_index(plan.collection_id(), plan.index_name());
-    if (existing == nullptr && plan.if_exists()) {
+    if (!plan.index_id().has_value()) {
         return command_result(0);
+    }
+    const auto * existing = meta().find_vector_index(*plan.index_id());
+    if (existing == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "DROP VECTOR INDEX target was not found",
+        });
     }
 
     auto editor = meta::CatalogEditor::from(meta());
     if (!editor) {
-        return std::unexpected(from_meta_error(std::move(editor.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(editor.error())));
     }
     auto staged = std::move(*editor);
 
     auto dropped = staged.drop_vector_index(meta::DropVectorIndexRequest {
-        .collection_id = plan.collection_id(),
-        .name = plan.index_name(),
-        .if_exists = plan.if_exists(),
+        .collection_id = existing->collection_id(),
+        .name = existing->name(),
+        .if_exists = false,
     });
     if (!dropped.has_value()) {
-        return std::unexpected(from_meta_error(std::move(dropped.error()), plan.location()));
+        return std::unexpected(from_meta_error(std::move(dropped.error())));
     }
 
-    return commit_catalog_transaction(staged.snapshot(), existing == nullptr ? 0 : 1, plan.location());
+    return commit_catalog_transaction(staged.snapshot(), existing == nullptr ? 0 : 1);
 }
 
 std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_meta()
@@ -625,71 +805,66 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
 }
 
 executor::ExecutionError DatabaseEngine::from_meta_error(
-    meta::MetaError error,
-    parser::ast::AstNodeLocation location
+    meta::MetaError error
 )
 {
     auto message = error.message();
     return executor::ExecutionError {
         executor::ExecutionErrorCode::MetaError,
         message,
-        executor::ExecutionErrorContext {location},
+
         std::move(error),
     };
 }
 
 executor::ExecutionError DatabaseEngine::from_schema_error(
-    storage::SchemaLoadError error,
-    parser::ast::AstNodeLocation location
+    storage::SchemaLoadError error
 )
 {
     auto message = error.message();
     return executor::ExecutionError {
         executor::ExecutionErrorCode::SchemaError,
         message,
-        executor::ExecutionErrorContext {location},
+
         std::move(error),
     };
 }
 
 executor::ExecutionError DatabaseEngine::from_storage_error(
-    storage::StorageError error,
-    parser::ast::AstNodeLocation location
+    storage::StorageError error
 )
 {
     auto message = error.message();
     return executor::ExecutionError {
         executor::ExecutionErrorCode::StorageError,
         message,
-        executor::ExecutionErrorContext {location},
+
         std::move(error),
     };
 }
 
 executor::ExecutionError DatabaseEngine::from_index_error(
-    index::IndexError error,
-    parser::ast::AstNodeLocation location
+    index::IndexError error
 )
 {
     auto message = error.message();
     return executor::ExecutionError {
         executor::ExecutionErrorCode::IndexError,
         message,
-        executor::ExecutionErrorContext {location},
+
         std::move(error),
     };
 }
 
 executor::ExecutionError DatabaseEngine::from_vector_index_error(
-    vindex::VectorIndexError error,
-    parser::ast::AstNodeLocation location
+    vindex::VectorIndexError error
 )
 {
     auto message = error.message();
     return executor::ExecutionError {
         executor::ExecutionErrorCode::IndexError,
         message,
-        executor::ExecutionErrorContext {location},
+
         std::move(error),
     };
 }

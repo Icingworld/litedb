@@ -29,11 +29,6 @@ AstNodeKind CreateVectorIndexStatement::kind() const noexcept
     return AstNodeKind::CreateVectorIndex;
 }
 
-void CreateVectorIndexStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::string & CreateVectorIndexStatement::index_name() const noexcept
 {
     return index_name_;

@@ -3,20 +3,14 @@
 namespace litedb::core::binder::bound
 {
 
-BoundStatement::BoundStatement(BoundStatementKind kind, parser::ast::AstNodeLocation location) noexcept
-    : kind_(kind),
-      location_(location)
+BoundStatement::BoundStatement(BoundStatementKind kind) noexcept
+    : kind_(kind)
 {
 }
 
 BoundStatementKind BoundStatement::kind() const noexcept
 {
     return kind_;
-}
-
-parser::ast::AstNodeLocation BoundStatement::location() const noexcept
-{
-    return location_;
 }
 
 } // namespace litedb::core::binder::bound

@@ -2,71 +2,39 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <vector>
 
+#include "core/binder/bound/bound_order_by_item.hpp"
+#include "core/binder/bound/bound_projection_item.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief 排序项
- * @note 示例：expression [ASC | DESC]
- */
-struct BoundOrderByItem
-{
-    std::unique_ptr<BoundExpression> expression;    ///< 排序表达式
-    bool ascending {true};                          ///< 是否升序
-};
-
-struct BoundProjectionItem
-{
-    std::unique_ptr<BoundExpression> expression;    ///< 投影表达式
-    std::optional<std::string> alias;               ///< 投影别名
-};
-
-/**
- * @brief SELECT 语句节点
- * @details 示例：SELECT <select_item> [, <select_item>] FROM <collection_name> [WHERE <expression>] [ORDER BY <expression> [ASC | DESC]] [LIMIT <integer_literal>] [OFFSET <integer_literal>]
+ * @brief 绑定 SELECT 语句
  */
 class BoundSelectStatement final : public BoundStatement
 {
 public:
     BoundSelectStatement(
-        common::DatabaseId database_id,
         common::CollectionId collection_id,
-        std::string collection_name,
         std::vector<BoundProjectionItem> projections,
         std::unique_ptr<BoundExpression> where,
         std::vector<BoundOrderByItem> order_by,
         std::optional<std::size_t> limit,
-        std::optional<std::size_t> offset,
-        parser::ast::AstNodeLocation location
+        std::optional<std::size_t> offset
     );
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
-    [[nodiscard]]
-    common::DatabaseId database_id() const noexcept;
-
     /**
      * @brief 获取集合 ID
      * @return 集合 ID
      */
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
-
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
-    [[nodiscard]]
-    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 获取选择列表
@@ -124,16 +92,8 @@ public:
     [[nodiscard]]
     std::vector<BoundOrderByItem> take_order_by() noexcept;
 
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
-
 private:
-    common::DatabaseId database_id_;                                ///< 数据库 ID
     common::CollectionId collection_id_;                            ///< 集合 ID
-    std::string collection_name_;                                   ///< 集合名称
     std::vector<BoundProjectionItem> projections_;                  ///< 选择列表
     std::unique_ptr<BoundExpression> where_;                        ///< 条件表达式
     std::vector<BoundOrderByItem> order_by_;                        ///< 排序列表

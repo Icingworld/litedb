@@ -6,35 +6,20 @@ namespace litedb::core::binder::bound
 {
 
 BoundUpdateStatement::BoundUpdateStatement(
-    common::DatabaseId database_id,
     common::CollectionId collection_id,
-    std::string collection_name,
     std::vector<BoundAssignment> assignments,
-    std::unique_ptr<BoundExpression> where,
-    parser::ast::AstNodeLocation location
+    std::unique_ptr<BoundExpression> where
 )
-    : BoundStatement(BoundStatementKind::Update, location)
-    , database_id_(database_id)
+    : BoundStatement(BoundStatementKind::Update)
     , collection_id_(collection_id)
-    , collection_name_(std::move(collection_name))
     , assignments_(std::move(assignments))
     , where_(std::move(where))
 {
 }
 
-common::DatabaseId BoundUpdateStatement::database_id() const noexcept
-{
-    return database_id_;
-}
-
 common::CollectionId BoundUpdateStatement::collection_id() const noexcept
 {
     return collection_id_;
-}
-
-const std::string & BoundUpdateStatement::collection_name() const noexcept
-{
-    return collection_name_;
 }
 
 const std::vector<BoundAssignment> & BoundUpdateStatement::assignments() const noexcept
@@ -55,11 +40,6 @@ std::vector<BoundAssignment> BoundUpdateStatement::take_assignments() noexcept
 std::unique_ptr<BoundExpression> BoundUpdateStatement::take_where() noexcept
 {
     return std::move(where_);
-}
-
-void BoundUpdateStatement::accept(BoundStatementVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 } // namespace litedb::core::binder::bound

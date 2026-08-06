@@ -89,51 +89,135 @@ Token Lexer::next_internal()
 
     switch (c) {
     case '=':
-        return Token(TokenType::Equal, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Equal,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '!':
         if (match('=')) {
-            return Token(TokenType::NotEqual, std::string_view(input_).substr(start_position, 2), start);
+            return Token(
+                TokenType::NotEqual,
+                std::string_view(input_).substr(start_position, 2),
+                start
+            );
         }
-        return Token(TokenType::Error, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Error,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '<':
         if (match('=')) {
-            return Token(TokenType::LessEqual, std::string_view(input_).substr(start_position, 2), start);
+            return Token(
+                TokenType::LessEqual,
+                std::string_view(input_).substr(start_position, 2),
+                start
+            );
         }
         if (match('>')) {
-            return Token(TokenType::NotEqual, std::string_view(input_).substr(start_position, 2), start);
+            return Token(
+                TokenType::NotEqual,
+                std::string_view(input_).substr(start_position, 2),
+                start
+            );
         }
-        return Token(TokenType::LessThan, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::LessThan,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '>':
         if (match('=')) {
-            return Token(TokenType::GreaterEqual, std::string_view(input_).substr(start_position, 2), start);
+            return Token(
+                TokenType::GreaterEqual,
+                std::string_view(input_).substr(start_position, 2),
+                start
+            );
         }
-        return Token(TokenType::GreaterThan, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::GreaterThan,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '+':
-        return Token(TokenType::Plus, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Plus,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '-':
-        return Token(TokenType::Minus, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Minus,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '*':
-        return Token(TokenType::Star, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Star,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '/':
-        return Token(TokenType::Slash, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Slash,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '%':
-        return Token(TokenType::Modulo, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Modulo,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case ',':
-        return Token(TokenType::Comma, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Comma,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case ';':
-        return Token(TokenType::Semicolon, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Semicolon,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '.':
-        return Token(TokenType::Dot, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Dot,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '(':
-        return Token(TokenType::LeftParen, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::LeftParen,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case ')':
-        return Token(TokenType::RightParen, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::RightParen,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case '[':
-        return Token(TokenType::LeftBracket, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::LeftBracket,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     case ']':
-        return Token(TokenType::RightBracket, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::RightBracket,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     default:
-        return Token(TokenType::Error, std::string_view(input_).substr(start_position, 1), start);
+        return Token(
+            TokenType::Error,
+            std::string_view(input_).substr(start_position, 1),
+            start
+        );
     }
 }
 
@@ -156,11 +240,18 @@ Token Lexer::read_identifier_or_keyword()
         advance();
     }
 
-    const std::string_view value = std::string_view(input_).substr(start_position, position_ - start_position);
+    const std::string_view value = std::string_view(input_).substr(
+        start_position,
+        position_ - start_position
+    );
     std::string upper_value;
     upper_value.reserve(value.length());
     for (const char c : value) {
-        upper_value.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        upper_value.push_back(
+            static_cast<char>(
+                std::toupper(static_cast<unsigned char>(c))
+            )
+        );
     }
 
     if (const auto type = keyword_type(upper_value); type.has_value()) {
@@ -180,7 +271,8 @@ Token Lexer::read_number()
     }
 
     TokenType type = TokenType::IntegerLiteral;
-    if (current_char() == '.' && position_ + 1 < input_.length() && is_digit(input_[position_ + 1])) {
+    if (current_char() == '.' && position_ + 1 < input_.length()
+        && is_digit(input_[position_ + 1])) {
         type = TokenType::FloatLiteral;
         advance();
         while (is_digit(current_char())) {
@@ -188,7 +280,11 @@ Token Lexer::read_number()
         }
     }
 
-    return Token(type, std::string_view(input_).substr(start_position, position_ - start_position), start);
+    return Token(type, std::string_view(input_).substr(
+        start_position,
+        position_ - start_position),
+        start
+    );
 }
 
 Token Lexer::read_string()
@@ -203,7 +299,14 @@ Token Lexer::read_string()
         if (c == quote) {
             const std::size_t value_length = position_ - value_position;
             advance();
-            return Token(TokenType::StringLiteral, std::string_view(input_).substr(value_position, value_length), start);
+            return Token(
+                TokenType::StringLiteral,
+                std::string_view(input_).substr(
+                    value_position,
+                    value_length
+                ),
+                start
+            );
         }
         if (c == '\\' && position_ + 1 < input_.length()) {
             advance();
@@ -211,7 +314,14 @@ Token Lexer::read_string()
         advance();
     }
 
-    return Token(TokenType::Error, std::string_view(input_).substr(quote_position), start);
+    return Token(
+        TokenType::Error,
+        std::string_view(input_).substr(
+            quote_position,
+            position_ - quote_position
+        ),
+        start
+    );
 }
 
 bool Lexer::is_alpha(char c) const noexcept

@@ -1,7 +1,5 @@
 #include "core/parser/worker/parser_insert_worker.hpp"
 
-#include <expected>
-#include <memory>
 #include <utility>
 
 #include "core/parser/ast/statement/insert_statement.hpp"
@@ -16,18 +14,23 @@ ParserInsertWorker::ParserInsertWorker(ParserContext & context)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWorker::parse_insert_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+ParserInsertWorker::parse_insert_statement()
 {
     const TokenLocation location = context_.current().location();
     context_.advance();
 
-    auto into = context_.consume(TokenType::Into, "Expected INTO after INSERT");
+    auto into = context_.consume(
+        TokenType::Into, "Expected INTO after INSERT"
+    );
     if (!into.has_value()) [[unlikely]] {
         return std::unexpected(std::move(into.error()));
     }
 
     ParserSchemaHelper schema_helper(context_);
-    auto collection = schema_helper.parse_identifier_string("Expected collection name");
+    auto collection = schema_helper.parse_identifier_string(
+        "Expected collection name"
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -36,11 +39,15 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
     // 列名列表是可省略的
     if (context_.match(TokenType::LeftParen)) {
         if (context_.check(TokenType::RightParen)) [[unlikely]] {
-            return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one column name"));
+            return std::unexpected(context_.make_current_error(
+                ParserErrorCode::EmptyList, "Expected at least one column name"
+            ));
         }
 
         while (true) {
-            auto column = schema_helper.parse_identifier_string("Expected column name");
+            auto column = schema_helper.parse_identifier_string(
+                "Expected column name"
+            );
             if (!column.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(column.error()));
             }
@@ -51,22 +58,30 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
             }
         }
 
-        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after column list");
+        auto right_paren = context_.consume(
+            TokenType::RightParen, "Expected ')' after column list"
+        );
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
     }
 
-    auto values = context_.consume(TokenType::Values, "Expected VALUES after INSERT target");
+    auto values = context_.consume(
+        TokenType::Values, "Expected VALUES after INSERT target"
+    );
     if (!values.has_value()) [[unlikely]] {
         return std::unexpected(std::move(values.error()));
     }
-    auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before values");
+    auto left_paren = context_.consume(
+        TokenType::LeftParen, "Expected '(' before values"
+    );
     if (!left_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(left_paren.error()));
     }
     if (context_.check(TokenType::RightParen)) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one value"));
+        return std::unexpected(context_.make_current_error(
+            ParserErrorCode::EmptyList, "Expected at least one value"
+        ));
     }
 
     ParserExpressionWorker expression_worker(context_);
@@ -83,7 +98,9 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserInsertWork
         }
     }
 
-    auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after values");
+    auto right_paren = context_.consume(
+        TokenType::RightParen, "Expected ')' after values"
+    );
     if (!right_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_paren.error()));
     }

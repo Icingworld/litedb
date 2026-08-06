@@ -1,6 +1,5 @@
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 
-#include <memory>
 #include <utility>
 
 namespace litedb::core::binder::bound
@@ -8,10 +7,15 @@ namespace litedb::core::binder::bound
 
 BoundInExpression::BoundInExpression(
     std::unique_ptr<BoundExpression> expression,
-    std::vector<std::unique_ptr<BoundExpression>> values,
-    parser::ast::AstNodeLocation location
+    std::vector<std::unique_ptr<BoundExpression>> values
 )
-    : BoundExpression(BoundExpressionKind::In, common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt}, location)
+    : BoundExpression(
+        BoundExpressionKind::In,
+        common::LogicalType {
+            common::LogicalTypeId::Boolean,
+            std::nullopt
+        }
+    )
     , expression_(std::move(expression))
     , values_(std::move(values))
 {
@@ -22,24 +26,19 @@ const BoundExpression & BoundInExpression::expression() const noexcept
     return *expression_;
 }
 
+std::unique_ptr<BoundExpression> BoundInExpression::take_expression() noexcept
+{
+    return std::move(expression_);
+}
+
 const std::vector<std::unique_ptr<BoundExpression>> & BoundInExpression::values() const noexcept
 {
     return values_;
 }
 
-void BoundInExpression::accept(BoundExpressionVisitor & visitor) const
+std::vector<std::unique_ptr<BoundExpression>> BoundInExpression::take_values() noexcept
 {
-    visitor.visit(*this);
-}
-
-std::unique_ptr<BoundExpression> BoundInExpression::clone() const
-{
-    std::vector<std::unique_ptr<BoundExpression>> values;
-    values.reserve(values_.size());
-    for (const auto & value : values_) {
-        values.push_back(value->clone());
-    }
-    return std::make_unique<BoundInExpression>(expression_->clone(), std::move(values), location());
+    return std::move(values_);
 }
 
 } // namespace litedb::core::binder::bound

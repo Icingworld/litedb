@@ -10,12 +10,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 一元表达式节点
- * @details 示例：op operand
  */
 class UnaryExpression final : public ExpressionNode
 {
 public:
-    UnaryExpression(TokenType op, std::unique_ptr<ExpressionNode> operand, AstNodeLocation location) noexcept;
+    UnaryExpression(
+        TokenType op,
+        std::unique_ptr<ExpressionNode> operand,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -24,12 +27,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取操作符

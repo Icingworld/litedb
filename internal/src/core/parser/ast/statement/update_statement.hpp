@@ -12,17 +12,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 赋值
- * @note 示例：column = value
  */
 struct Assignment
 {
-    std::string column;
-    std::unique_ptr<ExpressionNode> value;
+    std::string column_name;                        ///< 列名
+    std::unique_ptr<ExpressionNode> value;          ///< 值
 };
 
 /**
  * @brief UPDATE 语句节点
- * @details 示例：UPDATE <collection_name> SET <assignment> [WHERE <expression>]
  */
 class UpdateStatement final : public StatementNode
 {
@@ -31,7 +29,7 @@ public:
 
 public:
     UpdateStatement(
-        std::string collection,
+        std::string collection_name,
         AssignmentList assignments,
         std::unique_ptr<ExpressionNode> where,
         AstNodeLocation location
@@ -46,17 +44,11 @@ public:
     AstNodeKind kind() const noexcept override;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
-
-    /**
      * @brief 获取集合名称
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection() const noexcept;
+    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 获取赋值列表
@@ -73,7 +65,7 @@ public:
     const ExpressionNode * where() const noexcept;
 
 private:
-    std::string collection_;                ///< 集合名称
+    std::string collection_name_;           ///< 集合名称
     AssignmentList assignments_;            ///< 赋值列表
     std::unique_ptr<ExpressionNode> where_; ///< 条件表达式
 };

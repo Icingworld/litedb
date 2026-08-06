@@ -25,21 +25,50 @@ public:
     explicit ParserShowWorker(ParserContext & context);
 
 public:
+    /**
+     * @brief 解析 SHOW 语句
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_show_statement();
 
 private:
+    /**
+     * @brief 解析 SHOW DATABASES 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_databases_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_show_databases_statement(TokenLocation location);
 
+    /**
+     * @brief 解析 SHOW COLLECTIONS 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_collections_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_show_collections_statement(TokenLocation location);
 
+    /**
+     * @brief 解析 SHOW INDEXES 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_indexes_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_show_indexes_statement(TokenLocation location);
 
+    /**
+     * @brief 解析 SHOW VECTOR INDEXES 语句
+     * @param location 语句位置
+     * @return 解析结果
+     */
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_vector_indexes_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+    parse_show_vector_indexes_statement(TokenLocation location);
 
 private:
     ParserContext & context_;   ///< 解析上下文

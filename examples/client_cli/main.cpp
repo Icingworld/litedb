@@ -72,7 +72,7 @@ std::string trim(std::string_view value)
 }
 
 [[nodiscard]]
-std::string value_to_string(const litedb::core::common::Value & value)
+std::string format_value(const litedb::core::common::Value & value)
 {
     using litedb::core::common::NullValue;
     using litedb::core::common::VectorValue;
@@ -157,7 +157,7 @@ void print_result(const litedb::core::executor::ExecutionResult & result)
         std::vector<std::string> values;
         values.reserve(row.values.size());
         for (std::size_t index = 0; index < row.values.size(); ++index) {
-            auto text = value_to_string(row.values[index]);
+            auto text = format_value(row.values[index]);
             if (index < widths.size()) {
                 widths[index] = std::max(widths[index], text.size());
             }

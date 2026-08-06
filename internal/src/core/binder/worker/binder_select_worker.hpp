@@ -38,7 +38,8 @@ public:
      * @param statement SELECT 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_select(
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_select(
         const parser::ast::SelectStatement & statement
     );
 

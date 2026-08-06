@@ -6,12 +6,12 @@ namespace litedb::core::parser::ast
 {
 
 DeleteStatement::DeleteStatement(
-    std::string collection,
+    std::string collection_name,
     std::unique_ptr<ExpressionNode> where,
     AstNodeLocation location
 ) noexcept
     : StatementNode(location)
-    , collection_(std::move(collection))
+    , collection_name_(std::move(collection_name))
     , where_(std::move(where))
 {
 }
@@ -21,14 +21,9 @@ AstNodeKind DeleteStatement::kind() const noexcept
     return AstNodeKind::Delete;
 }
 
-void DeleteStatement::accept(AstNodeVisitor & visitor) const
+const std::string & DeleteStatement::collection_name() const noexcept
 {
-    visitor.visit(*this);
-}
-
-const std::string & DeleteStatement::collection() const noexcept
-{
-    return collection_;
+    return collection_name_;
 }
 
 const ExpressionNode * DeleteStatement::where() const noexcept

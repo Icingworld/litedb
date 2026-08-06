@@ -1,7 +1,5 @@
 #include "core/parser/worker/parser_delete_worker.hpp"
 
-#include <expected>
-#include <memory>
 #include <utility>
 
 #include "core/parser/ast/statement/delete_statement.hpp"
@@ -16,18 +14,23 @@ ParserDeleteWorker::ParserDeleteWorker(ParserContext & context)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserDeleteWorker::parse_delete_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+ParserDeleteWorker::parse_delete_statement()
 {
     const TokenLocation location = context_.current().location();
     context_.advance();
 
-    auto from = context_.consume(TokenType::From, "Expected FROM after DELETE");
+    auto from = context_.consume(
+        TokenType::From, "Expected FROM after DELETE"
+    );
     if (!from.has_value()) [[unlikely]] {
         return std::unexpected(std::move(from.error()));
     }
 
     ParserSchemaHelper schema_helper(context_);
-    auto collection = schema_helper.parse_identifier_string("Expected collection name");
+    auto collection = schema_helper.parse_identifier_string(
+        "Expected collection name"
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }

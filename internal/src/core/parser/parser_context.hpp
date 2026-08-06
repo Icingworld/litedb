@@ -75,7 +75,10 @@ public:
      * @return 解析错误
      */
     [[nodiscard]]
-    ParserError make_current_error(ParserErrorCode code, std::string_view message) const;
+    ParserError make_current_error(
+        ParserErrorCode code,
+        std::string_view message
+    ) const;
 
     /**
      * @brief 消费指定类型的 Token
@@ -107,8 +110,8 @@ public:
 private:
     Lexer & lexer_;                 ///< 词法分析器
     Token current_token_;           ///< 当前 Token
-    Token next_token_;
-    Token next_after_next_token_;
+    Token next_token_;              ///< 下一个 Token
+    Token next_after_next_token_;   ///< 下下个 Token
 };
 
 } // namespace litedb::core::parser

@@ -5,7 +5,11 @@
 namespace litedb::core::parser::ast
 {
 
-FunctionCallExpression::FunctionCallExpression(std::string name, ArgumentList arguments, AstNodeLocation location) noexcept
+FunctionCallExpression::FunctionCallExpression(
+    std::string name,
+    ArgumentList arguments,
+    AstNodeLocation location
+) noexcept
     : ExpressionNode(location)
     , name_(std::move(name))
     , arguments_(std::move(arguments))
@@ -15,11 +19,6 @@ FunctionCallExpression::FunctionCallExpression(std::string name, ArgumentList ar
 AstNodeKind FunctionCallExpression::kind() const noexcept
 {
     return AstNodeKind::FunctionCall;
-}
-
-void FunctionCallExpression::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
 }
 
 const std::string & FunctionCallExpression::name() const noexcept

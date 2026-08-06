@@ -1,5 +1,7 @@
 set(EVALUATOR_SOURCES
+    evaluator_helper.cpp
     expression_evaluator.cpp
+    value_operations.cpp
 )
 
 add_library(litedb_evaluator ${EVALUATOR_SOURCES})

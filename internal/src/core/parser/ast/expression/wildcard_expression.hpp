@@ -10,14 +10,16 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief 通配符表达式节点
- * @details 示例：*
  */
 class WildcardExpression final : public ExpressionNode
 {
 public:
     explicit WildcardExpression(AstNodeLocation location) noexcept;
 
-    WildcardExpression(std::optional<std::string> qualifier, AstNodeLocation location) noexcept;
+    WildcardExpression(
+        std::optional<std::string> qualifier,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -26,12 +28,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取限定符

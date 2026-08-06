@@ -1,4 +1,4 @@
-#include "core/parser/ast/debug_printer.hpp"
+#include "core/parser/ast/debug/debug_printer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 
@@ -60,7 +60,7 @@ void test_select_debug_print()
     require_contains(output, "      column: id\n");
     require_contains(output, "  where:\n");
     require_contains(output, "    BinaryExpression @");
-    require_contains(output, "      op: GreaterEqual\n");
+    require_contains(output, "      op: >=\n");
     require_contains(output, "  order_by: []\n");
     require_contains(output, "  limit: <none>\n");
     require_contains(output, "  offset: <none>\n");
@@ -110,10 +110,10 @@ void test_create_collection_debug_print()
     require_contains(output, "  collection: users\n");
     require_contains(output, "  comment: user collection\n");
     require_contains(output, "  columns:\n");
-    require_contains(output, "    [0] ColumnDefinition\n");
+    require_contains(output, "    [0] ColumnDefinitionSyntax\n");
     require_contains(output, "      name: id\n");
     require_contains(output, "      nullable: false\n");
-    require_contains(output, "    [1] ColumnDefinition\n");
+    require_contains(output, "    [1] ColumnDefinitionSyntax\n");
     require_contains(output, "      kind: Varchar\n");
     require_contains(output, "      parameter: 64\n");
     require_contains(output, "      unique: true\n");
@@ -145,6 +145,15 @@ void test_insert_update_delete_debug_print()
     require_contains(delete_output, "  where: <none>\n");
 }
 
+void test_describe_collection_debug_print()
+{
+    auto statement = parse_ok("DESC users;");
+    const auto output = print_without_location(*statement);
+
+    require_contains(output, "DescribeCollectionStatement\n");
+    require_contains(output, "  collection_name: users\n");
+}
+
 void test_vector_index_debug_print()
 {
     auto statement = parse_ok(
@@ -165,6 +174,36 @@ void test_vector_index_debug_print()
     require_contains(output, "    random_seed: <none>\n");
 }
 
+void test_remaining_statement_debug_print()
+{
+    auto create_index = parse_ok(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_age ON users(age) USING BTREE;"
+    );
+    const auto create_index_output = print_without_location(*create_index);
+    require_contains(create_index_output, "CreateIndexStatement\n");
+    require_contains(create_index_output, "  index_name: idx_age\n");
+    require_contains(create_index_output, "  unique: true\n");
+    require_contains(create_index_output, "  method: BTree\n");
+
+    auto drop_vector_index = parse_ok(
+        "DROP VINDEX IF EXISTS vidx_embedding ON users;"
+    );
+    const auto drop_vector_index_output = print_without_location(*drop_vector_index);
+    require_contains(drop_vector_index_output, "DropVectorIndexStatement\n");
+    require_contains(drop_vector_index_output, "  vector_index_name: vidx_embedding\n");
+    require_contains(drop_vector_index_output, "  if_exists: true\n");
+
+    auto show_collections = parse_ok("SHOW COLLECTIONS;");
+    const auto show_collections_output = print_without_location(*show_collections);
+    require_contains(show_collections_output, "ShowCollectionsStatement\n");
+    require_contains(show_collections_output, "  database_name: <none>\n");
+
+    auto use = parse_ok("USE demo;");
+    const auto use_output = print_without_location(*use);
+    require_contains(use_output, "UseStatement\n");
+    require_contains(use_output, "  database_name: demo\n");
+}
+
 } // namespace
 
 int main()
@@ -174,7 +213,9 @@ int main()
         test_expression_debug_print();
         test_create_collection_debug_print();
         test_insert_update_delete_debug_print();
+        test_describe_collection_debug_print();
         test_vector_index_debug_print();
+        test_remaining_statement_debug_print();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';
         return 1;

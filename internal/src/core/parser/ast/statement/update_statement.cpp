@@ -6,13 +6,13 @@ namespace litedb::core::parser::ast
 {
 
 UpdateStatement::UpdateStatement(
-    std::string collection,
+    std::string collection_name,
     AssignmentList assignments,
     std::unique_ptr<ExpressionNode> where,
     AstNodeLocation location
 ) noexcept
     : StatementNode(location)
-    , collection_(std::move(collection))
+    , collection_name_(std::move(collection_name))
     , assignments_(std::move(assignments))
     , where_(std::move(where))
 {
@@ -23,14 +23,9 @@ AstNodeKind UpdateStatement::kind() const noexcept
     return AstNodeKind::Update;
 }
 
-void UpdateStatement::accept(AstNodeVisitor & visitor) const
+const std::string & UpdateStatement::collection_name() const noexcept
 {
-    visitor.visit(*this);
-}
-
-const std::string & UpdateStatement::collection() const noexcept
-{
-    return collection_;
+    return collection_name_;
 }
 
 const UpdateStatement::AssignmentList & UpdateStatement::assignments() const noexcept

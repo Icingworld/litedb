@@ -19,27 +19,34 @@ BinderDeleteWorker::BinderDeleteWorker(const BinderContext & context) noexcept
 {
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDeleteWorker::bind_delete(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderDeleteWorker::bind_delete(
     const DeleteStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
 
-    auto collection = helper.bind_collection(statement.collection(), statement.location());
+    // 通过 Helper 绑定集合
+    auto collection = helper.bind_collection(
+        statement.collection_name()
+    );
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
+    // 通过 Helper 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
     if (statement.where() != nullptr) {
-        auto bound_where = helper.bind_expression(*statement.where(), *collection);
+        auto bound_where = helper.bind_expression(
+            *statement.where(),
+            *collection
+        );
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
         if (!is_boolean((*bound_where)->type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
-                statement.where()->location(),
                 "WHERE expression must be BOOLEAN"
             ));
         }
@@ -47,11 +54,8 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDeleteWorker::
     }
 
     return std::make_unique<BoundDeleteStatement>(
-        collection->database_id,
         collection->collection->id(),
-        collection->collection->name(),
-        std::move(where),
-        statement.location()
+        std::move(where)
     );
 }
 

@@ -19,16 +19,11 @@ namespace litedb::core::binder
 
 /**
  * @brief 绑定器
- * @details 用于将 SQL 语句解析为绑定后的语句节点
  */
 class Binder
 {
 public:
-    /**
-     * @brief 构造绑定器
-     * @param context 绑定上下文
-     */
-    Binder(const BinderContext & context) noexcept;
+    explicit Binder(const BinderContext & context) noexcept;
 
 public:
     /**

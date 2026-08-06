@@ -6,7 +6,6 @@
 #include "core/binder/bound/statement/bound_drop_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_index_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
-#include "core/meta/meta.hpp"
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
@@ -26,115 +25,123 @@ BinderDropWorker::BinderDropWorker(const BinderContext & context) noexcept
 {
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_database(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderDropWorker::bind_drop_database(
     const DropDatabaseStatement & statement
 )
 {
-    const auto * database = context_.meta().find_database(statement.database_name());
-    if (database == nullptr && !statement.if_exists()) {
+    // 查找数据库
+    const auto * database = context_.meta().find_database(
+        statement.database_name()
+    );
+    if (database == nullptr && !statement.if_exists()) [[unlikely]] {
+        // 数据库不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
             BinderErrorCode::DatabaseNotFound,
-            statement.location(),
             "Database not found: " + statement.database_name()
         ));
     }
 
     return std::make_unique<BoundDropDatabaseStatement>(
-        database == nullptr ? std::nullopt : std::optional<DatabaseId>(database->id()),
-        statement.database_name(),
-        statement.if_exists(),
-        statement.location()
+        database == nullptr ?
+            std::nullopt : std::optional<DatabaseId>(database->id())
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_collection(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderDropWorker::bind_drop_collection(
     const DropCollectionStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
-    
-    auto database_id = helper.require_database(statement.location());
+
+    // 通过 Helper 获取当前会话数据库
+    auto database_id = helper.require_database();
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.meta().find_collection(*database_id, statement.collection_name());
+    // 查找集合
+    const auto * collection = context_.meta().find_collection(
+        *database_id,
+        statement.collection_name()
+    );
     if (collection == nullptr && !statement.if_exists()) [[unlikely]] {
+        // 集合不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
-            statement.location(),
             "Collection not found: " + statement.collection_name()
         ));
     }
 
     return std::make_unique<BoundDropCollectionStatement>(
-        *database_id,
-        collection == nullptr ? std::nullopt : std::optional<CollectionId>(collection->id()),
-        statement.collection_name(),
-        statement.if_exists(),
-        statement.location()
+        collection == nullptr ?
+            std::nullopt : std::optional<CollectionId>(collection->id())
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_index(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderDropWorker::bind_drop_index(
     const DropIndexStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
-    
-    auto collection = helper.bind_collection(statement.collection_name(), statement.location());
+
+    // 通过 Helper 绑定集合
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
     // 查找索引
-    const auto * index = context_.meta().find_index(collection->collection->id(), statement.index_name());
+    const auto * index = context_.meta().find_index(
+        collection->collection->id(),
+        statement.index_name()
+    );
     if (index == nullptr && !statement.if_exists()) [[unlikely]] {
+        // 索引不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
             BinderErrorCode::IndexNotFound,
-            statement.location(),
             "Index not found: " + statement.index_name()
         ));
     }
 
     return std::make_unique<BoundDropIndexStatement>(
-        collection->database_id,
-        collection->collection->id(),
-        collection->collection->name(),
-        statement.index_name(),
-        statement.if_exists(),
-        statement.location()
+        index == nullptr ?
+            std::nullopt : std::optional<IndexId>(index->id())
     );
 }
 
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_vector_index(
+std::expected<std::unique_ptr<BoundStatement>, BinderError>
+BinderDropWorker::bind_drop_vector_index(
     const DropVectorIndexStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
-    
-    auto collection = helper.bind_collection(statement.collection_name(), statement.location());
+
+    // 通过 Helper 绑定集合
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
-    const auto * index = context_.meta().find_vector_index(collection->collection->id(), statement.index_name());
-    if (index == nullptr && !statement.if_exists()) [[unlikely]] {
+    // 查找向量索引
+    const auto * vector_index = context_.meta().find_vector_index(
+        collection->collection->id(),
+        statement.vector_index_name()
+    );
+    if (vector_index == nullptr && !statement.if_exists()) [[unlikely]] {
+        // 向量索引不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
-            BinderErrorCode::IndexNotFound,
-            statement.location(),
-            "Vector index not found: " + statement.index_name()
+            BinderErrorCode::VectorIndexNotFound,
+            "Vector index not found: " + statement.vector_index_name()
         ));
     }
 
     return std::make_unique<BoundDropVectorIndexStatement>(
-        collection->database_id,
-        collection->collection->id(),
-        collection->collection->name(),
-        statement.index_name(),
-        statement.if_exists(),
-        statement.location()
+        vector_index == nullptr ?
+            std::nullopt : std::optional<VIndexId>(vector_index->id())
     );
 }
 

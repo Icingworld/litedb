@@ -7,18 +7,17 @@ namespace litedb::core::binder::bound
 {
 
 BoundUnaryExpression::BoundUnaryExpression(
-    parser::TokenType op,
+    common::UnaryOperator op,
     std::unique_ptr<BoundExpression> operand,
-    common::LogicalType type,
-    parser::ast::AstNodeLocation location
+    common::LogicalType type
 )
-    : BoundExpression(BoundExpressionKind::Unary, type, location)
+    : BoundExpression(BoundExpressionKind::Unary, type)
     , op_(op)
     , operand_(std::move(operand))
 {
 }
 
-parser::TokenType BoundUnaryExpression::op() const noexcept
+common::UnaryOperator BoundUnaryExpression::op() const noexcept
 {
     return op_;
 }
@@ -28,14 +27,9 @@ const BoundExpression & BoundUnaryExpression::operand() const noexcept
     return *operand_;
 }
 
-void BoundUnaryExpression::accept(BoundExpressionVisitor & visitor) const
+std::unique_ptr<BoundExpression> BoundUnaryExpression::take_operand() noexcept
 {
-    visitor.visit(*this);
-}
-
-std::unique_ptr<BoundExpression> BoundUnaryExpression::clone() const
-{
-    return std::make_unique<BoundUnaryExpression>(op_, operand_->clone(), type(), location());
+    return std::move(operand_);
 }
 
 } // namespace litedb::core::binder::bound

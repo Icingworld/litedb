@@ -1,62 +1,35 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <vector>
 
+#include "core/binder/bound/bound_assignment.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief 更新语句节点
- * @details 用于表示 column = value 的赋值操作
- */
-struct BoundAssignment
-{
-    BoundColumn column;                             ///< 列
-    std::unique_ptr<BoundExpression> value;         ///< 值
-};
-
-/**
- * @brief 更新语句节点
- * @details 示例：UPDATE collection_name SET column1 = value1, column2 = value2, ... WHERE condition
+ * @brief 绑定 UPDATE 语句
  */
 class BoundUpdateStatement final : public BoundStatement
 {
 public:
     BoundUpdateStatement(
-        common::DatabaseId database_id,
         common::CollectionId collection_id,
-        std::string collection_name,
         std::vector<BoundAssignment> assignments,
-        std::unique_ptr<BoundExpression> where,
-        parser::ast::AstNodeLocation location
+        std::unique_ptr<BoundExpression> where
     );
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
-    [[nodiscard]]
-    common::DatabaseId database_id() const noexcept;
-
     /**
      * @brief 获取集合 ID
      * @return 集合 ID
      */
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
-
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
-    [[nodiscard]]
-    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 获取赋值列表
@@ -86,17 +59,8 @@ public:
     [[nodiscard]]
     std::unique_ptr<BoundExpression> take_where() noexcept;
 
-public:
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
-
 private:
-    common::DatabaseId database_id_;                ///< 数据库 ID
     common::CollectionId collection_id_;            ///< 集合 ID
-    std::string collection_name_;                   ///< 集合名称
     std::vector<BoundAssignment> assignments_;      ///< 赋值列表
     std::unique_ptr<BoundExpression> where_;        ///< 条件表达式
 };

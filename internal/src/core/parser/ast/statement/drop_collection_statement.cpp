@@ -21,11 +21,6 @@ AstNodeKind DropCollectionStatement::kind() const noexcept
     return AstNodeKind::DropCollection;
 }
 
-void DropCollectionStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::string & DropCollectionStatement::collection_name() const noexcept
 {
     return collection_name_;

@@ -10,12 +10,14 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief SHOW COLLECTIONS 语句节点
- * @details 示例：SHOW COLLECTIONS [FROM <database_name>]
  */
 class ShowCollectionsStatement final : public StatementNode
 {
 public:
-    ShowCollectionsStatement(std::optional<std::string> database_name, AstNodeLocation location) noexcept;
+    ShowCollectionsStatement(
+        std::optional<std::string> database_name,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -24,12 +26,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取数据库名称

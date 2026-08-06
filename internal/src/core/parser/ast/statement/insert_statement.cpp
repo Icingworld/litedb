@@ -6,13 +6,13 @@ namespace litedb::core::parser::ast
 {
 
 InsertStatement::InsertStatement(
-    std::string collection,
+    std::string collection_name,
     ColumnList columns,
     ValueList values,
     AstNodeLocation location
 ) noexcept
     : StatementNode(location)
-    , collection_(std::move(collection))
+    , collection_name_(std::move(collection_name))
     , columns_(std::move(columns))
     , values_(std::move(values))
 {
@@ -23,14 +23,9 @@ AstNodeKind InsertStatement::kind() const noexcept
     return AstNodeKind::Insert;
 }
 
-void InsertStatement::accept(AstNodeVisitor & visitor) const
+const std::string & InsertStatement::collection_name() const noexcept
 {
-    visitor.visit(*this);
-}
-
-const std::string & InsertStatement::collection() const noexcept
-{
-    return collection_;
+    return collection_name_;
 }
 
 const InsertStatement::ColumnList & InsertStatement::columns() const noexcept

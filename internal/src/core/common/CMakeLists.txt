@@ -1,5 +1,6 @@
 add_library(litedb_common
     identifier.cpp
+    type_rules.cpp
     value.cpp
 )
 

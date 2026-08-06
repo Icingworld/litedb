@@ -9,12 +9,11 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief USE 语句节点
- * @details 示例：USE <database_name>
  */
 class UseStatement final : public StatementNode
 {
 public:
-    UseStatement(std::string database, AstNodeLocation location) noexcept;
+    UseStatement(std::string database_name, AstNodeLocation location) noexcept;
 
 public:
     /**
@@ -25,20 +24,14 @@ public:
     AstNodeKind kind() const noexcept override;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
-
-    /**
      * @brief 获取数据库名称
      * @return 数据库名称
      */
     [[nodiscard]]
-    const std::string & database() const noexcept;
+    const std::string & database_name() const noexcept;
 
 private:
-    std::string database_;      ///< 数据库名称
+    std::string database_name_;    ///< 数据库名称
 };
 
 } // namespace litedb::core::parser::ast

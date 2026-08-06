@@ -1,18 +1,20 @@
 #pragma once
 
 #include "core/binder/bound/statement/bound_statement.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
 
 /**
- * @brief SHOW COLLECTIONS 语句节点
- * @details 示例：SHOW COLLECTIONS
+ * @brief 绑定 SHOW COLLECTIONS 语句
  */
 class BoundShowCollectionsStatement final : public BoundStatement
 {
 public:
-    BoundShowCollectionsStatement(common::DatabaseId database_id, parser::ast::AstNodeLocation location);
+    BoundShowCollectionsStatement(
+        common::DatabaseId database_id
+    ) noexcept;
 
 public:
     /**
@@ -21,12 +23,6 @@ public:
      */
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
 
 private:
     common::DatabaseId database_id_;        ///< 数据库ID

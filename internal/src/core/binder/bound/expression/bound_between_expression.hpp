@@ -8,8 +8,7 @@ namespace litedb::core::binder::bound
 {
 
 /**
- * @brief BETWEEN 表达式节点
- * @details 示例：expression BETWEEN lower AND upper
+ * @brief 绑定 BETWEEN 表达式
  */
 class BoundBetweenExpression final : public BoundExpression
 {
@@ -17,8 +16,7 @@ public:
     BoundBetweenExpression(
         std::unique_ptr<BoundExpression> expression,
         std::unique_ptr<BoundExpression> lower,
-        std::unique_ptr<BoundExpression> upper,
-        parser::ast::AstNodeLocation location
+        std::unique_ptr<BoundExpression> upper
     );
 
 public:
@@ -30,11 +28,25 @@ public:
     const BoundExpression & expression() const noexcept;
 
     /**
+     * @brief 移出 BETWEEN 目标表达式
+     * @return 目标表达式所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_expression() noexcept;
+
+    /**
      * @brief 获取下界
      * @return 下界
      */
     [[nodiscard]]
     const BoundExpression & lower() const noexcept;
+
+    /**
+     * @brief 移出 BETWEEN 下界
+     * @return 下界所有权
+     */
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_lower() noexcept;
 
     /**
      * @brief 获取上界
@@ -44,17 +56,11 @@ public:
     const BoundExpression & upper() const noexcept;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundExpressionVisitor & visitor) const override;
-
-    /**
-     * @brief 深拷贝表达式
-     * @return 表达式副本
+     * @brief 移出 BETWEEN 上界
+     * @return 上界所有权
      */
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> clone() const override;
+    std::unique_ptr<BoundExpression> take_upper() noexcept;
 
 private:
     std::unique_ptr<BoundExpression> expression_;   ///< 表达式

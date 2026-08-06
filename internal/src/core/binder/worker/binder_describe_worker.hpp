@@ -8,7 +8,7 @@
 namespace litedb::core::parser::ast
 {
 
-class DescribeStatement;
+class DescribeCollectionStatement;
 
 } // namespace litedb::core::parser::ast
 
@@ -34,12 +34,13 @@ public:
 
 public:
     /**
-     * @brief 绑定 DESCRIBE 语句
-     * @param statement DESCRIBE 语句
+     * @brief 绑定 DESCRIBE COLLECTION 语句
+     * @param statement DESCRIBE COLLECTION 语句
      * @return 绑定后的语句
      */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_describe(
-        const parser::ast::DescribeStatement & statement
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
+    bind_describe_collection(
+        const parser::ast::DescribeCollectionStatement & statement
     );
 
 private:

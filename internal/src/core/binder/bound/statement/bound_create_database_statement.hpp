@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
@@ -8,13 +9,14 @@ namespace litedb::core::binder::bound
 {
 
 /**
- * @brief CREATE DATABASE 语句节点
- * @details 示例：CREATE DATABASE [IF NOT EXISTS] database_name
+ * @brief 绑定 CREATE DATABASE 语句
  */
 class BoundCreateDatabaseStatement final : public BoundStatement
 {
 public:
-    BoundCreateDatabaseStatement(std::string database_name, bool if_not_exists, parser::ast::AstNodeLocation location);
+    BoundCreateDatabaseStatement(
+        std::optional<std::string> database_name
+    ) noexcept;
 
 public:
     /**
@@ -22,24 +24,10 @@ public:
      * @return 数据库名称
      */
     [[nodiscard]]
-    const std::string & database_name() const noexcept;
-
-    /**
-     * @brief 是否存在
-     * @return 是否存在
-     */
-    [[nodiscard]]
-    bool if_not_exists() const noexcept;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundStatementVisitor & visitor) const override;
+    const std::optional<std::string> & database_name() const noexcept;
 
 private:
-    std::string database_name_;         ///< 数据库名称
-    bool if_not_exists_;                ///< 是否不存在
+    std::optional<std::string> database_name_;         ///< 数据库名称
 };
 
 } // namespace litedb::core::binder::bound

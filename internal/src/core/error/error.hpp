@@ -25,17 +25,18 @@ enum class ErrorCategory : std::uint8_t
     VectorIndex = 6,            ///< 向量索引
     Wal = 7,                    ///< 预写日志
     Transaction = 8,            ///< 事务协调
-    Parser = 9,
-    Binder = 10,
-    Planner = 11,
-    Optimizer = 12,
-    Function = 13,
-    Evaluation = 14,
-    Execution = 15,
-    Database = 16,
-    Protocol = 17,
-    Network = 18,
-    Client = 19,
+    Parser = 9,                 ///< 解析器
+    Binder = 10,                ///< 绑定器
+    Optimizer = 11,             ///< 优化器
+    PhysicalPlanner = 12,       ///< 物理计划器
+    Function = 13,              ///< 函数
+    Evaluation = 14,            ///< 评估
+    Execution = 15,             ///< 执行
+    Database = 16,              ///< 数据库
+    Protocol = 17,              ///< 协议
+    Network = 18,               ///< 网络
+    Server = 19,                ///< 服务器
+    Client = 20,                ///< 客户端
 };
 
 /**

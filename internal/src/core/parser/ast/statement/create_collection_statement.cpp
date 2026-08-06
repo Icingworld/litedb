@@ -6,14 +6,14 @@ namespace litedb::core::parser::ast
 {
 
 CreateCollectionStatement::CreateCollectionStatement(
-    std::string collection,
+    std::string collection_name,
     bool if_not_exists,
-    ColumnDefinitionList columns,
+    ColumnDefinitionSyntaxList columns,
     std::optional<std::string> comment,
     AstNodeLocation location
 ) noexcept
     : StatementNode(location)
-    , collection_(std::move(collection))
+    , collection_name_(std::move(collection_name))
     , if_not_exists_(if_not_exists)
     , columns_(std::move(columns))
     , comment_(std::move(comment))
@@ -25,14 +25,9 @@ AstNodeKind CreateCollectionStatement::kind() const noexcept
     return AstNodeKind::CreateCollection;
 }
 
-void CreateCollectionStatement::accept(AstNodeVisitor & visitor) const
+const std::string & CreateCollectionStatement::collection_name() const noexcept
 {
-    visitor.visit(*this);
-}
-
-const std::string & CreateCollectionStatement::collection() const noexcept
-{
-    return collection_;
+    return collection_name_;
 }
 
 bool CreateCollectionStatement::if_not_exists() const noexcept
@@ -40,7 +35,7 @@ bool CreateCollectionStatement::if_not_exists() const noexcept
     return if_not_exists_;
 }
 
-const ColumnDefinitionList & CreateCollectionStatement::columns() const noexcept
+const ColumnDefinitionSyntaxList & CreateCollectionStatement::columns() const noexcept
 {
     return columns_;
 }

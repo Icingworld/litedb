@@ -1,7 +1,5 @@
 #include "core/parser/worker/parser_expression_worker.hpp"
 
-#include <expected>
-#include <memory>
 #include <utility>
 
 #include "core/parser/token.hpp"
@@ -25,13 +23,14 @@ ParserExpressionWorker::ParserExpressionWorker(ParserContext & context)
 {
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_expression()
 {
-
     return parse_or_expression();
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_or_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_or_expression()
 {
     auto left = parse_and_expression();
     if (!left.has_value()) [[unlikely]] {
@@ -57,7 +56,8 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     return left;
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_and_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_and_expression()
 {
     auto left = parse_not_expression();
     if (!left.has_value()) [[unlikely]] {
@@ -83,7 +83,8 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     return left;
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_not_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_not_expression()
 {
     if (context_.check(TokenType::Not)) {
         const Token op = context_.advance();
@@ -103,7 +104,8 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     return parse_comparison_expression();
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_comparison_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_comparison_expression()
 {
     auto left = parse_additive_expression();
     if (!left.has_value()) [[unlikely]] {
@@ -159,12 +161,16 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     if (context_.check(TokenType::In)) {
         const Token op = context_.advance();
 
-        auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after IN");
+        auto left_paren = context_.consume(
+            TokenType::LeftParen, "Expected '(' after IN"
+        );
         if (!left_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(left_paren.error()));
         }
         if (context_.check(TokenType::RightParen)) [[unlikely]] {
-            return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one IN value"));
+            return std::unexpected(context_.make_current_error(
+                ParserErrorCode::EmptyList, "Expected at least one IN value"
+            ));
         }
 
         ast::InExpression::ValueList values;
@@ -180,7 +186,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
             }
         }
 
-        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after IN values");
+        auto right_paren = context_.consume(
+            TokenType::RightParen, "Expected ')' after IN values"
+        );
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
@@ -208,7 +216,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
             return std::unexpected(std::move(lower.error()));
         }
 
-        auto and_token = context_.consume(TokenType::And, "Expected AND in BETWEEN expression");
+        auto and_token = context_.consume(
+            TokenType::And, "Expected AND in BETWEEN expression"
+        );
         if (!and_token.has_value()) [[unlikely]] {
             return std::unexpected(std::move(and_token.error()));
         }
@@ -235,13 +245,16 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     }
 
     if (negated) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedToken, "Expected LIKE, IN, or BETWEEN after NOT"));
+        return std::unexpected(context_.make_current_error(
+            ParserErrorCode::ExpectedToken, "Expected LIKE, IN, or BETWEEN after NOT"
+        ));
     }
 
     return left;
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_additive_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_additive_expression()
 {
     auto left = parse_multiplicative_expression();
     if (!left.has_value()) [[unlikely]] {
@@ -267,7 +280,8 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     return left;
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_multiplicative_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_multiplicative_expression()
 {
     auto left = parse_unary_expression();
     if (!left.has_value()) [[unlikely]] {
@@ -293,7 +307,8 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     return left;
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_unary_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_unary_expression()
 {
     if (context_.check(TokenType::Plus) || context_.check(TokenType::Minus)) {
         const Token op = context_.advance();
@@ -313,9 +328,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     return parse_primary_expression();
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_primary_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_primary_expression()
 {
-
     if (is_literal_token(context_.current().type())) {
         return parse_literal_expression();
     }
@@ -331,7 +346,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
             return std::unexpected(std::move(expression.error()));
         }
 
-        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after expression");
+        auto right_paren = context_.consume(
+            TokenType::RightParen, "Expected ')' after expression"
+        );
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
@@ -339,12 +356,17 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
         return expression;
     }
 
-    return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedExpression, "Expected expression"));
+    return std::unexpected(context_.make_current_error(
+        ParserErrorCode::ExpectedExpression, "Expected expression"
+    ));
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_column_reference_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_column_reference_expression()
 {
-    auto first = context_.consume(TokenType::Identifier, "Expected column name");
+    auto first = context_.consume(
+        TokenType::Identifier, "Expected column name"
+    );
     if (!first.has_value()) [[unlikely]] {
         return std::unexpected(std::move(first.error()));
     }
@@ -355,7 +377,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     if (context_.match(TokenType::Dot)) {
         qualifier = std::move(column);
 
-        auto second = context_.consume(TokenType::Identifier, "Expected column name after '.'");
+        auto second = context_.consume(
+            TokenType::Identifier, "Expected column name after '.'"
+        );
         if (!second.has_value()) [[unlikely]] {
             return std::unexpected(std::move(second.error()));
         }
@@ -369,9 +393,12 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_function_call_or_column_reference()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_function_call_or_column_reference()
 {
-    auto first = context_.consume(TokenType::Identifier, "Expected function or column name");
+    auto first = context_.consume(
+        TokenType::Identifier, "Expected function or column name"
+    );
     if (!first.has_value()) [[unlikely]] {
         return std::unexpected(std::move(first.error()));
     }
@@ -392,7 +419,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
             }
         }
 
-        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after function arguments");
+        auto right_paren = context_.consume(
+            TokenType::RightParen, "Expected ')' after function arguments"
+        );
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
@@ -407,7 +436,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     std::optional<std::string> qualifier;
     if (context_.match(TokenType::Dot)) {
         qualifier = std::move(name);
-        auto second = context_.consume(TokenType::Identifier, "Expected column name after '.'");
+        auto second = context_.consume(
+            TokenType::Identifier, "Expected column name after '.'"
+        );
         if (!second.has_value()) [[unlikely]] {
             return std::unexpected(std::move(second.error()));
         }
@@ -421,14 +452,17 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_literal_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_literal_expression()
 {
     if (context_.check(TokenType::LeftBracket)) {
         return parse_vector_expression();
     }
 
     if (!is_literal_token(context_.current().type())) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::ExpectedLiteral, "Expected literal"));
+        return std::unexpected(context_.make_current_error(
+            ParserErrorCode::ExpectedLiteral, "Expected literal"
+        ));
     }
 
     const Token token = context_.advance();
@@ -439,11 +473,14 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressionWorker::parse_vector_expression()
+std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+ParserExpressionWorker::parse_vector_expression()
 {
     const Token left_bracket = context_.advance();
     if (context_.check(TokenType::RightBracket)) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(ParserErrorCode::EmptyList, "Expected at least one vector element"));
+        return std::unexpected(context_.make_current_error(
+            ParserErrorCode::EmptyList, "Expected at least one vector element"
+        ));
     }
 
     ast::VectorExpression::ElementList elements;
@@ -459,7 +496,9 @@ std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError> ParserExpressio
         }
     }
 
-    auto right_bracket = context_.consume(TokenType::RightBracket, "Expected ']' after vector literal");
+    auto right_bracket = context_.consume(
+        TokenType::RightBracket, "Expected ']' after vector literal"
+    );
     if (!right_bracket.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_bracket.error()));
     }

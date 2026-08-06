@@ -9,12 +9,15 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief DROP COLLECTION 语句节点
- * @details 示例：DROP COLLECTION [IF EXISTS] <collection_name>
  */
 class DropCollectionStatement final : public StatementNode
 {
 public:
-    DropCollectionStatement(std::string collection_name, bool if_exists, AstNodeLocation location) noexcept;
+    DropCollectionStatement(
+        std::string collection_name,
+        bool if_exists,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -23,12 +26,6 @@ public:
      */
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
-
-    /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
 
     /**
      * @brief 获取集合名称

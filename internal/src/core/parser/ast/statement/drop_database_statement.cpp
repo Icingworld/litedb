@@ -21,11 +21,6 @@ AstNodeKind DropDatabaseStatement::kind() const noexcept
     return AstNodeKind::DropDatabase;
 }
 
-void DropDatabaseStatement::accept(AstNodeVisitor & visitor) const
-{
-    visitor.visit(*this);
-}
-
 const std::string & DropDatabaseStatement::database_name() const noexcept
 {
     return database_name_;

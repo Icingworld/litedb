@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-#include "core/parser/ast/schema.hpp"
+#include "core/parser/ast/column_definition.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 
 namespace litedb::core::parser::ast
@@ -11,15 +11,14 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief CREATE COLLECTION 语句节点
- * @details 示例：CREATE COLLECTION [IF NOT EXISTS] <collection_name> (<column_definition> [, <column_definition>])
  */
 class CreateCollectionStatement final : public StatementNode
 {
 public:
     CreateCollectionStatement(
-        std::string collection,
+        std::string collection_name,
         bool if_not_exists,
-        ColumnDefinitionList columns,
+        ColumnDefinitionSyntaxList columns,
         std::optional<std::string> comment,
         AstNodeLocation location
     ) noexcept;
@@ -33,17 +32,11 @@ public:
     AstNodeKind kind() const noexcept override;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
-
-    /**
      * @brief 获取集合名称
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection() const noexcept;
+    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 是否存在
@@ -57,7 +50,7 @@ public:
      * @return 列定义列表
      */
     [[nodiscard]]
-    const ColumnDefinitionList & columns() const noexcept;
+    const ColumnDefinitionSyntaxList & columns() const noexcept;
 
     /**
      * @brief 获取集合注释
@@ -67,10 +60,10 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    std::string collection_;        ///< 集合名称
-    bool if_not_exists_;            ///< 是否不存在
-    ColumnDefinitionList columns_;              ///< 列定义列表
-    std::optional<std::string> comment_;         ///< 集合注释
+    std::string collection_name_;               ///< 集合名称
+    bool if_not_exists_;                        ///< 是否不存在
+    ColumnDefinitionSyntaxList columns_;        ///< 列定义列表
+    std::optional<std::string> comment_;        ///< 集合注释
 };
 
 } // namespace litedb::core::parser::ast

@@ -12,7 +12,6 @@ namespace litedb::core::parser::ast
 
 /**
  * @brief INSERT 语句节点
- * @details 示例：INSERT INTO <collection_name> (<column_name> [, <column_name>]) VALUES (<value> [, <value>])
  */
 class InsertStatement final : public StatementNode
 {
@@ -21,7 +20,12 @@ public:
     using ValueList = std::vector<std::unique_ptr<ExpressionNode>>;
 
 public:
-    InsertStatement(std::string collection, ColumnList columns, ValueList values, AstNodeLocation location) noexcept;
+    InsertStatement(
+        std::string collection_name,
+        ColumnList columns,
+        ValueList values,
+        AstNodeLocation location
+    ) noexcept;
 
 public:
     /**
@@ -32,17 +36,11 @@ public:
     AstNodeKind kind() const noexcept override;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(AstNodeVisitor & visitor) const override;
-
-    /**
      * @brief 获取集合名称
      * @return 集合名称
      */
     [[nodiscard]]
-    const std::string & collection() const noexcept;
+    const std::string & collection_name() const noexcept;
 
     /**
      * @brief 获取列列表
@@ -59,7 +57,7 @@ public:
     const ValueList & values() const noexcept;
 
 private:
-    std::string collection_;        ///< 集合名称
+    std::string collection_name_;   ///< 集合名称
     ColumnList columns_;            ///< 列列表
     ValueList values_;              ///< 值列表
 };

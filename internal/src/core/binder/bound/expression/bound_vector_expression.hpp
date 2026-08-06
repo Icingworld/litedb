@@ -9,16 +9,13 @@ namespace litedb::core::binder::bound
 {
 
 /**
- * @brief 向量表达式节点
- * @details 示例：[value1, value2, ...]
+ * @brief 绑定向量表达式
  */
 class BoundVectorExpression final : public BoundExpression
 {
 public:
     BoundVectorExpression(
-        std::vector<std::unique_ptr<BoundExpression>> elements,
-        common::LogicalType type,
-        parser::ast::AstNodeLocation location
+        std::vector<std::unique_ptr<BoundExpression>> elements
     );
 
 public:
@@ -27,20 +24,15 @@ public:
      * @return 元素列表
      */
     [[nodiscard]]
-    const std::vector<std::unique_ptr<BoundExpression>> & elements() const noexcept;
+    const std::vector<std::unique_ptr<BoundExpression>> &
+    elements() const noexcept;
 
     /**
-     * @brief 接受访问器访问
-     * @param visitor 访问器
-     */
-    void accept(BoundExpressionVisitor & visitor) const override;
-
-    /**
-     * @brief 深拷贝表达式
-     * @return 表达式副本
+     * @brief 移出向量元素
+     * @return 向量元素所有权
      */
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> clone() const override;
+    std::vector<std::unique_ptr<BoundExpression>> take_elements() noexcept;
 
 private:
     std::vector<std::unique_ptr<BoundExpression>> elements_;      ///< 元素列表
