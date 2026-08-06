@@ -136,6 +136,8 @@ public:
 private:
     friend class Session;
 
+    class PlanExecutionDispatcher;
+
     explicit DatabaseEngine(DatabaseConfig config);
 
     /**

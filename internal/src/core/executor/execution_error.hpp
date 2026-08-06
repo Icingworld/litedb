@@ -26,9 +26,11 @@ using ExecutionError = error::Error;
 
 namespace litedb::core::error
 {
+
 template <>
 struct ErrorTraits<executor::ExecutionErrorCode>
 {
     static constexpr ErrorCategory category = ErrorCategory::Execution;
 };
+
 } // namespace litedb::core::error

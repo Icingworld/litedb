@@ -1,5 +1,10 @@
 set(EXECUTOR_SOURCES
     executor.cpp
+    execution_detail.cpp
+    command_executor.cpp
+    mutation_executor.cpp
+    query_executor.cpp
+    physical_operator_executor.cpp
 )
 
 add_library(litedb_executor ${EXECUTOR_SOURCES})

@@ -3,51 +3,26 @@
 #include <expected>
 
 #include "core/executor/execution_context.hpp"
-#include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
-
-namespace litedb::core::physical_planner::plan
-{
-
-class DescribeCollectionPlan;
-class DeletePlan;
-class InsertPlan;
-class QueryPlan;
-class ShowCollectionsPlan;
-class ShowDatabasesPlan;
-class ShowIndexesPlan;
-class ShowVectorIndexesPlan;
-class UpdatePlan;
-class UsePlan;
-
-} // namespace litedb::core::physical_planner::plan
+#include "core/executor/execution_error.hpp"
+#include "core/physical_planner/plan/command/describe_collection_plan.hpp"
+#include "core/physical_planner/plan/command/show_collections_plan.hpp"
+#include "core/physical_planner/plan/command/show_databases_plan.hpp"
+#include "core/physical_planner/plan/command/show_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
+#include "core/physical_planner/plan/command/use_plan.hpp"
 
 namespace litedb::core::executor
 {
 
-class Executor
+class CommandExecutor final
 {
 public:
-    explicit Executor(ExecutionContext context) noexcept;
+    explicit CommandExecutor(ExecutionContext & context) noexcept;
 
     [[nodiscard]]
     std::expected<ExecutionResult, ExecutionError> execute(
         const physical_planner::plan::DescribeCollectionPlan & plan
-    );
-
-    [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(
-        const physical_planner::plan::DeletePlan & plan
-    );
-
-    [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(
-        const physical_planner::plan::InsertPlan & plan
-    );
-
-    [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(
-        const physical_planner::plan::QueryPlan & plan
     );
 
     [[nodiscard]]
@@ -72,16 +47,11 @@ public:
 
     [[nodiscard]]
     std::expected<ExecutionResult, ExecutionError> execute(
-        const physical_planner::plan::UpdatePlan & plan
-    );
-
-    [[nodiscard]]
-    std::expected<ExecutionResult, ExecutionError> execute(
         const physical_planner::plan::UsePlan & plan
     );
 
 private:
-    ExecutionContext context_;
+    ExecutionContext & context_;
 };
 
 } // namespace litedb::core::executor

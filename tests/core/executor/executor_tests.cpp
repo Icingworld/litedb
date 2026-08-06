@@ -1,6 +1,8 @@
 #include "core/executor/executor.hpp"
 #include "core/binder/binder.hpp"
 #include "core/binder/binder_context.hpp"
+#include "core/binder/bound/bound_assignment.hpp"
+#include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/binder/session_context.hpp"
 #include "core/function/builtin/builtin_functions.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
@@ -15,8 +17,10 @@
 #include "core/physical_planner/operator/physical_vector_search_operator.hpp"
 #include "core/physical_planner/physical_planner.hpp"
 #include "core/physical_planner/operator/physical_seq_scan_operator.hpp"
+#include "core/physical_planner/plan/dispatcher/physical_plan_dispatcher.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 #include "core/physical_planner/plan/query/query_plan.hpp"
+#include "core/physical_planner/plan/mutation/update_plan.hpp"
 #include "core/physical_planner/plan/command/create_collection_plan.hpp"
 #include "core/physical_planner/plan/command/create_database_plan.hpp"
 #include "core/physical_planner/plan/command/create_index_plan.hpp"
@@ -123,6 +127,64 @@ struct Fixture
     }
 };
 
+class ExecutorPlanDispatcher final
+    : private physical_planner::plan::ConstPhysicalPlanDispatcher<
+          ExecutorPlanDispatcher,
+          std::expected<executor::ExecutionResult, executor::ExecutionError>
+      >
+{
+    using Result = std::expected<executor::ExecutionResult, executor::ExecutionError>;
+    using Dispatcher = physical_planner::plan::ConstPhysicalPlanDispatcher<
+        ExecutorPlanDispatcher,
+        Result
+    >;
+
+    friend Dispatcher;
+
+public:
+    explicit ExecutorPlanDispatcher(executor::Executor & executor) noexcept
+        : executor_(executor)
+    {
+    }
+
+    [[nodiscard]]
+    Result dispatch(const physical_planner::plan::PhysicalPlan & plan)
+    {
+        return dispatch_plan(plan);
+    }
+
+private:
+    Result visit_use_plan(const physical_planner::plan::UsePlan & plan) { return executor_.execute(plan); }
+    Result visit_create_database_plan(const physical_planner::plan::CreateDatabasePlan &) { return outside_executor(); }
+    Result visit_create_collection_plan(const physical_planner::plan::CreateCollectionPlan &) { return outside_executor(); }
+    Result visit_create_index_plan(const physical_planner::plan::CreateIndexPlan &) { return outside_executor(); }
+    Result visit_create_vector_index_plan(const physical_planner::plan::CreateVectorIndexPlan &) { return outside_executor(); }
+    Result visit_drop_database_plan(const physical_planner::plan::DropDatabasePlan &) { return outside_executor(); }
+    Result visit_drop_collection_plan(const physical_planner::plan::DropCollectionPlan &) { return outside_executor(); }
+    Result visit_drop_index_plan(const physical_planner::plan::DropIndexPlan &) { return outside_executor(); }
+    Result visit_drop_vector_index_plan(const physical_planner::plan::DropVectorIndexPlan &) { return outside_executor(); }
+    Result visit_show_databases_plan(const physical_planner::plan::ShowDatabasesPlan & plan) { return executor_.execute(plan); }
+    Result visit_show_collections_plan(const physical_planner::plan::ShowCollectionsPlan & plan) { return executor_.execute(plan); }
+    Result visit_show_indexes_plan(const physical_planner::plan::ShowIndexesPlan & plan) { return executor_.execute(plan); }
+    Result visit_show_vector_indexes_plan(const physical_planner::plan::ShowVectorIndexesPlan & plan) { return executor_.execute(plan); }
+    Result visit_describe_collection_plan(const physical_planner::plan::DescribeCollectionPlan & plan) { return executor_.execute(plan); }
+    Result visit_insert_plan(const physical_planner::plan::InsertPlan & plan) { return executor_.execute(plan); }
+    Result visit_update_plan(const physical_planner::plan::UpdatePlan & plan) { return executor_.execute(plan); }
+    Result visit_delete_plan(const physical_planner::plan::DeletePlan & plan) { return executor_.execute(plan); }
+    Result visit_query_plan(const physical_planner::plan::QueryPlan & plan) { return executor_.execute(plan); }
+
+    static Result outside_executor()
+    {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::InvalidPlan,
+            "DDL is outside Executor tests",
+        });
+    }
+
+private:
+    executor::Executor & executor_;
+};
+
 std::unique_ptr<parser::ast::StatementNode> parse_ok(std::string_view sql)
 {
     parser::Parser parser {std::string(sql)};
@@ -162,13 +224,15 @@ executor::ExecutionResult execute_ok(Fixture & fixture, std::string_view sql)
 {
     auto plan = plan_ok(fixture, sql);
     executor::Executor executor {
-        fixture.catalog.view(),
-        fixture.storage,
-        fixture.index_engine,
-        fixture.vector_index_engine,
-        *fixture.transaction_manager,
+        executor::ExecutionContext {
+            .catalog = fixture.catalog.view(),
+            .storage = fixture.storage,
+            .index_engine = fixture.index_engine,
+            .vector_index_engine = fixture.vector_index_engine,
+            .transaction_manager = *fixture.transaction_manager,
+        },
     };
-    auto result = executor.execute(*plan);
+    auto result = ExecutorPlanDispatcher {executor}.dispatch(*plan);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message());
     }
@@ -179,13 +243,15 @@ executor::ExecutionError execute_error(Fixture & fixture, std::string_view sql)
 {
     auto plan = plan_ok(fixture, sql);
     executor::Executor executor {
-        fixture.catalog.view(),
-        fixture.storage,
-        fixture.index_engine,
-        fixture.vector_index_engine,
-        *fixture.transaction_manager,
+        executor::ExecutionContext {
+            .catalog = fixture.catalog.view(),
+            .storage = fixture.storage,
+            .index_engine = fixture.index_engine,
+            .vector_index_engine = fixture.vector_index_engine,
+            .transaction_manager = *fixture.transaction_manager,
+        },
     };
-    auto result = executor.execute(*plan);
+    auto result = ExecutorPlanDispatcher {executor}.dispatch(*plan);
     require(!result.has_value(), "statement should fail to execute");
     return std::move(result.error());
 }
@@ -253,14 +319,17 @@ void insert_user(Fixture & fixture, std::int64_t id, std::int32_t age)
             "executor fixture INSERT mismatch");
 }
 
-void test_invalid_use_and_missing_scan()
+void test_invalid_use()
 {
     Fixture fixture;
     executor::Executor executor {
-        fixture.catalog.view(),
-        fixture.storage,
-        fixture.index_engine,
-        fixture.vector_index_engine,
+        executor::ExecutionContext {
+            .catalog = fixture.catalog.view(),
+            .storage = fixture.storage,
+            .index_engine = fixture.index_engine,
+            .vector_index_engine = fixture.vector_index_engine,
+            .transaction_manager = *fixture.transaction_manager,
+        },
     };
 
     physical_planner::plan::UsePlan use {99};
@@ -268,27 +337,45 @@ void test_invalid_use_and_missing_scan()
     require(!use_result.has_value(), "USE of missing database should fail");
     require(use_result.error().is(executor::ExecutionErrorCode::InvalidPlan), "USE error code mismatch");
 
+}
+
+void test_command_metadata_reads()
+{
+    Fixture fixture;
+    auto databases = execute_ok(fixture, "SHOW DATABASES;");
+    require(databases.kind == executor::ExecutionResultKind::RowSet,
+            "SHOW DATABASES result kind mismatch");
+    require(!databases.rows.empty(), "SHOW DATABASES should list the fixture database");
+
+    auto collections = execute_ok(fixture, "SHOW COLLECTIONS;");
+    require(collections.kind == executor::ExecutionResultKind::RowSet,
+            "SHOW COLLECTIONS result kind mismatch");
+    require(!collections.rows.empty(), "SHOW COLLECTIONS should list the fixture collection");
+
+    auto description = execute_ok(fixture, "DESCRIBE users;");
+    require(description.kind == executor::ExecutionResultKind::RowSet,
+            "DESCRIBE result kind mismatch");
+    require(description.rows.size() == 3, "DESCRIBE should return all fixture columns");
+}
+
+void test_missing_scan()
+{
+    Fixture fixture;
+    executor::Executor executor {
+        executor::ExecutionContext {
+            .catalog = fixture.catalog.view(),
+            .storage = fixture.storage,
+            .index_engine = fixture.index_engine,
+            .vector_index_engine = fixture.vector_index_engine,
+            .transaction_manager = *fixture.transaction_manager,
+        },
+    };
     auto query = std::make_unique<physical_planner::plan::QueryPlan>(
         std::make_unique<physical_planner::op::SeqScanOperator>(42)
     );
     auto query_result = executor.execute(*query);
     require(!query_result.has_value(), "scan of missing collection should fail");
     require(query_result.error().is(executor::ExecutionErrorCode::SchemaError), "scan error code mismatch");
-}
-
-void test_ddl_is_delegated()
-{
-    Fixture fixture;
-    executor::Executor executor {
-        fixture.catalog.view(),
-        fixture.storage,
-        fixture.index_engine,
-        fixture.vector_index_engine,
-    };
-    physical_planner::plan::CreateDatabasePlan create {std::string {"demo"}};
-    auto result = executor.execute(create);
-    require(!result.has_value(), "DDL should not execute in Executor");
-    require(result.error().is(executor::ExecutionErrorCode::UnsupportedStatement), "DDL delegation error mismatch");
 }
 
 void test_dml_sort_and_scalar_index_execution()
@@ -310,6 +397,53 @@ void test_dml_sort_and_scalar_index_execution()
     require(updated.affected_rows == 1, "executor indexed UPDATE affected rows mismatch");
     auto deleted = execute_ok(fixture, "DELETE FROM users WHERE age < 18;");
     require(deleted.affected_rows == 1, "executor indexed DELETE affected rows mismatch");
+}
+
+void test_mutation_error_aborts_and_releases_writer()
+{
+    Fixture fixture;
+    insert_user(fixture, 1, 18);
+
+    const auto * age = fixture.catalog.view().find_column(fixture.collection_id, "age");
+    require(age != nullptr, "executor mutation error test age column missing");
+    std::vector<binder::bound::BoundAssignment> assignments;
+    assignments.push_back(binder::bound::BoundAssignment {
+        .column_id = age->id(),
+        .value = std::make_unique<binder::bound::BoundColumnRefExpression>(
+            age->id(),
+            999,
+            common::LogicalType {common::LogicalTypeId::Integer, std::nullopt}
+        ),
+    });
+    physical_planner::plan::UpdatePlan update {
+        fixture.collection_id,
+        std::move(assignments),
+        std::make_unique<physical_planner::op::SeqScanOperator>(fixture.collection_id),
+    };
+
+    executor::Executor executor {
+        executor::ExecutionContext {
+            .catalog = fixture.catalog.view(),
+            .storage = fixture.storage,
+            .index_engine = fixture.index_engine,
+            .vector_index_engine = fixture.vector_index_engine,
+            .transaction_manager = *fixture.transaction_manager,
+        },
+    };
+    auto result = executor.execute(update);
+    require(!result.has_value(), "invalid assignment should fail inside mutation transaction");
+    require(result.error().is(executor::ExecutionErrorCode::EvaluationError),
+            "mutation evaluation error code mismatch");
+
+    auto selected = execute_ok(fixture, "SELECT age FROM users;");
+    require(selected.rows.size() == 1, "aborted update should retain the source row");
+    require(value_as<std::int32_t>(selected.rows[0].values[0]) == 18,
+            "aborted update should not modify the source row");
+
+    auto transaction = fixture.transaction_manager->begin_implicit();
+    require(transaction.has_value(), "writer lock should be released after mutation abort");
+    require(fixture.transaction_manager->abort(*transaction).has_value(),
+            "writer lock probe abort failed");
 }
 
 void test_vector_search_execution()
@@ -348,11 +482,13 @@ void test_index_descriptor_mismatch_is_invalid_plan()
         )
     );
     executor::Executor executor {
-        fixture.catalog.view(),
-        fixture.storage,
-        fixture.index_engine,
-        fixture.vector_index_engine,
-        *fixture.transaction_manager,
+        executor::ExecutionContext {
+            .catalog = fixture.catalog.view(),
+            .storage = fixture.storage,
+            .index_engine = fixture.index_engine,
+            .vector_index_engine = fixture.vector_index_engine,
+            .transaction_manager = *fixture.transaction_manager,
+        },
     };
     auto result = executor.execute(*query);
     require(!result.has_value(), "mismatched physical index descriptor should fail");
@@ -365,11 +501,26 @@ void test_index_descriptor_mismatch_is_invalid_plan()
 int main()
 {
     try {
-        test_invalid_use_and_missing_scan();
-        test_ddl_is_delegated();
+#if defined(LITEDB_EXECUTOR_COMMAND_TESTS)
+        test_invalid_use();
+        test_command_metadata_reads();
+#elif defined(LITEDB_EXECUTOR_OPERATOR_TESTS)
+        test_missing_scan();
+        test_index_descriptor_mismatch_is_invalid_plan();
+#elif defined(LITEDB_EXECUTOR_QUERY_TESTS)
+        test_vector_search_execution();
+#elif defined(LITEDB_EXECUTOR_MUTATION_TESTS)
         test_dml_sort_and_scalar_index_execution();
+        test_mutation_error_aborts_and_releases_writer();
+#else
+        test_invalid_use();
+        test_command_metadata_reads();
+        test_missing_scan();
+        test_dml_sort_and_scalar_index_execution();
+        test_mutation_error_aborts_and_releases_writer();
         test_vector_search_execution();
         test_index_descriptor_mismatch_is_invalid_plan();
+#endif
     } catch (const std::exception & error) {
         std::cerr << "executor_tests failed: " << error.what() << '\n';
         return 1;

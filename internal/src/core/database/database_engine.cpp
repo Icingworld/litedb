@@ -9,6 +9,7 @@
 
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/executor/executor.hpp"
+#include "core/physical_planner/plan/dispatcher/physical_plan_dispatcher.hpp"
 #include "core/physical_planner/plan/command/create_collection_plan.hpp"
 #include "core/physical_planner/plan/command/create_database_plan.hpp"
 #include "core/physical_planner/plan/command/create_index_plan.hpp"
@@ -131,6 +132,129 @@ bool writes_wal(physical_planner::plan::PhysicalPlanKind kind) noexcept
 }
 
 } // namespace
+
+class DatabaseEngine::PlanExecutionDispatcher final
+    : private physical_planner::plan::ConstPhysicalPlanDispatcher<
+          DatabaseEngine::PlanExecutionDispatcher,
+          std::expected<executor::ExecutionResult, executor::ExecutionError>
+      >
+{
+    using Result = std::expected<executor::ExecutionResult, executor::ExecutionError>;
+    using Dispatcher = physical_planner::plan::ConstPhysicalPlanDispatcher<
+        PlanExecutionDispatcher,
+        Result
+    >;
+
+    friend Dispatcher;
+
+public:
+    PlanExecutionDispatcher(DatabaseEngine & database, executor::Executor & executor) noexcept
+        : database_(database)
+        , executor_(executor)
+    {
+    }
+
+    [[nodiscard]]
+    Result dispatch(const physical_planner::plan::PhysicalPlan & plan)
+    {
+        return dispatch_plan(plan);
+    }
+
+private:
+    Result visit_use_plan(const physical_planner::plan::UsePlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_create_database_plan(const physical_planner::plan::CreateDatabasePlan & plan)
+    {
+        return database_.execute_create_database(plan);
+    }
+
+    Result visit_create_collection_plan(const physical_planner::plan::CreateCollectionPlan & plan)
+    {
+        return database_.execute_create_collection(plan);
+    }
+
+    Result visit_create_index_plan(const physical_planner::plan::CreateIndexPlan & plan)
+    {
+        return database_.execute_create_index(plan);
+    }
+
+    Result visit_create_vector_index_plan(const physical_planner::plan::CreateVectorIndexPlan & plan)
+    {
+        return database_.execute_create_vector_index(plan);
+    }
+
+    Result visit_drop_database_plan(const physical_planner::plan::DropDatabasePlan & plan)
+    {
+        return database_.execute_drop_database(plan);
+    }
+
+    Result visit_drop_collection_plan(const physical_planner::plan::DropCollectionPlan & plan)
+    {
+        return database_.execute_drop_collection(plan);
+    }
+
+    Result visit_drop_index_plan(const physical_planner::plan::DropIndexPlan & plan)
+    {
+        return database_.execute_drop_index(plan);
+    }
+
+    Result visit_drop_vector_index_plan(const physical_planner::plan::DropVectorIndexPlan & plan)
+    {
+        return database_.execute_drop_vector_index(plan);
+    }
+
+    Result visit_show_databases_plan(const physical_planner::plan::ShowDatabasesPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_show_collections_plan(const physical_planner::plan::ShowCollectionsPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_show_indexes_plan(const physical_planner::plan::ShowIndexesPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_show_vector_indexes_plan(const physical_planner::plan::ShowVectorIndexesPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_describe_collection_plan(const physical_planner::plan::DescribeCollectionPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_insert_plan(const physical_planner::plan::InsertPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_update_plan(const physical_planner::plan::UpdatePlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_delete_plan(const physical_planner::plan::DeletePlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+    Result visit_query_plan(const physical_planner::plan::QueryPlan & plan)
+    {
+        return executor_.execute(plan);
+    }
+
+private:
+    DatabaseEngine & database_;
+    executor::Executor & executor_;
+};
 
 DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     : data_directory_(std::move(config.data_dir))
@@ -321,38 +445,30 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     const physical_planner::plan::PhysicalPlan & plan
 )
 {
-    using physical_planner::plan::PhysicalPlanKind;
-
-    if (transaction_manager_ != nullptr && transaction_manager_->recovery_required()) {
+    if (transaction_manager_ == nullptr) {
+        return std::unexpected(executor::ExecutionError {
+            executor::ExecutionErrorCode::TransactionError,
+            "Database transaction manager is not initialized",
+        });
+    }
+    if (transaction_manager_->recovery_required()) {
         return std::unexpected(executor::ExecutionError {
             executor::ExecutionErrorCode::TransactionError,
             "Database requires WAL recovery before accepting more requests",
         });
     }
 
-    auto executed = [&]() -> std::expected<executor::ExecutionResult, executor::ExecutionError> {
-        switch (plan.kind()) {
-        case PhysicalPlanKind::CreateDatabase:
-            return execute_create_database(static_cast<const physical_planner::plan::CreateDatabasePlan &>(plan));
-        case PhysicalPlanKind::CreateCollection:
-            return execute_create_collection(static_cast<const physical_planner::plan::CreateCollectionPlan &>(plan));
-        case PhysicalPlanKind::CreateIndex:
-            return execute_create_index(static_cast<const physical_planner::plan::CreateIndexPlan &>(plan));
-        case PhysicalPlanKind::CreateVectorIndex:
-            return execute_create_vector_index(static_cast<const physical_planner::plan::CreateVectorIndexPlan &>(plan));
-        case PhysicalPlanKind::DropDatabase:
-            return execute_drop_database(static_cast<const physical_planner::plan::DropDatabasePlan &>(plan));
-        case PhysicalPlanKind::DropCollection:
-            return execute_drop_collection(static_cast<const physical_planner::plan::DropCollectionPlan &>(plan));
-        case PhysicalPlanKind::DropIndex:
-            return execute_drop_index(static_cast<const physical_planner::plan::DropIndexPlan &>(plan));
-        case PhysicalPlanKind::DropVectorIndex:
-            return execute_drop_vector_index(static_cast<const physical_planner::plan::DropVectorIndexPlan &>(plan));
-        default:
-            executor::Executor executor {meta(), storage_, index_engine_, vector_index_engine_, *transaction_manager_};
-            return executor.execute(plan);
-        }
-    }();
+    executor::Executor executor {
+        executor::ExecutionContext {
+            .catalog = meta(),
+            .storage = storage_,
+            .index_engine = index_engine_,
+            .vector_index_engine = vector_index_engine_,
+            .transaction_manager = *transaction_manager_,
+        },
+    };
+    PlanExecutionDispatcher dispatcher {*this, executor};
+    auto executed = dispatcher.dispatch(plan);
     if (executed && writes_wal(plan.kind())) {
         maybe_run_automatic_checkpoint();
     }
