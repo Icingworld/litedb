@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -23,12 +24,14 @@ struct BinaryDecodeLimits
 };
 
 /**
- * @brief 小端二进制写入器
+ * @brief 二进制写入器
+ * @tparam E 字节序（std::endian::little 或 std::endian::big）
  */
-class BinaryWriter
+template <std::endian E>
+class BasicBinaryWriter
 {
 public:
-    explicit BinaryWriter(ByteWriter & writer) noexcept;
+    explicit BasicBinaryWriter(ByteWriter & writer) noexcept;
 
 public:
     [[nodiscard]] std::expected<void, IoError> write_u8(std::uint8_t value);
@@ -50,12 +53,14 @@ private:
 };
 
 /**
- * @brief 有界小端二进制读取器
+ * @brief 有界二进制读取器
+ * @tparam E 字节序（std::endian::little 或 std::endian::big）
  */
-class BinaryReader
+template <std::endian E>
+class BasicBinaryReader
 {
 public:
-    BinaryReader(ByteReader & reader, BinaryDecodeLimits limits) noexcept;
+    BasicBinaryReader(ByteReader & reader, BinaryDecodeLimits limits) noexcept;
 
 public:
     [[nodiscard]] std::expected<std::uint8_t, IoError> read_u8();
@@ -80,5 +85,25 @@ private:
     BinaryDecodeLimits limits_;             ///< 解码限制
     std::uint64_t remaining_bytes_;         ///< 剩余读取预算
 };
+
+using LittleEndianBinaryWriter = BasicBinaryWriter<std::endian::little>;
+using LittleEndianBinaryReader = BasicBinaryReader<std::endian::little>;
+using BigEndianBinaryWriter = BasicBinaryWriter<std::endian::big>;
+using BigEndianBinaryReader = BasicBinaryReader<std::endian::big>;
+
+/**
+ * @brief 小端二进制写入器（兼容别名）
+ */
+using BinaryWriter = LittleEndianBinaryWriter;
+
+/**
+ * @brief 有界小端二进制读取器（兼容别名）
+ */
+using BinaryReader = LittleEndianBinaryReader;
+
+extern template class BasicBinaryWriter<std::endian::little>;
+extern template class BasicBinaryWriter<std::endian::big>;
+extern template class BasicBinaryReader<std::endian::little>;
+extern template class BasicBinaryReader<std::endian::big>;
 
 } // namespace litedb::core::io
