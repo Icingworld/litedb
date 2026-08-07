@@ -84,7 +84,7 @@ asio::awaitable<void> run_client_flow(Server & server, bool & passed, std::strin
         require(!bad_sql.has_value(), "bad SQL should fail");
         require(bad_sql.error().is(ClientErrorCode::ServerError), "bad SQL error code mismatch");
 
-        client.close();
+        require((co_await client.close()).has_value(), "client close should succeed");
         server.close();
         passed = true;
     } catch (const std::exception & exception) {
@@ -107,7 +107,7 @@ asio::awaitable<void> run_persistent_write_flow(Server & server, bool & passed, 
         require((co_await client.execute_sql("CREATE COLLECTION users (id BIGINT NOT NULL, name VARCHAR(64));")).has_value(), "CREATE COLLECTION should succeed");
         require((co_await client.execute_sql("INSERT INTO users VALUES (1, 'persisted');")).has_value(), "INSERT should succeed");
 
-        client.close();
+        require((co_await client.close()).has_value(), "client close should succeed");
         server.close();
         passed = true;
     } catch (const std::exception & exception) {
@@ -131,7 +131,7 @@ asio::awaitable<void> run_persistent_read_flow(Server & server, bool & passed, s
         require(selected->rows.size() == 1, "persistent server row count mismatch");
         require(get_value<std::string>(selected->rows[0].values[0]) == "persisted", "persistent server value mismatch");
 
-        client.close();
+        require((co_await client.close()).has_value(), "client close should succeed");
         server.close();
         passed = true;
     } catch (const std::exception & exception) {

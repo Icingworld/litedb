@@ -2,7 +2,7 @@
 
 [EN](../../README.md) | 简体中文
 
-`litedb` 是一款使用现代 C++（C++26）编写的轻量级实验性数据库。v0.8.0 提供了可重启的单机数据库流水线：持久化 collection 存储、持久化 B+Tree 标量索引、持久化 HNSW 向量索引、基于规则的查询规划、带 checksum 的 redo WAL，以及 crash-consistent 的隐式语句级事务。每条 DML 或 DDL 语句作为一个 `Serializable` 事务提交，元数据、存储与索引共享同一条 Commit Record。
+`litedb` 是一款使用现代 C++（C++26）编写的轻量级实验性数据库。v0.8.1 提供了可重启的单机数据库流水线：持久化 collection 存储、持久化 B+Tree 标量索引、持久化 HNSW 向量索引、基于规则的查询规划、带 checksum 的 redo WAL，以及 crash-consistent 的隐式语句级事务。每条 DML 或 DDL 语句作为一个 `Serializable` 事务提交，元数据、存储与索引共享同一条 Commit Record。
 
 本项目仍处于早期阶段 —— 它是一个面向学习与实验的数据库内核，而非可直接用于生产的存储引擎。
 

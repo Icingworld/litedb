@@ -232,6 +232,62 @@ void test_exact_primitive_encoding()
     require(reader.remaining_bytes() == 0, "reader budget mismatch");
 }
 
+void test_big_endian_primitive_encoding()
+{
+    io::BufferByteWriter bytes {128};
+    io::BigEndianBinaryWriter writer {bytes};
+    require_ok(writer.write_u16(0x1234), "write u16 failed");
+    require_ok(writer.write_u32(0x89abcdef), "write u32 failed");
+    require_ok(writer.write_u64(0x0123456789abcdefULL), "write u64 failed");
+    require_ok(writer.write_i32(std::numeric_limits<std::int32_t>::min()), "write i32 failed");
+    require_ok(writer.write_i64(-2), "write i64 failed");
+    require_ok(writer.write_f32(1.0F), "write f32 failed");
+    require_ok(writer.write_f64(1.0), "write f64 failed");
+
+    const std::vector<std::byte> expected {
+        std::byte {0x12}, std::byte {0x34},
+        std::byte {0x89}, std::byte {0xab}, std::byte {0xcd}, std::byte {0xef},
+        std::byte {0x01}, std::byte {0x23}, std::byte {0x45}, std::byte {0x67},
+        std::byte {0x89}, std::byte {0xab}, std::byte {0xcd}, std::byte {0xef},
+        std::byte {0x80}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0xff}, std::byte {0xff}, std::byte {0xff}, std::byte {0xff},
+        std::byte {0xff}, std::byte {0xff}, std::byte {0xff}, std::byte {0xfe},
+        std::byte {0x3f}, std::byte {0x80}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x3f}, std::byte {0xf0}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+    };
+    require(bytes.bytes() == expected, "primitive big-endian bytes mismatch");
+
+    io::BufferByteReader input {bytes.bytes()};
+    io::BigEndianBinaryReader reader {input, limits(bytes.bytes().size())};
+    require(require_value(reader.read_u16(), "read u16 failed") == 0x1234, "u16 mismatch");
+    require(require_value(reader.read_u32(), "read u32 failed") == 0x89abcdef, "u32 mismatch");
+    require(require_value(reader.read_u64(), "read u64 failed") == 0x0123456789abcdefULL, "u64 mismatch");
+    require(require_value(reader.read_i32(), "read i32 failed") == std::numeric_limits<std::int32_t>::min(), "i32 mismatch");
+    require(require_value(reader.read_i64(), "read i64 failed") == -2, "i64 mismatch");
+    require(require_value(reader.read_f32(), "read f32 failed") == 1.0F, "f32 mismatch");
+    require(require_value(reader.read_f64(), "read f64 failed") == 1.0, "f64 mismatch");
+    require(reader.remaining_bytes() == 0, "reader budget mismatch");
+}
+
+void test_big_endian_string_round_trip()
+{
+    io::BufferByteWriter bytes {64};
+    io::BigEndianBinaryWriter writer {bytes};
+    require_ok(writer.write_string("hello"), "write string failed");
+
+    const std::vector<std::byte> expected {
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x05},
+        std::byte {0x68}, std::byte {0x65}, std::byte {0x6c}, std::byte {0x6c}, std::byte {0x6f},
+    };
+    require(bytes.bytes() == expected, "big-endian string bytes mismatch");
+
+    io::BufferByteReader input {bytes.bytes()};
+    io::BigEndianBinaryReader reader {input, limits(bytes.bytes().size())};
+    require(require_value(reader.read_string(), "read string failed") == "hello", "string mismatch");
+    require(reader.remaining_bytes() == 0, "reader budget mismatch");
+}
+
 void test_single_call_per_primitive()
 {
     CountingWriter bytes;
@@ -327,6 +383,8 @@ int main()
 {
     try {
         test_exact_primitive_encoding();
+        test_big_endian_primitive_encoding();
+        test_big_endian_string_round_trip();
         test_single_call_per_primitive();
         test_string_and_resource_limits();
         test_truncated_data();

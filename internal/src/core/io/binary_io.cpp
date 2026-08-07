@@ -18,23 +18,27 @@ namespace
 template <std::integral T>
 using UnsignedInteger = std::make_unsigned_t<T>;
 
-template <std::integral T>
-std::array<std::byte, sizeof(T)> encode_little_endian(T value) noexcept
+template <std::endian E, std::integral T>
+std::array<std::byte, sizeof(T)> encode_integer(T value) noexcept
 {
     std::array<std::byte, sizeof(T)> bytes {};
     auto data = static_cast<UnsignedInteger<T>>(value);
+    constexpr std::size_t last = sizeof(T) - 1;
     for (std::size_t index = 0; index < bytes.size(); ++index) {
-        bytes[index] = static_cast<std::byte>((data >> (index * 8U)) & 0xffU);
+        const std::size_t position = (E == std::endian::little) ? index : last - index;
+        bytes[position] = static_cast<std::byte>((data >> (index * 8U)) & 0xffU);
     }
     return bytes;
 }
 
-template <std::integral T>
-T decode_little_endian(const std::array<std::byte, sizeof(T)> & bytes) noexcept
+template <std::endian E, std::integral T>
+T decode_integer(const std::array<std::byte, sizeof(T)> & bytes) noexcept
 {
     UnsignedInteger<T> value = 0;
+    constexpr std::size_t last = sizeof(T) - 1;
     for (std::size_t index = 0; index < bytes.size(); ++index) {
-        value |= static_cast<UnsignedInteger<T>>(std::to_integer<std::uint8_t>(bytes[index]))
+        const std::size_t position = (E == std::endian::little) ? index : last - index;
+        value |= static_cast<UnsignedInteger<T>>(std::to_integer<std::uint8_t>(bytes[position]))
                  << (index * 8U);
     }
     if constexpr (std::is_signed_v<T>) {
@@ -45,59 +49,69 @@ T decode_little_endian(const std::array<std::byte, sizeof(T)> & bytes) noexcept
 
 } // namespace
 
-BinaryWriter::BinaryWriter(ByteWriter & writer) noexcept
+template <std::endian E>
+BasicBinaryWriter<E>::BasicBinaryWriter(ByteWriter & writer) noexcept
     : writer_(writer)
 {
 }
 
-std::expected<void, IoError> BinaryWriter::write_u8(std::uint8_t value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_u8(std::uint8_t value)
 {
     return write_bytes(&value, sizeof(value));
 }
 
-std::expected<void, IoError> BinaryWriter::write_u16(std::uint16_t value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_u16(std::uint16_t value)
 {
-    const auto bytes = encode_little_endian(value);
+    const auto bytes = encode_integer<E>(value);
     return write_bytes(bytes.data(), bytes.size());
 }
 
-std::expected<void, IoError> BinaryWriter::write_u32(std::uint32_t value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_u32(std::uint32_t value)
 {
-    const auto bytes = encode_little_endian(value);
+    const auto bytes = encode_integer<E>(value);
     return write_bytes(bytes.data(), bytes.size());
 }
 
-std::expected<void, IoError> BinaryWriter::write_u64(std::uint64_t value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_u64(std::uint64_t value)
 {
-    const auto bytes = encode_little_endian(value);
+    const auto bytes = encode_integer<E>(value);
     return write_bytes(bytes.data(), bytes.size());
 }
 
-std::expected<void, IoError> BinaryWriter::write_i32(std::int32_t value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_i32(std::int32_t value)
 {
-    const auto bytes = encode_little_endian(value);
+    const auto bytes = encode_integer<E>(value);
     return write_bytes(bytes.data(), bytes.size());
 }
 
-std::expected<void, IoError> BinaryWriter::write_i64(std::int64_t value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_i64(std::int64_t value)
 {
-    const auto bytes = encode_little_endian(value);
+    const auto bytes = encode_integer<E>(value);
     return write_bytes(bytes.data(), bytes.size());
 }
 
-std::expected<void, IoError> BinaryWriter::write_f32(float value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_f32(float value)
 {
     static_assert(std::numeric_limits<float>::is_iec559);
     return write_u32(std::bit_cast<std::uint32_t>(value));
 }
 
-std::expected<void, IoError> BinaryWriter::write_f64(double value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_f64(double value)
 {
     static_assert(std::numeric_limits<double>::is_iec559);
     return write_u64(std::bit_cast<std::uint64_t>(value));
 }
 
-std::expected<void, IoError> BinaryWriter::write_string(std::string_view value)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_string(std::string_view value)
 {
     if (value.size() > std::numeric_limits<std::uint32_t>::max()) {
         return std::unexpected(make_io_error(
@@ -114,7 +128,8 @@ std::expected<void, IoError> BinaryWriter::write_string(std::string_view value)
     return write_bytes(value.data(), value.size());
 }
 
-std::expected<void, IoError> BinaryWriter::write_bytes(const void * data, std::size_t size)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryWriter<E>::write_bytes(const void * data, std::size_t size)
 {
     return writer_.write_bytes(std::span {
         static_cast<const std::byte *>(data),
@@ -122,14 +137,16 @@ std::expected<void, IoError> BinaryWriter::write_bytes(const void * data, std::s
     });
 }
 
-BinaryReader::BinaryReader(ByteReader & reader, BinaryDecodeLimits limits) noexcept
+template <std::endian E>
+BasicBinaryReader<E>::BasicBinaryReader(ByteReader & reader, BinaryDecodeLimits limits) noexcept
     : reader_(reader)
     , limits_(limits)
     , remaining_bytes_(limits.max_total_bytes)
 {
 }
 
-std::expected<std::uint8_t, IoError> BinaryReader::read_u8()
+template <std::endian E>
+std::expected<std::uint8_t, IoError> BasicBinaryReader<E>::read_u8()
 {
     std::uint8_t value = 0;
     if (auto read = read_exact_bytes(&value, sizeof(value)); !read) {
@@ -138,52 +155,58 @@ std::expected<std::uint8_t, IoError> BinaryReader::read_u8()
     return value;
 }
 
-std::expected<std::uint16_t, IoError> BinaryReader::read_u16()
+template <std::endian E>
+std::expected<std::uint16_t, IoError> BasicBinaryReader<E>::read_u16()
 {
     std::array<std::byte, sizeof(std::uint16_t)> bytes {};
     if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) {
         return std::unexpected(std::move(read.error()));
     }
-    return decode_little_endian<std::uint16_t>(bytes);
+    return decode_integer<E, std::uint16_t>(bytes);
 }
 
-std::expected<std::uint32_t, IoError> BinaryReader::read_u32()
+template <std::endian E>
+std::expected<std::uint32_t, IoError> BasicBinaryReader<E>::read_u32()
 {
     std::array<std::byte, sizeof(std::uint32_t)> bytes {};
     if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) {
         return std::unexpected(std::move(read.error()));
     }
-    return decode_little_endian<std::uint32_t>(bytes);
+    return decode_integer<E, std::uint32_t>(bytes);
 }
 
-std::expected<std::uint64_t, IoError> BinaryReader::read_u64()
+template <std::endian E>
+std::expected<std::uint64_t, IoError> BasicBinaryReader<E>::read_u64()
 {
     std::array<std::byte, sizeof(std::uint64_t)> bytes {};
     if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) {
         return std::unexpected(std::move(read.error()));
     }
-    return decode_little_endian<std::uint64_t>(bytes);
+    return decode_integer<E, std::uint64_t>(bytes);
 }
 
-std::expected<std::int32_t, IoError> BinaryReader::read_i32()
+template <std::endian E>
+std::expected<std::int32_t, IoError> BasicBinaryReader<E>::read_i32()
 {
     std::array<std::byte, sizeof(std::int32_t)> bytes {};
     if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) {
         return std::unexpected(std::move(read.error()));
     }
-    return decode_little_endian<std::int32_t>(bytes);
+    return decode_integer<E, std::int32_t>(bytes);
 }
 
-std::expected<std::int64_t, IoError> BinaryReader::read_i64()
+template <std::endian E>
+std::expected<std::int64_t, IoError> BasicBinaryReader<E>::read_i64()
 {
     std::array<std::byte, sizeof(std::int64_t)> bytes {};
     if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) {
         return std::unexpected(std::move(read.error()));
     }
-    return decode_little_endian<std::int64_t>(bytes);
+    return decode_integer<E, std::int64_t>(bytes);
 }
 
-std::expected<float, IoError> BinaryReader::read_f32()
+template <std::endian E>
+std::expected<float, IoError> BasicBinaryReader<E>::read_f32()
 {
     auto bits = read_u32();
     if (!bits) {
@@ -193,7 +216,8 @@ std::expected<float, IoError> BinaryReader::read_f32()
     return std::bit_cast<float>(*bits);
 }
 
-std::expected<double, IoError> BinaryReader::read_f64()
+template <std::endian E>
+std::expected<double, IoError> BasicBinaryReader<E>::read_f64()
 {
     auto bits = read_u64();
     if (!bits) {
@@ -203,7 +227,8 @@ std::expected<double, IoError> BinaryReader::read_f64()
     return std::bit_cast<double>(*bits);
 }
 
-std::expected<std::string, IoError> BinaryReader::read_string()
+template <std::endian E>
+std::expected<std::string, IoError> BasicBinaryReader<E>::read_string()
 {
     auto size = read_u32();
     if (!size) {
@@ -231,12 +256,14 @@ std::expected<std::string, IoError> BinaryReader::read_string()
     return value;
 }
 
-std::uint64_t BinaryReader::remaining_bytes() const noexcept
+template <std::endian E>
+std::uint64_t BasicBinaryReader<E>::remaining_bytes() const noexcept
 {
     return remaining_bytes_;
 }
 
-std::expected<void, IoError> BinaryReader::read_exact_bytes(void * data, std::size_t size)
+template <std::endian E>
+std::expected<void, IoError> BasicBinaryReader<E>::read_exact_bytes(void * data, std::size_t size)
 {
     if (size > remaining_bytes_) {
         return std::unexpected(make_io_error(
@@ -254,5 +281,10 @@ std::expected<void, IoError> BinaryReader::read_exact_bytes(void * data, std::si
     remaining_bytes_ -= size;
     return {};
 }
+
+template class BasicBinaryWriter<std::endian::little>;
+template class BasicBinaryWriter<std::endian::big>;
+template class BasicBinaryReader<std::endian::little>;
+template class BasicBinaryReader<std::endian::big>;
 
 } // namespace litedb::core::io
