@@ -59,30 +59,43 @@ struct ExecuteSqlRequest
  */
 enum class ResultKind : std::uint8_t
 {
-    Command = 0,
-    RowSet = 1,
-    UseDatabase = 2,
+    Command = 0,                                                        ///< 命令
+    RowSet = 1,                                                         ///< 行集
+    UseDatabase = 2,                                                    ///< 切换数据库
 };
 
+/**
+ * @brief 逻辑类型 ID
+ */
 enum class LogicalTypeId : std::uint8_t
 {
-    Null = 0,
-    Boolean = 1,
-    Integer = 2,
-    BigInt = 3,
-    Float = 4,
-    Double = 5,
-    Varchar = 6,
-    Vector = 7,
+    Null = 0,                                                           ///< 空
+    Boolean = 1,                                                        ///< 布尔
+    Integer = 2,                                                        ///< 整数
+    BigInt = 3,                                                         ///< 大整数
+    Float = 4,                                                          ///< 浮点数
+    Double = 5,                                                         ///< 双精度浮点数
+    Varchar = 6,                                                        ///< 字符串
+    Vector = 7,                                                         ///< 向量
 };
 
+/**
+ * @brief 逻辑类型
+ */
 struct LogicalType
 {
-    LogicalTypeId id {LogicalTypeId::Null};
-    std::optional<std::uint64_t> parameter;
+    LogicalTypeId id {LogicalTypeId::Null};                            ///< 类型 ID
+    std::optional<std::uint64_t> parameter;                            ///< 参数
 };
 
+/**
+ * @brief 向量值
+ */
 using VectorValue = std::vector<double>;
+
+/**
+ * @brief 值数据
+ */
 using ValueData = std::variant<
     std::monostate,
     bool,
@@ -94,29 +107,41 @@ using ValueData = std::variant<
     VectorValue
 >;
 
+/**
+ * @brief 值
+ */
 struct Value
 {
-    ValueData data;
+    ValueData data;                                                ///< 值数据
 };
 
+/**
+ * @brief 列
+ */
 struct Column
 {
-    std::string name;
-    LogicalType type;
+    std::string name;                                                ///< 列名
+    LogicalType type;                                                ///< 列类型
 };
 
+/**
+ * @brief 行
+ */
 struct Row
 {
-    std::vector<Value> values;
+    std::vector<Value> values;                                        ///< 值列表
 };
 
+/**
+ * @brief 执行 SQL 响应
+ */
 struct ExecuteSqlResponse
 {
-    ResultKind kind {ResultKind::Command};
-    std::uint64_t affected_rows {0};
-    std::optional<std::string> selected_database_name;
-    std::vector<Column> columns;
-    std::vector<Row> rows;
+    ResultKind kind {ResultKind::Command};                            ///< 结果类型
+    std::uint64_t affected_rows {0};                                  ///< 受影响的行数
+    std::optional<std::string> selected_database_name;                ///< 选定的数据库名称
+    std::vector<Column> columns;                                      ///< 列列表
+    std::vector<Row> rows;                                            ///< 行列表
 };
 
 /**
@@ -134,7 +159,8 @@ struct ErrorResponse
  * @return 编码后的字节序列
  */
 [[nodiscard]]
-std::expected<std::vector<std::byte>, ProtocolError> encode_hello_request(
+std::expected<std::vector<std::byte>, ProtocolError>
+encode_hello_request(
     const HelloRequest & request
 );
 
@@ -145,7 +171,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_hello_request(
  * @return 解码后的连接请求
  */
 [[nodiscard]]
-std::expected<HelloRequest, ProtocolError> decode_hello_request(
+std::expected<HelloRequest, ProtocolError>
+decode_hello_request(
     std::span<const std::byte> payload,
     ProtocolDecodeLimits limits = {}
 );
@@ -156,7 +183,8 @@ std::expected<HelloRequest, ProtocolError> decode_hello_request(
  * @return 编码后的字节序列
  */
 [[nodiscard]]
-std::expected<std::vector<std::byte>, ProtocolError> encode_hello_response(
+std::expected<std::vector<std::byte>, ProtocolError>
+encode_hello_response(
     const HelloResponse & response
 );
 
@@ -167,7 +195,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_hello_response(
  * @return 解码后的连接响应
  */
 [[nodiscard]]
-std::expected<HelloResponse, ProtocolError> decode_hello_response(
+std::expected<HelloResponse, ProtocolError>
+decode_hello_response(
     std::span<const std::byte> payload,
     ProtocolDecodeLimits limits = {}
 );
@@ -178,7 +207,8 @@ std::expected<HelloResponse, ProtocolError> decode_hello_response(
  * @return 编码后的字节序列
  */
 [[nodiscard]]
-std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_request(
+std::expected<std::vector<std::byte>, ProtocolError>
+encode_execute_sql_request(
     std::string_view sql
 );
 
@@ -189,7 +219,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_request(
  * @return 解码后的执行 SQL 请求
  */
 [[nodiscard]]
-std::expected<ExecuteSqlRequest, ProtocolError> decode_execute_sql_request(
+std::expected<ExecuteSqlRequest, ProtocolError>
+decode_execute_sql_request(
     std::span<const std::byte> payload,
     ProtocolDecodeLimits limits = {}
 );
@@ -200,7 +231,8 @@ std::expected<ExecuteSqlRequest, ProtocolError> decode_execute_sql_request(
  * @return 编码后的字节序列
  */
 [[nodiscard]]
-std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response(
+std::expected<std::vector<std::byte>, ProtocolError>
+encode_execute_sql_response(
     const ExecuteSqlResponse & result
 );
 
@@ -211,7 +243,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
  * @return 解码后的执行 SQL 响应
  */
 [[nodiscard]]
-std::expected<ExecuteSqlResponse, ProtocolError> decode_execute_sql_response(
+std::expected<ExecuteSqlResponse, ProtocolError>
+decode_execute_sql_response(
     std::span<const std::byte> payload,
     ProtocolDecodeLimits limits = {}
 );
@@ -222,7 +255,8 @@ std::expected<ExecuteSqlResponse, ProtocolError> decode_execute_sql_response(
  * @return 编码后的字节序列
  */
 [[nodiscard]]
-std::expected<std::vector<std::byte>, ProtocolError> encode_error_response(
+std::expected<std::vector<std::byte>, ProtocolError>
+encode_error_response(
     const ErrorResponse & response
 );
 
@@ -233,7 +267,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_error_response(
  * @return 解码后的错误响应
  */
 [[nodiscard]]
-std::expected<ErrorResponse, ProtocolError> decode_error_response(
+std::expected<ErrorResponse, ProtocolError>
+decode_error_response(
     std::span<const std::byte> payload,
     ProtocolDecodeLimits limits = {}
 );
