@@ -43,8 +43,8 @@ public:
     std::unique_ptr<BoundExpression> take_operand() noexcept;
 
 private:
-    common::UnaryOperator op_;                      ///< 一元操作符
-    std::unique_ptr<BoundExpression> operand_;      ///< 操作数
+    common::UnaryOperator op_;                      // 一元操作符
+    std::unique_ptr<BoundExpression> operand_;      // 操作数
 };
 
 } // namespace litedb::core::binder::bound

@@ -22,14 +22,14 @@ namespace litedb::core::index::btree_index
  */
 enum class BTreePageStoreErrorCode : std::uint8_t
 {
-    FileSystemError,      ///< 文件系统操作失败
-    InvalidFormat,        ///< 文件格式或文件级元数据无效
-    UnsupportedVersion,   ///< 不支持的文件格式版本
-    ChecksumMismatch,     ///< 文件或页面校验和不匹配
-    CorruptedPage,        ///< 节点页损坏
-    PageNotFound,         ///< 页 ID 不存在
-    InvalidPage,          ///< 待写入页面状态无效
-    PageCodecError,       ///< 单页编解码失败
+    FileSystemError,      // 文件系统操作失败
+    InvalidFormat,        // 文件格式或文件级元数据无效
+    UnsupportedVersion,   // 不支持的文件格式版本
+    ChecksumMismatch,     // 文件或页面校验和不匹配
+    CorruptedPage,        // 节点页损坏
+    PageNotFound,         // 页 ID 不存在
+    InvalidPage,          // 待写入页面状态无效
+    PageCodecError,       // 单页编解码失败
 };
 
 /**
@@ -37,7 +37,7 @@ enum class BTreePageStoreErrorCode : std::uint8_t
  */
 struct BTreePageStoreErrorContext
 {
-    std::optional<BTreePageCodecErrorCode> codec_code;    ///< 页编解码错误码
+    std::optional<BTreePageCodecErrorCode> codec_code;    // 页编解码错误码
 };
 
 using BTreePageStoreError = error::Error;
@@ -291,15 +291,15 @@ private:
     std::uint64_t page_offset(BTreePageId page_id) const noexcept;
 
 private:
-    std::filesystem::path path_;                        ///< 索引文件路径
-    common::IndexId index_id_;                          ///< 索引 ID
-    common::LogicalType key_type_;                      ///< 索引键类型
-    mutable filesystem::FileHandle file_;               ///< 文件句柄
-    BTreePageId root_page_id_ {InvalidBTreePageId};     ///< 根页 ID
-    BTreePageId next_page_id_ {1};                      ///< 下一个待分配页 ID
-    std::uint64_t entry_count_ {0};                     ///< 索引条目数量
-    BTreePageId free_page_head_ {InvalidBTreePageId};   ///< 空闲页链表头
-    std::uint64_t free_page_count_ {0};                 ///< 空闲页数量
+    std::filesystem::path path_;                        // 索引文件路径
+    common::IndexId index_id_;                          // 索引 ID
+    common::LogicalType key_type_;                      // 索引键类型
+    mutable filesystem::FileHandle file_;               // 文件句柄
+    BTreePageId root_page_id_ {InvalidBTreePageId};     // 根页 ID
+    BTreePageId next_page_id_ {1};                      // 下一个待分配页 ID
+    std::uint64_t entry_count_ {0};                     // 索引条目数量
+    BTreePageId free_page_head_ {InvalidBTreePageId};   // 空闲页链表头
+    std::uint64_t free_page_count_ {0};                 // 空闲页数量
 };
 
 } // namespace litedb::core::index::btree_index

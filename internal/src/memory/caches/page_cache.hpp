@@ -59,10 +59,10 @@ public:
 
 private:
     std::mutex mutex_;
-    std::array<SpanList, MAX_PAGE_COUNT> span_lists_;               ///< 页数到空闲页段链表的映射
-    std::unordered_map<std::size_t, SpanNode *> free_span_map_;     ///< 页号到空闲页段节点的映射
-    std::map<std::size_t, SpanNode *> busy_span_map_;               ///< 页号到繁忙页段节点的映射
-    std::vector<void *> align_pointers_;                            ///< 原始内存地址列表
+    std::array<SpanList, MAX_PAGE_COUNT> span_lists_;               // 页数到空闲页段链表的映射
+    std::unordered_map<std::size_t, SpanNode *> free_span_map_;     // 页号到空闲页段节点的映射
+    std::map<std::size_t, SpanNode *> busy_span_map_;               // 页号到繁忙页段节点的映射
+    std::vector<void *> align_pointers_;                            // 原始内存地址列表
 };
 
 } // namespace litedb::memory

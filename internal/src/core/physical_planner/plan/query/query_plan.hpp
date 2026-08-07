@@ -25,7 +25,7 @@ public:
     const op::PhysicalOperator & root_operator() const noexcept;
 
 private:
-    std::unique_ptr<op::PhysicalOperator> root_operator_;   ///< 根算子
+    std::unique_ptr<op::PhysicalOperator> root_operator_;   // 根算子
 };
 
 } // namespace litedb::core::physical_planner::plan

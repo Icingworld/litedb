@@ -117,10 +117,10 @@ private:
     bool match(char expected);
 
 private:
-    std::string input_;                     ///< 原始字符串
-    std::size_t position_;                  ///< 当前字符位置
-    TokenLocation location_;                ///< 当前 Token 位置
-    std::optional<Token> peeked_token_;     ///< 预读的 Token
+    std::string input_;                     // 原始字符串
+    std::size_t position_;                  // 当前字符位置
+    TokenLocation location_;                // 当前 Token 位置
+    std::optional<Token> peeked_token_;     // 预读的 Token
 };
 
 } // namespace litedb::core::parser

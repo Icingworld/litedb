@@ -60,10 +60,10 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    std::string collection_name_;               ///< 集合名称
-    bool if_not_exists_;                        ///< 是否不存在
-    ColumnDefinitionSyntaxList columns_;        ///< 列定义列表
-    std::optional<std::string> comment_;        ///< 集合注释
+    std::string collection_name_;               // 集合名称
+    bool if_not_exists_;                        // 是否不存在
+    ColumnDefinitionSyntaxList columns_;        // 列定义列表
+    std::optional<std::string> comment_;        // 集合注释
 };
 
 } // namespace litedb::core::parser::ast

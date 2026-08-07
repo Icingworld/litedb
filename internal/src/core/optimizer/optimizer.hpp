@@ -13,10 +13,10 @@ namespace litedb::core::optimizer
  */
 struct OptimizerOptions
 {
-    bool enabled {true};                           ///< 是否启用优化器
-    bool enable_constant_folding {true};           ///< 是否启用常量折叠
-    bool enable_boolean_simplification {true};     ///< 是否启用布尔简化
-    bool enable_filter_elimination {true};         ///< 是否启用过滤消除
+    bool enabled {true};                           // 是否启用优化器
+    bool enable_constant_folding {true};           // 是否启用常量折叠
+    bool enable_boolean_simplification {true};     // 是否启用布尔简化
+    bool enable_filter_elimination {true};         // 是否启用过滤消除
 };
 
 /**
@@ -299,7 +299,7 @@ private:
     );
 
 private:
-    OptimizerOptions options_;                       ///< 优化器选项
+    OptimizerOptions options_;                       // 优化器选项
 };
 
 } // namespace litedb::core::optimizer

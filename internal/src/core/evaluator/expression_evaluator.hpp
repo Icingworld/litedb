@@ -160,7 +160,7 @@ private:
     );
 
 private:
-    EvaluationContext context_;     ///< 评估上下文
+    EvaluationContext context_;     // 评估上下文
 };
 
 } // namespace litedb::core::evaluator

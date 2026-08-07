@@ -117,7 +117,7 @@ public:
     std::expected<void, error::Error> sync_directory(const std::filesystem::path & path);
 
 private:
-    std::unique_ptr<backend::FileSystemBackend> backend_;   ///< 文件系统后端
+    std::unique_ptr<backend::FileSystemBackend> backend_;   // 文件系统后端
 };
 
 } // namespace litedb::core::filesystem

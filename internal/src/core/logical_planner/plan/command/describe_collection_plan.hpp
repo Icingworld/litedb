@@ -25,7 +25,7 @@ public:
     common::CollectionId collection_id() const noexcept;
 
 private:
-    common::CollectionId collection_id_;    ///< 集合 ID
+    common::CollectionId collection_id_;    // 集合 ID
 };
 
 } // namespace litedb::core::logical_planner::plan

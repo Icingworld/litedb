@@ -8,24 +8,24 @@ namespace litedb::core::binder::bound
  */
 enum class BoundStatementKind
 {
-    Use,                    ///< USE
-    Select,                 ///< SELECT
-    Insert,                 ///< INSERT
-    Update,                 ///< UPDATE
-    Delete,                 ///< DELETE
-    CreateDatabase,         ///< CREATE DATABASE
-    CreateCollection,       ///< CREATE COLLECTION
-    CreateIndex,            ///< CREATE INDEX
-    CreateVectorIndex,      ///< CREATE VINDEX
-    DropDatabase,           ///< DROP DATABASE
-    DropCollection,         ///< DROP COLLECTION
-    DropIndex,              ///< DROP INDEX
-    DropVectorIndex,        ///< DROP VINDEX
-    ShowDatabases,          ///< SHOW DATABASES
-    ShowCollections,        ///< SHOW COLLECTIONS
-    ShowIndexes,            ///< SHOW INDEXES
-    ShowVectorIndexes,      ///< SHOW VINDEXES
-    DescribeCollection,     ///< DESCRIBE COLLECTION
+    Use,                    // USE
+    Select,                 // SELECT
+    Insert,                 // INSERT
+    Update,                 // UPDATE
+    Delete,                 // DELETE
+    CreateDatabase,         // CREATE DATABASE
+    CreateCollection,       // CREATE COLLECTION
+    CreateIndex,            // CREATE INDEX
+    CreateVectorIndex,      // CREATE VINDEX
+    DropDatabase,           // DROP DATABASE
+    DropCollection,         // DROP COLLECTION
+    DropIndex,              // DROP INDEX
+    DropVectorIndex,        // DROP VINDEX
+    ShowDatabases,          // SHOW DATABASES
+    ShowCollections,        // SHOW COLLECTIONS
+    ShowIndexes,            // SHOW INDEXES
+    ShowVectorIndexes,      // SHOW VINDEXES
+    DescribeCollection,     // DESCRIBE COLLECTION
 };
 
 /**
@@ -56,7 +56,7 @@ public:
     BoundStatementKind kind() const noexcept;
 
 private:
-    BoundStatementKind kind_;                   ///< 绑定语句类型
+    BoundStatementKind kind_;                   // 绑定语句类型
 };
 
 } // namespace litedb::core::binder::bound

@@ -63,9 +63,9 @@ public:
     std::unique_ptr<BoundExpression> take_upper() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> expression_;   ///< 表达式
-    std::unique_ptr<BoundExpression> lower_;        ///< 下界
-    std::unique_ptr<BoundExpression> upper_;        ///< 上界
+    std::unique_ptr<BoundExpression> expression_;   // 表达式
+    std::unique_ptr<BoundExpression> lower_;        // 下界
+    std::unique_ptr<BoundExpression> upper_;        // 上界
 };
 
 } // namespace litedb::core::binder::bound

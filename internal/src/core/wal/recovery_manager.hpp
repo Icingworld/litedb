@@ -15,9 +15,9 @@ namespace litedb::core::wal
  */
 struct RecoveryResult
 {
-    transaction::TransactionId maximum_transaction_id {transaction::InvalidTransactionId}; ///< 最大事务 ID
-    std::size_t committed_transactions {0};  ///< 已提交事务数
-    std::size_t replayed_writes {0};         ///< 重放写入数
+    transaction::TransactionId maximum_transaction_id {transaction::InvalidTransactionId}; // 最大事务 ID
+    std::size_t committed_transactions {0};  // 已提交事务数
+    std::size_t replayed_writes {0};         // 重放写入数
 };
 
 /**

@@ -16,14 +16,14 @@ namespace litedb::core::transaction
  */
 enum class TransactionErrorCode : std::uint8_t
 {
-    InvalidState,              ///< 无效状态
-    RollbackOnly,              ///< 回滚状态
-    PrepareFailed,             ///< 准备失败
-    WalError,                  ///< WAL 写入失败
-    ApplyFailed,               ///< 应用失败
-    CommittedApplyFailed,      ///< 提交应用失败
-    RecoveryRequired,          ///< 需要恢复
-    FaultInjected,             ///< 测试故障注入
+    InvalidState,              // 无效状态
+    RollbackOnly,              // 回滚状态
+    PrepareFailed,             // 准备失败
+    WalError,                  // WAL 写入失败
+    ApplyFailed,               // 应用失败
+    CommittedApplyFailed,      // 提交应用失败
+    RecoveryRequired,          // 需要恢复
+    FaultInjected,             // 测试故障注入
 };
 
 /**

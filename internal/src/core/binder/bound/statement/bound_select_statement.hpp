@@ -93,12 +93,12 @@ public:
     std::vector<BoundOrderByItem> take_order_by() noexcept;
 
 private:
-    common::CollectionId collection_id_;                            ///< 集合 ID
-    std::vector<BoundProjectionItem> projections_;                  ///< 选择列表
-    std::unique_ptr<BoundExpression> where_;                        ///< 条件表达式
-    std::vector<BoundOrderByItem> order_by_;                        ///< 排序列表
-    std::optional<std::size_t> limit_;                              ///< 限制
-    std::optional<std::size_t> offset_;                             ///< 偏移
+    common::CollectionId collection_id_;                            // 集合 ID
+    std::vector<BoundProjectionItem> projections_;                  // 选择列表
+    std::unique_ptr<BoundExpression> where_;                        // 条件表达式
+    std::vector<BoundOrderByItem> order_by_;                        // 排序列表
+    std::optional<std::size_t> limit_;                              // 限制
+    std::optional<std::size_t> offset_;                             // 偏移
 };
 
 } // namespace litedb::core::binder::bound

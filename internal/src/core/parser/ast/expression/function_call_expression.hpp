@@ -47,8 +47,8 @@ public:
     const ArgumentList & arguments() const noexcept;
 
 private:
-    std::string name_;          ///< 函数名称
-    ArgumentList arguments_;    ///< 参数列表
+    std::string name_;          // 函数名称
+    ArgumentList arguments_;    // 参数列表
 };
 
 } // namespace litedb::core::parser::ast

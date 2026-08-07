@@ -35,7 +35,7 @@ private:
     explicit ScalarIndexKey(common::Value value);
 
 private:
-    common::Value value_;       ///< 值
+    common::Value value_;       // 值
 };
 
 /**

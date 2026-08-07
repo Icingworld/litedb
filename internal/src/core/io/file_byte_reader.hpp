@@ -33,8 +33,8 @@ public:
     std::uint64_t offset() const noexcept;
 
 private:
-    filesystem::FileHandle * file_;     ///< 文件句柄
-    std::uint64_t offset_;              ///< 文件偏移
+    filesystem::FileHandle * file_;     // 文件句柄
+    std::uint64_t offset_;              // 文件偏移
 };
 
 } // namespace litedb::core::io

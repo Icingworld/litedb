@@ -46,8 +46,8 @@ public:
     const ValueList & values() const noexcept;
 
 private:
-    std::unique_ptr<ExpressionNode> expression_;    ///< 表达式
-    ValueList values_;                              ///< 值列表
+    std::unique_ptr<ExpressionNode> expression_;    // 表达式
+    ValueList values_;                              // 值列表
 };
 
 } // namespace litedb::core::parser::ast

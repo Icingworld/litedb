@@ -11,8 +11,8 @@ namespace litedb::core::parser::ast
  */
 struct AstNodeLocation
 {
-    std::size_t line;       ///< 行号
-    std::size_t column;     ///< 列号
+    std::size_t line;       // 行号
+    std::size_t column;     // 列号
 };
 
 /**
@@ -20,37 +20,37 @@ struct AstNodeLocation
  */
 enum class AstNodeKind : std::uint8_t
 {
-    CreateDatabase,         ///< CREATE DATABASE
-    CreateCollection,       ///< CREATE COLLECTION
-    CreateIndex,            ///< CREATE INDEX
-    CreateVectorIndex,      ///< CREATE VINDEX
-    Delete,                 ///< DELETE
-    DescribeCollection,     ///< DESCRIBE COLLECTION
-    DropDatabase,           ///< DROP DATABASE
-    DropCollection,         ///< DROP COLLECTION
-    DropIndex,              ///< DROP INDEX
-    DropVectorIndex,        ///< DROP VINDEX
-    Insert,                 ///< INSERT
-    Select,                 ///< SELECT
-    ShowDatabases,          ///< SHOW DATABASES
-    ShowCollections,        ///< SHOW COLLECTIONS
-    ShowIndexes,            ///< SHOW INDEXES
-    ShowVectorIndexes,      ///< SHOW VINDEXES
-    Update,                 ///< UPDATE
-    Use,                    ///< USE
+    CreateDatabase,         // CREATE DATABASE
+    CreateCollection,       // CREATE COLLECTION
+    CreateIndex,            // CREATE INDEX
+    CreateVectorIndex,      // CREATE VINDEX
+    Delete,                 // DELETE
+    DescribeCollection,     // DESCRIBE COLLECTION
+    DropDatabase,           // DROP DATABASE
+    DropCollection,         // DROP COLLECTION
+    DropIndex,              // DROP INDEX
+    DropVectorIndex,        // DROP VINDEX
+    Insert,                 // INSERT
+    Select,                 // SELECT
+    ShowDatabases,          // SHOW DATABASES
+    ShowCollections,        // SHOW COLLECTIONS
+    ShowIndexes,            // SHOW INDEXES
+    ShowVectorIndexes,      // SHOW VINDEXES
+    Update,                 // UPDATE
+    Use,                    // USE
 
-    Identifier,             ///< 标识符
-    Wildcard,               ///< *
-    Literal,                ///< 字面量
-    FunctionCall,           ///< 函数调用
-    ColumnReference,        ///< 列引用
-    Vector,                 ///< 向量
-    Binary,                 ///< 二元运算符
-    Unary,                  ///< 一元运算符
-    In,                     ///< IN
-    Between,                ///< BETWEEN
-    Like,                   ///< LIKE
-    Alias,                  ///< AS alias
+    Identifier,             // 标识符
+    Wildcard,               // *
+    Literal,                // 字面量
+    FunctionCall,           // 函数调用
+    ColumnReference,        // 列引用
+    Vector,                 // 向量
+    Binary,                 // 二元运算符
+    Unary,                  // 一元运算符
+    In,                     // IN
+    Between,                // BETWEEN
+    Like,                   // LIKE
+    Alias,                  // AS alias
 };
 
 /**
@@ -89,7 +89,7 @@ public:
     virtual AstNodeKind kind() const noexcept = 0;
 
 private:
-    AstNodeLocation location_;  ///< 节点位置
+    AstNodeLocation location_;  // 节点位置
 };
 
 } // namespace litedb::core::parser::ast

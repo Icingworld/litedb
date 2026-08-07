@@ -53,10 +53,10 @@ public:
     bool unique() const noexcept;
 
 private:
-    common::ColumnId column_id_;                ///< 列 ID
-    std::optional<std::string> index_name_;     ///< 索引名称
-    meta::entry::IndexKind index_kind_;         ///< 索引类型
-    bool unique_;                               ///< 是否唯一
+    common::ColumnId column_id_;                // 列 ID
+    std::optional<std::string> index_name_;     // 索引名称
+    meta::entry::IndexKind index_kind_;         // 索引类型
+    bool unique_;                               // 是否唯一
 };
 
 } // namespace litedb::core::binder::bound

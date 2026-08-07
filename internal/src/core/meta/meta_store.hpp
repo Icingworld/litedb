@@ -36,8 +36,8 @@ public:
     std::expected<void, MetaError> save(const MetaSnapshot & snapshot) const;
 
 private:
-    std::filesystem::path path_;            ///< 元数据文件路径
-    filesystem::FileSystem * filesystem_;   ///< 文件系统
+    std::filesystem::path path_;            // 元数据文件路径
+    filesystem::FileSystem * filesystem_;   // 文件系统
 };
 
 } // namespace litedb::core::meta

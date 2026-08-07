@@ -234,8 +234,8 @@ private:
     }
 
 private:
-    io::BinaryWriter * writer_;           ///< 二进制写入器
-    std::optional<io::IoError> error_;    ///< 错误
+    io::BinaryWriter * writer_;           // 二进制写入器
+    std::optional<io::IoError> error_;    // 错误
 };
 
 /**
@@ -375,8 +375,8 @@ private:
     }
 
 private:
-    io::BinaryReader * reader_;           ///< 二进制读取器
-    std::optional<io::IoError> error_;    ///< 错误
+    io::BinaryReader * reader_;           // 二进制读取器
+    std::optional<io::IoError> error_;    // 错误
 };
 
 /**

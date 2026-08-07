@@ -13,7 +13,7 @@ namespace litedb::core::binder
  */
 struct SessionContext
 {
-    std::optional<common::DatabaseId> current_database_id;    ///< 当前数据库 ID
+    std::optional<common::DatabaseId> current_database_id;    // 当前数据库 ID
 };
 
 } // namespace litedb::core::binder

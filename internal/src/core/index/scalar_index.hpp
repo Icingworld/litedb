@@ -18,7 +18,7 @@ namespace litedb::core::index
  */
 enum class IndexKind
 {
-    BTree = 0,            ///< B+ 树索引
+    BTree = 0,            // B+ 树索引
 };
 
 /**
@@ -26,8 +26,8 @@ enum class IndexKind
  */
 struct IndexBound
 {
-    ScalarIndexKey key;         ///< 键
-    bool inclusive {true};      ///< 是否包含边界
+    ScalarIndexKey key;         // 键
+    bool inclusive {true};      // 是否包含边界
 };
 
 /**
@@ -102,8 +102,8 @@ public:
     const std::optional<IndexBound> & upper() const noexcept;
 
 private:
-    std::optional<IndexBound> lower_;    ///< 下界
-    std::optional<IndexBound> upper_;    ///< 上界
+    std::optional<IndexBound> lower_;    // 下界
+    std::optional<IndexBound> upper_;    // 上界
 };
 
 struct ScalarIndexEntry

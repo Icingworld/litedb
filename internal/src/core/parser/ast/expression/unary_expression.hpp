@@ -43,8 +43,8 @@ public:
     const ExpressionNode & operand() const noexcept;
 
 private:
-    TokenType op_;                                ///< 操作符
-    std::unique_ptr<ExpressionNode> operand_;     ///< 操作数
+    TokenType op_;                                // 操作符
+    std::unique_ptr<ExpressionNode> operand_;     // 操作数
 };
 
 } // namespace litedb::core::parser::ast

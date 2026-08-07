@@ -86,11 +86,11 @@ public:
     const ColumnSchema * find_column(std::string_view column_name) const;
 
 private:
-    common::DatabaseId database_id_;                    ///< 数据库 ID
-    common::CollectionId collection_id_;                ///< 集合 ID
-    std::string collection_name_;                       ///< 集合名称
-    std::vector<ColumnSchema> columns_;                 ///< 列 schema
-    std::optional<std::string> comment_;                ///< 集合注释
+    common::DatabaseId database_id_;                    // 数据库 ID
+    common::CollectionId collection_id_;                // 集合 ID
+    std::string collection_name_;                       // 集合名称
+    std::vector<ColumnSchema> columns_;                 // 列 schema
+    std::optional<std::string> comment_;                // 集合注释
 };
 
 } // namespace litedb::core::schema

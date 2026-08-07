@@ -13,29 +13,29 @@ namespace litedb::core::binder
  */
 enum class BinderErrorCode : std::uint8_t
 {
-    UnsupportedStatement = 0,      ///< 不支持的语句
-    UnsupportedExpression = 1,     ///< 不支持的表达式
-    DatabaseNotSelected = 2,       ///< 数据库未选择
-    DatabaseNotFound = 3,          ///< 数据库不存在
-    CollectionNotFound = 4,        ///< 集合不存在
-    ColumnNotFound = 5,            ///< 列不存在
-    IndexNotFound = 6,             ///< 索引不存在
-    DatabaseAlreadyExists = 7,     ///< 数据库已存在
-    CollectionAlreadyExists = 8,   ///< 集合已存在
-    IndexAlreadyExists = 9,        ///< 索引已存在
-    VectorIndexAlreadyExists = 10, ///< 向量索引已存在
-    DuplicateColumn = 11,          ///< 列已存在
-    AmbiguousAlias = 12,           ///< 别名不明确
-    InvalidQualifier = 13,         ///< 无效的限定符
-    InvalidType = 14,              ///< 无效的类型
-    InvalidValueCount = 15,        ///< 无效的值数量
-    NotNullable = 16,              ///< 不能为 NULL
-    VectorIndexNotFound = 17,      ///< 向量索引不存在
-    InvalidIndexOptions = 18,      ///< 无效的索引选项
-    InvalidLiteral = 19,           ///< 无效的字面量
-    FunctionNotFound = 20,         ///< 函数不存在
-    NoMatchingFunctionOverload = 21, ///< 没有匹配的函数重载
-    AmbiguousFunctionCall = 22,    ///< 函数调用存在歧义
+    UnsupportedStatement = 0,      // 不支持的语句
+    UnsupportedExpression = 1,     // 不支持的表达式
+    DatabaseNotSelected = 2,       // 数据库未选择
+    DatabaseNotFound = 3,          // 数据库不存在
+    CollectionNotFound = 4,        // 集合不存在
+    ColumnNotFound = 5,            // 列不存在
+    IndexNotFound = 6,             // 索引不存在
+    DatabaseAlreadyExists = 7,     // 数据库已存在
+    CollectionAlreadyExists = 8,   // 集合已存在
+    IndexAlreadyExists = 9,        // 索引已存在
+    VectorIndexAlreadyExists = 10, // 向量索引已存在
+    DuplicateColumn = 11,          // 列已存在
+    AmbiguousAlias = 12,           // 别名不明确
+    InvalidQualifier = 13,         // 无效的限定符
+    InvalidType = 14,              // 无效的类型
+    InvalidValueCount = 15,        // 无效的值数量
+    NotNullable = 16,              // 不能为 NULL
+    VectorIndexNotFound = 17,      // 向量索引不存在
+    InvalidIndexOptions = 18,      // 无效的索引选项
+    InvalidLiteral = 19,           // 无效的字面量
+    FunctionNotFound = 20,         // 函数不存在
+    NoMatchingFunctionOverload = 21, // 没有匹配的函数重载
+    AmbiguousFunctionCall = 22,    // 函数调用存在歧义
 };
 
 /**
@@ -43,7 +43,7 @@ enum class BinderErrorCode : std::uint8_t
  */
 struct BinderErrorContext
 {
-    parser::ast::AstNodeLocation location;  ///< AST 中的错误位置
+    parser::ast::AstNodeLocation location;  // AST 中的错误位置
 };
 
 using BinderError = error::Error;

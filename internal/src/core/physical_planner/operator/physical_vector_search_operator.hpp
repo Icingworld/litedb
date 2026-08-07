@@ -81,13 +81,13 @@ public:
     std::size_t required_count() const noexcept;
 
 private:
-    common::CollectionId collection_id_;                                    ///< 集合 ID
-    common::VIndexId index_id_;                                             ///< 向量索引 ID
-    common::ColumnId column_id_;                                            ///< 列 ID
-    meta::entry::VectorDistanceMetric metric_;                              ///< 距离度量
-    std::unique_ptr<binder::bound::BoundExpression> query_vector_;          ///< 查询向量
-    std::unique_ptr<binder::bound::BoundExpression> predicate_;             ///< 可选残差谓词
-    std::size_t required_count_;                                            ///< 所需结果数量
+    common::CollectionId collection_id_;                                    // 集合 ID
+    common::VIndexId index_id_;                                             // 向量索引 ID
+    common::ColumnId column_id_;                                            // 列 ID
+    meta::entry::VectorDistanceMetric metric_;                              // 距离度量
+    std::unique_ptr<binder::bound::BoundExpression> query_vector_;          // 查询向量
+    std::unique_ptr<binder::bound::BoundExpression> predicate_;             // 可选残差谓词
+    std::size_t required_count_;                                            // 所需结果数量
 };
 
 } // namespace litedb::core::physical_planner::op

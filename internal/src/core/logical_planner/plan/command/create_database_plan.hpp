@@ -27,7 +27,7 @@ public:
     const std::optional<std::string> & database_name() const noexcept;
 
 private:
-    std::optional<std::string> database_name_;     ///< 数据库名称
+    std::optional<std::string> database_name_;     // 数据库名称
 };
 
 } // namespace litedb::core::logical_planner::plan

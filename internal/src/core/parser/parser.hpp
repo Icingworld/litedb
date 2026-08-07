@@ -47,7 +47,7 @@ public:
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse();
 
 private:
-    std::unique_ptr<Lexer> lexer_;      ///< 词法分析器
+    std::unique_ptr<Lexer> lexer_;      // 词法分析器
 };
 
 } // namespace litedb::core::parser

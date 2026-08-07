@@ -37,8 +37,8 @@ public:
     std::optional<std::size_t> offset() const noexcept;
 
 private:
-    std::optional<std::size_t> limit_;               ///< 限制
-    std::optional<std::size_t> offset_;              ///< 偏移
+    std::optional<std::size_t> limit_;               // 限制
+    std::optional<std::size_t> offset_;              // 偏移
 };
 
 } // namespace litedb::core::physical_planner::op

@@ -12,11 +12,11 @@ namespace litedb::core::meta::entry
  */
 enum class MetaEntryKind
 {
-    Database,             ///< 数据库
-    Collection,           ///< 集合
-    Column,               ///< 列
-    Index,                ///< 索引
-    VectorIndex,          ///< 向量索引
+    Database,             // 数据库
+    Collection,           // 集合
+    Column,               // 列
+    Index,                // 索引
+    VectorIndex,          // 向量索引
 };
 
 /**
@@ -67,10 +67,10 @@ public:
     const std::string & key() const noexcept;
 
 private:
-    MetaEntryKind kind_;             ///< 元数据项类型
-    common::MetaEntryId id_;         ///< 元数据项 ID
-    std::string name_;               ///< 元数据项名称
-    std::string key_;                ///< 元数据项规范化名称
+    MetaEntryKind kind_;             // 元数据项类型
+    common::MetaEntryId id_;         // 元数据项 ID
+    std::string name_;               // 元数据项名称
+    std::string key_;                // 元数据项规范化名称
 };
 
 } // namespace litedb::core::meta::entry

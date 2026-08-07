@@ -86,14 +86,14 @@ public:
     std::size_t random_seed() const noexcept;
 
 private:
-    common::ColumnId column_id_;                        ///< 列 ID
-    std::optional<std::string> index_name_;             ///< 索引名称
-    meta::entry::VectorIndexKind index_kind_;           ///< 索引类型
-    meta::entry::VectorDistanceMetric metric_;          ///< 距离度量
-    std::size_t max_neighbors_;                         ///< 最大邻居数
-    std::size_t ef_construction_;                       ///< 构建时 EF 值
-    std::size_t ef_search_default_;                     ///< 搜索时默认 EF 值
-    std::size_t random_seed_;                           ///< 随机种子
+    common::ColumnId column_id_;                        // 列 ID
+    std::optional<std::string> index_name_;             // 索引名称
+    meta::entry::VectorIndexKind index_kind_;           // 索引类型
+    meta::entry::VectorDistanceMetric metric_;          // 距离度量
+    std::size_t max_neighbors_;                         // 最大邻居数
+    std::size_t ef_construction_;                       // 构建时 EF 值
+    std::size_t ef_search_default_;                     // 搜索时默认 EF 值
+    std::size_t random_seed_;                           // 随机种子
 };
 
 } // namespace litedb::core::physical_planner::plan

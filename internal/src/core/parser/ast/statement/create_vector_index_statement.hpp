@@ -14,7 +14,7 @@ namespace litedb::core::parser::ast
  */
 enum class CreateVectorIndexMethod
 {
-    Hnsw,                     ///< HNSW
+    Hnsw,                     // HNSW
 };
 
 /**
@@ -22,10 +22,10 @@ enum class CreateVectorIndexMethod
  */
 enum class VectorIndexMetric
 {
-    Default,                  ///< 默认
-    L2,                       ///< L2
-    InnerProduct,             ///< InnerProduct
-    Cosine,                   ///< Cosine
+    Default,                  // 默认
+    L2,                       // L2
+    InnerProduct,             // InnerProduct
+    Cosine,                   // Cosine
 };
 
 /**
@@ -33,11 +33,11 @@ enum class VectorIndexMetric
  */
 struct VectorIndexOptions
 {
-    VectorIndexMetric metric {VectorIndexMetric::Default};   ///< 指标
-    std::optional<std::size_t> max_neighbors;                ///< 最大邻居数
-    std::optional<std::size_t> ef_construction;              ///< 构建时邻居数
-    std::optional<std::size_t> ef_search;                    ///< 搜索时邻居数
-    std::optional<std::size_t> random_seed;                  ///< 随机种子
+    VectorIndexMetric metric {VectorIndexMetric::Default};   // 指标
+    std::optional<std::size_t> max_neighbors;                // 最大邻居数
+    std::optional<std::size_t> ef_construction;              // 构建时邻居数
+    std::optional<std::size_t> ef_search;                    // 搜索时邻居数
+    std::optional<std::size_t> random_seed;                  // 随机种子
 };
 
 /**
@@ -107,12 +107,12 @@ public:
     const VectorIndexOptions & options() const noexcept;
 
 private:
-    std::string index_name_;                      ///< 索引名称
-    std::string collection_name_;                 ///< 集合名称
-    std::string column_name_;                     ///< 列名称
-    bool if_not_exists_;                          ///< 是否不存在
-    CreateVectorIndexMethod method_;              ///< 创建向量索引方法
-    VectorIndexOptions options_;                  ///< 向量索引选项
+    std::string index_name_;                      // 索引名称
+    std::string collection_name_;                 // 集合名称
+    std::string column_name_;                     // 列名称
+    bool if_not_exists_;                          // 是否不存在
+    CreateVectorIndexMethod method_;              // 创建向量索引方法
+    VectorIndexOptions options_;                  // 向量索引选项
 };
 
 } // namespace litedb::core::parser::ast

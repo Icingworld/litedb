@@ -304,8 +304,8 @@ std::expected<std::vector<std::byte>, BTreePageCodecError> encode_entry(
  */
 struct DecodedEntry
 {
-    BTreeEntryKey key;                             ///< 条目键
-    std::optional<BTreePageId> right_child_id;     ///< 右子页 ID
+    BTreeEntryKey key;                             // 条目键
+    std::optional<BTreePageId> right_child_id;     // 右子页 ID
 };
 
 /**

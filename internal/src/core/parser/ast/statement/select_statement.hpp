@@ -16,8 +16,8 @@ namespace litedb::core::parser::ast
  */
 struct OrderByItem
 {
-    std::unique_ptr<ExpressionNode> expression;     ///< 表达式
-    bool ascending {true};                          ///< 是否升序
+    std::unique_ptr<ExpressionNode> expression;     // 表达式
+    bool ascending {true};                          // 是否升序
 };
 
 /**
@@ -91,12 +91,12 @@ public:
     std::optional<std::size_t> offset() const noexcept;
 
 private:
-    SelectList select_list_;                    ///< 选择列表
-    std::string collection_name_;               ///< 集合名称
-    std::unique_ptr<ExpressionNode> where_;     ///< 条件表达式
-    OrderByList order_by_;                      ///< 排序列表
-    std::optional<std::size_t> limit_;          ///< 限制
-    std::optional<std::size_t> offset_;         ///< 偏移
+    SelectList select_list_;                    // 选择列表
+    std::string collection_name_;               // 集合名称
+    std::unique_ptr<ExpressionNode> where_;     // 条件表达式
+    OrderByList order_by_;                      // 排序列表
+    std::optional<std::size_t> limit_;          // 限制
+    std::optional<std::size_t> offset_;         // 偏移
 };
 
 } // namespace litedb::core::parser::ast

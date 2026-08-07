@@ -27,8 +27,8 @@ enum class LogicalTypeId : std::uint8_t
  */
 struct LogicalType
 {
-    LogicalTypeId id;                           ///< 逻辑类型 ID
-    std::optional<std::size_t> parameter;       ///< 逻辑类型参数
+    LogicalTypeId id;                           // 逻辑类型 ID
+    std::optional<std::size_t> parameter;       // 逻辑类型参数
 };
 
 } // namespace litedb::core::common

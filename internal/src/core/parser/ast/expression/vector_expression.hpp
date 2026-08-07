@@ -38,7 +38,7 @@ public:
     const ElementList & elements() const noexcept;
 
 private:
-    ElementList elements_;            ///< 元素列表
+    ElementList elements_;            // 元素列表
 };
 
 } // namespace litedb::core::parser::ast

@@ -18,14 +18,14 @@ namespace litedb::core::index::btree_index
  */
 enum class BTreePageCodecErrorCode : std::uint8_t
 {
-    UnsupportedKeyType,      ///< 不支持的索引键类型
-    KeyTypeMismatch,         ///< 页中的键与索引键类型不匹配
-    InvalidPage,             ///< 逻辑页状态无效
-    PageTooLarge,            ///< 逻辑页无法放入一个物理页
-    InvalidFormat,           ///< 物理页格式无效
-    UnsupportedVersion,      ///< 不支持的物理页格式版本
-    ChecksumMismatch,        ///< 物理页校验和不匹配
-    CorruptedPage,           ///< 物理页内容损坏
+    UnsupportedKeyType,      // 不支持的索引键类型
+    KeyTypeMismatch,         // 页中的键与索引键类型不匹配
+    InvalidPage,             // 逻辑页状态无效
+    PageTooLarge,            // 逻辑页无法放入一个物理页
+    InvalidFormat,           // 物理页格式无效
+    UnsupportedVersion,      // 不支持的物理页格式版本
+    ChecksumMismatch,        // 物理页校验和不匹配
+    CorruptedPage,           // 物理页内容损坏
 };
 
 /**
@@ -40,11 +40,11 @@ using BTreePageCodecError = error::Error;
 class BTreePageCodec final
 {
 public:
-    static constexpr std::size_t PageSize = 4096;       ///< 物理页大小
-    static constexpr std::size_t HeaderSize = 48;       ///< 物理页头部大小
-    static constexpr std::size_t SlotSize = 4;          ///< 物理页条目大小
+    static constexpr std::size_t PageSize = 4096;       // 物理页大小
+    static constexpr std::size_t HeaderSize = 48;       // 物理页头部大小
+    static constexpr std::size_t SlotSize = 4;          // 物理页条目大小
 
-    using PageBuffer = std::array<std::byte, PageSize>; ///< 物理页缓冲区类型
+    using PageBuffer = std::array<std::byte, PageSize>; // 物理页缓冲区类型
 
 public:
     /**

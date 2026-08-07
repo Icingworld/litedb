@@ -36,7 +36,7 @@ public:
     std::unique_ptr<LogicalPlanOperator> take_child() noexcept;
 
 private:
-    std::unique_ptr<LogicalPlanOperator> child_;   ///< 子算子
+    std::unique_ptr<LogicalPlanOperator> child_;   // 子算子
 };
 
 } // namespace litedb::core::logical_planner::op

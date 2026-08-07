@@ -46,8 +46,8 @@ public:
     take_values() noexcept;
 
 private:
-    common::CollectionId collection_id_;                                        ///< 集合 ID
-    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;       ///< 值
+    common::CollectionId collection_id_;                                        // 集合 ID
+    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;       // 值
 };
 
 } // namespace litedb::core::logical_planner::plan

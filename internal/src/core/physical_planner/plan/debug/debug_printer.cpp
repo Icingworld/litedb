@@ -44,7 +44,7 @@ public:
     }
 
 private:
-    PhysicalPlanDebugPrinter & printer_;     ///< 打印器
+    PhysicalPlanDebugPrinter & printer_;     // 打印器
 };
 
 PhysicalPlanDebugPrinter::PhysicalPlanDebugPrinter(std::ostream & ostream)

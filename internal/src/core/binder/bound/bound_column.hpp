@@ -13,10 +13,10 @@ namespace litedb::core::binder::bound
  */
 struct BoundColumn
 {
-    common::ColumnId column_id {0};     ///< 列 ID
-    std::string name;                   ///< 列名称
-    common::LogicalType type;           ///< 列类型
-    bool nullable {true};               ///< 是否可为 NULL
+    common::ColumnId column_id {0};     // 列 ID
+    std::string name;                   // 列名称
+    common::LogicalType type;           // 列类型
+    bool nullable {true};               // 是否可为 NULL
 };
 
 } // namespace litedb::core::binder::bound

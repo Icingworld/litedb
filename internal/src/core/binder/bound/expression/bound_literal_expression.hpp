@@ -26,7 +26,7 @@ public:
     const common::Value & value() const noexcept;
 
 private:
-    common::Value value_;     ///< 常量值
+    common::Value value_;     // 常量值
 };
 
 } // namespace litedb::core::binder::bound

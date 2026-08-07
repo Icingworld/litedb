@@ -28,7 +28,7 @@ public:
     std::optional<common::DatabaseId> database_id() const noexcept;
 
 private:
-    std::optional<common::DatabaseId> database_id_;     ///< 数据库 ID
+    std::optional<common::DatabaseId> database_id_;     // 数据库 ID
 };
 
 } // namespace litedb::core::logical_planner::plan

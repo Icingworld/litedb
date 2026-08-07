@@ -19,8 +19,8 @@ namespace litedb::core::io
  */
 struct BinaryDecodeLimits
 {
-    std::uint64_t max_total_bytes;       ///< 最多可读取的总字节数
-    std::uint32_t max_string_bytes;      ///< 单个字符串的最大字节数
+    std::uint64_t max_total_bytes;       // 最多可读取的总字节数
+    std::uint32_t max_string_bytes;      // 单个字符串的最大字节数
 };
 
 /**
@@ -49,7 +49,7 @@ private:
     std::expected<void, IoError> write_bytes(const void * data, std::size_t size);
 
 private:
-    ByteWriter & writer_;       ///< 字节写入器
+    ByteWriter & writer_;       // 字节写入器
 };
 
 /**
@@ -81,9 +81,9 @@ private:
     std::expected<void, IoError> read_exact_bytes(void * data, std::size_t size);
 
 private:
-    ByteReader & reader_;                   ///< 字节读取器
-    BinaryDecodeLimits limits_;             ///< 解码限制
-    std::uint64_t remaining_bytes_;         ///< 剩余读取预算
+    ByteReader & reader_;                   // 字节读取器
+    BinaryDecodeLimits limits_;             // 解码限制
+    std::uint64_t remaining_bytes_;         // 剩余读取预算
 };
 
 using LittleEndianBinaryWriter = BasicBinaryWriter<std::endian::little>;

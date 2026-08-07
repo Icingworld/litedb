@@ -26,8 +26,8 @@ std::expected<RecoveryResult, WalError> RecoveryManager::recover(
      */
     struct TransactionLogState
     {
-        bool began {false};      ///< 是否已开始
-        bool committed {false};  ///< 是否已提交
+        bool began {false};      // 是否已开始
+        bool committed {false};  // 是否已提交
     };
 
     std::unordered_map<transaction::TransactionId, TransactionLogState> states;

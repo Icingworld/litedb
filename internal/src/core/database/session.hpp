@@ -39,8 +39,8 @@ public:
     std::optional<common::DatabaseId> current_database_id() const noexcept;
 
 private:
-    DatabaseEngine * engine_;               ///< 数据库引擎
-    binder::SessionContext session_;        ///< 会话上下文
+    DatabaseEngine * engine_;               // 数据库引擎
+    binder::SessionContext session_;        // 会话上下文
 };
 
 } // namespace litedb::core::database

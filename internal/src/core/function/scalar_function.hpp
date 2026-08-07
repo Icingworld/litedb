@@ -41,9 +41,9 @@ public:
  */
 struct ScalarBindResult
 {
-    std::vector<common::LogicalType> argument_types;     ///< 参数类型
-    common::LogicalType return_type;                     ///< 返回类型
-    std::shared_ptr<const FunctionBindData> bind_data;   ///< 绑定数据
+    std::vector<common::LogicalType> argument_types;     // 参数类型
+    common::LogicalType return_type;                     // 返回类型
+    std::shared_ptr<const FunctionBindData> bind_data;   // 绑定数据
 };
 
 /**
@@ -72,11 +72,11 @@ struct ScalarFunctionOverload
         const FunctionBindData * bind_data
     );
 
-    FunctionParameters parameters;                    ///< 参数类型
-    common::LogicalType return_type;                  ///< 返回类型
-    BindFn bind {nullptr};                            ///< 绑定函数
-    EvalFn evaluate {nullptr};                        ///< 执行函数
-    FunctionProperties properties {};                 ///< 函数属性
+    FunctionParameters parameters;                    // 参数类型
+    common::LogicalType return_type;                  // 返回类型
+    BindFn bind {nullptr};                            // 绑定函数
+    EvalFn evaluate {nullptr};                        // 执行函数
+    FunctionProperties properties {};                 // 函数属性
 };
 
 /**
@@ -149,12 +149,12 @@ public:
     ) const;
 
 private:
-    std::string name_;                                          ///< 函数名称
-    std::shared_ptr<const ScalarFunctionOverload> overload_;    ///< 函数重载定义
-    std::vector<common::LogicalType> argument_types_;           ///< 参数类型
-    common::LogicalType return_type_;                           ///< 返回类型
-    std::shared_ptr<const FunctionBindData> bind_data_;         ///< 绑定数据
-    std::size_t match_cost_;                                    ///< 匹配成本
+    std::string name_;                                          // 函数名称
+    std::shared_ptr<const ScalarFunctionOverload> overload_;    // 函数重载定义
+    std::vector<common::LogicalType> argument_types_;           // 参数类型
+    common::LogicalType return_type_;                           // 返回类型
+    std::shared_ptr<const FunctionBindData> bind_data_;         // 绑定数据
+    std::size_t match_cost_;                                    // 匹配成本
 };
 
 } // namespace litedb::core::function

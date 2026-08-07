@@ -276,18 +276,18 @@ private:
     void erase_collection(common::CollectionId id);
 
 private:
-    common::DatabaseId next_database_id_ {1};                                           ///< 下一个数据库 ID
-    common::CollectionId next_collection_id_ {1};                                       ///< 下一个集合 ID
-    common::ColumnId next_column_id_ {1};                                               ///< 下一个列 ID
-    common::IndexId next_index_id_ {1};                                                 ///< 下一个索引 ID
-    common::VIndexId next_vector_index_id_ {1};                                       ///< 下一个向量索引 ID
-    std::vector<common::DatabaseId> database_ids_;                                    ///< 数据库 ID 顺序列表
-    std::unordered_map<common::DatabaseId, std::unique_ptr<entry::DatabaseEntry>> databases_;     ///< 数据库项
-    std::unordered_map<std::string, common::DatabaseId> database_keys_;                 ///< 数据库名到 ID 的映射
-    std::unordered_map<common::CollectionId, std::unique_ptr<entry::CollectionEntry>> collections_;   ///< 集合项
-    std::unordered_map<common::ColumnId, std::unique_ptr<entry::ColumnEntry>> columns_;             ///< 列项
-    std::unordered_map<common::IndexId, std::unique_ptr<entry::IndexEntry>> indexes_;               ///< 标量索引项
-    std::unordered_map<common::VIndexId, std::unique_ptr<entry::VectorIndexEntry>> vector_indexes_;  ///< 向量索引项
+    common::DatabaseId next_database_id_ {1};                                           // 下一个数据库 ID
+    common::CollectionId next_collection_id_ {1};                                       // 下一个集合 ID
+    common::ColumnId next_column_id_ {1};                                               // 下一个列 ID
+    common::IndexId next_index_id_ {1};                                                 // 下一个索引 ID
+    common::VIndexId next_vector_index_id_ {1};                                       // 下一个向量索引 ID
+    std::vector<common::DatabaseId> database_ids_;                                    // 数据库 ID 顺序列表
+    std::unordered_map<common::DatabaseId, std::unique_ptr<entry::DatabaseEntry>> databases_;     // 数据库项
+    std::unordered_map<std::string, common::DatabaseId> database_keys_;                 // 数据库名到 ID 的映射
+    std::unordered_map<common::CollectionId, std::unique_ptr<entry::CollectionEntry>> collections_;   // 集合项
+    std::unordered_map<common::ColumnId, std::unique_ptr<entry::ColumnEntry>> columns_;             // 列项
+    std::unordered_map<common::IndexId, std::unique_ptr<entry::IndexEntry>> indexes_;               // 标量索引项
+    std::unordered_map<common::VIndexId, std::unique_ptr<entry::VectorIndexEntry>> vector_indexes_;  // 向量索引项
 };
 
 /**

@@ -24,8 +24,8 @@ enum class ClientErrorCode : std::uint8_t
  */
 struct ClientErrorContext
 {
-    std::uint16_t server_code {0};   ///< 服务端错误码
-    std::error_code error;           ///< 系统错误码
+    std::uint16_t server_code {0};   // 服务端错误码
+    std::error_code error;           // 系统错误码
 };
 
 using ClientError = core::error::Error;

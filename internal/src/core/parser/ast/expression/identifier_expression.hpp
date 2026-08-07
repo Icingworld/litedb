@@ -31,7 +31,7 @@ public:
     const std::string & name() const noexcept;
 
 private:
-    std::string name_;      ///< 标识符名称
+    std::string name_;      // 标识符名称
 };
 
 } // namespace litedb::core::parser::ast

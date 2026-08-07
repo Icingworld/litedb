@@ -49,8 +49,8 @@ public:
     std::vector<std::unique_ptr<BoundExpression>> take_values() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> expression_;               ///< 表达式
-    std::vector<std::unique_ptr<BoundExpression>> values_;      ///< 值列表
+    std::unique_ptr<BoundExpression> expression_;               // 表达式
+    std::vector<std::unique_ptr<BoundExpression>> values_;      // 值列表
 };
 
 } // namespace litedb::core::binder::bound

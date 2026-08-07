@@ -22,10 +22,10 @@ class TransactionManager;
  */
 enum class IsolationLevel
 {
-    // ReadUncommitted,  ///< 读未提交
-    // ReadCommitted,    ///< 读已提交
-    // RepeatableRead,   ///< 可重复读
-    Serializable,     ///< 可序列化
+    // ReadUncommitted,  // 读未提交
+    // ReadCommitted,    // 读已提交
+    // RepeatableRead,   // 可重复读
+    Serializable,     // 可序列化
 };
 
 /**
@@ -33,9 +33,9 @@ enum class IsolationLevel
  */
 enum class RowMutationKind
 {
-    Insert,           ///< 插入
-    Update,           ///< 更新
-    Delete,           ///< 删除
+    Insert,           // 插入
+    Update,           // 更新
+    Delete,           // 删除
 };
 
 /**
@@ -43,11 +43,11 @@ enum class RowMutationKind
  */
 struct RowMutation
 {
-    RowMutationKind kind;                        ///< 变更类型
-    common::CollectionId collection_id;          ///< 集合 ID
-    common::RecordId record_id;                  ///< 记录 ID
-    std::optional<common::RecordData> before;    ///< 变更前的记录数据
-    std::optional<common::RecordData> after;     ///< 变更后的记录数据
+    RowMutationKind kind;                        // 变更类型
+    common::CollectionId collection_id;          // 集合 ID
+    common::RecordId record_id;                  // 记录 ID
+    std::optional<common::RecordData> before;    // 变更前的记录数据
+    std::optional<common::RecordData> after;     // 变更后的记录数据
 };
 
 /**
@@ -55,7 +55,7 @@ struct RowMutation
  */
 struct TransactionFailure
 {
-    std::string message;     ///< 错误信息
+    std::string message;     // 错误信息
 };
 
 /**
@@ -183,18 +183,18 @@ private:
     void release_writer_guard() noexcept;
 
 private:
-    TransactionId id_;                                           ///< 事务 ID
-    TransactionState state_ {TransactionState::Active};          ///< 事务状态
-    IsolationLevel isolation_ {IsolationLevel::Serializable};    ///< 隔离级别
-    std::optional<Lsn> first_lsn_;                               ///< 首条 LSN
-    std::optional<Lsn> last_lsn_;                                ///< 最新 LSN
-    std::optional<Lsn> commit_lsn_;                              ///< 提交 LSN
-    std::vector<RowMutation> write_set_;                         ///< 写集合
-    std::optional<meta::MetaSnapshot> catalog_snapshot_;         ///< DDL 提交后的 catalog 快照
-    bool rollback_only_ {false};                                 ///< 是否只能回滚
-    std::optional<TransactionFailure> failure_;                  ///< 失败信息
-    std::unique_lock<std::mutex> writer_guard_;                  ///< 单写者生命周期锁
-    TransactionManager * owner_ {nullptr};                       ///< 创建该事务的管理器
+    TransactionId id_;                                           // 事务 ID
+    TransactionState state_ {TransactionState::Active};          // 事务状态
+    IsolationLevel isolation_ {IsolationLevel::Serializable};    // 隔离级别
+    std::optional<Lsn> first_lsn_;                               // 首条 LSN
+    std::optional<Lsn> last_lsn_;                                // 最新 LSN
+    std::optional<Lsn> commit_lsn_;                              // 提交 LSN
+    std::vector<RowMutation> write_set_;                         // 写集合
+    std::optional<meta::MetaSnapshot> catalog_snapshot_;         // DDL 提交后的 catalog 快照
+    bool rollback_only_ {false};                                 // 是否只能回滚
+    std::optional<TransactionFailure> failure_;                  // 失败信息
+    std::unique_lock<std::mutex> writer_guard_;                  // 单写者生命周期锁
+    TransactionManager * owner_ {nullptr};                       // 创建该事务的管理器
 };
 
 } // namespace litedb::core::transaction

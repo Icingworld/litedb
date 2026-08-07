@@ -88,13 +88,13 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    common::CollectionId collection_id_;                    ///< 集合 ID
-    std::size_t ordinal_;                                   ///< 列序号
-    common::LogicalType type_;                              ///< 列类型
-    bool unique_;                                           ///< 是否唯一
-    bool nullable_;                                         ///< 是否可为空
-    std::optional<schema::DefaultExpression> default_expression_;   ///< 默认值表达式
-    std::optional<std::string> comment_;                    ///< 列注释
+    common::CollectionId collection_id_;                    // 集合 ID
+    std::size_t ordinal_;                                   // 列序号
+    common::LogicalType type_;                              // 列类型
+    bool unique_;                                           // 是否唯一
+    bool nullable_;                                         // 是否可为空
+    std::optional<schema::DefaultExpression> default_expression_;   // 默认值表达式
+    std::optional<std::string> comment_;                    // 列注释
 };
 
 } // namespace litedb::core::meta::entry

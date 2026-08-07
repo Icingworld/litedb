@@ -13,8 +13,8 @@ namespace litedb::core::function
  */
 struct FunctionParameters
 {
-    std::vector<common::LogicalType> fixed;           ///< 固定参数
-    std::optional<common::LogicalType> variadic;      ///< 可变参数
+    std::vector<common::LogicalType> fixed;           // 固定参数
+    std::optional<common::LogicalType> variadic;      // 可变参数
 };
 
 } // namespace litedb::core::function

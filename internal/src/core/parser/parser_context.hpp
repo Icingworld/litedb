@@ -108,10 +108,10 @@ public:
     ast::AstNodeLocation ast_location(TokenLocation location) const noexcept;
 
 private:
-    Lexer & lexer_;                 ///< 词法分析器
-    Token current_token_;           ///< 当前 Token
-    Token next_token_;              ///< 下一个 Token
-    Token next_after_next_token_;   ///< 下下个 Token
+    Lexer & lexer_;                 // 词法分析器
+    Token current_token_;           // 当前 Token
+    Token next_token_;              // 下一个 Token
+    Token next_after_next_token_;   // 下下个 Token
 };
 
 } // namespace litedb::core::parser

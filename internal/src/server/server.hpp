@@ -20,10 +20,10 @@ namespace litedb::server
  */
 struct ServerConfig
 {
-    std::string host {"127.0.0.1"};                           ///< 主机地址
-    std::uint16_t port {0};                                   ///< 端口号
-    std::size_t max_frame_size {protocol::MaxFrameSize};      ///< 最大帧大小
-    protocol::ProtocolDecodeLimits decode_limits {};          ///< 解码限制
+    std::string host {"127.0.0.1"};                           // 主机地址
+    std::uint16_t port {0};                                   // 端口号
+    std::size_t max_frame_size {protocol::MaxFrameSize};      // 最大帧大小
+    protocol::ProtocolDecodeLimits decode_limits {};          // 解码限制
 };
 
 /**
@@ -87,9 +87,9 @@ private:
     ) const;
 
 private:
-    asio::ip::tcp::acceptor acceptor_;                            ///< 套接字接受器
-    ServerConfig config_;                                         ///< 配置
-    std::shared_ptr<core::database::DatabaseEngine> engine_;      ///< 数据库引擎
+    asio::ip::tcp::acceptor acceptor_;                            // 套接字接受器
+    ServerConfig config_;                                         // 配置
+    std::shared_ptr<core::database::DatabaseEngine> engine_;      // 数据库引擎
 };
 
 } // namespace litedb::server

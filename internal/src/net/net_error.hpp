@@ -12,8 +12,8 @@ namespace litedb::net
  */
 enum class NetworkErrorCode : std::uint8_t
 {
-    AsioError = 0,                  ///< ASIO 错误
-    FrameTooLarge = 1,              ///< 帧太大
+    AsioError = 0,                  // ASIO 错误
+    FrameTooLarge = 1,              // 帧太大
 };
 
 /**
@@ -21,7 +21,7 @@ enum class NetworkErrorCode : std::uint8_t
  */
 struct NetworkErrorContext
 {
-    std::error_code error;          ///< 系统错误码
+    std::error_code error;          // 系统错误码
 };
 
 using NetworkError = core::error::Error;

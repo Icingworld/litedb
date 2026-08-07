@@ -148,8 +148,8 @@ private:
      */
     struct CollectionState
     {
-        schema::CollectionSchema schema;            ///< 集合模式
-        std::unique_ptr<StorageStore> store;        ///< 持久化存储
+        schema::CollectionSchema schema;            // 集合模式
+        std::unique_ptr<StorageStore> store;        // 持久化存储
     };
 
     /**
@@ -173,10 +173,10 @@ private:
     ) const;
 
 private:
-    std::filesystem::path data_directory_;                                      ///< 数据目录
-    filesystem::FileSystem * filesystem_ {nullptr};                             ///< 文件系统
-    std::unordered_map<common::CollectionId, CollectionState> collections_;     ///< 已加载集合
-    StorageOpenMode mode_ {StorageOpenMode::LiveReadOnly};                     ///< 打开模式
+    std::filesystem::path data_directory_;                                      // 数据目录
+    filesystem::FileSystem * filesystem_ {nullptr};                             // 文件系统
+    std::unordered_map<common::CollectionId, CollectionState> collections_;     // 已加载集合
+    StorageOpenMode mode_ {StorageOpenMode::LiveReadOnly};                     // 打开模式
 };
 
 } // namespace litedb::core::storage

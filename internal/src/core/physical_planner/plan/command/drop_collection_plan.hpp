@@ -27,7 +27,7 @@ public:
     std::optional<common::CollectionId> collection_id() const noexcept;
 
 private:
-    std::optional<common::CollectionId> collection_id_;  ///< 集合 ID
+    std::optional<common::CollectionId> collection_id_;  // 集合 ID
 };
 
 } // namespace litedb::core::physical_planner::plan

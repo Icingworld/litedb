@@ -27,7 +27,7 @@ public:
     std::optional<common::VIndexId> vector_index_id() const noexcept;
 
 private:
-    std::optional<common::VIndexId> vector_index_id_;  ///< 向量索引 ID
+    std::optional<common::VIndexId> vector_index_id_;  // 向量索引 ID
 };
 
 } // namespace litedb::core::logical_planner::plan

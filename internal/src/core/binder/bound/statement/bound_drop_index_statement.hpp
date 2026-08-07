@@ -27,7 +27,7 @@ public:
     std::optional<common::IndexId> index_id() const noexcept;
 
 private:
-    std::optional<common::IndexId> index_id_;  ///< 索引 ID
+    std::optional<common::IndexId> index_id_;  // 索引 ID
 };
 
 } // namespace litedb::core::binder::bound

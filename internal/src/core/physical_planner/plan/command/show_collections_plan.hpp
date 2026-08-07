@@ -23,7 +23,7 @@ public:
     common::DatabaseId database_id() const noexcept;
 
 private:
-    common::DatabaseId database_id_;             ///< 数据库 ID
+    common::DatabaseId database_id_;             // 数据库 ID
 };
 
 } // namespace litedb::core::physical_planner::plan

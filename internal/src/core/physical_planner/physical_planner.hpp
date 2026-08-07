@@ -32,7 +32,7 @@ public:
     );
 
 private:
-    meta::CatalogView catalog_;             ///< 目录视图
+    meta::CatalogView catalog_;             // 目录视图
 };
 
 } // namespace litedb::core::physical_planner

@@ -38,7 +38,7 @@ public:
     take_order_by() noexcept;
 
 private:
-    std::vector<binder::bound::BoundOrderByItem> order_by_;   ///< 排序项
+    std::vector<binder::bound::BoundOrderByItem> order_by_;   // 排序项
 };
 
 } // namespace litedb::core::logical_planner::op

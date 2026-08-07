@@ -44,8 +44,8 @@ public:
     const std::string & column_name() const noexcept;
 
 private:
-    std::optional<std::string> qualifier_;    ///< 限定符
-    std::string column_name_;                 ///< 列名
+    std::optional<std::string> qualifier_;    // 限定符
+    std::string column_name_;                 // 列名
 };
 
 } // namespace litedb::core::parser::ast

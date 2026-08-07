@@ -28,7 +28,7 @@ public:
     }
 
 private:
-    PhysicalOperatorDebugPrinter & printer_;     ///< 打印器
+    PhysicalOperatorDebugPrinter & printer_;     // 打印器
 };
 
 PhysicalOperatorDebugPrinter::PhysicalOperatorDebugPrinter(

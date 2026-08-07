@@ -13,8 +13,8 @@ namespace litedb::core::evaluator
  */
 struct EvaluationContext
 {
-    std::span<const common::Value> input_values {};           ///< 输入值
-    function::ScalarFunctionContext function_context {};      ///< 函数上下文
+    std::span<const common::Value> input_values {};           // 输入值
+    function::ScalarFunctionContext function_context {};      // 函数上下文
 };
 
 } // namespace litedb::core::evaluator

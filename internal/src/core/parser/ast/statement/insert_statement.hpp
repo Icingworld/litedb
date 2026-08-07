@@ -57,9 +57,9 @@ public:
     const ValueList & values() const noexcept;
 
 private:
-    std::string collection_name_;   ///< 集合名称
-    ColumnList columns_;            ///< 列列表
-    ValueList values_;              ///< 值列表
+    std::string collection_name_;   // 集合名称
+    ColumnList columns_;            // 列列表
+    ValueList values_;              // 值列表
 };
 
 } // namespace litedb::core::parser::ast

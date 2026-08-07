@@ -16,27 +16,27 @@ namespace litedb::core::error
  */
 enum class ErrorCategory : std::uint8_t
 {
-    Unknown = 0,                ///< 未知
-    FileSystem = 1,             ///< 文件系统
-    Io = 2,                     ///< 二进制输入输出
-    Meta = 3,                   ///< 元数据目录
-    Storage = 4,                ///< 记录存储
-    Index = 5,                  ///< 标量索引
-    VectorIndex = 6,            ///< 向量索引
-    Wal = 7,                    ///< 预写日志
-    Transaction = 8,            ///< 事务协调
-    Parser = 9,                 ///< 解析器
-    Binder = 10,                ///< 绑定器
-    Optimizer = 11,             ///< 优化器
-    PhysicalPlanner = 12,       ///< 物理计划器
-    Function = 13,              ///< 函数
-    Evaluation = 14,            ///< 评估
-    Execution = 15,             ///< 执行
-    Database = 16,              ///< 数据库
-    Protocol = 17,              ///< 协议
-    Network = 18,               ///< 网络
-    Server = 19,                ///< 服务器
-    Client = 20,                ///< 客户端
+    Unknown = 0,                // 未知
+    FileSystem = 1,             // 文件系统
+    Io = 2,                     // 二进制输入输出
+    Meta = 3,                   // 元数据目录
+    Storage = 4,                // 记录存储
+    Index = 5,                  // 标量索引
+    VectorIndex = 6,            // 向量索引
+    Wal = 7,                    // 预写日志
+    Transaction = 8,            // 事务协调
+    Parser = 9,                 // 解析器
+    Binder = 10,                // 绑定器
+    Optimizer = 11,             // 优化器
+    PhysicalPlanner = 12,       // 物理计划器
+    Function = 13,              // 函数
+    Evaluation = 14,            // 评估
+    Execution = 15,             // 执行
+    Database = 16,              // 数据库
+    Protocol = 17,              // 协议
+    Network = 18,               // 网络
+    Server = 19,                // 服务器
+    Client = 20,                // 客户端
 };
 
 /**
@@ -175,9 +175,9 @@ private:
     }
 
 private:
-    void * value_ {nullptr};                        ///< 错误上下文对象指针
-    const void * type_token_ {nullptr};             ///< 错误上下文类型标识
-    void (*destroy_)(void *) noexcept {nullptr};    ///< 错误上下文对象销毁函数
+    void * value_ {nullptr};                        // 错误上下文对象指针
+    const void * type_token_ {nullptr};             // 错误上下文类型标识
+    void (*destroy_)(void *) noexcept {nullptr};    // 错误上下文对象销毁函数
 };
 
 } // namespace detail
@@ -286,6 +286,7 @@ public:
     /**
      * @brief 获取下层错误
      * @return 下层错误，如果没有 cause，则返回 nullptr
+     * @deprecated 与直接穿透的错误模型不符，将移除 cause() 链
      */
     [[nodiscard]]
     const Error * cause() const noexcept
@@ -304,11 +305,11 @@ public:
     }
 
 private:
-    ErrorCategory category_;                    ///< 错误所属模块
-    std::uint8_t code_;                         ///< 错误码
-    std::string message_;                       ///< 错误信息
-    detail::ErasedErrorContext context_;        ///< 模块上下文
-    std::unique_ptr<Error> cause_;               ///< 下层错误
+    ErrorCategory category_;                    // 错误所属模块
+    std::uint8_t code_;                         // 错误码
+    std::string message_;                       // 错误信息
+    detail::ErasedErrorContext context_;        // 模块上下文
+    std::unique_ptr<Error> cause_;               // 下层错误
 };
 
 } // namespace litedb::core::error

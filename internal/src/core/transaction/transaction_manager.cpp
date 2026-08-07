@@ -35,7 +35,7 @@ public:
     }
 
 private:
-    std::filesystem::path path_;    ///< 暂存路径
+    std::filesystem::path path_;    // 暂存路径
 };
 
 class CommitTimer final

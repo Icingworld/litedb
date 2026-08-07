@@ -27,8 +27,8 @@ public:
     std::expected<std::size_t, IoError> read_some(std::span<std::byte> data) override;
 
 private:
-    std::span<const std::byte> data_;     ///< 字节数据
-    std::uint64_t offset_;                ///< 文件偏移
+    std::span<const std::byte> data_;     // 字节数据
+    std::uint64_t offset_;                // 文件偏移
 };
 
 } // namespace litedb::core::io

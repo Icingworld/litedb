@@ -48,8 +48,8 @@ public:
     std::unique_ptr<BoundExpression> take_pattern() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> expression_;   ///< 表达式
-    std::unique_ptr<BoundExpression> pattern_;      ///< 模式
+    std::unique_ptr<BoundExpression> expression_;   // 表达式
+    std::unique_ptr<BoundExpression> pattern_;      // 模式
 };
 
 } // namespace litedb::core::binder::bound

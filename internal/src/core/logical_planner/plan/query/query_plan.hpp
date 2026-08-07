@@ -33,7 +33,7 @@ public:
     std::unique_ptr<op::LogicalPlanOperator> take_root_operator() noexcept;
 
 private:
-    std::unique_ptr<op::LogicalPlanOperator> root_operator_;   ///< 根算子
+    std::unique_ptr<op::LogicalPlanOperator> root_operator_;   // 根算子
 };
 
 } // namespace litedb::core::logical_planner::plan

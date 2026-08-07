@@ -28,7 +28,7 @@ public:
     const PhysicalOperator & child() const noexcept;
 
 private:
-    std::unique_ptr<PhysicalOperator> child_;   ///< 子算子
+    std::unique_ptr<PhysicalOperator> child_;   // 子算子
 };
 
 } // namespace litedb::core::physical_planner::op

@@ -15,8 +15,8 @@ namespace litedb::core::database
  */
 enum class ManifestErrorCode : std::uint8_t
 {
-    FileSystemError,            ///< 文件系统错误
-    InvalidFormat,              ///< 格式无效
+    FileSystemError,            // 文件系统错误
+    InvalidFormat,              // 格式无效
 };
 
 /**
@@ -62,8 +62,8 @@ public:
     std::filesystem::path collections_dir() const;
 
 private:
-    std::filesystem::path data_dir_;            ///< 数据目录
-    filesystem::FileSystem * filesystem_;       ///< 文件系统
+    std::filesystem::path data_dir_;            // 数据目录
+    filesystem::FileSystem * filesystem_;       // 文件系统
 };
 
 } // namespace litedb::core::database

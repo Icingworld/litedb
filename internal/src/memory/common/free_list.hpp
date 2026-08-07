@@ -44,7 +44,7 @@ public:
     void set_next(FreeBlock * next) noexcept;
 
 private:
-    FreeBlock * next_;  ///< 下一个空闲内存块
+    FreeBlock * next_;  // 下一个空闲内存块
 };
 
 /**
@@ -111,7 +111,7 @@ public:
     bool operator!=(const FreeListIterator & other) const noexcept;
 
 private:
-    FreeBlock * current_;  ///< 当前空闲内存块
+    FreeBlock * current_;  // 当前空闲内存块
 };
 
 /**
@@ -206,9 +206,9 @@ public:
     void set_capacity(std::size_t capacity) noexcept;
 
 private:
-    FreeBlock head_;        ///< 虚拟头节点
-    std::size_t size_;      ///< 空闲内存块数量
-    std::size_t capacity_;  ///< 空闲内存块总容量
+    FreeBlock head_;        // 虚拟头节点
+    std::size_t size_;      // 空闲内存块数量
+    std::size_t capacity_;  // 空闲内存块总容量
 };
 
 } // namespace litedb::memory

@@ -248,17 +248,17 @@ private:
     std::expected<void, TransactionError> sync_checkpoint_participants(TransactionId checkpoint_transaction_id);
 
 private:
-    std::filesystem::path data_directory_;                       ///< 数据目录
-    filesystem::FileSystem * filesystem_ {nullptr};              ///< 文件系统
-    meta::CatalogPublisher * catalog_ {nullptr};                 ///< 在线 Catalog 发布者
-    storage::StorageEngine * storage_ {nullptr};                 ///< 存储引擎
-    index::IndexEngine * index_engine_ {nullptr};                ///< 标量索引引擎
-    vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  ///< 向量索引引擎
-    wal::WalManager * wal_ {nullptr};                            ///< WAL 管理器
-    TransactionId next_transaction_id_ {1};                      ///< 下一个事务 ID
-    TransactionOptions options_;                                ///< 事务可选配置
-    std::mutex writer_mutex_;                                   ///< 核心层单写者锁
-    std::atomic_bool recovery_required_ {false};                 ///< 是否需要恢复
+    std::filesystem::path data_directory_;                       // 数据目录
+    filesystem::FileSystem * filesystem_ {nullptr};              // 文件系统
+    meta::CatalogPublisher * catalog_ {nullptr};                 // 在线 Catalog 发布者
+    storage::StorageEngine * storage_ {nullptr};                 // 存储引擎
+    index::IndexEngine * index_engine_ {nullptr};                // 标量索引引擎
+    vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  // 向量索引引擎
+    wal::WalManager * wal_ {nullptr};                            // WAL 管理器
+    TransactionId next_transaction_id_ {1};                      // 下一个事务 ID
+    TransactionOptions options_;                                // 事务可选配置
+    std::mutex writer_mutex_;                                   // 核心层单写者锁
+    std::atomic_bool recovery_required_ {false};                 // 是否需要恢复
     std::atomic_uint64_t started_transactions_ {0};
     std::atomic_uint64_t committed_transactions_ {0};
     std::atomic_uint64_t aborted_transactions_ {0};

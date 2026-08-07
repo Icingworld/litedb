@@ -143,11 +143,11 @@ private:
     );
 
 private:
-    std::filesystem::path path_;                        ///< 文件路径
-    filesystem::FileHandle file_;                       ///< 文件句柄
-    WalFileHeader header_;                              ///< WAL 段文件头
-    std::optional<transaction::Lsn> flushed_lsn_;       ///< 已刷盘 LSN
-    std::uint64_t size_bytes_ {0};                      ///< 当前 WAL 大小
+    std::filesystem::path path_;                        // 文件路径
+    filesystem::FileHandle file_;                       // 文件句柄
+    WalFileHeader header_;                              // WAL 段文件头
+    std::optional<transaction::Lsn> flushed_lsn_;       // 已刷盘 LSN
+    std::uint64_t size_bytes_ {0};                      // 当前 WAL 大小
 };
 
 } // namespace litedb::core::wal

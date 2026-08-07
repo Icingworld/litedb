@@ -53,7 +53,7 @@ public:
     std::size_t dimension() const noexcept;
 
 private:
-    common::VectorValue value_;             ///< 向量值
+    common::VectorValue value_;             // 向量值
 };
 
 } // namespace litedb::core::vindex

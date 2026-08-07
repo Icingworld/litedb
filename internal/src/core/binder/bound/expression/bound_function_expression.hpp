@@ -44,8 +44,8 @@ public:
     std::vector<std::unique_ptr<BoundExpression>> take_arguments() noexcept;
 
 private:
-    function::BoundScalarFunction function_;                    ///< 已绑定函数
-    std::vector<std::unique_ptr<BoundExpression>> arguments_;   ///< 参数列表
+    function::BoundScalarFunction function_;                    // 已绑定函数
+    std::vector<std::unique_ptr<BoundExpression>> arguments_;   // 参数列表
 };
 
 } // namespace litedb::core::binder::bound

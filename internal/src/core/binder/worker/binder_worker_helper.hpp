@@ -44,8 +44,8 @@ namespace litedb::core::binder
  */
 struct BindingCollection
 {
-    common::DatabaseId database_id {0};                     ///< 数据库 ID
-    const meta::entry::CollectionEntry * collection {nullptr};  ///< 集合
+    common::DatabaseId database_id {0};                     // 数据库 ID
+    const meta::entry::CollectionEntry * collection {nullptr};  // 集合
 };
 
 /**
@@ -246,7 +246,7 @@ private:
     ) const;
 
 private:
-    const BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        // 绑定上下文
 };
 
 } // namespace litedb::core::binder

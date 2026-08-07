@@ -131,7 +131,7 @@ private:
     parse_vector_expression();
 
 private:
-    ParserContext & context_;                   ///< 解析上下文
+    ParserContext & context_;                   // 解析上下文
 };
 
 } // namespace litedb::core::parser

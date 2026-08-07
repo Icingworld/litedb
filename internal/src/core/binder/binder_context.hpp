@@ -38,9 +38,9 @@ public:
     const function::FunctionCatalog & functions() const noexcept;
 
 private:
-    meta::CatalogView meta_;              ///< 元数据视图
-    const SessionContext & session_;            ///< 会话上下文
-    const function::FunctionCatalog & functions_; ///< 函数目录
+    meta::CatalogView meta_;              // 元数据视图
+    const SessionContext & session_;            // 会话上下文
+    const function::FunctionCatalog & functions_; // 函数目录
 };
 
 } // namespace litedb::core::binder

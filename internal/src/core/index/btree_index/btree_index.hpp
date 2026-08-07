@@ -152,7 +152,7 @@ public:
     std::uint64_t entry_count() const noexcept;
 
 private:
-    btree_index::BTreePageStore store_;         ///< 页面存储
+    btree_index::BTreePageStore store_;         // 页面存储
 };
 
 } // namespace litedb::core::index

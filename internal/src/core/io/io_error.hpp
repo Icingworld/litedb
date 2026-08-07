@@ -12,9 +12,9 @@ namespace litedb::core::io
  */
 enum class IoErrorCode : std::uint8_t
 {
-    UnexpectedEof = 0,          ///< 意外到达文件末尾
-    InvalidData = 1,            ///< 数据无效
-    ValueTooLarge = 2,          ///< 值过大，无法编码
+    UnexpectedEof = 0,          // 意外到达文件末尾
+    InvalidData = 1,            // 数据无效
+    ValueTooLarge = 2,          // 值过大，无法编码
 };
 
 using IoError = error::Error;

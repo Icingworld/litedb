@@ -8,12 +8,12 @@ namespace litedb::core::transaction
  */
 enum class TransactionState
 {
-    Active,           ///< 活跃状态
-    Preparing,        ///< 正在准备持久化写集合
-    Committing,       ///< 正在提交状态
-    Committed,        ///< 已提交状态
-    Aborting,         ///< 正在回滚状态
-    Aborted,          ///< 已回滚状态
+    Active,           // 活跃状态
+    Preparing,        // 正在准备持久化写集合
+    Committing,       // 正在提交状态
+    Committed,        // 已提交状态
+    Aborting,         // 正在回滚状态
+    Aborted,          // 已回滚状态
 };
 
 /**

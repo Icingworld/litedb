@@ -12,8 +12,8 @@ namespace litedb::core::parser::ast
  */
 enum class CreateIndexMethod
 {
-    Default,                ///< 默认
-    BTree,                  ///< B+ 树
+    Default,                // 默认
+    BTree,                  // B+ 树
 };
 
 /**
@@ -83,12 +83,12 @@ public:
     CreateIndexMethod method() const noexcept;
 
 private:
-    std::string index_name_;        ///< 索引名称
-    std::string collection_name_;   ///< 集合名称
-    std::string column_name_;       ///< 列名称
-    bool if_not_exists_;            ///< 是否不存在
-    bool unique_;                   ///< 是否为唯一索引
-    CreateIndexMethod method_;      ///< 创建索引方法
+    std::string index_name_;        // 索引名称
+    std::string collection_name_;   // 集合名称
+    std::string column_name_;       // 列名称
+    bool if_not_exists_;            // 是否不存在
+    bool unique_;                   // 是否为唯一索引
+    CreateIndexMethod method_;      // 创建索引方法
 };
 
 } // namespace litedb::core::parser::ast

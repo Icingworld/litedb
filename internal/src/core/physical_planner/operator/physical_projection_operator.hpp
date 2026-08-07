@@ -30,7 +30,7 @@ public:
     projections() const noexcept;
 
 private:
-    std::vector<binder::bound::BoundProjectionItem> projections_;   ///< 投影项
+    std::vector<binder::bound::BoundProjectionItem> projections_;   // 投影项
 };
 
 } // namespace litedb::core::physical_planner::op

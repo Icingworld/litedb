@@ -30,7 +30,7 @@ public:
     order_by() const noexcept;
 
 private:
-    std::vector<binder::bound::BoundOrderByItem> order_by_;   ///< 排序项
+    std::vector<binder::bound::BoundOrderByItem> order_by_;   // 排序项
 };
 
 } // namespace litedb::core::physical_planner::op

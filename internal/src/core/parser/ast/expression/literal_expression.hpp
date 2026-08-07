@@ -43,8 +43,8 @@ public:
     const std::string & value() const noexcept;
 
 private:
-    TokenType literal_type_;    ///< 字面量类型
-    std::string value_;         ///< 字面量值
+    TokenType literal_type_;    // 字面量类型
+    std::string value_;         // 字面量值
 };
 
 } // namespace litedb::core::parser::ast

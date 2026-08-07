@@ -21,12 +21,12 @@ namespace litedb::protocol
  */
 struct ProtocolDecodeLimits
 {
-    std::uint32_t max_string_bytes {DefaultMaxStringBytes};             ///< 最大字符串字节数
-    std::uint32_t max_sql_bytes {DefaultMaxSqlBytes};                   ///< 最大 SQL 字节数
-    std::uint32_t max_columns {DefaultMaxColumns};                      ///< 最大列数
-    std::uint32_t max_rows {DefaultMaxRows};                            ///< 最大行数
-    std::uint32_t max_values_per_row {DefaultMaxValuesPerRow};          ///< 最大每行值数
-    std::uint32_t max_vector_elements {DefaultMaxVectorElements};       ///< 最大向量元素数
+    std::uint32_t max_string_bytes {DefaultMaxStringBytes};             // 最大字符串字节数
+    std::uint32_t max_sql_bytes {DefaultMaxSqlBytes};                   // 最大 SQL 字节数
+    std::uint32_t max_columns {DefaultMaxColumns};                      // 最大列数
+    std::uint32_t max_rows {DefaultMaxRows};                            // 最大行数
+    std::uint32_t max_values_per_row {DefaultMaxValuesPerRow};          // 最大每行值数
+    std::uint32_t max_vector_elements {DefaultMaxVectorElements};       // 最大向量元素数
 };
 
 /**
@@ -34,8 +34,8 @@ struct ProtocolDecodeLimits
  */
 struct HelloRequest
 {
-    std::uint16_t min_version {ProtocolVersion};                        ///< 最小协议版本
-    std::uint16_t max_version {ProtocolVersion};                        ///< 最大协议版本
+    std::uint16_t min_version {ProtocolVersion};                        // 最小协议版本
+    std::uint16_t max_version {ProtocolVersion};                        // 最大协议版本
 };
 
 /**
@@ -43,7 +43,7 @@ struct HelloRequest
  */
 struct HelloResponse
 {
-    std::uint16_t selected_version {ProtocolVersion};                   ///< 选定的协议版本
+    std::uint16_t selected_version {ProtocolVersion};                   // 选定的协议版本
 };
 
 /**
@@ -51,7 +51,7 @@ struct HelloResponse
  */
 struct ExecuteSqlRequest
 {
-    std::string sql;                                                    ///< SQL 语句
+    std::string sql;                                                    // SQL 语句
 };
 
 /**
@@ -59,9 +59,9 @@ struct ExecuteSqlRequest
  */
 enum class ResultKind : std::uint8_t
 {
-    Command = 0,                                                        ///< 命令
-    RowSet = 1,                                                         ///< 行集
-    UseDatabase = 2,                                                    ///< 切换数据库
+    Command = 0,                                                        // 命令
+    RowSet = 1,                                                         // 行集
+    UseDatabase = 2,                                                    // 切换数据库
 };
 
 /**
@@ -69,14 +69,14 @@ enum class ResultKind : std::uint8_t
  */
 enum class LogicalTypeId : std::uint8_t
 {
-    Null = 0,                                                           ///< 空
-    Boolean = 1,                                                        ///< 布尔
-    Integer = 2,                                                        ///< 整数
-    BigInt = 3,                                                         ///< 大整数
-    Float = 4,                                                          ///< 浮点数
-    Double = 5,                                                         ///< 双精度浮点数
-    Varchar = 6,                                                        ///< 字符串
-    Vector = 7,                                                         ///< 向量
+    Null = 0,                                                           // 空
+    Boolean = 1,                                                        // 布尔
+    Integer = 2,                                                        // 整数
+    BigInt = 3,                                                         // 大整数
+    Float = 4,                                                          // 浮点数
+    Double = 5,                                                         // 双精度浮点数
+    Varchar = 6,                                                        // 字符串
+    Vector = 7,                                                         // 向量
 };
 
 /**
@@ -84,8 +84,8 @@ enum class LogicalTypeId : std::uint8_t
  */
 struct LogicalType
 {
-    LogicalTypeId id {LogicalTypeId::Null};                            ///< 类型 ID
-    std::optional<std::uint64_t> parameter;                            ///< 参数
+    LogicalTypeId id {LogicalTypeId::Null};                            // 类型 ID
+    std::optional<std::uint64_t> parameter;                            // 参数
 };
 
 /**
@@ -112,7 +112,7 @@ using ValueData = std::variant<
  */
 struct Value
 {
-    ValueData data;                                                ///< 值数据
+    ValueData data;                                                // 值数据
 };
 
 /**
@@ -120,8 +120,8 @@ struct Value
  */
 struct Column
 {
-    std::string name;                                                ///< 列名
-    LogicalType type;                                                ///< 列类型
+    std::string name;                                                // 列名
+    LogicalType type;                                                // 列类型
 };
 
 /**
@@ -129,7 +129,7 @@ struct Column
  */
 struct Row
 {
-    std::vector<Value> values;                                        ///< 值列表
+    std::vector<Value> values;                                        // 值列表
 };
 
 /**
@@ -137,11 +137,11 @@ struct Row
  */
 struct ExecuteSqlResponse
 {
-    ResultKind kind {ResultKind::Command};                            ///< 结果类型
-    std::uint64_t affected_rows {0};                                  ///< 受影响的行数
-    std::optional<std::string> selected_database_name;                ///< 选定的数据库名称
-    std::vector<Column> columns;                                      ///< 列列表
-    std::vector<Row> rows;                                            ///< 行列表
+    ResultKind kind {ResultKind::Command};                            // 结果类型
+    std::uint64_t affected_rows {0};                                  // 受影响的行数
+    std::optional<std::string> selected_database_name;                // 选定的数据库名称
+    std::vector<Column> columns;                                      // 列列表
+    std::vector<Row> rows;                                            // 行列表
 };
 
 /**
@@ -149,8 +149,8 @@ struct ExecuteSqlResponse
  */
 struct ErrorResponse
 {
-    std::uint16_t code {0};                                             ///< 错误码
-    std::string message;                                                ///< 错误消息
+    std::uint16_t code {0};                                             // 错误码
+    std::string message;                                                // 错误消息
 };
 
 /**

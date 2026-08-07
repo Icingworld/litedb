@@ -93,15 +93,15 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    common::ColumnId column_id_;                                            ///< 列 ID
-    common::CollectionId collection_id_;                                    ///< 集合 ID
-    std::size_t ordinal_;                                                   ///< 列序号
-    std::string column_name_;                                               ///< 列名称
-    common::LogicalType type_;                                              ///< 列类型
-    bool nullable_;                                                         ///< 是否可为空
-    bool unique_;                                                           ///< 是否唯一
-    std::optional<DefaultExpression> default_expression_;                   ///< 默认值
-    std::optional<std::string> comment_;                                    ///< 注释
+    common::ColumnId column_id_;                                            // 列 ID
+    common::CollectionId collection_id_;                                    // 集合 ID
+    std::size_t ordinal_;                                                   // 列序号
+    std::string column_name_;                                               // 列名称
+    common::LogicalType type_;                                              // 列类型
+    bool nullable_;                                                         // 是否可为空
+    bool unique_;                                                           // 是否唯一
+    std::optional<DefaultExpression> default_expression_;                   // 默认值
+    std::optional<std::string> comment_;                                    // 注释
 };
 
 } // namespace litedb::core::schema

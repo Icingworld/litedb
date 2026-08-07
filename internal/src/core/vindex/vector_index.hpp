@@ -16,8 +16,8 @@ namespace litedb::core::vindex
  */
 enum class VectorIndexKind
 {
-    Flat,   ///< 精确向量索引
-    Hnsw,   ///< HNSW 近似最近邻索引
+    Flat,   // 精确向量索引
+    Hnsw,   // HNSW 近似最近邻索引
 };
 
 /**
@@ -25,9 +25,9 @@ enum class VectorIndexKind
  */
 enum class VectorDistanceMetric
 {
-    L2,             ///< 欧氏距离
-    InnerProduct,   ///< 内积，值越小代表越近时会取负内积
-    Cosine,         ///< 余弦距离
+    L2,             // 欧氏距离
+    InnerProduct,   // 内积，值越小代表越近时会取负内积
+    Cosine,         // 余弦距离
 };
 
 /**
@@ -35,7 +35,7 @@ enum class VectorDistanceMetric
  */
 struct VectorSearchRequest
 {
-    std::size_t top_k {10}; ///< 返回数量
+    std::size_t top_k {10}; // 返回数量
 };
 
 /**
@@ -43,8 +43,8 @@ struct VectorSearchRequest
  */
 struct VectorSearchResult
 {
-    common::RecordId record_id; ///< 记录 ID
-    double distance {0.0};      ///< 距离
+    common::RecordId record_id; // 记录 ID
+    double distance {0.0};      // 距离
 };
 
 /**

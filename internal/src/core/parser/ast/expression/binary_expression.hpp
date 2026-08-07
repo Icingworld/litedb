@@ -51,9 +51,9 @@ public:
     const ExpressionNode & right() const noexcept;
 
 private:
-    std::unique_ptr<ExpressionNode> left_;      ///< 左操作数
-    TokenType op_;                              ///< 操作符
-    std::unique_ptr<ExpressionNode> right_;     ///< 右操作数
+    std::unique_ptr<ExpressionNode> left_;      // 左操作数
+    TokenType op_;                              // 操作符
+    std::unique_ptr<ExpressionNode> right_;     // 右操作数
 };
 
 } // namespace litedb::core::parser::ast

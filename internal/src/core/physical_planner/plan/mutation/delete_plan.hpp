@@ -37,8 +37,8 @@ public:
 
 private:
     // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销
-    common::CollectionId collection_id_;                        ///< 集合 ID
-    std::unique_ptr<op::PhysicalOperator> root_operator_;       ///< 根算子
+    common::CollectionId collection_id_;                        // 集合 ID
+    std::unique_ptr<op::PhysicalOperator> root_operator_;       // 根算子
 };
 
 } // namespace litedb::core::physical_planner::plan

@@ -26,7 +26,7 @@ public:
     }
 
 private:
-    LogicalPlanDebugPrinter & printer_;     ///< 打印器
+    LogicalPlanDebugPrinter & printer_;     // 打印器
 };
 
 LogicalPlanDebugPrinter::LogicalPlanDebugPrinter(std::ostream & ostream)

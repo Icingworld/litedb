@@ -32,8 +32,8 @@ namespace litedb::core::index
  */
 struct IndexKeyBinding
 {
-    common::IndexId index_id;               ///< 索引 ID
-    ScalarIndexKey key;                     ///< 索引键
+    common::IndexId index_id;               // 索引 ID
+    ScalarIndexKey key;                     // 索引键
 };
 
 /**
@@ -41,10 +41,10 @@ struct IndexKeyBinding
  */
 struct IndexUpdateBinding
 {
-    common::IndexId index_id;               ///< 索引 ID
-    std::optional<ScalarIndexKey> old_key;  ///< 旧索引键
-    std::optional<ScalarIndexKey> new_key;  ///< 新索引键
-    bool key_changed {false};               ///< 是否键发生变化
+    common::IndexId index_id;               // 索引 ID
+    std::optional<ScalarIndexKey> old_key;  // 旧索引键
+    std::optional<ScalarIndexKey> new_key;  // 新索引键
+    bool key_changed {false};               // 是否键发生变化
 };
 
 using IndexKeyBindings = std::vector<IndexKeyBinding>;
@@ -55,14 +55,14 @@ using IndexUpdateBindings = std::vector<IndexUpdateBinding>;
  */
 struct ManagedIndexView
 {
-    common::IndexId index_id;               ///< 索引 ID
-    common::CollectionId collection_id;     ///< 集合 ID
-    common::ColumnId column_id;             ///< 列 ID
-    std::size_t column_ordinal;             ///< 列序号
-    common::LogicalType key_type;           ///< 键类型
-    IndexKind kind;                         ///< 索引类型
-    bool unique {false};                    ///< 是否唯一
-    std::size_t entry_count {0};            ///< 索引条目数量
+    common::IndexId index_id;               // 索引 ID
+    common::CollectionId collection_id;     // 集合 ID
+    common::ColumnId column_id;             // 列 ID
+    std::size_t column_ordinal;             // 列序号
+    common::LogicalType key_type;           // 键类型
+    IndexKind kind;                         // 索引类型
+    bool unique {false};                    // 是否唯一
+    std::size_t entry_count {0};            // 索引条目数量
 };
 
 /**
@@ -290,12 +290,12 @@ private:
     std::vector<const IndexStore *> list_stores(common::CollectionId collection_id) const;
 
 private:
-    std::filesystem::path data_directory_;                             ///< 数据库数据目录
-    filesystem::FileSystem * filesystem_ {nullptr};                    ///< 非拥有型文件系统
-    std::unordered_map<common::IndexId, IndexStore> stores_by_id_;   ///< 索引存储按 ID 索引
+    std::filesystem::path data_directory_;                             // 数据库数据目录
+    filesystem::FileSystem * filesystem_ {nullptr};                    // 非拥有型文件系统
+    std::unordered_map<common::IndexId, IndexStore> stores_by_id_;   // 索引存储按 ID 索引
     std::unordered_map<
         common::CollectionId, std::vector<common::IndexId>
-    > indexes_by_collection_;                                        ///< 集合索引按集合 ID 索引
+    > indexes_by_collection_;                                        // 集合索引按集合 ID 索引
 };
 
 } // namespace litedb::core::index

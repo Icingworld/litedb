@@ -15,7 +15,7 @@ namespace litedb::core::meta::entry
  */
 enum class IndexKind
 {
-    BTree = 0,            ///< B+ 树索引
+    BTree = 0,            // B+ 树索引
 };
 
 /**
@@ -77,10 +77,10 @@ public:
     bool unique() const noexcept;
 
 private:
-    common::CollectionId collection_id_;            ///< 集合 ID
-    std::vector<common::ColumnId> column_ids_;      ///< 列 ID 列表
-    IndexKind kind_;                                ///< 索引类型
-    bool unique_;                                   ///< 是否唯一
+    common::CollectionId collection_id_;            // 集合 ID
+    std::vector<common::ColumnId> column_ids_;      // 列 ID 列表
+    IndexKind kind_;                                // 索引类型
+    bool unique_;                                   // 是否唯一
 };
 
 } // namespace litedb::core::meta::entry

@@ -13,8 +13,8 @@ namespace litedb::core::binder::bound
  */
 struct BoundAssignment
 {
-    common::ColumnId column_id;                     ///< 列
-    std::unique_ptr<BoundExpression> value;         ///< 值
+    common::ColumnId column_id;                     // 列
+    std::unique_ptr<BoundExpression> value;         // 值
 };
 
 } // namespace litedb::core::binder::bound

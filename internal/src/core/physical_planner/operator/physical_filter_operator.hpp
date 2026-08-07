@@ -28,7 +28,7 @@ public:
     const binder::bound::BoundExpression & predicate() const noexcept;
 
 private:
-    std::unique_ptr<binder::bound::BoundExpression> predicate_;   ///< 谓词
+    std::unique_ptr<binder::bound::BoundExpression> predicate_;   // 谓词
 };
 
 } // namespace litedb::core::physical_planner::op

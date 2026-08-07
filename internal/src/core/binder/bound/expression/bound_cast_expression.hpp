@@ -34,7 +34,7 @@ public:
     std::unique_ptr<BoundExpression> take_expression() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> expression_;    ///< 表达式
+    std::unique_ptr<BoundExpression> expression_;    // 表达式
 };
 
 } // namespace litedb::core::binder::bound

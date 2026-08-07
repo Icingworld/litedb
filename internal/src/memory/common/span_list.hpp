@@ -116,13 +116,13 @@ public:
     static std::size_t ptr_to_id(void * pointer) noexcept;
 
 private:
-    SpanNode * prev_;  ///< 上一个节点
-    SpanNode * next_;  ///< 下一个节点
+    SpanNode * prev_;  // 上一个节点
+    SpanNode * next_;  // 下一个节点
 
-    FreeList free_list_;  ///< 空闲内存块链表
-    std::size_t page_id_;  ///< 页段逻辑编号
-    std::size_t page_count_;  ///< 页段包含的页数
-    std::size_t used_;  ///< 已使用的内存块数量
+    FreeList free_list_;  // 空闲内存块链表
+    std::size_t page_id_;  // 页段逻辑编号
+    std::size_t page_count_;  // 页段包含的页数
+    std::size_t used_;  // 已使用的内存块数量
 };
 
 /**
@@ -189,7 +189,7 @@ public:
     bool operator!=(const SpanListIterator & other) const noexcept;
 
 private:
-    SpanNode * current_;  ///< 当前页段节点
+    SpanNode * current_;  // 当前页段节点
 };
 
 /**
@@ -299,8 +299,8 @@ public:
     void clear() noexcept;
 
 private:
-    SpanNode head_;     ///< 虚拟头节点
-    std::size_t size_;  ///< 页段节点数量
+    SpanNode head_;     // 虚拟头节点
+    std::size_t size_;  // 页段节点数量
 };
 
 } // namespace litedb::memory

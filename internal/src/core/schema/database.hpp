@@ -31,8 +31,8 @@ public:
     const std::string & database_name() const noexcept;
 
 private:
-    common::DatabaseId database_id_;    ///< 数据库 ID
-    std::string database_name_;         ///< 数据库名称
+    common::DatabaseId database_id_;    // 数据库 ID
+    std::string database_name_;         // 数据库名称
 };
 
 } // namespace litedb::core::schema

@@ -19,13 +19,13 @@ namespace litedb::core::index
  */
 struct IndexDescriptor
 {
-    common::IndexId index_id;               ///< 索引 ID
-    common::CollectionId collection_id;     ///< 集合 ID
-    common::ColumnId column_id;             ///< 列 ID
-    std::size_t column_ordinal;             ///< 列序号
-    common::LogicalType key_type;           ///< 键类型
-    IndexKind kind;                         ///< 索引类型
-    bool unique {false};                    ///< 是否唯一
+    common::IndexId index_id;               // 索引 ID
+    common::CollectionId collection_id;     // 集合 ID
+    common::ColumnId column_id;             // 列 ID
+    std::size_t column_ordinal;             // 列序号
+    common::LogicalType key_type;           // 键类型
+    IndexKind kind;                         // 索引类型
+    bool unique {false};                    // 是否唯一
 };
 
 /**
@@ -110,8 +110,8 @@ private:
     std::expected<void, IndexError> validate_unique(const ScalarIndexKey & key) const;
 
 private:
-    IndexDescriptor descriptor_;                ///< 索引描述符
-    std::unique_ptr<ScalarIndex> backend_;      ///< 底层索引实现
+    IndexDescriptor descriptor_;                // 索引描述符
+    std::unique_ptr<ScalarIndex> backend_;      // 底层索引实现
 };
 
 } // namespace litedb::core::index

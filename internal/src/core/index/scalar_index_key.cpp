@@ -16,12 +16,12 @@ namespace
  */
 enum class KeyType
 {
-    Boolean,        ///< 布尔值
-    Integer,        ///< 整数
-    BigInt,         ///< 大整数
-    Float,          ///< 浮点数
-    Double,         ///< 双精度浮点数
-    Varchar,        ///< 字符串
+    Boolean,        // 布尔值
+    Integer,        // 整数
+    BigInt,         // 大整数
+    Float,          // 浮点数
+    Double,         // 双精度浮点数
+    Varchar,        // 字符串
 };
 
 /**

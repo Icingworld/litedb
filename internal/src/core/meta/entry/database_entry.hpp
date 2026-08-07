@@ -74,10 +74,10 @@ private:
     void remove_collection(std::string_view collection_key);
 
 private:
-    std::vector<common::CollectionId> collection_ids_;  ///< 数据库包含的集合 ID 列表
+    std::vector<common::CollectionId> collection_ids_;  // 数据库包含的集合 ID 列表
     std::unordered_map<
         std::string, common::CollectionId
-    > collections_by_key_;                              ///< 数据库包含的集合键到 ID 的映射
+    > collections_by_key_;                              // 数据库包含的集合键到 ID 的映射
 };
 
 } // namespace litedb::core::meta::entry

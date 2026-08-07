@@ -63,9 +63,9 @@ public:
 
 private:
     // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销
-    common::CollectionId collection_id_;                            ///< 集合 ID
-    std::vector<binder::bound::BoundAssignment> assignments_;       ///< 赋值
-    std::unique_ptr<op::LogicalPlanOperator> root_operator_;        ///< 根算子
+    common::CollectionId collection_id_;                            // 集合 ID
+    std::vector<binder::bound::BoundAssignment> assignments_;       // 赋值
+    std::unique_ptr<op::LogicalPlanOperator> root_operator_;        // 根算子
 };
 
 } // namespace litedb::core::logical_planner::plan

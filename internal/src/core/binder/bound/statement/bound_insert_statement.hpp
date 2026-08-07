@@ -44,8 +44,8 @@ public:
     std::vector<std::unique_ptr<BoundExpression>> take_values() noexcept;
 
 private:
-    common::CollectionId collection_id_;                        ///< 集合 ID
-    std::vector<std::unique_ptr<BoundExpression>> values_;      ///< 值列表
+    common::CollectionId collection_id_;                        // 集合 ID
+    std::vector<std::unique_ptr<BoundExpression>> values_;      // 值列表
 };
 
 } // namespace litedb::core::binder::bound

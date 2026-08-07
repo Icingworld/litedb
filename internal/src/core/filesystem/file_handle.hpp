@@ -99,7 +99,7 @@ public:
     std::expected<void, error::Error> sync_all();
 
 private:
-    std::unique_ptr<backend::FileHandleBackend> backend_;   ///< 文件句柄后端
+    std::unique_ptr<backend::FileHandleBackend> backend_;   // 文件句柄后端
 };
 
 } // namespace litedb::core::filesystem

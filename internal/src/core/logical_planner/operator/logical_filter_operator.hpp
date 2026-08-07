@@ -36,7 +36,7 @@ public:
     std::unique_ptr<binder::bound::BoundExpression> take_predicate() noexcept;
 
 private:
-    std::unique_ptr<binder::bound::BoundExpression> predicate_;   ///< 谓词
+    std::unique_ptr<binder::bound::BoundExpression> predicate_;   // 谓词
 };
 
 } // namespace litedb::core::logical_planner::op

@@ -75,7 +75,7 @@ public:
     bool matches_type(const LogicalType & type) const noexcept;
 
 private:
-    ValueData data_;     ///< 值数据
+    ValueData data_;     // 值数据
 };
 
 /**

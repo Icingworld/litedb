@@ -42,8 +42,8 @@ public:
     std::vector<std::byte> take_bytes() noexcept;    
 
 private:
-    std::vector<std::byte> bytes_;     ///< 字节数据
-    std::size_t max_bytes_;            ///< 最大缓冲区大小
+    std::vector<std::byte> bytes_;     // 字节数据
+    std::size_t max_bytes_;            // 最大缓冲区大小
 };
 
 } // namespace litedb::core::io

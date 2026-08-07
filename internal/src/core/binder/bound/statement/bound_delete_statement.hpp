@@ -43,8 +43,8 @@ public:
     std::unique_ptr<BoundExpression> take_where() noexcept;
 
 private:
-    common::CollectionId collection_id_;            ///< 集合 ID
-    std::unique_ptr<BoundExpression> where_;        ///< 条件表达式
+    common::CollectionId collection_id_;            // 集合 ID
+    std::unique_ptr<BoundExpression> where_;        // 条件表达式
 };
 
 } // namespace litedb::core::binder::bound

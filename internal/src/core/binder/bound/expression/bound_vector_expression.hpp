@@ -35,7 +35,7 @@ public:
     std::vector<std::unique_ptr<BoundExpression>> take_elements() noexcept;
 
 private:
-    std::vector<std::unique_ptr<BoundExpression>> elements_;      ///< 元素列表
+    std::vector<std::unique_ptr<BoundExpression>> elements_;      // 元素列表
 };
 
 } // namespace litedb::core::binder::bound

@@ -25,7 +25,7 @@ public:
     common::DatabaseId database_id() const noexcept;
 
 private:
-    common::DatabaseId database_id_;        ///< 数据库ID
+    common::DatabaseId database_id_;        // 数据库ID
 };
 
 } // namespace litedb::core::binder::bound

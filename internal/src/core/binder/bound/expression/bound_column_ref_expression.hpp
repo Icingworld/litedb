@@ -34,8 +34,8 @@ public:
     std::size_t column_ordinal() const noexcept;
 
 private:
-    common::ColumnId column_id_;                ///< 列 ID
-    std::size_t column_ordinal_;                ///< 列在集合中的序号
+    common::ColumnId column_id_;                // 列 ID
+    std::size_t column_ordinal_;                // 列在集合中的序号
 };
 
 } // namespace litedb::core::binder::bound

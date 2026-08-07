@@ -44,7 +44,7 @@ public:
     );
 
 private:
-    const BinderContext & context_;        ///< 绑定上下文
+    const BinderContext & context_;        // 绑定上下文
 };
 
 } // namespace litedb::core::binder

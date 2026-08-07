@@ -49,8 +49,8 @@ public:
     void release_range(FreeBlock * block, std::size_t size);
 
 private:
-    std::array<SpanList, MAX_ARRAY_SIZE> span_lists_;   ///< 页段链表数组
-    std::array<std::mutex, MAX_ARRAY_SIZE> mutexes_;    ///< 每个页段链表对应的互斥锁数组
+    std::array<SpanList, MAX_ARRAY_SIZE> span_lists_;   // 页段链表数组
+    std::array<std::mutex, MAX_ARRAY_SIZE> mutexes_;    // 每个页段链表对应的互斥锁数组
 };
 
 } // namespace litedb::memory

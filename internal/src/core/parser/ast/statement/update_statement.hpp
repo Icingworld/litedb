@@ -15,8 +15,8 @@ namespace litedb::core::parser::ast
  */
 struct Assignment
 {
-    std::string column_name;                        ///< 列名
-    std::unique_ptr<ExpressionNode> value;          ///< 值
+    std::string column_name;                        // 列名
+    std::unique_ptr<ExpressionNode> value;          // 值
 };
 
 /**
@@ -65,9 +65,9 @@ public:
     const ExpressionNode * where() const noexcept;
 
 private:
-    std::string collection_name_;           ///< 集合名称
-    AssignmentList assignments_;            ///< 赋值列表
-    std::unique_ptr<ExpressionNode> where_; ///< 条件表达式
+    std::string collection_name_;           // 集合名称
+    AssignmentList assignments_;            // 赋值列表
+    std::unique_ptr<ExpressionNode> where_; // 条件表达式
 };
 
 } // namespace litedb::core::parser::ast

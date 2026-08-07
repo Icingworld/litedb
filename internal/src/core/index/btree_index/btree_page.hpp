@@ -28,8 +28,8 @@ inline constexpr BTreePageId InvalidBTreePageId = 0;
  */
 enum class BTreePageType
 {
-    Internal,       ///< 内部页
-    Leaf,           ///< 叶子页
+    Internal,       // 内部页
+    Leaf,           // 叶子页
 };
 
 /**
@@ -38,8 +38,8 @@ enum class BTreePageType
  */
 struct BTreeEntryKey
 {
-    ScalarIndexKey key;             ///< 标量索引键
-    common::RecordId record_id;     ///< 记录 ID
+    ScalarIndexKey key;             // 标量索引键
+    common::RecordId record_id;     // 记录 ID
 };
 
 /**
@@ -167,10 +167,10 @@ public:
     bool erase(const BTreeEntryKey & entry);
 
 private:
-    BTreePageId page_id_;                    ///< 页 ID
-    BTreePageId previous_page_id_;           ///< 前一叶子页 ID
-    BTreePageId next_page_id_;               ///< 后一叶子页 ID
-    std::vector<BTreeLeafEntry> entries_;    ///< 有序叶子条目
+    BTreePageId page_id_;                    // 页 ID
+    BTreePageId previous_page_id_;           // 前一叶子页 ID
+    BTreePageId next_page_id_;               // 后一叶子页 ID
+    std::vector<BTreeLeafEntry> entries_;    // 有序叶子条目
 };
 
 /**
@@ -179,8 +179,8 @@ private:
  */
 struct BTreeInternalEntry
 {
-    BTreeEntryKey separator;          ///< 右子树最小内部键
-    BTreePageId right_child_id;       ///< 右子页 ID
+    BTreeEntryKey separator;          // 右子树最小内部键
+    BTreePageId right_child_id;       // 右子页 ID
 };
 
 /**
@@ -283,9 +283,9 @@ private:
     bool separators_are_strictly_ordered() const noexcept;
 
 private:
-    BTreePageId page_id_;                         ///< 页 ID
-    BTreePageId first_child_id_;                  ///< 第一个子页 ID
-    std::vector<BTreeInternalEntry> entries_;     ///< 有序分隔键与右子页
+    BTreePageId page_id_;                         // 页 ID
+    BTreePageId first_child_id_;                  // 第一个子页 ID
+    std::vector<BTreeInternalEntry> entries_;     // 有序分隔键与右子页
 };
 
 /**

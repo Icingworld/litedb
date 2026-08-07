@@ -22,10 +22,10 @@ namespace litedb::core::vindex
  */
 struct FlatIndexOptions
 {
-    common::CollectionId collection_id;                          ///< 集合 ID
-    std::size_t column_ordinal {0};                              ///< 向量列序号
-    std::size_t dimension {0};                                   ///< 向量维度
-    VectorDistanceMetric metric {VectorDistanceMetric::L2};      ///< 距离度量
+    common::CollectionId collection_id;                          // 集合 ID
+    std::size_t column_ordinal {0};                              // 向量列序号
+    std::size_t dimension {0};                                   // 向量维度
+    VectorDistanceMetric metric {VectorDistanceMetric::L2};      // 距离度量
 };
 
 /**
@@ -113,8 +113,8 @@ private:
     std::expected<void, VectorIndexError> validate_key(const VectorIndexKey & key) const;
 
 private:
-    FlatIndexOptions options_;                             ///< 配置
-    const storage::StorageEngine * storage_ {nullptr};     ///< 非拥有型存储引擎
+    FlatIndexOptions options_;                             // 配置
+    const storage::StorageEngine * storage_ {nullptr};     // 非拥有型存储引擎
 };
 
 } // namespace litedb::core::vindex

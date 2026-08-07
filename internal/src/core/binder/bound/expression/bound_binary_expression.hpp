@@ -58,9 +58,9 @@ public:
     std::unique_ptr<BoundExpression> take_right() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> left_;     ///< 左操作数
-    common::BinaryOperator op_;                 ///< 二元操作符
-    std::unique_ptr<BoundExpression> right_;    ///< 右操作数
+    std::unique_ptr<BoundExpression> left_;     // 左操作数
+    common::BinaryOperator op_;                 // 二元操作符
+    std::unique_ptr<BoundExpression> right_;    // 右操作数
 };
 
 } // namespace litedb::core::binder::bound

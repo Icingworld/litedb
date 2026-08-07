@@ -53,10 +53,10 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    common::DatabaseId database_id_;                     ///< 数据库 ID
-    std::optional<std::string> collection_name_;         ///< 集合名称
-    std::vector<meta::ColumnDefinition> columns_;        ///< 列定义列表
-    std::optional<std::string> comment_;                 ///< 集合注释
+    common::DatabaseId database_id_;                     // 数据库 ID
+    std::optional<std::string> collection_name_;         // 集合名称
+    std::vector<meta::ColumnDefinition> columns_;        // 列定义列表
+    std::optional<std::string> comment_;                 // 集合注释
 };
 
 } // namespace litedb::core::binder::bound

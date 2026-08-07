@@ -84,7 +84,7 @@ public:
     );
 
 private:
-    std::vector<FileWrite> writes_;    ///< 写入列表
+    std::vector<FileWrite> writes_;    // 写入列表
 };
 
 } // namespace litedb::core::wal

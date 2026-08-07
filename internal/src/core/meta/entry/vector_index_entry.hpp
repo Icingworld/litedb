@@ -14,7 +14,7 @@ namespace litedb::core::meta::entry
  */
 enum class VectorIndexKind
 {
-    Hnsw,                 ///< HNSW 索引
+    Hnsw,                 // HNSW 索引
 };
 
 /**
@@ -22,9 +22,9 @@ enum class VectorIndexKind
  */
 enum class VectorDistanceMetric
 {
-    L2,                   ///< 欧氏距离
-    InnerProduct,         ///< 内积
-    Cosine,               ///< 余弦距离
+    L2,                   // 欧氏距离
+    InnerProduct,         // 内积
+    Cosine,               // 余弦距离
 };
 
 /**
@@ -32,10 +32,10 @@ enum class VectorDistanceMetric
  */
 struct HnswOptions
 {
-    std::size_t max_neighbors {16};          ///< 最大邻居数量
-    std::size_t ef_construction {200};       ///< 构建候选数量
-    std::size_t ef_search_default {50};      ///< 默认搜索候选数量
-    std::size_t random_seed {0};             ///< 随机种子
+    std::size_t max_neighbors {16};          // 最大邻居数量
+    std::size_t ef_construction {200};       // 构建候选数量
+    std::size_t ef_search_default {50};      // 默认搜索候选数量
+    std::size_t random_seed {0};             // 随机种子
 };
 
 /**
@@ -134,12 +134,12 @@ public:
     std::size_t random_seed() const noexcept;
 
 private:
-    common::CollectionId collection_id_;      ///< 集合 ID
-    common::ColumnId column_id_;              ///< 列 ID
-    VectorIndexKind index_kind_;              ///< 向量索引类型
-    VectorDistanceMetric metric_;             ///< 距离度量
-    std::size_t dimension_;                   ///< 向量维度
-    HnswOptions hnsw_options_;                ///< HNSW 参数
+    common::CollectionId collection_id_;      // 集合 ID
+    common::ColumnId column_id_;              // 列 ID
+    VectorIndexKind index_kind_;              // 向量索引类型
+    VectorDistanceMetric metric_;             // 距离度量
+    std::size_t dimension_;                   // 向量维度
+    HnswOptions hnsw_options_;                // HNSW 参数
 };
 
 } // namespace litedb::core::meta::entry

@@ -82,8 +82,8 @@ private:
     );
 
 private:
-    asio::ip::tcp::socket socket_;                  ///< 套接字
-    std::uint64_t next_request_id_ {1};             ///< 下一个请求 ID
+    asio::ip::tcp::socket socket_;                  // 套接字
+    std::uint64_t next_request_id_ {1};             // 下一个请求 ID
 };
 
 } // namespace litedb::client

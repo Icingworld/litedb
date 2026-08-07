@@ -17,7 +17,7 @@ namespace litedb::core::parser::ast
  */
 struct AstDebugPrinterOptions
 {
-    bool include_location {true};    ///< 是否包含位置信息
+    bool include_location {true};    // 是否包含位置信息
 };
 
 /**
@@ -365,10 +365,10 @@ private:
     class IndentScope;
 
 private:
-    std::ostream & ostream_;              ///< 输出流
-    AstDebugPrinterOptions options_;      ///< 打印选项
-    std::size_t indent_;                  ///< 缩进
-    std::string pending_str_;             ///< 待处理的节点前缀
+    std::ostream & ostream_;              // 输出流
+    AstDebugPrinterOptions options_;      // 打印选项
+    std::size_t indent_;                  // 缩进
+    std::string pending_str_;             // 待处理的节点前缀
 };
 
 /**

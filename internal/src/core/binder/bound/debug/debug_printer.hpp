@@ -19,7 +19,7 @@ struct BoundColumn;
  */
 struct BoundDebugPrinterOptions
 {
-    bool include_type {true};    ///< 是否包含表达式和列的逻辑类型
+    bool include_type {true};    // 是否包含表达式和列的逻辑类型
 };
 
 /**
@@ -368,10 +368,10 @@ private:
     class IndentScope;
 
 private:
-    std::ostream & ostream_;              ///< 输出流
-    BoundDebugPrinterOptions options_;    ///< 打印选项
-    std::size_t indent_;                  ///< 缩进
-    std::string pending_str_;             ///< 待处理的节点前缀
+    std::ostream & ostream_;              // 输出流
+    BoundDebugPrinterOptions options_;    // 打印选项
+    std::size_t indent_;                  // 缩进
+    std::string pending_str_;             // 待处理的节点前缀
 };
 
 /**

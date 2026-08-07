@@ -45,7 +45,7 @@ private:
     parse_statement();
 
 private:
-    ParserContext context_;         ///< 解析器上下文
+    ParserContext context_;         // 解析器上下文
 };
 
 } // namespace litedb::core::parser
