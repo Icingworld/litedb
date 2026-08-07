@@ -3,7 +3,7 @@
 EN | [简体中文](docs/readme/README_zh_CN.md)
 
 `litedb` is a lightweight experimental database written in modern C++ (C++26).
-v0.8.0 provides a restartable single-node database pipeline: persistent
+v0.8.1 provides a restartable single-node database pipeline: persistent
 collection storage, persistent B+Tree scalar indexes, persistent HNSW vector
 indexes, rule-based query planning, checksum-protected redo WAL, and
 crash-consistent implicit statement transactions. Each DML or DDL statement
