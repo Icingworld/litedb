@@ -180,8 +180,13 @@ void print_client_error(const litedb::client::ClientError & error)
 {
     std::cerr << "error: " << error.message();
     const auto * context = error.context<litedb::client::ClientErrorContext>();
-    if (context != nullptr && context->server_code != 0) {
-        std::cerr << " (server code " << context->server_code << ')';
+    if (context != nullptr) {
+        if (context->server_code != 0) {
+            std::cerr << " (server code " << context->server_code << ')';
+        }
+        if (context->error) {
+            std::cerr << " (native " << context->error << ')';
+        }
     }
     std::cerr << '\n';
 }

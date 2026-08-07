@@ -5,6 +5,9 @@
 #include <type_traits>
 #include <utility>
 
+#include "protocol/message.hpp"
+#include "net/frame_io.hpp"
+
 namespace litedb::client
 {
 
@@ -134,7 +137,9 @@ asio::awaitable<std::expected<void, ClientError>> Client::connect(std::string_vi
         co_return std::unexpected(ClientError {
             ClientErrorCode::NetworkError,
             error.message(),
-            ClientErrorContext {.native_code = error.value()},
+            ClientErrorContext {
+                .error = error
+            },
         });
     }
 
@@ -146,7 +151,9 @@ asio::awaitable<std::expected<void, ClientError>> Client::connect(std::string_vi
         co_return std::unexpected(ClientError {
             ClientErrorCode::NetworkError,
             error.message(),
-            ClientErrorContext {.native_code = error.value()},
+            ClientErrorContext {
+                .error = error
+            },
         });
     }
 
@@ -170,7 +177,9 @@ asio::awaitable<std::expected<void, ClientError>> Client::connect(std::string_vi
         co_return std::unexpected(ClientError {
             ClientErrorCode::ServerError,
             decoded->message,
-            ClientErrorContext {.server_code = decoded->code},
+            ClientErrorContext {
+                .server_code = decoded->code,
+            },
         });
     }
     if (response->header.kind != protocol::MessageKind::HelloResponse) {
@@ -226,7 +235,9 @@ asio::awaitable<std::expected<core::executor::ExecutionResult, ClientError>> Cli
         co_return std::unexpected(ClientError {
             ClientErrorCode::ServerError,
             error->message,
-            ClientErrorContext {.server_code = error->code},
+            ClientErrorContext {
+                .server_code = error->code,
+            },
         });
     }
     if (response->header.kind != protocol::MessageKind::ExecuteSqlResponse) {

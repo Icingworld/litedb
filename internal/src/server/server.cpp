@@ -1,14 +1,15 @@
 #include "server/server.hpp"
 
-#include <limits>
 #include <system_error>
-#include <type_traits>
 #include <utility>
 
 #include "core/common/logical_type.hpp"
 #include "core/common/value.hpp"
 #include "core/database/session.hpp"
 #include "protocol/message.hpp"
+#include "net/frame_io.hpp"
+
+using TcpSocket = asio::ip::tcp::socket;
 
 namespace litedb::server
 {
@@ -168,7 +169,7 @@ asio::awaitable<void> Server::listen()
     }
 }
 
-asio::awaitable<void> Server::handle_connection(net::TcpSocket socket)
+asio::awaitable<void> Server::handle_connection(TcpSocket socket)
 {
     core::database::Session session {*engine_};
     bool handshaken = false;

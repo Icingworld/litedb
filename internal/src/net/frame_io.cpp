@@ -54,7 +54,13 @@ asio::awaitable<std::expected<protocol::Frame, NetworkError>> async_read_frame(
     if (!payload.empty()) {
         co_await asio::async_read(socket, asio::buffer(payload), asio::redirect_error(asio::use_awaitable, error));
         if (error) {
-            co_return std::unexpected(std::move(error));
+            co_return std::unexpected(NetworkError {
+                NetworkErrorCode::AsioError,
+                error.message(),
+                NetworkErrorContext {
+                    .error = error
+                },
+            });
         }
     }
 
@@ -79,7 +85,13 @@ asio::awaitable<std::expected<void, NetworkError>> async_write_frame(
     std::error_code error;
     co_await asio::async_write(socket, asio::buffer(*bytes), asio::redirect_error(asio::use_awaitable, error));
     if (error) {
-        co_return std::unexpected(std::move(error));
+        co_return std::unexpected(NetworkError {
+            NetworkErrorCode::AsioError,
+            error.message(),
+            NetworkErrorContext {
+                .error = error
+            },
+        });
     }
 
     co_return std::expected<void, NetworkError> {};
