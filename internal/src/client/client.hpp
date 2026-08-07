@@ -10,6 +10,7 @@
 
 #include "core/executor/execution_result.hpp"
 #include "net/frame_io.hpp"
+#include "protocol/message.hpp"
 
 namespace litedb::client
 {
@@ -48,17 +49,12 @@ public:
     [[nodiscard]]
     asio::awaitable<std::expected<core::executor::ExecutionResult, ClientError>> execute_sql(std::string_view sql);
 
-    void close();
+    [[nodiscard]]
+    asio::awaitable<std::expected<void, ClientError>> close();
 
 private:
     [[nodiscard]]
     std::uint64_t next_request_id() noexcept;
-
-    [[nodiscard]]
-    ClientError from_network_error(net::NetworkError error) const;
-
-    [[nodiscard]]
-    ClientError from_protocol_error(protocol::ProtocolError error) const;
 
     [[nodiscard]]
     asio::awaitable<std::expected<protocol::Frame, ClientError>> roundtrip(protocol::Frame frame);

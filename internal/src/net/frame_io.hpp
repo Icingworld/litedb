@@ -7,7 +7,7 @@
 
 #include <asio.hpp>
 
-#include "protocol/message.hpp"
+#include "protocol/codec.hpp"
 
 namespace litedb::net
 {
@@ -32,7 +32,7 @@ using TcpSocket = asio::ip::tcp::socket;
 [[nodiscard]]
 asio::awaitable<std::expected<protocol::Frame, NetworkError>> async_read_frame(
     TcpSocket & socket,
-    std::size_t max_frame_size = protocol::DefaultMaxFrameSize
+    std::size_t max_frame_size = protocol::MaxFrameSize
 );
 
 [[nodiscard]]

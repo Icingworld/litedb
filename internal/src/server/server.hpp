@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <string>
 
@@ -9,6 +10,7 @@
 
 #include "core/database/database_engine.hpp"
 #include "net/frame_io.hpp"
+#include "protocol/message.hpp"
 
 namespace litedb::server
 {
@@ -17,7 +19,8 @@ struct ServerConfig
 {
     std::string host {"127.0.0.1"};
     std::uint16_t port {0};
-    std::size_t max_frame_size {protocol::DefaultMaxFrameSize};
+    std::size_t max_frame_size {protocol::MaxFrameSize};
+    protocol::ProtocolDecodeLimits decode_limits {};
 };
 
 class Server
@@ -41,7 +44,11 @@ private:
     asio::awaitable<void> handle_connection(net::TcpSocket socket);
 
     [[nodiscard]]
-    protocol::Frame make_error_response(std::uint64_t request_id, std::uint16_t code, std::string message) const;
+    std::expected<protocol::Frame, protocol::ProtocolError> make_error_response(
+        std::uint64_t request_id,
+        std::uint16_t code,
+        std::string message
+    ) const;
 
     asio::ip::tcp::acceptor acceptor_;
     ServerConfig config_;

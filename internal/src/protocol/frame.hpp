@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "protocol/constants.hpp"
@@ -33,18 +33,23 @@ enum class MessageKind : std::uint16_t
 };
 
 /**
- * @brief 帧头
+ * @brief 固定帧头
  */
 struct FrameHeader
 {
-    std::uint32_t magic {FrameHeaderMagic};                 ///< 固定魔数
+    std::uint16_t version {ProtocolVersion};               ///< 协议版本
+    MessageKind kind {MessageKind::ErrorResponse};         ///< 消息类型
+    std::uint16_t flags {0};                               ///< 标志
+    std::uint64_t request_id {0};                          ///< 请求 ID
+};
+
+/**
+ * @brief 线帧头
+ */
+struct WireHeader
+{
+    FrameHeader header;                                     ///< 帧头
     std::uint32_t frame_size {0};                           ///< 帧大小
-    std::uint16_t version {ProtocolVersion};                ///< 协议版本号
-    std::uint16_t header_size {sizeof(FrameHeader)};        ///< 头部长度
-    MessageKind kind {MessageKind::ErrorResponse};          ///< 消息类型
-    std::uint16_t flags {0};                                ///< 标志位
-    std::uint16_t reserved {0};                             ///< 保留空间
-    std::uint64_t request_id {0};                           ///< 请求 ID
 };
 
 /**

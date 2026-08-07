@@ -1,7 +1,15 @@
-add_executable(protocol_tests
-    protocol_tests.cpp
+add_executable(protocol_frame_codec_tests
+    protocol_frame_codec_tests.cpp
 )
 
-target_link_libraries(protocol_tests PRIVATE litedb_protocol)
+target_link_libraries(protocol_frame_codec_tests PRIVATE litedb_protocol)
 
-add_test(NAME protocol_tests COMMAND protocol_tests)
+add_test(NAME protocol_frame_codec_tests COMMAND protocol_frame_codec_tests)
+
+add_executable(protocol_message_codec_tests
+    protocol_message_codec_tests.cpp
+)
+
+target_link_libraries(protocol_message_codec_tests PRIVATE litedb_protocol)
+
+add_test(NAME protocol_message_codec_tests COMMAND protocol_message_codec_tests)
