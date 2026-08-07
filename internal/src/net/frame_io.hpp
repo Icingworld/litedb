@@ -2,49 +2,40 @@
 
 #include <cstddef>
 #include <expected>
-#include <optional>
-#include <string>
 
 #include <asio.hpp>
 
-#include "protocol/codec.hpp"
+#include "net/net_error.hpp"
+#include "protocol/constants.hpp"
+#include "protocol/frame.hpp"
 
 namespace litedb::net
 {
 
-enum class NetworkErrorCode : std::uint8_t
-{
-    IoError,
-    ProtocolError,
-    FrameTooLarge,
-};
-
-struct NetworkErrorContext
-{
-    std::optional<int> native_code;
-    std::optional<std::uint16_t> source_code;
-};
-
-using NetworkError = core::error::Error;
-
-using TcpSocket = asio::ip::tcp::socket;
-
+/**
+ * @brief 异步读取帧
+ * @param socket 套接字
+ * @param max_frame_size 最大帧大小
+ * @return 帧
+ */
 [[nodiscard]]
-asio::awaitable<std::expected<protocol::Frame, NetworkError>> async_read_frame(
-    TcpSocket & socket,
+asio::awaitable<std::expected<protocol::Frame, NetworkError>>
+async_read_frame(
+    asio::ip::tcp::socket & socket,
     std::size_t max_frame_size = protocol::MaxFrameSize
 );
 
+/**
+ * @brief 异步写入帧
+ * @param socket 套接字
+ * @param frame 帧
+ * @return 是否成功
+ */
 [[nodiscard]]
-asio::awaitable<std::expected<void, NetworkError>> async_write_frame(TcpSocket & socket, const protocol::Frame & frame);
+asio::awaitable<std::expected<void, NetworkError>>
+async_write_frame(
+    asio::ip::tcp::socket & socket,
+    const protocol::Frame & frame
+);
 
 } // namespace litedb::net
-
-namespace litedb::core::error
-{
-template <>
-struct ErrorTraits<::litedb::net::NetworkErrorCode>
-{
-    static constexpr ErrorCategory category = ErrorCategory::Network;
-};
-} // namespace litedb::core::error

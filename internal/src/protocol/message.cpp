@@ -754,6 +754,7 @@ std::expected<ExecuteSqlResponse, ProtocolError> decode_execute_sql_response(
             ));
         }
         // 读取行值
+        // TODO: 添加值类型验证
         Row row;
         row.values.reserve(*value_count);
         for (std::uint32_t value_index = 0; value_index < *value_count; ++value_index) {
