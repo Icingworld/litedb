@@ -91,7 +91,7 @@ ParserInsertWorker::parse_insert_statement()
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
-        value_list.push_back(std::move(*value));
+        value_list.push_back(std::move(value->expression));
 
         if (!context_.match(TokenType::Comma)) {
             break;

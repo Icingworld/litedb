@@ -34,7 +34,7 @@ ParserSelectWorker::parse_select_statement()
         if (!item.has_value()) [[unlikely]] {
             return std::unexpected(std::move(item.error()));
         }
-        select_list.push_back(std::move(*item));
+        select_list.push_back(std::move(item->expression));
 
         if (!context_.match(TokenType::Comma)) {
             break;
@@ -61,7 +61,7 @@ ParserSelectWorker::parse_select_statement()
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
-        where = std::move(*expression);
+        where = std::move(expression->expression);
     }
 
     std::vector<ast::OrderByItem> order_by;
@@ -86,7 +86,7 @@ ParserSelectWorker::parse_select_statement()
                 ascending = false;
             }
 
-            order_by.push_back(ast::OrderByItem {std::move(*expression), ascending});
+            order_by.push_back(ast::OrderByItem {std::move(expression->expression), ascending});
 
             if (!context_.match(TokenType::Comma)) {
                 break;
@@ -127,7 +127,7 @@ ParserSelectWorker::parse_select_statement()
     );
 }
 
-std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+std::expected<ParsedExpression, ParserError>
 ParserSelectWorker::parse_select_item()
 {
     if (context_.check(TokenType::Star)) {
@@ -138,7 +138,10 @@ ParserSelectWorker::parse_select_item()
                 "Wildcard select item cannot have alias"
             ));
         }
-        return std::make_unique<ast::WildcardExpression>(context_.ast_location(star.location()));
+        return ParsedExpression {
+            std::make_unique<ast::WildcardExpression>(context_.ast_location(star.location())),
+            1,
+        };
     }
 
     if (context_.check(TokenType::Identifier)
@@ -153,10 +156,13 @@ ParserSelectWorker::parse_select_item()
                 "Wildcard select item cannot have alias"
             ));
         }
-        return std::make_unique<ast::WildcardExpression>(
-            std::string(qualifier.value()),
-            context_.ast_location(qualifier.location())
-        );
+        return ParsedExpression {
+            std::make_unique<ast::WildcardExpression>(
+                std::string(qualifier.value()),
+                context_.ast_location(qualifier.location())
+            ),
+            1,
+        };
     }
 
     ParserExpressionWorker expression_worker(context_);
@@ -178,12 +184,23 @@ ParserSelectWorker::parse_select_item()
         return std::unexpected(std::move(alias.error()));
     }
 
-    const auto location = (*expression)->location();
-    return std::make_unique<ast::AliasExpression>(
-        std::move(*expression),
-        std::string(alias->value()),
-        location
+    auto depth = context_.make_expression_parent_depth(
+        expression->depth,
+        alias->location()
     );
+    if (!depth.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(depth.error()));
+    }
+
+    const auto location = expression->expression->location();
+    return ParsedExpression {
+        std::make_unique<ast::AliasExpression>(
+            std::move(expression->expression),
+            std::string(alias->value()),
+            location
+        ),
+        *depth,
+    };
 }
 
 } // namespace litedb::core::parser

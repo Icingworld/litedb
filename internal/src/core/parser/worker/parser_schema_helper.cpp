@@ -168,7 +168,7 @@ std::expected<ast::ColumnDefinitionSyntax, ParserError> ParserSchemaHelper::pars
                     ParserErrorCode::ExpectedLiteral, "Expected literal after DEFAULT"
                 ));
             }
-            column.default_value = std::move(*default_value);
+            column.default_value = std::move(default_value->expression);
         } else if (context_.match(TokenType::Not)) {
             auto null_token = context_.consume(TokenType::Null, "Expected NULL after NOT");
             if (!null_token.has_value()) [[unlikely]] {

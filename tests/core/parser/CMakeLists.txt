@@ -29,3 +29,11 @@ add_executable(parser_parser_tests
 target_link_libraries(parser_parser_tests PRIVATE litedb_parser)
 
 add_test(NAME parser_parser_tests COMMAND parser_parser_tests)
+
+add_executable(parser_depth_tests
+    parser_depth_tests.cpp
+)
+
+target_link_libraries(parser_depth_tests PRIVATE litedb_parser)
+
+add_test(NAME parser_depth_tests COMMAND parser_depth_tests)

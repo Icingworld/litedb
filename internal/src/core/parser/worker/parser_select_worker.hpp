@@ -5,6 +5,7 @@
 
 #include "core/parser/parser_context.hpp"
 #include "core/parser/parser_error.hpp"
+#include "core/parser/worker/parser_expression_worker.hpp"
 
 namespace litedb::core::parser
 {
@@ -32,7 +33,7 @@ public:
 private:
     // 解析 SELECT 列表项
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
+    std::expected<ParsedExpression, ParserError>
     parse_select_item();
 
 private:

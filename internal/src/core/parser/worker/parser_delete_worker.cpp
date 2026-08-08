@@ -42,7 +42,7 @@ ParserDeleteWorker::parse_delete_statement()
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
-        where = std::move(*expression);
+        where = std::move(expression->expression);
     }
 
     return std::make_unique<ast::DeleteStatement>(

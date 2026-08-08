@@ -59,7 +59,7 @@ ParserUpdateWorker::parse_update_statement()
 
         assignments.push_back(ast::Assignment {
             .column_name = std::move(*column),
-            .value = std::move(*value),
+            .value = std::move(value->expression),
         });
 
         if (!context_.match(TokenType::Comma)) {
@@ -73,7 +73,7 @@ ParserUpdateWorker::parse_update_statement()
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
-        where = std::move(*expression);
+        where = std::move(expression->expression);
     }
 
     return std::make_unique<ast::UpdateStatement>(

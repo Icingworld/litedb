@@ -5,9 +5,15 @@
 
 #include "core/parser/lexer.hpp"
 #include "core/parser/parser_helper.hpp"
+#include "core/parser/parser_limits.hpp"
 
 namespace litedb::core::parser
 {
+
+ParserContext::ExpressionNestingGuard::ExpressionNestingGuard(ParserContext & context) noexcept
+    : context_(context)
+{
+}
 
 ParserContext::ParserContext(Lexer & lexer) noexcept
     : lexer_(lexer)
@@ -17,8 +23,14 @@ ParserContext::ParserContext(Lexer & lexer) noexcept
 {
 }
 
+ParserContext::ExpressionNestingGuard::~ExpressionNestingGuard()
+{
+    context_.leave_expression_nesting();
+}
+
 void ParserContext::initialize()
 {
+    expression_nesting_depth_ = 0;
     current_token_ = lexer_.next();
     next_token_ = lexer_.next();
     next_after_next_token_ = lexer_.next();
@@ -76,7 +88,65 @@ ParserError ParserContext::make_current_error(
         );
     }
 
-    return make_parser_error(code, current_token_.location(), message);
+    return make_error(code, current_token_.location(), message);
+}
+
+ParserError ParserContext::make_error(
+    ParserErrorCode code,
+    TokenLocation location,
+    std::string_view message
+) const
+{
+    return make_parser_error(code, location, message);
+}
+
+std::expected<ParserContext::ExpressionNestingGuard, ParserError>
+ParserContext::enter_expression_nesting(TokenLocation location)
+{
+    if (expression_nesting_limit_reached()) [[unlikely]] {
+        return std::unexpected(make_expression_nesting_error(location));
+    }
+
+    ++expression_nesting_depth_;
+    return ExpressionNestingGuard(*this);
+}
+
+bool ParserContext::expression_nesting_limit_reached() const noexcept
+{
+    return expression_nesting_depth_ >= MaxExpressionDepth;
+}
+
+ParserError ParserContext::make_expression_nesting_error(
+    TokenLocation location
+) const
+{
+    return make_error(
+        ParserErrorCode::ExpressionDepthLimitExceeded,
+        location,
+        "Maximum expression nesting depth exceeded (limit: 256)"
+    );
+}
+
+std::expected<std::size_t, ParserError>
+ParserContext::make_expression_parent_depth(
+    std::size_t max_child_depth,
+    TokenLocation location
+) const
+{
+    if (max_child_depth >= MaxExpressionDepth) [[unlikely]] {
+        return std::unexpected(make_error(
+            ParserErrorCode::ExpressionDepthLimitExceeded,
+            location,
+            "Maximum AST expression depth exceeded (limit: 256)"
+        ));
+    }
+
+    return max_child_depth + 1;
+}
+
+void ParserContext::leave_expression_nesting() noexcept
+{
+    --expression_nesting_depth_;
 }
 
 std::expected<Token, ParserError> ParserContext::consume(
