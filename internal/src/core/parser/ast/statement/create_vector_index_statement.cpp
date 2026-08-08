@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/create_vector_index_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -13,7 +14,7 @@ CreateVectorIndexStatement::CreateVectorIndexStatement(
     CreateVectorIndexMethod method,
     VectorIndexOptions options,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , index_name_(std::move(index_name))
     , collection_name_(std::move(collection_name))
@@ -22,6 +23,9 @@ CreateVectorIndexStatement::CreateVectorIndexStatement(
     , method_(method)
     , options_(options)
 {
+    assert(!index_name_.empty());
+    assert(!collection_name_.empty());
+    assert(!column_name_.empty());
 }
 
 AstNodeKind CreateVectorIndexStatement::kind() const noexcept

@@ -155,18 +155,18 @@ void AstDebugPrinter::visit_create_collection_statement(
         write_indent();
         ostream_ << '[' << index << "] ColumnDefinitionSyntax\n";
         IndentScope column_scope(*this);
-        write_field("name", column.name);
+        write_field("name", column->name);
         write_indent();
         ostream_ << "type:\n";
         {
             IndentScope type_scope(*this);
-            write_field("kind", logical_type_name(column.type.id));
-            write_optional_field("parameter", column.type.parameter);
+            write_field("kind", logical_type_name(column->type.id));
+            write_optional_field("parameter", column->type.parameter);
         }
-        write_field("unique", column.unique);
-        write_field("nullable", column.nullable);
-        write_child_field("default_value", column.default_value.get());
-        write_optional_field("comment", column.comment);
+        write_field("unique", column->unique);
+        write_field("nullable", column->nullable);
+        write_child_field("default_value", column->default_value.get());
+        write_optional_field("comment", column->comment);
     }
 }
 
@@ -640,7 +640,24 @@ void AstDebugPrinter::write_child_field(
 {
     write_indent();
     ostream_ << name << ':';
-    if (expression == nullptr) {
+    if (!expression) {
+        ostream_ << " <none>\n";
+        return;
+    }
+
+    ostream_ << '\n';
+    IndentScope scope(*this);
+    print(*expression);
+}
+
+void AstDebugPrinter::write_child_field(
+    std::string_view name,
+    std::optional<const ExpressionNode &> expression
+)
+{
+    write_indent();
+    ostream_ << name << ':';
+    if (!expression) {
         ostream_ << " <none>\n";
         return;
     }

@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -8,10 +9,11 @@ namespace litedb::core::parser::ast
 ShowIndexesStatement::ShowIndexesStatement(
     std::string collection_name,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , collection_name_(std::move(collection_name))
 {
+    assert(!collection_name_.empty());
 }
 
 AstNodeKind ShowIndexesStatement::kind() const noexcept

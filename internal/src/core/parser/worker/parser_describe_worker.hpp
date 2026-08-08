@@ -16,19 +16,14 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief DESCRIBE 语句解析工作器
- */
+// DESCRIBE 语句解析工作器
 class ParserDescribeWorker
 {
 public:
-    explicit ParserDescribeWorker(ParserContext & context);
+    explicit ParserDescribeWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 DESCRIBE COLLECTION 语句
-     * @return 解析结果
-     */
+    // 解析 DESCRIBE COLLECTION 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_describe_collection_statement();

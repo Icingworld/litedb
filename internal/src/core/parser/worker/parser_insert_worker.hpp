@@ -16,19 +16,14 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief INSERT 语句解析工作器
- */
+// INSERT 语句解析工作器
 class ParserInsertWorker
 {
 public:
-    explicit ParserInsertWorker(ParserContext & context);
+    explicit ParserInsertWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 INSERT 语句
-     * @return 解析结果
-     */
+    // 解析 INSERT 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_insert_statement();

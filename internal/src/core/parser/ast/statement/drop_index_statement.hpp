@@ -7,9 +7,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief DROP INDEX 语句节点
- */
+// DROP INDEX 语句节点
 class DropIndexStatement final : public StatementNode
 {
 public:
@@ -18,41 +16,29 @@ public:
         std::string collection_name,
         bool if_exists,
         AstNodeLocation location
-    ) noexcept;
+    );
 
 public:
-    /**
-     * @brief 获取节点类型
-     * @return 节点类型
-     */
+    // 获取节点类型
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
-    /**
-     * @brief 获取索引名称
-     * @return 索引名称
-     */
+    // 获取索引名称
     [[nodiscard]]
     const std::string & index_name() const noexcept;
 
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
+    // 获取集合名称
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
 
-    /**
-     * @brief 是否存在
-     * @return 是否存在
-     */
+    // 是否存在 IF EXISTS
     [[nodiscard]]
     bool if_exists() const noexcept;
 
 private:
     std::string index_name_;        // 索引名称
     std::string collection_name_;   // 集合名称
-    bool if_exists_;                // 是否存在
+    bool if_exists_;                // 是否存在 IF EXISTS
 };
 
 } // namespace litedb::core::parser::ast

@@ -1,17 +1,22 @@
 #include "core/parser/ast/expression/vector_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
 
 VectorExpression::VectorExpression(
-    ElementList elements,
+    std::vector<std::unique_ptr<ExpressionNode>> elements,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , elements_(std::move(elements))
 {
+    assert(!elements_.empty());
+    for (const auto & element : elements_) {
+        assert(element != nullptr);
+    }
 }
 
 AstNodeKind VectorExpression::kind() const noexcept
@@ -19,7 +24,7 @@ AstNodeKind VectorExpression::kind() const noexcept
     return AstNodeKind::Vector;
 }
 
-const VectorExpression::ElementList & VectorExpression::elements() const noexcept
+const std::vector<std::unique_ptr<ExpressionNode>> & VectorExpression::elements() const noexcept
 {
     return elements_;
 }

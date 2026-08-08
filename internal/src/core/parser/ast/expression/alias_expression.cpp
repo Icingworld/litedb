@@ -1,6 +1,7 @@
 #include "core/parser/ast/expression/alias_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,13 @@ AliasExpression::AliasExpression(
     std::unique_ptr<ExpressionNode> expression,
     std::string alias,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , expression_(std::move(expression))
     , alias_(std::move(alias))
 {
+    assert(expression_ != nullptr);
+    assert(!alias_.empty());
 }
 
 AstNodeKind AliasExpression::kind() const noexcept

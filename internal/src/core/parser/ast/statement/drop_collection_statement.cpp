@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,12 @@ DropCollectionStatement::DropCollectionStatement(
     std::string collection_name,
     bool if_exists,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , collection_name_(std::move(collection_name))
     , if_exists_(if_exists)
 {
+    assert(!collection_name_.empty());
 }
 
 AstNodeKind DropCollectionStatement::kind() const noexcept

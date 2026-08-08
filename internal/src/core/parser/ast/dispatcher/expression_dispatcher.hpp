@@ -20,12 +20,9 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief AST 表达式调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- * @tparam IsConst 是否为常量
- */
+// AST 表达式调度器
+// 基于 CRTP 实现，Derived 为派生类类型，ReturnType 为返回类型
+// IsConst 为是否为常量，当调度器会修改节点时，传入 false，否则传入 true
 template <
     typename Derived,
     typename ReturnType,
@@ -34,9 +31,7 @@ template <
 class AstExpressionDispatcher
 {
 protected:
-    /**
-     * @brief 引用类型
-     */
+    // 引用类型
     template <typename T>
     using ReferenceType = std::conditional_t<
         IsConst,
@@ -45,11 +40,7 @@ protected:
     >;
 
 protected:
-    /**
-     * @brief 调度表达式
-     * @param expression 表达式
-     * @return 返回值
-     */
+    // 调度表达式
     [[nodiscard]]
     ReturnType dispatch_expression(ReferenceType<ExpressionNode> expression)
     {
@@ -108,10 +99,7 @@ protected:
     }
 
 private:
-    /**
-     * @brief 获取派生类引用
-     * @return 派生类引用
-     */
+    // 获取派生类引用
     [[nodiscard]]
     Derived & derived() noexcept
     {
@@ -119,11 +107,7 @@ private:
     }
 };
 
-/**
- * @brief 常量 AST 表达式调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 常量 AST 表达式调度器
 template <typename Derived, typename ReturnType>
 using ConstAstExpressionDispatcher = AstExpressionDispatcher<
     Derived,
@@ -131,11 +115,7 @@ using ConstAstExpressionDispatcher = AstExpressionDispatcher<
     true
 >;
 
-/**
- * @brief 可变 AST 表达式调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 可变 AST 表达式调度器
 template <typename Derived, typename ReturnType>
 using MutableAstExpressionDispatcher = AstExpressionDispatcher<
     Derived,

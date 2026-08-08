@@ -9,17 +9,13 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief 创建向量索引方法
- */
+// 创建向量索引方法
 enum class CreateVectorIndexMethod
 {
     Hnsw,                     // HNSW
 };
 
-/**
- * @brief 向量索引指标
- */
+// 向量索引指标
 enum class VectorIndexMetric
 {
     Default,                  // 默认
@@ -28,9 +24,7 @@ enum class VectorIndexMetric
     Cosine,                   // Cosine
 };
 
-/**
- * @brief 向量索引选项
- */
+// 向量索引选项
 struct VectorIndexOptions
 {
     VectorIndexMetric metric {VectorIndexMetric::Default};   // 指标
@@ -40,9 +34,7 @@ struct VectorIndexOptions
     std::optional<std::size_t> random_seed;                  // 随机种子
 };
 
-/**
- * @brief 创建向量索引语句节点
- */
+// 创建向量索引语句节点
 class CreateVectorIndexStatement final : public StatementNode
 {
 public:
@@ -54,55 +46,34 @@ public:
         CreateVectorIndexMethod method,
         VectorIndexOptions options,
         AstNodeLocation location
-    ) noexcept;
+    );
 
 public:
-    /**
-     * @brief 获取节点类型
-     * @return 节点类型
-     */
+    // 获取节点类型
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
-    /**
-     * @brief 获取索引名称
-     * @return 索引名称
-     */
+    // 获取索引名称
     [[nodiscard]]
     const std::string & index_name() const noexcept;
 
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
+    // 获取集合名称
     [[nodiscard]]
     const std::string & collection_name() const noexcept;
 
-    /**
-     * @brief 获取列名称
-     * @return 列名称
-     */
+    // 获取列名称
     [[nodiscard]]
     const std::string & column_name() const noexcept;
 
-    /**
-     * @brief 是否不存在
-     * @return 是否不存在
-     */
+    // 是否存在 IF NOT EXISTS
     [[nodiscard]]
     bool if_not_exists() const noexcept;
 
-    /**
-     * @brief 获取创建向量索引方法
-     * @return 创建向量索引方法
-     */
+    // 获取创建向量索引方法
     [[nodiscard]]
     CreateVectorIndexMethod method() const noexcept;
 
-    /**
-     * @brief 获取向量索引选项
-     * @return 向量索引选项
-     */
+    // 获取向量索引选项
     [[nodiscard]]
     const VectorIndexOptions & options() const noexcept;
 
@@ -110,7 +81,7 @@ private:
     std::string index_name_;                      // 索引名称
     std::string collection_name_;                 // 集合名称
     std::string column_name_;                     // 列名称
-    bool if_not_exists_;                          // 是否不存在
+    bool if_not_exists_;                          // 是否存在 IF NOT EXISTS
     CreateVectorIndexMethod method_;              // 创建向量索引方法
     VectorIndexOptions options_;                  // 向量索引选项
 };

@@ -1,6 +1,7 @@
 #include "core/parser/ast/expression/identifier_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -8,10 +9,11 @@ namespace litedb::core::parser::ast
 IdentifierExpression::IdentifierExpression(
     std::string name,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , name_(std::move(name))
 {
+    assert(!name_.empty());
 }
 
 AstNodeKind IdentifierExpression::kind() const noexcept

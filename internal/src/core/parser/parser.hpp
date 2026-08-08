@@ -18,9 +18,7 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief 解析器
- */
+// 解析器
 class Parser
 {
 public:
@@ -39,10 +37,7 @@ public:
     ~Parser();
 
 public:
-    /**
-     * @brief 解析 SQL 语句
-     * @return 解析结果
-     */
+    // 解析 SQL 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse();
 

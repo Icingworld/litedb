@@ -9,7 +9,7 @@
 namespace litedb::core::parser
 {
 
-ParserContext::ParserContext(Lexer & lexer)
+ParserContext::ParserContext(Lexer & lexer) noexcept
     : lexer_(lexer)
     , current_token_(TokenType::EoF, "", TokenLocation {1, 1})
     , next_token_(TokenType::EoF, "", TokenLocation {1, 1})

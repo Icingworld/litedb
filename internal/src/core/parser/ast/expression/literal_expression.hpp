@@ -8,9 +8,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief 字面量表达式节点
- */
+// 字面量表达式节点
 class LiteralExpression final : public ExpressionNode
 {
 public:
@@ -18,27 +16,18 @@ public:
         TokenType literal_type,
         std::string value,
         AstNodeLocation location
-    ) noexcept;
+    );
 
 public:
-    /**
-     * @brief 获取节点类型
-     * @return 节点类型
-     */
+    // 获取节点类型
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
-    /**
-     * @brief 获取字面量类型
-     * @return 字面量类型
-     */
+    // 获取字面量类型
     [[nodiscard]]
     TokenType literal_type() const noexcept;
 
-    /**
-     * @brief 获取字面量值
-     * @return 字面量值
-     */
+    // 获取字面量值
     [[nodiscard]]
     const std::string & value() const noexcept;
 

@@ -16,19 +16,14 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief UPDATE 语句解析工作器
- */
+// UPDATE 语句解析工作器
 class ParserUpdateWorker
 {
 public:
-    explicit ParserUpdateWorker(ParserContext & context);
+    explicit ParserUpdateWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 UPDATE 语句
-     * @return 解析结果
-     */
+    // 解析 UPDATE 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_update_statement();

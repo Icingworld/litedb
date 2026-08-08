@@ -1,5 +1,6 @@
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
+#include "core/parser/ast/expression/expression_node.hpp"
 #include "core/parser/ast/expression/identifier_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -43,7 +45,7 @@ void test_expression_nodes()
 
 void test_statement_nodes()
 {
-    SelectStatement::SelectList select_list;
+    std::vector<std::unique_ptr<ExpressionNode>> select_list;
     select_list.push_back(std::make_unique<IdentifierExpression>("name", AstNodeLocation {1, 8}));
 
     SelectStatement statement(
@@ -60,7 +62,7 @@ void test_statement_nodes()
     require(statement.location().line == 1, "select statement line mismatch");
     require(statement.collection_name() == "users", "select collection mismatch");
     require(statement.select_list().size() == 1, "select list size mismatch");
-    require(statement.where() == nullptr, "select where should be empty");
+    require(!statement.where().has_value(), "select where should be empty");
     require(statement.limit().has_value() && statement.limit().value() == 10, "select limit mismatch");
 }
 
@@ -75,26 +77,26 @@ void test_create_database_statement()
 
 void test_create_collection_statement()
 {
-    ColumnDefinitionSyntax id;
-    id.name = "id";
-    id.type = LogicalType {LogicalTypeId::BigInt, std::nullopt};
+    auto id = std::make_unique<ColumnDefinitionSyntax>();
+    id->name = "id";
+    id->type = LogicalType {LogicalTypeId::BigInt, std::nullopt};
 
-    ColumnDefinitionSyntax name;
-    name.name = "name";
-    name.type = LogicalType {LogicalTypeId::Varchar, 64};
+    auto name = std::make_unique<ColumnDefinitionSyntax>();
+    name->name = "name";
+    name->type = LogicalType {LogicalTypeId::Varchar, 64};
 
-    ColumnDefinitionSyntax age;
-    age.name = "age";
-    age.type = LogicalType {LogicalTypeId::Integer, std::nullopt};
-    age.default_value = std::make_unique<LiteralExpression>(
+    auto age = std::make_unique<ColumnDefinitionSyntax>();
+    age->name = "age";
+    age->type = LogicalType {LogicalTypeId::Integer, std::nullopt};
+    age->default_value = std::make_unique<LiteralExpression>(
         TokenType::IntegerLiteral,
         "0",
         AstNodeLocation {4, 25}
     );
 
-    ColumnDefinitionSyntax embedding;
-    embedding.name = "embedding";
-    embedding.type = LogicalType {LogicalTypeId::Vector, 128};
+    auto embedding = std::make_unique<ColumnDefinitionSyntax>();
+    embedding->name = "embedding";
+    embedding->type = LogicalType {LogicalTypeId::Vector, 128};
 
     ColumnDefinitionSyntaxList columns;
     columns.push_back(std::move(id));
@@ -110,11 +112,11 @@ void test_create_collection_statement()
     require(statement.columns().size() == 4, "create collection columns size mismatch");
     require(statement.comment().has_value(), "create collection comment missing");
     require(statement.comment().value() == "user collection", "create collection comment mismatch");
-    require(statement.columns()[1].type.parameter.has_value(), "varchar parameter should exist");
-    require(statement.columns()[1].type.parameter.value() == 64, "varchar parameter mismatch");
-    require(statement.columns()[2].default_value != nullptr, "default value should exist");
-    require(statement.columns()[3].type.id == LogicalTypeId::Vector, "vector column type mismatch");
-    require(statement.columns()[3].type.parameter.value() == 128, "vector dimension mismatch");
+    require(statement.columns()[1]->type.parameter.has_value(), "varchar parameter should exist");
+    require(statement.columns()[1]->type.parameter.value() == 64, "varchar parameter mismatch");
+    require(statement.columns()[2]->default_value != nullptr, "default value should exist");
+    require(statement.columns()[3]->type.id == LogicalTypeId::Vector, "vector column type mismatch");
+    require(statement.columns()[3]->type.parameter.value() == 128, "vector dimension mismatch");
 }
 
 void test_schema_object_type_statements()

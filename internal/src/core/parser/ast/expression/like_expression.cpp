@@ -1,6 +1,7 @@
 #include "core/parser/ast/expression/like_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,13 @@ LikeExpression::LikeExpression(
     std::unique_ptr<ExpressionNode> expression,
     std::unique_ptr<ExpressionNode> pattern,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , expression_(std::move(expression))
     , pattern_(std::move(pattern))
 {
+    assert(expression_ != nullptr);
+    assert(pattern_ != nullptr);
 }
 
 AstNodeKind LikeExpression::kind() const noexcept

@@ -17,56 +17,35 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief DROP 语句解析工作器
- */
+// DROP 语句解析工作器
 class ParserDropWorker
 {
 public:
-    explicit ParserDropWorker(ParserContext & context);
+    explicit ParserDropWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 DROP 语句
-     * @return 解析结果
-     */
+    // 解析 DROP 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_drop_statement();
 
 private:
-    /**
-     * @brief 解析 DROP DATABASE 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 DROP DATABASE 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_drop_database_statement(TokenLocation location);
 
-    /**
-     * @brief 解析 DROP COLLECTION 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 DROP COLLECTION 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_drop_collection_statement(TokenLocation location);
 
-    /**
-     * @brief 解析 DROP INDEX 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 DROP INDEX 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_drop_index_statement(TokenLocation location);
 
-    /**
-     * @brief 解析 DROP VECTOR INDEX 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 DROP VECTOR INDEX 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_drop_vector_index_statement(TokenLocation location);

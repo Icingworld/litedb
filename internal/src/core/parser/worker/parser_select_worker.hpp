@@ -17,28 +17,20 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief SELECT 语句解析工作器
- */
+// SELECT 语句解析工作器
 class ParserSelectWorker
 {
 public:
-    explicit ParserSelectWorker(ParserContext & context);
+    explicit ParserSelectWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 SELECT 语句
-     * @return 解析结果
-     */
+    // 解析 SELECT 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_select_statement();
 
 private:
-    /**
-     * @brief 解析 SELECT 列表项
-     * @return 解析结果
-     */
+    // 解析 SELECT 列表项
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_select_item();

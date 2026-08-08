@@ -1,6 +1,7 @@
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,15 @@ ColumnReferenceExpression::ColumnReferenceExpression(
     std::optional<std::string> qualifier,
     std::string column_name,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , qualifier_(std::move(qualifier))
     , column_name_(std::move(column_name))
 {
+    if (qualifier_.has_value()) {
+        assert(!qualifier_.value().empty());
+    }
+    assert(!column_name_.empty());
 }
 
 AstNodeKind ColumnReferenceExpression::kind() const noexcept

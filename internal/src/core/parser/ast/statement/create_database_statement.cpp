@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/create_database_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,12 @@ CreateDatabaseStatement::CreateDatabaseStatement(
     std::string database_name,
     bool if_not_exists,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , database_name_(std::move(database_name))
     , if_not_exists_(if_not_exists)
 {
+    assert(!database_name_.empty());
 }
 
 AstNodeKind CreateDatabaseStatement::kind() const noexcept

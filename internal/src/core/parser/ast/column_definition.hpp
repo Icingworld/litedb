@@ -11,9 +11,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief CREATE COLLECTION 中尚未绑定的列定义
- */
+// CREATE COLLECTION 中尚未绑定的列定义
 struct ColumnDefinitionSyntax
 {
     std::string name;                                 // 列名称
@@ -25,6 +23,6 @@ struct ColumnDefinitionSyntax
     AstNodeLocation location {};                      // 列定义位置
 };
 
-using ColumnDefinitionSyntaxList = std::vector<ColumnDefinitionSyntax>;
+using ColumnDefinitionSyntaxList = std::vector<std::unique_ptr<ColumnDefinitionSyntax>>;
 
 } // namespace litedb::core::parser::ast

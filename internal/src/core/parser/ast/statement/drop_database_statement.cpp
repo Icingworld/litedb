@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/drop_database_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,12 @@ DropDatabaseStatement::DropDatabaseStatement(
     std::string database_name,
     bool if_exists,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , database_name_(std::move(database_name))
     , if_exists_(if_exists)
 {
+    assert(!database_name_.empty());
 }
 
 AstNodeKind DropDatabaseStatement::kind() const noexcept

@@ -1,19 +1,20 @@
 #include "core/parser/ast/statement/select_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
 
 SelectStatement::SelectStatement(
-    SelectList select_list,
+    std::vector<std::unique_ptr<ExpressionNode>> select_list,
     std::string collection_name,
     std::unique_ptr<ExpressionNode> where,
-    OrderByList order_by,
+    std::vector<OrderByItem> order_by,
     std::optional<std::size_t> limit,
     std::optional<std::size_t> offset,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , select_list_(std::move(select_list))
     , collection_name_(std::move(collection_name))
@@ -22,6 +23,14 @@ SelectStatement::SelectStatement(
     , limit_(limit)
     , offset_(offset)
 {
+    assert(!select_list_.empty());
+    for (const auto & select_item : select_list_) {
+        assert(select_item != nullptr);
+    }
+    assert(!collection_name_.empty());
+    for (const auto & order_by_item : order_by_) {
+        assert(order_by_item.expression != nullptr);
+    }
 }
 
 AstNodeKind SelectStatement::kind() const noexcept
@@ -29,7 +38,7 @@ AstNodeKind SelectStatement::kind() const noexcept
     return AstNodeKind::Select;
 }
 
-const SelectStatement::SelectList & SelectStatement::select_list() const noexcept
+const std::vector<std::unique_ptr<ExpressionNode>> & SelectStatement::select_list() const noexcept
 {
     return select_list_;
 }
@@ -39,12 +48,16 @@ const std::string & SelectStatement::collection_name() const noexcept
     return collection_name_;
 }
 
-const ExpressionNode * SelectStatement::where() const noexcept
+std::optional<const ExpressionNode &> SelectStatement::where() const noexcept
 {
-    return where_.get();
+    if (!where_) {
+        return std::nullopt;
+    }
+
+    return *where_;
 }
 
-const SelectStatement::OrderByList & SelectStatement::order_by() const noexcept
+const std::vector<OrderByItem> & SelectStatement::order_by() const noexcept
 {
     return order_by_;
 }

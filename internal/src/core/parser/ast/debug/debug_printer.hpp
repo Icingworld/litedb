@@ -360,6 +360,16 @@ private:
     );
 
     /**
+     * @brief 写入表达式子字段
+     * @param name 字段名称
+     * @param expression 表达式，允许为空
+     */
+    void write_child_field(
+        std::string_view name,
+        std::optional<const ExpressionNode &> expression
+    );
+
+    /**
      * @brief 缩进作用域
      */
     class IndentScope;

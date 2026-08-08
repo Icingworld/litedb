@@ -8,82 +8,80 @@
 namespace litedb::core::parser
 {
 
-/**
- * @brief Token 类型
- */
+// Token 类型
 enum class TokenType
 {
     EoF,                // 结束标记
 
-    Select,             // SELECT
-    Create,             // CREATE
-    Insert,             // INSERT
-    Delete,             // DELETE
-    Update,             // UPDATE
-    Drop,               // DROP
-    Use,                // USE
-    Alter,              // ALTER
-    Show,               // SHOW
-    Describe,           // DESCRIBE
-    Desc,               // DESC
+    Select,
+    Create,
+    Insert,
+    Delete,
+    Update,
+    Drop,
+    Use,
+    Alter,
+    Show,
+    Describe,
+    Desc,
 
-    Database,           // DATABASE
-    Collection,         // COLLECTION
-    Index,              // INDEX
-    VIndex,             // VINDEX
-    Databases,          // DATABASES
-    Collections,        // COLLECTIONS
-    Indexes,            // INDEXES
-    VIndexes,           // VINDEXES
-    Group,              // GROUP
-    By,                 // BY
-    Having,             // HAVING
-    Order,              // ORDER
-    Asc,                // ASC
-    Limit,              // LIMIT
-    Offset,             // OFFSET
-    In,                 // IN
-    Between,            // BETWEEN
-    Like,               // LIKE
+    Database,
+    Collection,
+    Index,
+    VIndex,
+    Databases,
+    Collections,
+    Indexes,
+    VIndexes,
+    Group,
+    By,
+    Having,
+    Order,
+    Asc,
+    Limit,
+    Offset,
+    In,
+    Between,
+    Like,
 
-    Add,                // ADD
-    Modify,             // MODIFY
-    Rename,             // RENAME
-    Column,             // COLUMN
-    To,                 // TO
-    Primary,            // PRIMARY
-    Key,                // KEY
-    Unique,             // UNIQUE
-    AutoIncrement,      // AUTO_INCREMENT
-    Default,            // DEFAULT
-    Comment,            // COMMENT
-    Using,              // USING
-    BTree,              // BTREE
-    With,               // WITH
-    From,               // FROM
-    Where,              // WHERE
-    Into,               // INTO
-    Values,             // VALUES
-    Set,                // SET
-    And,                // AND
-    Or,                 // OR
-    Not,                // NOT
-    As,                 // AS
-    On,                 // ON
-    If,                 // IF
-    Exists,             // EXISTS
-    Is,                 // IS
-    Null,               // NULL
-    True,               // TRUE
-    False,              // FALSE
+    Add,
+    Modify,
+    Rename,
+    Column,
+    To,
+    Primary,
+    Key,
+    Unique,
+    AutoIncrement,
+    Default,
+    Comment,
+    Using,
+    BTree,
+    With,
+    From,
+    Where,
+    Into,
+    Values,
+    Set,
+    And,
+    Or,
+    Not,
+    As,
+    On,
+    If,
+    Exists,
+    Is,
+    Null,
+    True,
+    False,
 
-    Integer,            // INTEGER
-    BigInt,             // BIGINT
-    Float,              // FLOAT
-    Double,             // DOUBLE
-    Varchar,            // VARCHAR
-    Boolean,            // BOOLEAN
-    Vector,             // VECTOR
+    Integer,
+    BigInt,
+    Float,
+    Double,
+    Varchar,
+    Boolean,
+    Vector,
 
     Identifier,         // 标识符
     StringLiteral,      // 字符串字面量
@@ -113,18 +111,14 @@ enum class TokenType
     Error,              // 错误标记
 };
 
-/**
- * @brief Token 位置
- */
+// Token 位置
 struct TokenLocation
 {
     std::size_t line;       // 行号
     std::size_t column;     // 列号
 };
 
-/**
- * @brief 词法单元
- */
+// 词法单元
 class Token
 {
 public:
@@ -133,24 +127,15 @@ public:
     Token(TokenType type, std::string_view value, TokenLocation location);
 
 public:
-    /**
-     * @brief 获取 Token 类型
-     * @return Token 类型
-     */
+    // 获取 Token 类型
     [[nodiscard]]
     TokenType type() const noexcept;
 
-    /**
-     * @brief 获取 Token 值
-     * @return Token 值
-     */
+    // 获取 Token 值
     [[nodiscard]]
     std::string_view value() const noexcept;
 
-    /**
-     * @brief 获取 Token 位置
-     * @return Token 位置
-     */
+    // 获取 Token 位置
     [[nodiscard]]
     TokenLocation location() const noexcept;
 
@@ -230,27 +215,15 @@ inline constexpr auto TOKEN_KEYWORDS_TABLE = std::to_array<std::pair<std::string
     {"VECTOR", TokenType::Vector},
 });
 
-/**
- * @brief 是否为比较运算符
- * @param type Token 类型
- * @return 是否为比较运算符
- */
+// 是否为比较运算符
 [[nodiscard]]
 bool is_comparison_operator(TokenType type) noexcept;
 
-/**
- * @brief 是否为字面量 Token
- * @param type Token 类型
- * @return 是否为字面量 Token
- */
+// 是否为字面量 Token
 [[nodiscard]]
 bool is_literal_token(TokenType type) noexcept;
 
-/**
- * @brief 获取关键字的 Token 类型
- * @param value 关键字
- * @return 关键字的 Token 类型
- */
+// 获取关键字的 Token 类型
 [[nodiscard]]
 inline constexpr std::optional<TokenType> keyword_type(std::string_view value) noexcept
 {

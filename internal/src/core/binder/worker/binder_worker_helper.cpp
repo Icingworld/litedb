@@ -726,7 +726,8 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
     std::vector<meta::ColumnDefinition> result;
     result.reserve(columns.size());
 
-    for (const auto & column : columns) {
+    for (const auto & column_ptr : columns) {
+        const auto & column = *column_ptr;
         if (!seen_columns.emplace(common::normalize_identifier(column.name)).second) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DuplicateColumn,

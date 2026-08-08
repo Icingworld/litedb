@@ -9,7 +9,7 @@
 namespace litedb::core::parser
 {
 
-ParserUpdateWorker::ParserUpdateWorker(ParserContext & context)
+ParserUpdateWorker::ParserUpdateWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }
@@ -36,7 +36,7 @@ ParserUpdateWorker::parse_update_statement()
     }
 
     ParserExpressionWorker expression_worker(context_);
-    ast::UpdateStatement::AssignmentList assignments;
+    std::vector<ast::Assignment> assignments;
     while (true) {
         auto column = schema_helper.parse_identifier_string(
             "Expected column name"
@@ -58,8 +58,8 @@ ParserUpdateWorker::parse_update_statement()
         }
 
         assignments.push_back(ast::Assignment {
-            std::move(*column),
-            std::move(*value),
+            .column_name = std::move(*column),
+            .value = std::move(*value),
         });
 
         if (!context_.match(TokenType::Comma)) {

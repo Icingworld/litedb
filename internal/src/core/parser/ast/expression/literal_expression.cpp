@@ -1,6 +1,7 @@
 #include "core/parser/ast/expression/literal_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -9,11 +10,12 @@ LiteralExpression::LiteralExpression(
     TokenType literal_type,
     std::string value,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , literal_type_(literal_type)
     , value_(std::move(value))
 {
+    assert(literal_type_ == TokenType::Null || !value_.empty());
 }
 
 AstNodeKind LiteralExpression::kind() const noexcept

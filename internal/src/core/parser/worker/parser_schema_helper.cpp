@@ -13,14 +13,15 @@
 namespace litedb::core::parser
 {
 
-ParserSchemaHelper::ParserSchemaHelper(ParserContext & context)
+ParserSchemaHelper::ParserSchemaHelper(ParserContext & context) noexcept
     : context_(context)
     , expression_worker_(context)
 {
 }
 
-std::expected<std::string, ParserError>
-ParserSchemaHelper::parse_identifier_string(std::string_view message)
+std::expected<std::string, ParserError> ParserSchemaHelper::parse_identifier_string(
+    std::string_view message
+)
 {
     auto token = context_.consume(
         TokenType::Identifier,
@@ -34,8 +35,9 @@ ParserSchemaHelper::parse_identifier_string(std::string_view message)
     return std::string(token->value());
 }
 
-std::expected<std::size_t, ParserError>
-ParserSchemaHelper::parse_integer_value(std::string_view message)
+std::expected<std::size_t, ParserError> ParserSchemaHelper::parse_integer_value(
+    std::string_view message
+)
 {
     auto token = context_.consume(TokenType::IntegerLiteral, message);
     if (!token.has_value()) [[unlikely]] {
@@ -58,23 +60,37 @@ ParserSchemaHelper::parse_integer_value(std::string_view message)
     return value;
 }
 
-std::expected<common::LogicalType, ParserError>
-ParserSchemaHelper::parse_data_type()
+std::expected<common::LogicalType, ParserError> ParserSchemaHelper::parse_data_type()
 {
     if (context_.match(TokenType::Integer)) {
-        return common::LogicalType {common::LogicalTypeId::Integer, std::nullopt};
+        return common::LogicalType {
+            common::LogicalTypeId::Integer,
+            std::nullopt
+        };
     }
     if (context_.match(TokenType::BigInt)) {
-        return common::LogicalType {common::LogicalTypeId::BigInt, std::nullopt};
+        return common::LogicalType {
+            common::LogicalTypeId::BigInt,
+            std::nullopt
+        };
     }
     if (context_.match(TokenType::Float)) {
-        return common::LogicalType {common::LogicalTypeId::Float, std::nullopt};
+        return common::LogicalType {
+            common::LogicalTypeId::Float,
+            std::nullopt
+        };
     }
     if (context_.match(TokenType::Double)) {
-        return common::LogicalType {common::LogicalTypeId::Double, std::nullopt};
+        return common::LogicalType {
+            common::LogicalTypeId::Double,
+            std::nullopt
+        };
     }
     if (context_.match(TokenType::Boolean)) {
-        return common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt};
+        return common::LogicalType {
+            common::LogicalTypeId::Boolean,
+            std::nullopt
+        };
     }
     if (context_.match(TokenType::Varchar)) {
         auto left_paren = context_.consume(
@@ -83,30 +99,27 @@ ParserSchemaHelper::parse_data_type()
         if (!left_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(left_paren.error()));
         }
-        auto parameter = parse_integer_value(
-            "Expected VARCHAR length"
-        );
+        auto parameter = parse_integer_value("Expected VARCHAR length");
         if (!parameter.has_value()) [[unlikely]] {
             return std::unexpected(std::move(parameter.error()));
         }
         auto right_paren = context_.consume(
-            TokenType::RightParen, "Expected ')' after VARCHAR length"
+TokenType::RightParen, "Expected ')' after VARCHAR length"
         );
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
-        return common::LogicalType {common::LogicalTypeId::Varchar, *parameter};
+        return common::LogicalType {
+            common::LogicalTypeId::Varchar,
+            std::make_optional(*parameter)
+        };
     }
     if (context_.match(TokenType::Vector)) {
-        auto left_paren = context_.consume(
-            TokenType::LeftParen, "Expected '(' after VECTOR"
-        );
+        auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after VECTOR");
         if (!left_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(left_paren.error()));
         }
-        auto parameter = parse_integer_value(
-            "Expected VECTOR dimension"
-        );
+        auto parameter = parse_integer_value("Expected VECTOR dimension");
         if (!parameter.has_value()) [[unlikely]] {
             return std::unexpected(std::move(parameter.error()));
         }
@@ -116,7 +129,10 @@ ParserSchemaHelper::parse_data_type()
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
-        return common::LogicalType {common::LogicalTypeId::Vector, *parameter};
+        return common::LogicalType {
+            common::LogicalTypeId::Vector,
+            std::make_optional(*parameter)
+        };
     }
 
     return std::unexpected(context_.make_current_error(
@@ -124,13 +140,10 @@ ParserSchemaHelper::parse_data_type()
     ));
 }
 
-std::expected<ast::ColumnDefinitionSyntax, ParserError>
-ParserSchemaHelper::parse_column_definition()
+std::expected<ast::ColumnDefinitionSyntax, ParserError> ParserSchemaHelper::parse_column_definition()
 {
     const auto location = context_.ast_location(context_.current().location());
-    auto name = parse_identifier_string(
-        "Expected column name"
-    );
+    auto name = parse_identifier_string("Expected column name");
     if (!name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(name.error()));
     }
@@ -157,9 +170,7 @@ ParserSchemaHelper::parse_column_definition()
             }
             column.default_value = std::move(*default_value);
         } else if (context_.match(TokenType::Not)) {
-            auto null_token = context_.consume(
-                TokenType::Null, "Expected NULL after NOT"
-            );
+            auto null_token = context_.consume(TokenType::Null, "Expected NULL after NOT");
             if (!null_token.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(null_token.error()));
             }
@@ -185,22 +196,17 @@ ParserSchemaHelper::parse_column_definition()
     return column;
 }
 
-std::expected<bool, ParserError>
-ParserSchemaHelper::parse_if_not_exists()
+std::expected<bool, ParserError> ParserSchemaHelper::parse_if_not_exists()
 {
     if (!context_.match(TokenType::If)) {
         return false;
     }
 
-    auto not_token = context_.consume(
-        TokenType::Not, "Expected NOT after IF"
-    );
+    auto not_token = context_.consume(TokenType::Not, "Expected NOT after IF");
     if (!not_token.has_value()) [[unlikely]] {
         return std::unexpected(std::move(not_token.error()));
     }
-    auto exists_token = context_.consume(
-        TokenType::Exists, "Expected EXISTS after IF NOT"
-    );
+    auto exists_token = context_.consume(TokenType::Exists, "Expected EXISTS after IF NOT");
     if (!exists_token.has_value()) [[unlikely]] {
         return std::unexpected(std::move(exists_token.error()));
     }
@@ -208,16 +214,13 @@ ParserSchemaHelper::parse_if_not_exists()
     return true;
 }
 
-std::expected<bool, ParserError>
-ParserSchemaHelper::parse_if_exists()
+std::expected<bool, ParserError> ParserSchemaHelper::parse_if_exists()
 {
     if (!context_.match(TokenType::If)) {
         return false;
     }
 
-    auto exists_token = context_.consume(
-        TokenType::Exists, "Expected EXISTS after IF"
-    );
+    auto exists_token = context_.consume(TokenType::Exists, "Expected EXISTS after IF");
     if (!exists_token.has_value()) [[unlikely]] {
         return std::unexpected(std::move(exists_token.error()));
     }

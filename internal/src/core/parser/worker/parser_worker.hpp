@@ -27,22 +27,14 @@ public:
     explicit ParserWorker(Lexer & lexer);
 
 public:
-    /**
-     * @brief 解析 SQL 语句
-     * @return 解析结果
-     */
+    // 解析 SQL 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse();
 
 private:
-    /**
-     * @brief 根据首个 Token 按需创建子工作器并分发解析
-     * @return 解析结果
-     */
+    // 根据首个 Token 创建子工作器并分发解析
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_statement();
 
 private:
     ParserContext context_;         // 解析器上下文

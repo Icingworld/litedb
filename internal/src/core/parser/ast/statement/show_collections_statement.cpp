@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/show_collections_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -8,10 +9,13 @@ namespace litedb::core::parser::ast
 ShowCollectionsStatement::ShowCollectionsStatement(
     std::optional<std::string> database_name,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , database_name_(std::move(database_name))
 {
+    if (database_name_.has_value()) {
+        assert(!database_name_.value().empty());
+    }
 }
 
 AstNodeKind ShowCollectionsStatement::kind() const noexcept

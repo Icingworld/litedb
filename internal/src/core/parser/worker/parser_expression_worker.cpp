@@ -13,12 +13,11 @@
 #include "core/parser/ast/expression/literal_expression.hpp"
 #include "core/parser/ast/expression/unary_expression.hpp"
 #include "core/parser/ast/expression/vector_expression.hpp"
-#include "core/parser/ast/expression/wildcard_expression.hpp"
 
 namespace litedb::core::parser
 {
 
-ParserExpressionWorker::ParserExpressionWorker(ParserContext & context)
+ParserExpressionWorker::ParserExpressionWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }
@@ -173,7 +172,7 @@ ParserExpressionWorker::parse_comparison_expression()
             ));
         }
 
-        ast::InExpression::ValueList values;
+        std::vector<std::unique_ptr<ast::ExpressionNode>> values;
         while (true) {
             auto value = parse_expression();
             if (!value.has_value()) [[unlikely]] {
@@ -405,7 +404,7 @@ ParserExpressionWorker::parse_function_call_or_column_reference()
 
     std::string name(first->value());
     if (context_.match(TokenType::LeftParen)) {
-        ast::FunctionCallExpression::ArgumentList arguments;
+        std::vector<std::unique_ptr<ast::ExpressionNode>> arguments;
         if (!context_.check(TokenType::RightParen)) {
             while (true) {
                 auto argument = parse_expression();
@@ -483,7 +482,7 @@ ParserExpressionWorker::parse_vector_expression()
         ));
     }
 
-    ast::VectorExpression::ElementList elements;
+    std::vector<std::unique_ptr<ast::ExpressionNode>> elements;
     while (true) {
         auto element = parse_expression();
         if (!element.has_value()) [[unlikely]] {

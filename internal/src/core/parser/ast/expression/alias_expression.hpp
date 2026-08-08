@@ -8,9 +8,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief AS 表达式节点
- */
+// AS 表达式节点
 class AliasExpression final : public ExpressionNode
 {
 public:
@@ -18,27 +16,18 @@ public:
         std::unique_ptr<ExpressionNode> expression,
         std::string alias,
         AstNodeLocation location
-    ) noexcept;
+    );
 
 public:
-    /**
-     * @brief 获取节点类型
-     * @return 节点类型
-     */
+    // 获取节点类型
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
-    /**
-     * @brief 获取表达式
-     * @return 表达式
-     */
+    // 获取表达式
     [[nodiscard]]
     const ExpressionNode & expression() const noexcept;
 
-    /**
-     * @brief 获取别名
-     * @return 别名
-     */
+    // 获取别名
     [[nodiscard]]
     const std::string & alias() const noexcept;
 

@@ -14,7 +14,7 @@
 namespace litedb::core::parser
 {
 
-ParserSelectWorker::ParserSelectWorker(ParserContext & context)
+ParserSelectWorker::ParserSelectWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }
@@ -28,7 +28,7 @@ ParserSelectWorker::parse_select_statement()
     ParserExpressionWorker expression_worker(context_);
     ParserSchemaHelper schema_worker(context_);
 
-    ast::SelectStatement::SelectList select_list;
+    std::vector<std::unique_ptr<ast::ExpressionNode>> select_list;
     while (true) {
         auto item = parse_select_item();
         if (!item.has_value()) [[unlikely]] {
@@ -64,7 +64,7 @@ ParserSelectWorker::parse_select_statement()
         where = std::move(*expression);
     }
 
-    ast::SelectStatement::OrderByList order_by;
+    std::vector<ast::OrderByItem> order_by;
     if (context_.match(TokenType::Order)) {
         auto by = context_.consume(
             TokenType::By, "Expected BY after ORDER"

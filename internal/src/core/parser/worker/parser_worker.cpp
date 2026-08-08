@@ -22,8 +22,7 @@ ParserWorker::ParserWorker(Lexer & lexer)
 {
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-ParserWorker::parse()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse()
 {
     context_.initialize();
 
@@ -75,8 +74,7 @@ ParserWorker::parse()
     return statement;
 }
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-ParserWorker::parse_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse_statement()
 {
     // 根据当前 Token 类型选择对应的解析器
     switch (context_.current().type()) {

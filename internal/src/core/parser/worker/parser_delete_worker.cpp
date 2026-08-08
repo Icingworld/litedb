@@ -9,7 +9,7 @@
 namespace litedb::core::parser
 {
 
-ParserDeleteWorker::ParserDeleteWorker(ParserContext & context)
+ParserDeleteWorker::ParserDeleteWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }

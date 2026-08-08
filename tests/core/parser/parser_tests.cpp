@@ -116,18 +116,18 @@ void test_parse_create_collection_statement()
     require(create->columns().size() == 5, "CREATE COLLECTION column count mismatch");
     require(create->comment().has_value(), "CREATE COLLECTION comment missing");
     require(create->comment().value() == "user collection", "CREATE COLLECTION comment mismatch");
-    require(!create->columns()[0].nullable, "NOT NULL constraint mismatch");
-    require(create->columns()[1].unique, "UNIQUE constraint mismatch");
-    require(create->columns()[1].comment.has_value(), "COMMENT constraint mismatch");
-    require(create->columns()[1].type.id == LogicalTypeId::Varchar, "VARCHAR type mismatch");
-    require(create->columns()[1].type.parameter.value() == 64, "VARCHAR length mismatch");
-    require(create->columns()[1].location.line == 1, "column definition line mismatch");
-    require(create->columns()[1].location.column > create->columns()[0].location.column, "column definition column mismatch");
-    require(create->columns()[2].nullable, "NULL constraint mismatch");
-    require(create->columns()[2].default_value != nullptr, "DEFAULT literal missing");
-    require(create->columns()[4].type.id == LogicalTypeId::Vector, "VECTOR type mismatch");
-    require(create->columns()[4].type.parameter.value() == 128, "VECTOR dimension mismatch");
-    require(create->columns()[4].default_value->kind() == AstNodeKind::Vector, "VECTOR default mismatch");
+    require(!create->columns()[0]->nullable, "NOT NULL constraint mismatch");
+    require(create->columns()[1]->unique, "UNIQUE constraint mismatch");
+    require(create->columns()[1]->comment.has_value(), "COMMENT constraint mismatch");
+    require(create->columns()[1]->type.id == LogicalTypeId::Varchar, "VARCHAR type mismatch");
+    require(create->columns()[1]->type.parameter.value() == 64, "VARCHAR length mismatch");
+    require(create->columns()[1]->location.line == 1, "column definition line mismatch");
+    require(create->columns()[1]->location.column > create->columns()[0]->location.column, "column definition column mismatch");
+    require(create->columns()[2]->nullable, "NULL constraint mismatch");
+    require(create->columns()[2]->default_value != nullptr, "DEFAULT literal missing");
+    require(create->columns()[4]->type.id == LogicalTypeId::Vector, "VECTOR type mismatch");
+    require(create->columns()[4]->type.parameter.value() == 128, "VECTOR dimension mismatch");
+    require(create->columns()[4]->default_value->kind() == AstNodeKind::Vector, "VECTOR default mismatch");
 }
 
 void test_parse_create_index_statement()
@@ -304,7 +304,7 @@ void test_parse_update_delete_statements()
     require(update_statement->collection_name() == "users", "UPDATE collection mismatch");
     require(update_statement->assignments().size() == 1, "UPDATE assignment count mismatch");
     require(update_statement->assignments()[0].value->kind() == AstNodeKind::Binary, "UPDATE assignment expression mismatch");
-    require(update_statement->where() != nullptr, "UPDATE WHERE missing");
+    require(update_statement->where().has_value(), "UPDATE WHERE missing");
 
     auto update_vector = parse_ok("UPDATE users SET active = false, embedding = [0.2, 0.3, 0.4] WHERE id = 1;");
     const auto * vector_update = static_cast<const UpdateStatement *>(update_vector.get());
@@ -315,11 +315,11 @@ void test_parse_update_delete_statements()
     require(delete_statement->kind() == AstNodeKind::Delete, "DELETE kind mismatch");
     const auto * del = static_cast<const DeleteStatement *>(delete_statement.get());
     require(del->collection_name() == "users", "DELETE collection mismatch");
-    require(del->where() != nullptr, "DELETE WHERE missing");
+    require(del->where().has_value(), "DELETE WHERE missing");
 
     auto delete_all = parse_ok("DELETE FROM users;");
     const auto * del_all = static_cast<const DeleteStatement *>(delete_all.get());
-    require(del_all->where() == nullptr, "DELETE without WHERE mismatch");
+    require(!del_all->where().has_value(), "DELETE without WHERE mismatch");
 }
 
 void test_parse_select_statement()
@@ -330,7 +330,7 @@ void test_parse_select_statement()
     require(select->select_list().size() == 1, "SELECT list size mismatch");
     require(select->select_list()[0]->kind() == AstNodeKind::Wildcard, "SELECT wildcard mismatch");
     require(select->collection_name() == "users", "SELECT collection mismatch");
-    require(select->where() != nullptr, "SELECT WHERE missing");
+    require(select->where().has_value(), "SELECT WHERE missing");
     require(select->order_by().size() == 1, "SELECT ORDER BY size mismatch");
     require(!select->order_by()[0].ascending, "SELECT ORDER BY direction mismatch");
     require(select->limit().value() == 10, "SELECT LIMIT mismatch");
@@ -385,29 +385,34 @@ void test_parse_expression_shapes()
 {
     auto between_statement = parse_ok("SELECT * FROM users WHERE age BETWEEN 18 AND 30;");
     const auto * between_select = static_cast<const SelectStatement *>(between_statement.get());
+    require(between_select->where().has_value(), "BETWEEN WHERE missing");
     require(between_select->where()->kind() == AstNodeKind::Between, "BETWEEN expression kind mismatch");
 
     auto in_statement = parse_ok("SELECT * FROM users WHERE category IN ('book', 'tool');");
     const auto * in_select = static_cast<const SelectStatement *>(in_statement.get());
+    require(in_select->where().has_value(), "IN WHERE missing");
     require(in_select->where()->kind() == AstNodeKind::In, "IN expression kind mismatch");
-    const auto * in_expression = static_cast<const InExpression *>(in_select->where());
+    const auto * in_expression = static_cast<const InExpression *>(&*in_select->where());
     require(in_expression->values().size() == 2, "IN value count mismatch");
 
     auto like_statement = parse_ok("SELECT * FROM users WHERE name LIKE 'Tom%';");
     const auto * like_select = static_cast<const SelectStatement *>(like_statement.get());
+    require(like_select->where().has_value(), "LIKE WHERE missing");
     require(like_select->where()->kind() == AstNodeKind::Like, "LIKE expression kind mismatch");
 
     auto not_statement = parse_ok("SELECT * FROM users WHERE NOT active OR age < 10;");
     const auto * not_select = static_cast<const SelectStatement *>(not_statement.get());
+    require(not_select->where().has_value(), "OR WHERE missing");
     require(not_select->where()->kind() == AstNodeKind::Binary, "OR expression kind mismatch");
-    const auto * or_expression = static_cast<const BinaryExpression *>(not_select->where());
+    const auto * or_expression = static_cast<const BinaryExpression *>(&*not_select->where());
     require(or_expression->op() == TokenType::Or, "OR operator mismatch");
     require(or_expression->left().kind() == AstNodeKind::Unary, "NOT expression kind mismatch");
 
     auto precedence_statement = parse_ok("SELECT * FROM users WHERE score + bonus * 2 >= 100;");
     const auto * precedence_select = static_cast<const SelectStatement *>(precedence_statement.get());
+    require(precedence_select->where().has_value(), "comparison WHERE missing");
     require(precedence_select->where()->kind() == AstNodeKind::Binary, "comparison expression kind mismatch");
-    const auto * comparison = static_cast<const BinaryExpression *>(precedence_select->where());
+    const auto * comparison = static_cast<const BinaryExpression *>(&*precedence_select->where());
     require(comparison->op() == TokenType::GreaterEqual, "comparison operator mismatch");
     require(comparison->left().kind() == AstNodeKind::Binary, "additive expression kind mismatch");
 }

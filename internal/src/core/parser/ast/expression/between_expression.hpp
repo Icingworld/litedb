@@ -7,9 +7,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief BETWEEN 表达式节点
- */
+// BETWEEN 表达式节点
 class BetweenExpression final : public ExpressionNode
 {
 public:
@@ -18,34 +16,22 @@ public:
         std::unique_ptr<ExpressionNode> lower,
         std::unique_ptr<ExpressionNode> upper,
         AstNodeLocation location
-    ) noexcept;
+    );
 
 public:
-    /**
-     * @brief 获取节点类型
-     * @return 节点类型
-     */
+    // 获取节点类型
     [[nodiscard]]
     AstNodeKind kind() const noexcept override;
 
-    /**
-     * @brief 获取表达式
-     * @return 表达式
-     */
+    // 获取表达式
     [[nodiscard]]
     const ExpressionNode & expression() const noexcept;
 
-    /**
-     * @brief 获取下界
-     * @return 下界
-     */
+    // 获取下界
     [[nodiscard]]
     const ExpressionNode & lower() const noexcept;
 
-    /**
-     * @brief 获取上界
-     * @return 上界
-     */
+    // 获取上界
     [[nodiscard]]
     const ExpressionNode & upper() const noexcept;
 

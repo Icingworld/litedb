@@ -3,9 +3,7 @@
 namespace litedb::core::parser::ast
 {
 
-ShowDatabasesStatement::ShowDatabasesStatement(
-    AstNodeLocation location
-) noexcept
+ShowDatabasesStatement::ShowDatabasesStatement(AstNodeLocation location) noexcept
     : StatementNode(location)
 {
 }

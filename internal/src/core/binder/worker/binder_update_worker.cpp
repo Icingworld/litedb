@@ -86,7 +86,7 @@ BinderUpdateWorker::bind_update(
 
     // 通过 Helper 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
-    if (statement.where() != nullptr) {
+    if (statement.where()) {
         auto bound_where = helper.bind_expression(
             *statement.where(),
             *collection

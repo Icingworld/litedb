@@ -9,7 +9,7 @@
 namespace litedb::core::parser
 {
 
-ParserInsertWorker::ParserInsertWorker(ParserContext & context)
+ParserInsertWorker::ParserInsertWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }
@@ -35,7 +35,7 @@ ParserInsertWorker::parse_insert_statement()
         return std::unexpected(std::move(collection.error()));
     }
 
-    ast::InsertStatement::ColumnList columns;
+    std::vector<std::string> columns;
     // 列名列表是可省略的
     if (context_.match(TokenType::LeftParen)) {
         if (context_.check(TokenType::RightParen)) [[unlikely]] {
@@ -85,7 +85,7 @@ ParserInsertWorker::parse_insert_statement()
     }
 
     ParserExpressionWorker expression_worker(context_);
-    ast::InsertStatement::ValueList value_list;
+    std::vector<std::unique_ptr<ast::ExpressionNode>> value_list;
     while (true) {
         auto value = expression_worker.parse_expression();
         if (!value.has_value()) [[unlikely]] {

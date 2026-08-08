@@ -16,19 +16,14 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief DELETE 语句解析工作器
- */
+// DELETE 语句解析工作器
 class ParserDeleteWorker
 {
 public:
-    explicit ParserDeleteWorker(ParserContext & context);
+    explicit ParserDeleteWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 DELETE 语句
-     * @return 解析结果
-     */
+    // 解析 DELETE 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_delete_statement();

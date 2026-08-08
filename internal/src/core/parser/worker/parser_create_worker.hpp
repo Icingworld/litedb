@@ -18,57 +18,35 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief CREATE 语句解析工作器
- */
+// CREATE 语句解析工作器
 class ParserCreateWorker
 {
 public:
-    explicit ParserCreateWorker(ParserContext & context);
+    explicit ParserCreateWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 CREATE 语句
-     * @return 解析结果
-     */
+    // 解析 CREATE 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_create_statement();
 
 private:
-    /**
-     * @brief 解析 CREATE DATABASE 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 CREATE DATABASE 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_create_database_statement(TokenLocation location);
 
-    /**
-     * @brief 解析 CREATE COLLECTION 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 CREATE COLLECTION 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_create_collection_statement(TokenLocation location);
 
-    /**
-     * @brief 解析 CREATE INDEX 语句
-     * @param location 语句位置
-     * @param unique 是否为唯一索引
-     * @return 解析结果
-     */
+    // 解析 CREATE INDEX 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_create_index_statement(TokenLocation location, bool unique);
 
-    /**
-     * @brief 解析 CREATE VINDEX 语句
-     * @param location 语句位置
-     * @return 解析结果
-     */
+    // 解析 CREATE VINDEX 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
     parse_create_vector_index_statement(TokenLocation location);

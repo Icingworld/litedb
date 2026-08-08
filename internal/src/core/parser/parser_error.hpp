@@ -8,9 +8,7 @@
 namespace litedb::core::parser
 {
 
-/**
- * @brief 解析器错误码
- */
+// 解析器错误码
 enum class ParserErrorCode : std::uint8_t
 {
     EmptyStatement = 0,        // 空输入
@@ -27,9 +25,7 @@ enum class ParserErrorCode : std::uint8_t
     UnsupportedSyntax = 11,    // 识别但不支持的语法
 };
 
-/**
- * @brief 解析器错误上下文
- */
+// 解析器错误上下文
 struct ParserErrorContext
 {
     TokenLocation location;     // 错误位置

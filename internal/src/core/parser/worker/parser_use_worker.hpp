@@ -16,22 +16,16 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief USE 语句解析工作器
- */
+// USE 语句解析工作器
 class ParserUseWorker
 {
 public:
-    explicit ParserUseWorker(ParserContext & context);
+    explicit ParserUseWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析 USE 语句
-     * @return 解析结果
-     */
+    // 解析 USE 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_use_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_use_statement();
 
 private:
     ParserContext & context_;   // 解析上下文

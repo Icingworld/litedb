@@ -11,7 +11,7 @@
 namespace litedb::core::parser
 {
 
-ParserDropWorker::ParserDropWorker(ParserContext & context)
+ParserDropWorker::ParserDropWorker(ParserContext & context) noexcept
     : context_(context)
     , schema_helper_(context)
 {

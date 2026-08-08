@@ -28,7 +28,13 @@ ParserError make_parser_error(
     std::string_view message
 )
 {
-    return ParserError {code, message, ParserErrorContext {location}};
+    return ParserError {
+        code,
+        message,
+        ParserErrorContext {
+            .location = location,
+        }
+    };
 }
 
 } // namespace litedb::core::parser

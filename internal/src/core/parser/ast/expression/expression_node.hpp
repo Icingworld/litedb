@@ -5,9 +5,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief 表达式节点基类
- */
+// 表达式节点基类
 class ExpressionNode : public AstNode
 {
 protected:

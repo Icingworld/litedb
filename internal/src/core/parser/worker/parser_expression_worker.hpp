@@ -16,116 +16,77 @@ class ExpressionNode;
 
 } // namespace ast
 
-/**
- * @brief 表达式解析工作器
- */
+// 表达式解析工作器
+// 手写递归下降解析表达式，共用一份上下文
+// 在种类不多的情况下，放在同一个类中，比拆分成多个类更清晰
 class ParserExpressionWorker
 {
 public:
-    explicit ParserExpressionWorker(ParserContext & context);
+    explicit ParserExpressionWorker(ParserContext & context) noexcept;
 
 public:
-    /**
-     * @brief 解析表达式
-     * @return 解析结果
-     */
+    // 解析表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_expression();
 
-    /**
-     * @brief 解析字面量表达式
-     * @return 解析结果
-     */
+    // 解析字面量表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_literal_expression();
 
 private:
-    /**
-     * @brief 解析 OR 表达式
-     * @return 解析结果
-     */
+    // 解析 OR 表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_or_expression();
 
-    /**
-     * @brief 解析 AND 表达式
-     * @return 解析结果
-     */
+    // 解析 AND 表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_and_expression();
 
-    /**
-     * @brief 解析 NOT 表达式
-     * @return 解析结果
-     */
+    // 解析 NOT 表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_not_expression();
 
-    /**
-     * @brief 解析比较表达式
-     * @return 解析结果
-     */
+    // 解析比较表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_comparison_expression();
 
-    /**
-     * @brief 解析加减表达式
-     * @return 解析结果
-     */
+    // 解析加减表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_additive_expression();
 
-    /**
-     * @brief 解析乘除表达式
-     * @return 解析结果
-     */
+    // 解析乘除表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_multiplicative_expression();
 
-    /**
-     * @brief 解析一元表达式
-     * @return 解析结果
-     */
+    // 解析一元表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_unary_expression();
 
-    /**
-     * @brief 解析主表达式
-     * @return 解析结果
-     */
+    // 解析主表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_primary_expression();
 
-    /**
-     * @brief 解析列引用表达式
-     * @return 解析结果
-     */
+    // 解析列引用表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_column_reference_expression();
 
-    /**
-     * @brief 解析函数调用或列引用
-     * @return 解析结果
-     */
+    // 解析函数调用或列引用
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_function_call_or_column_reference();
 
-    /**
-     * @brief 解析向量表达式
-     * @return 解析结果
-     */
+    // 解析向量表达式
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_vector_expression();

@@ -8,7 +8,7 @@
 namespace litedb::core::parser
 {
 
-ParserDescribeWorker::ParserDescribeWorker(ParserContext & context)
+ParserDescribeWorker::ParserDescribeWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }
@@ -25,9 +25,7 @@ ParserDescribeWorker::parse_describe_collection_statement()
     }
 
     ParserSchemaHelper schema_helper(context_);
-    auto collection = schema_helper.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection = schema_helper.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }

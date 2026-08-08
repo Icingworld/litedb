@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/create_index_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -13,7 +14,7 @@ CreateIndexStatement::CreateIndexStatement(
     bool unique,
     CreateIndexMethod method,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , index_name_(std::move(index_name))
     , collection_name_(std::move(collection_name))
@@ -22,6 +23,9 @@ CreateIndexStatement::CreateIndexStatement(
     , unique_(unique)
     , method_(method)
 {
+    assert(!index_name_.empty());
+    assert(!collection_name_.empty());
+    assert(!column_name_.empty());
 }
 
 AstNodeKind CreateIndexStatement::kind() const noexcept

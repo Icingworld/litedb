@@ -1,6 +1,7 @@
 #include "core/parser/ast/statement/drop_index_statement.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -10,12 +11,14 @@ DropIndexStatement::DropIndexStatement(
     std::string collection_name,
     bool if_exists,
     AstNodeLocation location
-) noexcept
+)
     : StatementNode(location)
     , index_name_(std::move(index_name))
     , collection_name_(std::move(collection_name))
     , if_exists_(if_exists)
 {
+    assert(!index_name_.empty());
+    assert(!collection_name_.empty());
 }
 
 AstNodeKind DropIndexStatement::kind() const noexcept

@@ -5,9 +5,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief SHOW DATABASES 语句节点
- */
+// SHOW DATABASES 语句节点
 class ShowDatabasesStatement final : public StatementNode
 {
 public:

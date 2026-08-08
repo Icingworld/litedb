@@ -12,7 +12,7 @@
 namespace litedb::core::parser
 {
 
-ParserShowWorker::ParserShowWorker(ParserContext & context)
+ParserShowWorker::ParserShowWorker(ParserContext & context) noexcept
     : context_(context)
 {
 }
@@ -78,9 +78,7 @@ ParserShowWorker::parse_show_collections_statement(TokenLocation location)
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserShowWorker::parse_show_indexes_statement(TokenLocation location)
 {
-    auto from = context_.consume(
-        TokenType::From, "Expected FROM after SHOW INDEXES"
-    );
+    auto from = context_.consume(TokenType::From, "Expected FROM after SHOW INDEXES");
     if (!from.has_value()) [[unlikely]] {
         return std::unexpected(std::move(from.error()));
     }
@@ -103,9 +101,7 @@ ParserShowWorker::parse_show_indexes_statement(TokenLocation location)
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserShowWorker::parse_show_vector_indexes_statement(TokenLocation location)
 {
-    auto from = context_.consume(
-        TokenType::From, "Expected FROM after SHOW VINDEXES"
-    );
+    auto from = context_.consume(TokenType::From, "Expected FROM after SHOW VINDEXES");
     if (!from.has_value()) [[unlikely]] {
         return std::unexpected(std::move(from.error()));
     }

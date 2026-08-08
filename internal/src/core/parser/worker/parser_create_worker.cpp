@@ -13,7 +13,7 @@
 namespace litedb::core::parser
 {
 
-ParserCreateWorker::ParserCreateWorker(ParserContext & context)
+ParserCreateWorker::ParserCreateWorker(ParserContext & context) noexcept
     : context_(context)
     , schema_helper_(context)
 {
@@ -107,13 +107,13 @@ ParserCreateWorker::parse_create_collection_statement(TokenLocation location)
         ));
     }
 
-    ast::ColumnDefinitionSyntaxList columns;
+    std::vector<std::unique_ptr<ast::ColumnDefinitionSyntax>> columns;
     while (true) {
         auto column = schema_helper_.parse_column_definition();
         if (!column.has_value()) [[unlikely]] {
             return std::unexpected(std::move(column.error()));
         }
-        columns.push_back(std::move(*column));
+        columns.push_back(std::make_unique<ast::ColumnDefinitionSyntax>(std::move(*column)));
 
         if (!context_.match(TokenType::Comma)) {
             break;

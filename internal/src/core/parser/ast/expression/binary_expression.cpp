@@ -1,6 +1,7 @@
 #include "core/parser/ast/expression/binary_expression.hpp"
 
 #include <utility>
+#include <cassert>
 
 namespace litedb::core::parser::ast
 {
@@ -10,12 +11,14 @@ BinaryExpression::BinaryExpression(
     TokenType op,
     std::unique_ptr<ExpressionNode> right,
     AstNodeLocation location
-) noexcept
+)
     : ExpressionNode(location)
     , left_(std::move(left))
     , op_(op)
     , right_(std::move(right))
 {
+    assert(left_ != nullptr);
+    assert(right_ != nullptr);
 }
 
 AstNodeKind BinaryExpression::kind() const noexcept
