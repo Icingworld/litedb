@@ -36,9 +36,9 @@ public:
     const ExpressionNode & upper() const noexcept;
 
 private:
-    std::unique_ptr<ExpressionNode> expression_; // 表达式
-    std::unique_ptr<ExpressionNode> lower_;      // 下界
-    std::unique_ptr<ExpressionNode> upper_;      // 上界
+    std::unique_ptr<ExpressionNode> expression_;
+    std::unique_ptr<ExpressionNode> lower_;
+    std::unique_ptr<ExpressionNode> upper_;
 };
 
 } // namespace litedb::core::parser::ast

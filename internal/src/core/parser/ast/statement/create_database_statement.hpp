@@ -31,8 +31,8 @@ public:
     bool if_not_exists() const noexcept;
 
 private:
-    std::string database_name_;     // 数据库名称
-    bool if_not_exists_;            // 是否存在 IF NOT EXISTS
+    std::string database_name_;
+    bool if_not_exists_;
 };
 
 } // namespace litedb::core::parser::ast

@@ -29,7 +29,7 @@ enum class ParserErrorCode : std::uint8_t
 // 解析器错误上下文
 struct ParserErrorContext
 {
-    TokenLocation location;     // 错误位置
+    TokenLocation location;
 };
 
 using ParserError = error::Error;

@@ -23,7 +23,7 @@ public:
     const std::string & database_name() const noexcept;
 
 private:
-    std::string database_name_;    // 数据库名称
+    std::string database_name_;
 };
 
 } // namespace litedb::core::parser::ast

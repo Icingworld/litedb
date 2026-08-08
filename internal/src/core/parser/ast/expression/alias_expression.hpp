@@ -32,8 +32,8 @@ public:
     const std::string & alias() const noexcept;
 
 private:
-    std::unique_ptr<ExpressionNode> expression_;  // 表达式
-    std::string alias_;                           // 别名
+    std::unique_ptr<ExpressionNode> expression_;
+    std::string alias_;
 };
 
 } // namespace litedb::core::parser::ast

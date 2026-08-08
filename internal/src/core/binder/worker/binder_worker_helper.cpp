@@ -719,7 +719,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelper::bind_column_definitions(
-    const ColumnDefinitionSyntaxList & columns
+    const std::vector<std::unique_ptr<ColumnDefinitionSyntax>> & columns
 ) const
 {
     std::unordered_set<std::string> seen_columns;

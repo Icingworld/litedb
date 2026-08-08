@@ -52,8 +52,8 @@ private:
     parse_create_vector_index_statement(TokenLocation location);
 
 private:
-    ParserContext & context_;                   // 解析上下文
-    ParserSchemaHelper schema_helper_;          // schema 和通用语法解析辅助
+    ParserContext & context_;
+    ParserSchemaHelper schema_helper_;
 };
 
 } // namespace litedb::core::parser

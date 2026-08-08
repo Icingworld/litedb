@@ -36,9 +36,9 @@ public:
     bool if_exists() const noexcept;
 
 private:
-    std::string index_name_;        // 索引名称
-    std::string collection_name_;   // 集合名称
-    bool if_exists_;                // 是否存在 IF EXISTS
+    std::string index_name_;
+    std::string collection_name_;
+    bool if_exists_;
 };
 
 } // namespace litedb::core::parser::ast

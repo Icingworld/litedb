@@ -33,8 +33,8 @@ public:
     const std::vector<std::unique_ptr<ExpressionNode>> & arguments() const noexcept;
 
 private:
-    std::string name_;                                          // 函数名称
-    std::vector<std::unique_ptr<ExpressionNode>> arguments_;    // 参数列表
+    std::string name_;
+    std::vector<std::unique_ptr<ExpressionNode>> arguments_;
 };
 
 } // namespace litedb::core::parser::ast

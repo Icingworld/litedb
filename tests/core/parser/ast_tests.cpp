@@ -106,7 +106,7 @@ void test_create_collection_statement()
     embedding->name = "embedding";
     embedding->type = LogicalType {LogicalTypeId::Vector, 128};
 
-    ColumnDefinitionSyntaxList columns;
+    std::vector<std::unique_ptr<ColumnDefinitionSyntax>> columns;
     columns.push_back(std::move(id));
     columns.push_back(std::move(name));
     columns.push_back(std::move(age));

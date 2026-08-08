@@ -43,10 +43,10 @@ public:
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    std::string collection_name_;                                   // 集合名称
-    bool if_not_exists_;                                            // 是否存在 IF NOT EXISTS
-    std::vector<std::unique_ptr<ColumnDefinitionSyntax>> columns_;  // 列定义列表
-    std::optional<std::string> comment_;                            // 集合注释
+    std::string collection_name_;
+    bool if_not_exists_;
+    std::vector<std::unique_ptr<ColumnDefinitionSyntax>> columns_;
+    std::optional<std::string> comment_;
 };
 
 } // namespace litedb::core::parser::ast

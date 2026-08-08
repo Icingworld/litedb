@@ -75,7 +75,7 @@ public:
     virtual AstNodeKind kind() const noexcept = 0;
 
 private:
-    AstNodeLocation location_;  // 节点位置
+    AstNodeLocation location_;
 };
 
 } // namespace litedb::core::parser::ast

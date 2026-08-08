@@ -37,7 +37,7 @@ private:
     std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_statement();
 
 private:
-    ParserContext context_;         // 解析器上下文
+    ParserContext context_;
 };
 
 } // namespace litedb::core::parser

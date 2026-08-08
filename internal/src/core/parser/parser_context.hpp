@@ -39,7 +39,7 @@ public:
         explicit ExpressionNestingGuard(ParserContext & context) noexcept;
 
     private:
-        ParserContext * context_;       // 解析上下文
+        ParserContext * context_;  // 解析上下文
     };
 
 public:
@@ -73,10 +73,7 @@ public:
 
     // 创建当前 Token 的错误
     [[nodiscard]]
-    ParserError make_current_error(
-        ParserErrorCode code,
-        std::string_view message
-    ) const;
+    ParserError make_current_error(ParserErrorCode code, std::string_view message) const;
 
     // 创建指定位置和消息的错误
     [[nodiscard]]
@@ -88,8 +85,9 @@ public:
 
     // 进入表达式嵌套
     [[nodiscard]]
-    std::expected<ExpressionNestingGuard, ParserError>
-    enter_expression_nesting(TokenLocation location);
+    std::expected<ExpressionNestingGuard, ParserError> enter_expression_nesting(
+        TokenLocation location
+    );
 
     // 检查表达式嵌套深度是否超出限制
     [[nodiscard]]
@@ -101,8 +99,7 @@ public:
 
     // 计算表达式嵌套深度
     [[nodiscard]]
-    std::expected<std::size_t, ParserError>
-    make_expression_parent_depth(
+    std::expected<std::size_t, ParserError> make_expression_parent_depth(
         std::size_t max_child_depth,
         TokenLocation location
     ) const;
@@ -127,11 +124,11 @@ private:
     void leave_expression_nesting() noexcept;
 
 private:
-    Lexer & lexer_;                                 // 词法分析器
-    Token current_token_;                           // 当前 Token
-    Token next_token_;                              // 下一个 Token
-    Token next_after_next_token_;                   // 下下个 Token
-    std::size_t expression_nesting_depth_;          // 表达式嵌套深度
+    Lexer & lexer_;
+    Token current_token_;
+    Token next_token_;
+    Token next_after_next_token_;
+    std::size_t expression_nesting_depth_;  // 表达式嵌套深度
 };
 
-} // namespace litedb::core::parser
+}  // namespace litedb::core::parser

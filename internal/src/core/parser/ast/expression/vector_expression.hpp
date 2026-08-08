@@ -27,7 +27,7 @@ public:
     const std::vector<std::unique_ptr<ExpressionNode>> & elements() const noexcept;
 
 private:
-    std::vector<std::unique_ptr<ExpressionNode>> elements_;     // 元素列表
+    std::vector<std::unique_ptr<ExpressionNode>> elements_;
 };
 
 } // namespace litedb::core::parser::ast

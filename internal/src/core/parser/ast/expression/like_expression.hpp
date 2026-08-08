@@ -31,8 +31,8 @@ public:
     const ExpressionNode & pattern() const noexcept;
 
 private:
-    std::unique_ptr<ExpressionNode> expression_;    // 表达式
-    std::unique_ptr<ExpressionNode> pattern_;       // 模式
+    std::unique_ptr<ExpressionNode> expression_;
+    std::unique_ptr<ExpressionNode> pattern_;
 };
 
 } // namespace litedb::core::parser::ast

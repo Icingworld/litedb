@@ -37,7 +37,7 @@ private:
     parse_select_item();
 
 private:
-    ParserContext & context_;                   // 解析上下文
+    ParserContext & context_;
 };
 
 } // namespace litedb::core::parser

@@ -115,7 +115,7 @@ public:
      */
     [[nodiscard]]
     std::expected<std::vector<meta::ColumnDefinition>, BinderError> bind_column_definitions(
-        const parser::ast::ColumnDefinitionSyntaxList & columns
+        const std::vector<std::unique_ptr<parser::ast::ColumnDefinitionSyntax>> & columns
     ) const;
 
     /**

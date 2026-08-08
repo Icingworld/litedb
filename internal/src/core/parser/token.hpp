@@ -128,9 +128,9 @@ public:
     TokenLocation location() const noexcept;
 
 private:
-    TokenType type_;            // Token 类型
-    std::string_view value_;    // Token 值
-    TokenLocation location_;    // Token 位置
+    TokenType type_;
+    std::string_view value_;
+    TokenLocation location_;
 };
 
 // 编译期常量表，用于快速查找获取 Token 类型

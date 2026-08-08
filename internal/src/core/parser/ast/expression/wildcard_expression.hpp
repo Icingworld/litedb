@@ -30,7 +30,7 @@ public:
     const std::optional<std::string> & qualifier() const noexcept;
 
 private:
-    std::optional<std::string> qualifier_;    // 限定符
+    std::optional<std::string> qualifier_;
 };
 
 } // namespace litedb::core::parser::ast

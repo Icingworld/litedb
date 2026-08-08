@@ -46,8 +46,8 @@ public:
     std::expected<bool, ParserError> parse_if_exists();
 
 private:
-    ParserContext & context_;                   // 解析上下文
-    ParserExpressionWorker expression_worker_;  // 表达式解析工作器
+    ParserContext & context_;
+    ParserExpressionWorker expression_worker_;
 };
 
 } // namespace litedb::core::parser

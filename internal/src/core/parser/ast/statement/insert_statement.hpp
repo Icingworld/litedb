@@ -39,9 +39,9 @@ public:
     const std::vector<std::unique_ptr<ExpressionNode>> & values() const noexcept;
 
 private:
-    std::string collection_name_;                               // 集合名称
-    std::vector<std::string> columns_;                          // 列列表
-    std::vector<std::unique_ptr<ExpressionNode>> values_;       // 值列表
+    std::string collection_name_;
+    std::vector<std::string> columns_;
+    std::vector<std::unique_ptr<ExpressionNode>> values_;
 };
 
 } // namespace litedb::core::parser::ast

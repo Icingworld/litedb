@@ -47,9 +47,9 @@ public:
     std::optional<const ExpressionNode &> where() const noexcept;
 
 private:
-    std::string collection_name_;           // 集合名称
-    std::vector<Assignment> assignments_;   // 赋值列表
-    std::unique_ptr<ExpressionNode> where_; // 条件表达式
+    std::string collection_name_;
+    std::vector<Assignment> assignments_;
+    std::unique_ptr<ExpressionNode> where_;
 };
 
 } // namespace litedb::core::parser::ast

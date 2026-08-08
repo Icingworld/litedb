@@ -62,12 +62,12 @@ public:
     std::optional<std::size_t> offset() const noexcept;
 
 private:
-    std::vector<std::unique_ptr<ExpressionNode>> select_list_;      // 选择列表
-    std::string collection_name_;                                   // 集合名称
-    std::unique_ptr<ExpressionNode> where_;                         // 条件表达式
-    std::vector<OrderByItem> order_by_;                             // 排序列表
-    std::optional<std::size_t> limit_;                              // 限制
-    std::optional<std::size_t> offset_;                             // 偏移
+    std::vector<std::unique_ptr<ExpressionNode>> select_list_;
+    std::string collection_name_;
+    std::unique_ptr<ExpressionNode> where_;
+    std::vector<OrderByItem> order_by_;
+    std::optional<std::size_t> limit_;
+    std::optional<std::size_t> offset_;
 };
 
 } // namespace litedb::core::parser::ast

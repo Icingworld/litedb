@@ -58,12 +58,12 @@ public:
     CreateIndexMethod method() const noexcept;
 
 private:
-    std::string index_name_;        // 索引名称
-    std::string collection_name_;   // 集合名称
-    std::string column_name_;       // 列名称
-    bool if_not_exists_;            // 是否存在 IF NOT EXISTS
-    bool unique_;                   // 是否为唯一索引
-    CreateIndexMethod method_;      // 创建索引方法
+    std::string index_name_;
+    std::string collection_name_;
+    std::string column_name_;
+    bool if_not_exists_;
+    bool unique_;
+    CreateIndexMethod method_;
 };
 
 } // namespace litedb::core::parser::ast

@@ -26,7 +26,7 @@ public:
     const std::string & collection_name() const noexcept;
 
 private:
-    std::string collection_name_;    // 集合名称
+    std::string collection_name_;
 };
 
 } // namespace litedb::core::parser::ast

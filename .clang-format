@@ -189,7 +189,7 @@ BreakStringLiterals: false                          # 不把超长字符串字�
 ReflowComments: Never                               # 不自动重排或重新缩进注释内容
 AlignTrailingComments:
   Kind: Never                                       # 不对行尾注释对齐到同一列
-SpacesBeforeTrailingComments: 1                     # 行尾注释前加一个空格
+SpacesBeforeTrailingComments: 2                     # 行尾注释前加两个空格
 FixNamespaceComments: true                          # 自动修正命名空间结束注释
 CompactNamespaces: false                            # 不使用紧凑命名空间写法
 

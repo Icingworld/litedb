@@ -3,7 +3,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/expression/expression_node.hpp"
@@ -22,7 +21,5 @@ struct ColumnDefinitionSyntax
     std::optional<std::string> comment;               // 注释
     AstNodeLocation location {};                      // 列定义位置
 };
-
-using ColumnDefinitionSyntaxList = std::vector<std::unique_ptr<ColumnDefinitionSyntax>>;
 
 } // namespace litedb::core::parser::ast

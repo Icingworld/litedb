@@ -10,39 +10,19 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief 获取 Token 类型名称
- * @param type Token 类型
- * @return Token 类型名称
- */
+// 将 Token 类型转换为字符串
 std::string_view token_type_name(TokenType type) noexcept;
 
-/**
- * @brief 获取逻辑类型名称
- * @param id 逻辑类型 ID
- * @return 逻辑类型名称
- */
+// 将逻辑类型 ID 转换为字符串
 std::string_view logical_type_name(common::LogicalTypeId id) noexcept;
 
-/**
- * @brief 获取创建索引方法名称
- * @param method 创建索引方法
- * @return 创建索引方法名称
- */
+// 将创建索引方法转换为字符串
 std::string_view create_index_method_name(CreateIndexMethod method) noexcept;
 
-/**
- * @brief 获取创建向量索引方法名称
- * @param method 创建向量索引方法
- * @return 创建向量索引方法名称
- */
+// 将创建向量索引方法转换为字符串
 std::string_view create_vector_index_method_name(CreateVectorIndexMethod method) noexcept;
 
-/**
- * @brief 获取向量索引指标名称
- * @param metric 向量索引指标
- * @return 向量索引指标名称
- */
+// 将向量索引指标转换为字符串
 std::string_view vector_index_metric_name(VectorIndexMetric metric) noexcept;
 
 } // namespace litedb::core::parser::ast

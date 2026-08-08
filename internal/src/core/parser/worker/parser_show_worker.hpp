@@ -49,7 +49,7 @@ private:
     parse_show_vector_indexes_statement(TokenLocation location);
 
 private:
-    ParserContext & context_;   // 解析上下文
+    ParserContext & context_;
 };
 
 } // namespace litedb::core::parser
