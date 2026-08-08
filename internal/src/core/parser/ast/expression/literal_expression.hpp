@@ -12,11 +12,7 @@ namespace litedb::core::parser::ast
 class LiteralExpression final : public ExpressionNode
 {
 public:
-    LiteralExpression(
-        TokenType literal_type,
-        std::string value,
-        AstNodeLocation location
-    );
+    LiteralExpression(TokenType literal_type, std::string value, AstNodeLocation location);
 
 public:
     // 获取节点类型

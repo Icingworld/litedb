@@ -13,7 +13,6 @@
 namespace litedb::core::parser
 {
 
-
 // schema 和通用语法解析辅助器
 class ParserSchemaHelper
 {

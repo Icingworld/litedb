@@ -14,8 +14,8 @@ namespace litedb::core::parser::ast
 // 排序项
 struct OrderByItem
 {
-    std::unique_ptr<ExpressionNode> expression;     // 表达式
-    bool ascending {true};                          // 是否升序
+    std::unique_ptr<ExpressionNode> expression; // 表达式
+    bool ascending {true}; // 是否升序
 };
 
 // SELECT 语句节点

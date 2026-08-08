@@ -12,10 +12,7 @@ namespace litedb::core::parser::ast
 class ShowCollectionsStatement final : public StatementNode
 {
 public:
-    ShowCollectionsStatement(
-        std::optional<std::string> database_name,
-        AstNodeLocation location
-    );
+    ShowCollectionsStatement(std::optional<std::string> database_name, AstNodeLocation location);
 
 public:
     // 获取节点类型

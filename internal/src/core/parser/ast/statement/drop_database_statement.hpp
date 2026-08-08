@@ -11,11 +11,7 @@ namespace litedb::core::parser::ast
 class DropDatabaseStatement final : public StatementNode
 {
 public:
-    DropDatabaseStatement(
-        std::string database_name,
-        bool if_exists,
-        AstNodeLocation location
-    );
+    DropDatabaseStatement(std::string database_name, bool if_exists, AstNodeLocation location);
 
 public:
     // 获取节点类型

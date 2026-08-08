@@ -1,7 +1,7 @@
 #include "core/parser/ast/statement/drop_index_statement.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::parser::ast
 {

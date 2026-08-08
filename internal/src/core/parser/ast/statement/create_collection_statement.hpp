@@ -3,8 +3,8 @@
 #include <optional>
 #include <string>
 
-#include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/ast/column_definition.hpp"
+#include "core/parser/ast/statement/statement_node.hpp"
 
 namespace litedb::core::parser::ast
 {

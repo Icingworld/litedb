@@ -1,7 +1,7 @@
 #include "core/parser/ast/expression/wildcard_expression.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::parser::ast
 {
@@ -9,8 +9,7 @@ namespace litedb::core::parser::ast
 WildcardExpression::WildcardExpression(AstNodeLocation location) noexcept
     : ExpressionNode(location)
     , qualifier_(std::nullopt)
-{
-}
+{}
 
 WildcardExpression::WildcardExpression(
     std::optional<std::string> qualifier,

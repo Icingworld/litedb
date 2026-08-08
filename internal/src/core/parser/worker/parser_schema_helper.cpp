@@ -16,18 +16,14 @@ namespace litedb::core::parser
 ParserSchemaHelper::ParserSchemaHelper(ParserContext & context) noexcept
     : context_(context)
     , expression_worker_(context)
-{
-}
+{}
 
 std::expected<std::string, ParserError> ParserSchemaHelper::parse_identifier_string(
     std::string_view message
 )
 {
-    auto token = context_.consume(
-        TokenType::Identifier,
-        message,
-        ParserErrorCode::ExpectedIdentifier
-    );
+    auto token =
+        context_.consume(TokenType::Identifier, message, ParserErrorCode::ExpectedIdentifier);
     if (!token.has_value()) [[unlikely]] {
         return std::unexpected(std::move(token.error()));
     }
@@ -63,39 +59,22 @@ std::expected<std::size_t, ParserError> ParserSchemaHelper::parse_integer_value(
 std::expected<common::LogicalType, ParserError> ParserSchemaHelper::parse_data_type()
 {
     if (context_.match(TokenType::Integer)) {
-        return common::LogicalType {
-            common::LogicalTypeId::Integer,
-            std::nullopt
-        };
+        return common::LogicalType {common::LogicalTypeId::Integer, std::nullopt};
     }
     if (context_.match(TokenType::BigInt)) {
-        return common::LogicalType {
-            common::LogicalTypeId::BigInt,
-            std::nullopt
-        };
+        return common::LogicalType {common::LogicalTypeId::BigInt, std::nullopt};
     }
     if (context_.match(TokenType::Float)) {
-        return common::LogicalType {
-            common::LogicalTypeId::Float,
-            std::nullopt
-        };
+        return common::LogicalType {common::LogicalTypeId::Float, std::nullopt};
     }
     if (context_.match(TokenType::Double)) {
-        return common::LogicalType {
-            common::LogicalTypeId::Double,
-            std::nullopt
-        };
+        return common::LogicalType {common::LogicalTypeId::Double, std::nullopt};
     }
     if (context_.match(TokenType::Boolean)) {
-        return common::LogicalType {
-            common::LogicalTypeId::Boolean,
-            std::nullopt
-        };
+        return common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt};
     }
     if (context_.match(TokenType::Varchar)) {
-        auto left_paren = context_.consume(
-            TokenType::LeftParen, "Expected '(' after VARCHAR"
-        );
+        auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after VARCHAR");
         if (!left_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(left_paren.error()));
         }
@@ -103,16 +82,12 @@ std::expected<common::LogicalType, ParserError> ParserSchemaHelper::parse_data_t
         if (!parameter.has_value()) [[unlikely]] {
             return std::unexpected(std::move(parameter.error()));
         }
-        auto right_paren = context_.consume(
-TokenType::RightParen, "Expected ')' after VARCHAR length"
-        );
+        auto right_paren =
+            context_.consume(TokenType::RightParen, "Expected ')' after VARCHAR length");
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
-        return common::LogicalType {
-            common::LogicalTypeId::Varchar,
-            std::make_optional(*parameter)
-        };
+        return common::LogicalType {common::LogicalTypeId::Varchar, std::make_optional(*parameter)};
     }
     if (context_.match(TokenType::Vector)) {
         auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after VECTOR");
@@ -123,24 +98,21 @@ TokenType::RightParen, "Expected ')' after VARCHAR length"
         if (!parameter.has_value()) [[unlikely]] {
             return std::unexpected(std::move(parameter.error()));
         }
-        auto right_paren = context_.consume(
-            TokenType::RightParen, "Expected ')' after VECTOR dimension"
-        );
+        auto right_paren =
+            context_.consume(TokenType::RightParen, "Expected ')' after VECTOR dimension");
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
-        return common::LogicalType {
-            common::LogicalTypeId::Vector,
-            std::make_optional(*parameter)
-        };
+        return common::LogicalType {common::LogicalTypeId::Vector, std::make_optional(*parameter)};
     }
 
-    return std::unexpected(context_.make_current_error(
-        ParserErrorCode::ExpectedDataType, "Expected data type"
-    ));
+    return std::unexpected(
+        context_.make_current_error(ParserErrorCode::ExpectedDataType, "Expected data type")
+    );
 }
 
-std::expected<ast::ColumnDefinitionSyntax, ParserError> ParserSchemaHelper::parse_column_definition()
+std::expected<ast::ColumnDefinitionSyntax, ParserError>
+ParserSchemaHelper::parse_column_definition()
 {
     const auto location = context_.ast_location(context_.current().location());
     auto name = parse_identifier_string("Expected column name");
@@ -158,7 +130,8 @@ std::expected<ast::ColumnDefinitionSyntax, ParserError> ParserSchemaHelper::pars
     column.type = *type;
     column.location = location;
 
-    while (!context_.check(TokenType::Comma) && !context_.check(TokenType::RightParen) && !context_.check(TokenType::EoF)) {
+    while (!context_.check(TokenType::Comma) && !context_.check(TokenType::RightParen) &&
+           !context_.check(TokenType::EoF)) {
         if (context_.match(TokenType::Unique)) {
             column.unique = true;
         } else if (context_.match(TokenType::Default)) {
@@ -188,16 +161,16 @@ std::expected<ast::ColumnDefinitionSyntax, ParserError> ParserSchemaHelper::pars
             column.nullable = true;
             // NULL 是默认行为，不需要额外处理
         } else if (context_.match(TokenType::Comment)) {
-            auto comment = context_.consume(
-                TokenType::StringLiteral, "Expected string literal after COMMENT"
-            );
+            auto comment =
+                context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
             if (!comment.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(comment.error()));
             }
             column.comment = std::string(comment->value());
         } else {
             return std::unexpected(context_.make_current_error(
-                ParserErrorCode::UnexpectedToken, "Unexpected column constraint"
+                ParserErrorCode::UnexpectedToken,
+                "Unexpected column constraint"
             ));
         }
     }

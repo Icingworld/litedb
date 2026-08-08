@@ -11,10 +11,7 @@ namespace litedb::core::parser::ast
 class DescribeCollectionStatement final : public StatementNode
 {
 public:
-    DescribeCollectionStatement(
-        std::string collection_name,
-        AstNodeLocation location
-    );
+    DescribeCollectionStatement(std::string collection_name, AstNodeLocation location);
 
 public:
     // 获取节点类型

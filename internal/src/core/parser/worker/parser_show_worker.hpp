@@ -30,8 +30,9 @@ public:
 private:
     // 解析 SHOW DATABASES 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_show_databases_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_databases_statement(
+        TokenLocation location
+    );
 
     // 解析 SHOW COLLECTIONS 语句
     [[nodiscard]]
@@ -40,8 +41,9 @@ private:
 
     // 解析 SHOW INDEXES 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_show_indexes_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_show_indexes_statement(
+        TokenLocation location
+    );
 
     // 解析 SHOW VECTOR INDEXES 语句
     [[nodiscard]]

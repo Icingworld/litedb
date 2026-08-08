@@ -1,7 +1,7 @@
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::parser::ast
 {

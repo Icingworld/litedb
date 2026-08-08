@@ -11,11 +11,7 @@ namespace litedb::core::parser::ast
 class DropCollectionStatement final : public StatementNode
 {
 public:
-    DropCollectionStatement(
-        std::string collection_name,
-        bool if_exists,
-        AstNodeLocation location
-    );
+    DropCollectionStatement(std::string collection_name, bool if_exists, AstNodeLocation location);
 
 public:
     // 获取节点类型

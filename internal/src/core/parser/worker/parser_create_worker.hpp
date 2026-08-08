@@ -27,14 +27,14 @@ public:
 public:
     // 解析 CREATE 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_create_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_statement();
 
 private:
     // 解析 CREATE DATABASE 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_create_database_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_create_database_statement(
+        TokenLocation location
+    );
 
     // 解析 CREATE COLLECTION 语句
     [[nodiscard]]

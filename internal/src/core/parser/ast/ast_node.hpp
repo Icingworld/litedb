@@ -9,8 +9,8 @@ namespace litedb::core::parser::ast
 // 抽象语法树节点位置
 struct AstNodeLocation
 {
-    std::size_t line;       // 行号
-    std::size_t column;     // 列号
+    std::size_t line; // 行号
+    std::size_t column; // 列号
 };
 
 // 抽象语法树节点类型
@@ -35,17 +35,17 @@ enum class AstNodeKind : std::uint8_t
     Update,
     Use,
 
-    Wildcard,               // *
-    Literal,                // 字面量
-    FunctionCall,           // 函数调用
-    ColumnReference,        // 列引用
+    Wildcard, // *
+    Literal, // 字面量
+    FunctionCall, // 函数调用
+    ColumnReference, // 列引用
     Vector,
-    Binary,                 // 二元运算符
-    Unary,                  // 一元运算符
+    Binary, // 二元运算符
+    Unary, // 一元运算符
     In,
     Between,
     Like,
-    Alias,                  // AS alias
+    Alias, // AS alias
 };
 
 // 抽象语法树节点

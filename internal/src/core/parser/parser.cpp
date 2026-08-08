@@ -14,13 +14,11 @@ namespace litedb::core::parser
 
 Parser::Parser(std::string input)
     : lexer_(std::make_unique<Lexer>(std::move(input)))
-{
-}
+{}
 
 Parser::Parser(std::unique_ptr<Lexer> lexer)
     : lexer_(std::move(lexer))
-{
-}
+{}
 
 Parser::~Parser() = default;
 

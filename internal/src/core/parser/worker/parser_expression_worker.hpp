@@ -14,8 +14,8 @@ namespace litedb::core::parser
 // 解析到的表达式及其嵌套深度
 struct ParsedExpression
 {
-    std::unique_ptr<ast::ExpressionNode> expression;        // 解析到的表达式
-    std::size_t depth;                                      // 嵌套深度
+    std::unique_ptr<ast::ExpressionNode> expression; // 解析到的表达式
+    std::size_t depth; // 嵌套深度
 };
 
 // 表达式解析工作器
@@ -64,11 +64,8 @@ private:
 
     // 创建一元表达式
     [[nodiscard]]
-    std::expected<ParsedExpression, ParserError> make_unary(
-        ParsedExpression operand,
-        TokenType op,
-        TokenLocation location
-    ) const;
+    std::expected<ParsedExpression, ParserError>
+    make_unary(ParsedExpression operand, TokenType op, TokenLocation location) const;
 
     // 创建二元表达式
     [[nodiscard]]

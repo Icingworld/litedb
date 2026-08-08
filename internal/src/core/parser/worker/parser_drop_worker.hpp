@@ -26,24 +26,26 @@ public:
 public:
     // 解析 DROP 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_drop_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_statement();
 
 private:
     // 解析 DROP DATABASE 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_drop_database_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_database_statement(
+        TokenLocation location
+    );
 
     // 解析 DROP COLLECTION 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_drop_collection_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_collection_statement(
+        TokenLocation location
+    );
 
     // 解析 DROP INDEX 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_drop_index_statement(TokenLocation location);
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_drop_index_statement(
+        TokenLocation location
+    );
 
     // 解析 DROP VECTOR INDEX 语句
     [[nodiscard]]

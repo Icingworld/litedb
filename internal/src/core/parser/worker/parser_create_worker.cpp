@@ -16,8 +16,7 @@ namespace litedb::core::parser
 ParserCreateWorker::ParserCreateWorker(ParserContext & context) noexcept
     : context_(context)
     , schema_helper_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserCreateWorker::parse_create_statement()
@@ -35,9 +34,7 @@ ParserCreateWorker::parse_create_statement()
 
     // 判断是否有 UNIQUE 关键字
     if (context_.match(TokenType::Unique)) {
-        auto index = context_.consume(
-            TokenType::Index, "Expected INDEX after UNIQUE"
-        );
+        auto index = context_.consume(TokenType::Index, "Expected INDEX after UNIQUE");
         if (!index.has_value()) [[unlikely]] {
             return std::unexpected(std::move(index.error()));
         }
@@ -66,9 +63,7 @@ ParserCreateWorker::parse_create_database_statement(TokenLocation location)
         return std::unexpected(std::move(if_not_exists.error()));
     }
 
-    auto database = schema_helper_.parse_identifier_string(
-        "Expected database name"
-    );
+    auto database = schema_helper_.parse_identifier_string("Expected database name");
     if (!database.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database.error()));
     }
@@ -88,22 +83,20 @@ ParserCreateWorker::parse_create_collection_statement(TokenLocation location)
         return std::unexpected(std::move(if_not_exists.error()));
     }
 
-    auto collection = schema_helper_.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
-    auto left_paren = context_.consume(
-        TokenType::LeftParen, "Expected '(' before column definitions"
-    );
+    auto left_paren =
+        context_.consume(TokenType::LeftParen, "Expected '(' before column definitions");
     if (!left_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(left_paren.error()));
     }
     if (context_.check(TokenType::RightParen)) [[unlikely]] {
         return std::unexpected(context_.make_current_error(
-            ParserErrorCode::EmptyList, "Expected at least one column definition"
+            ParserErrorCode::EmptyList,
+            "Expected at least one column definition"
         ));
     }
 
@@ -120,18 +113,16 @@ ParserCreateWorker::parse_create_collection_statement(TokenLocation location)
         }
     }
 
-    auto right_paren = context_.consume(
-        TokenType::RightParen, "Expected ')' after column definitions"
-    );
+    auto right_paren =
+        context_.consume(TokenType::RightParen, "Expected ')' after column definitions");
     if (!right_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_paren.error()));
     }
 
     std::optional<std::string> comment;
     if (context_.match(TokenType::Comment)) {
-        auto comment_token = context_.consume(
-            TokenType::StringLiteral, "Expected string literal after COMMENT"
-        );
+        auto comment_token =
+            context_.consume(TokenType::StringLiteral, "Expected string literal after COMMENT");
         if (!comment_token.has_value()) [[unlikely]] {
             return std::unexpected(std::move(comment_token.error()));
         }
@@ -148,54 +139,39 @@ ParserCreateWorker::parse_create_collection_statement(TokenLocation location)
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-ParserCreateWorker::parse_create_index_statement(
-    TokenLocation location,
-    bool unique
-)
+ParserCreateWorker::parse_create_index_statement(TokenLocation location, bool unique)
 {
     auto if_not_exists = schema_helper_.parse_if_not_exists();
     if (!if_not_exists.has_value()) [[unlikely]] {
         return std::unexpected(std::move(if_not_exists.error()));
     }
 
-    auto index_name = schema_helper_.parse_identifier_string(
-        "Expected index name"
-    );
+    auto index_name = schema_helper_.parse_identifier_string("Expected index name");
     if (!index_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(index_name.error()));
     }
 
-    auto on = context_.consume(
-        TokenType::On, "Expected ON after index name"
-    );
+    auto on = context_.consume(TokenType::On, "Expected ON after index name");
     if (!on.has_value()) [[unlikely]] {
         return std::unexpected(std::move(on.error()));
     }
 
-    auto collection_name = schema_helper_.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection_name.error()));
     }
 
-    auto left_paren = context_.consume(
-        TokenType::LeftParen, "Expected '(' before index column"
-    );
+    auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' before index column");
     if (!left_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(left_paren.error()));
     }
 
-    auto column_name = schema_helper_.parse_identifier_string(
-        "Expected index column name"
-    );
+    auto column_name = schema_helper_.parse_identifier_string("Expected index column name");
     if (!column_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(column_name.error()));
     }
 
-    auto right_paren = context_.consume(
-        TokenType::RightParen, "Expected ')' after index column"
-    );
+    auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after index column");
     if (!right_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_paren.error()));
     }
@@ -232,51 +208,40 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
         return std::unexpected(std::move(if_not_exists.error()));
     }
 
-    auto index_name = schema_helper_.parse_identifier_string(
-        "Expected vector index name"
-    );
+    auto index_name = schema_helper_.parse_identifier_string("Expected vector index name");
     if (!index_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(index_name.error()));
     }
 
-    auto on = context_.consume(
-        TokenType::On, "Expected ON after vector index name"
-    );
+    auto on = context_.consume(TokenType::On, "Expected ON after vector index name");
     if (!on.has_value()) [[unlikely]] {
         return std::unexpected(std::move(on.error()));
     }
 
-    auto collection_name = schema_helper_.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection_name.error()));
     }
 
-    auto left_paren = context_.consume(
-        TokenType::LeftParen, "Expected '(' before vector index column"
-    );
+    auto left_paren =
+        context_.consume(TokenType::LeftParen, "Expected '(' before vector index column");
     if (!left_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(left_paren.error()));
     }
 
-    auto column_name = schema_helper_.parse_identifier_string(
-        "Expected vector index column name"
-    );
+    auto column_name = schema_helper_.parse_identifier_string("Expected vector index column name");
     if (!column_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(column_name.error()));
     }
 
-    auto right_paren = context_.consume(
-        TokenType::RightParen, "Expected ')' after vector index column"
-    );
+    auto right_paren =
+        context_.consume(TokenType::RightParen, "Expected ')' after vector index column");
     if (!right_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_paren.error()));
     }
 
-    auto using_token = context_.consume(
-        TokenType::Using, "Expected USING after vector index column"
-    );
+    auto using_token =
+        context_.consume(TokenType::Using, "Expected USING after vector index column");
     if (!using_token.has_value()) [[unlikely]] {
         return std::unexpected(std::move(using_token.error()));
     }
@@ -299,9 +264,7 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
 
     ast::VectorIndexOptions options;
     if (context_.match(TokenType::With)) {
-        auto options_left_paren = context_.consume(
-            TokenType::LeftParen, "Expected '(' after WITH"
-        );
+        auto options_left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after WITH");
         if (!options_left_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(options_left_paren.error()));
         }
@@ -323,9 +286,8 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
             }
             const auto option_key = lower_ascii(option_name->value());
 
-            auto equal = context_.consume(
-                TokenType::Equal, "Expected '=' after vector index option name"
-            );
+            auto equal =
+                context_.consume(TokenType::Equal, "Expected '=' after vector index option name");
             if (!equal.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(equal.error()));
             }
@@ -368,9 +330,7 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
                         "Duplicate vector index option: max_neighbors"
                     ));
                 }
-                auto value = schema_helper_.parse_integer_value(
-                    "Expected max_neighbors value"
-                );
+                auto value = schema_helper_.parse_integer_value("Expected max_neighbors value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(value.error()));
                 }
@@ -383,9 +343,7 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
                         "Duplicate vector index option: ef_construction"
                     ));
                 }
-                auto value = schema_helper_.parse_integer_value(
-                    "Expected ef_construction value"
-                );
+                auto value = schema_helper_.parse_integer_value("Expected ef_construction value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(value.error()));
                 }
@@ -398,9 +356,7 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
                         "Duplicate vector index option: ef_search"
                     ));
                 }
-                auto value = schema_helper_.parse_integer_value(
-                    "Expected ef_search value"
-                );
+                auto value = schema_helper_.parse_integer_value("Expected ef_search value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(value.error()));
                 }
@@ -413,9 +369,7 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
                         "Duplicate vector index option: random_seed"
                     ));
                 }
-                auto value = schema_helper_.parse_integer_value(
-                    "Expected random_seed value"
-                );
+                auto value = schema_helper_.parse_integer_value("Expected random_seed value");
                 if (!value.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(value.error()));
                 }
@@ -433,9 +387,8 @@ ParserCreateWorker::parse_create_vector_index_statement(TokenLocation location)
             }
         }
 
-        auto options_right_paren = context_.consume(
-            TokenType::RightParen, "Expected ')' after vector index options"
-        );
+        auto options_right_paren =
+            context_.consume(TokenType::RightParen, "Expected ')' after vector index options");
         if (!options_right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(options_right_paren.error()));
         }

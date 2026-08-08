@@ -25,8 +25,7 @@ public:
 public:
     // 解析 INSERT 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_insert_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_insert_statement();
 
 private:
     ParserContext & context_;

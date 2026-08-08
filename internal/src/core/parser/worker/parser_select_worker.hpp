@@ -27,14 +27,12 @@ public:
 public:
     // 解析 SELECT 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_select_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_select_statement();
 
 private:
     // 解析 SELECT 列表项
     [[nodiscard]]
-    std::expected<ParsedExpression, ParserError>
-    parse_select_item();
+    std::expected<ParsedExpression, ParserError> parse_select_item();
 
 private:
     ParserContext & context_;

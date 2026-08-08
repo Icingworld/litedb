@@ -8,9 +8,7 @@
 namespace litedb::core::parser::ast
 {
 
-/**
- * @brief 缩进作用域
- */
+// 缩进作用域
 class AstDebugPrinter::IndentScope
 {
 public:
@@ -29,16 +27,12 @@ private:
     AstDebugPrinter & printer_;
 };
 
-AstDebugPrinter::AstDebugPrinter(
-    std::ostream & ostream,
-    AstDebugPrinterOptions options
-)
+AstDebugPrinter::AstDebugPrinter(std::ostream & ostream, AstDebugPrinterOptions options)
     : ostream_(ostream)
     , options_(options)
     , indent_(0)
     , pending_str_()
-{
-}
+{}
 
 void AstDebugPrinter::print(const AstNode & node)
 {
@@ -119,9 +113,7 @@ void AstDebugPrinter::print(const ExpressionNode & expression)
     dispatch_expression(expression);
 }
 
-void AstDebugPrinter::visit_create_database_statement(
-    const CreateDatabaseStatement & statement
-)
+void AstDebugPrinter::visit_create_database_statement(const CreateDatabaseStatement & statement)
 {
     write_node_header("CreateDatabaseStatement", statement.location());
     IndentScope scope(*this);
@@ -129,9 +121,7 @@ void AstDebugPrinter::visit_create_database_statement(
     write_field("if_not_exists", statement.if_not_exists());
 }
 
-void AstDebugPrinter::visit_create_collection_statement(
-    const CreateCollectionStatement & statement
-)
+void AstDebugPrinter::visit_create_collection_statement(const CreateCollectionStatement & statement)
 {
     write_node_header("CreateCollectionStatement", statement.location());
     IndentScope scope(*this);
@@ -168,9 +158,7 @@ void AstDebugPrinter::visit_create_collection_statement(
     }
 }
 
-void AstDebugPrinter::visit_create_index_statement(
-    const CreateIndexStatement & statement
-)
+void AstDebugPrinter::visit_create_index_statement(const CreateIndexStatement & statement)
 {
     write_node_header("CreateIndexStatement", statement.location());
     IndentScope scope(*this);
@@ -222,9 +210,7 @@ void AstDebugPrinter::visit_describe_collection_statement(
     write_field("collection_name", statement.collection_name());
 }
 
-void AstDebugPrinter::visit_drop_database_statement(
-    const DropDatabaseStatement & statement
-)
+void AstDebugPrinter::visit_drop_database_statement(const DropDatabaseStatement & statement)
 {
     write_node_header("DropDatabaseStatement", statement.location());
     IndentScope scope(*this);
@@ -232,9 +218,7 @@ void AstDebugPrinter::visit_drop_database_statement(
     write_field("if_exists", statement.if_exists());
 }
 
-void AstDebugPrinter::visit_drop_collection_statement(
-    const DropCollectionStatement & statement
-)
+void AstDebugPrinter::visit_drop_collection_statement(const DropCollectionStatement & statement)
 {
     write_node_header("DropCollectionStatement", statement.location());
     IndentScope scope(*this);
@@ -242,9 +226,7 @@ void AstDebugPrinter::visit_drop_collection_statement(
     write_field("if_exists", statement.if_exists());
 }
 
-void AstDebugPrinter::visit_drop_index_statement(
-    const DropIndexStatement & statement
-)
+void AstDebugPrinter::visit_drop_index_statement(const DropIndexStatement & statement)
 {
     write_node_header("DropIndexStatement", statement.location());
     IndentScope scope(*this);
@@ -253,9 +235,7 @@ void AstDebugPrinter::visit_drop_index_statement(
     write_field("if_exists", statement.if_exists());
 }
 
-void AstDebugPrinter::visit_drop_vector_index_statement(
-    const DropVectorIndexStatement & statement
-)
+void AstDebugPrinter::visit_drop_vector_index_statement(const DropVectorIndexStatement & statement)
 {
     write_node_header("DropVectorIndexStatement", statement.location());
     IndentScope scope(*this);
@@ -339,25 +319,19 @@ void AstDebugPrinter::visit_select_statement(const SelectStatement & statement)
     write_optional_field("offset", statement.offset());
 }
 
-void AstDebugPrinter::visit_show_databases_statement(
-    const ShowDatabasesStatement & statement
-)
+void AstDebugPrinter::visit_show_databases_statement(const ShowDatabasesStatement & statement)
 {
     write_node_header("ShowDatabasesStatement", statement.location());
 }
 
-void AstDebugPrinter::visit_show_collections_statement(
-    const ShowCollectionsStatement & statement
-)
+void AstDebugPrinter::visit_show_collections_statement(const ShowCollectionsStatement & statement)
 {
     write_node_header("ShowCollectionsStatement", statement.location());
     IndentScope scope(*this);
     write_optional_field("database_name", statement.database_name());
 }
 
-void AstDebugPrinter::visit_show_indexes_statement(
-    const ShowIndexesStatement & statement
-)
+void AstDebugPrinter::visit_show_indexes_statement(const ShowIndexesStatement & statement)
 {
     write_node_header("ShowIndexesStatement", statement.location());
     IndentScope scope(*this);
@@ -406,18 +380,14 @@ void AstDebugPrinter::visit_use_statement(const UseStatement & statement)
     write_field("database_name", statement.database_name());
 }
 
-void AstDebugPrinter::visit_wildcard_expression(
-    const WildcardExpression & expression
-)
+void AstDebugPrinter::visit_wildcard_expression(const WildcardExpression & expression)
 {
     write_node_header("WildcardExpression", expression.location());
     IndentScope scope(*this);
     write_optional_field("qualifier", expression.qualifier());
 }
 
-void AstDebugPrinter::visit_literal_expression(
-    const LiteralExpression & expression
-)
+void AstDebugPrinter::visit_literal_expression(const LiteralExpression & expression)
 {
     write_node_header("LiteralExpression", expression.location());
     IndentScope scope(*this);
@@ -425,9 +395,7 @@ void AstDebugPrinter::visit_literal_expression(
     write_field("value", expression.value());
 }
 
-void AstDebugPrinter::visit_function_call_expression(
-    const FunctionCallExpression & expression
-)
+void AstDebugPrinter::visit_function_call_expression(const FunctionCallExpression & expression)
 {
     write_node_header("FunctionCallExpression", expression.location());
     IndentScope scope(*this);
@@ -458,9 +426,7 @@ void AstDebugPrinter::visit_column_reference_expression(
     write_field("column", expression.column_name());
 }
 
-void AstDebugPrinter::visit_vector_expression(
-    const VectorExpression & expression
-)
+void AstDebugPrinter::visit_vector_expression(const VectorExpression & expression)
 {
     write_node_header("VectorExpression", expression.location());
     IndentScope scope(*this);
@@ -479,9 +445,7 @@ void AstDebugPrinter::visit_vector_expression(
     }
 }
 
-void AstDebugPrinter::visit_binary_expression(
-    const BinaryExpression & expression
-)
+void AstDebugPrinter::visit_binary_expression(const BinaryExpression & expression)
 {
     write_node_header("BinaryExpression", expression.location());
     IndentScope scope(*this);
@@ -490,9 +454,7 @@ void AstDebugPrinter::visit_binary_expression(
     write_child_field("right", &expression.right());
 }
 
-void AstDebugPrinter::visit_unary_expression(
-    const UnaryExpression & expression
-)
+void AstDebugPrinter::visit_unary_expression(const UnaryExpression & expression)
 {
     write_node_header("UnaryExpression", expression.location());
     IndentScope scope(*this);
@@ -521,9 +483,7 @@ void AstDebugPrinter::visit_in_expression(const InExpression & expression)
     }
 }
 
-void AstDebugPrinter::visit_between_expression(
-    const BetweenExpression & expression
-)
+void AstDebugPrinter::visit_between_expression(const BetweenExpression & expression)
 {
     write_node_header("BetweenExpression", expression.location());
     IndentScope scope(*this);
@@ -540,9 +500,7 @@ void AstDebugPrinter::visit_like_expression(const LikeExpression & expression)
     write_child_field("pattern", &expression.pattern());
 }
 
-void AstDebugPrinter::visit_alias_expression(
-    const AliasExpression & expression
-)
+void AstDebugPrinter::visit_alias_expression(const AliasExpression & expression)
 {
     write_node_header("AliasExpression", expression.location());
     IndentScope scope(*this);
@@ -557,10 +515,7 @@ void AstDebugPrinter::write_indent()
     }
 }
 
-void AstDebugPrinter::write_node_header(
-    std::string_view name,
-    AstNodeLocation location
-)
+void AstDebugPrinter::write_node_header(std::string_view name, AstNodeLocation location)
 {
     write_indent();
     if (!pending_str_.empty()) {
@@ -575,10 +530,7 @@ void AstDebugPrinter::write_node_header(
     ostream_ << '\n';
 }
 
-void AstDebugPrinter::write_field(
-    std::string_view name,
-    std::string_view value
-)
+void AstDebugPrinter::write_field(std::string_view name, std::string_view value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -601,10 +553,7 @@ void AstDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(
-        name,
-        value ? std::string_view(*value) : std::string_view("<none>")
-    );
+    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
 }
 
 void AstDebugPrinter::write_optional_field(
@@ -622,10 +571,7 @@ void AstDebugPrinter::write_optional_field(
     ostream_ << '\n';
 }
 
-void AstDebugPrinter::write_child_field(
-    std::string_view name,
-    const ExpressionNode * expression
-)
+void AstDebugPrinter::write_child_field(std::string_view name, const ExpressionNode * expression)
 {
     write_indent();
     ostream_ << name << ':';
@@ -663,31 +609,21 @@ std::string debug_print(const AstNode & node, AstDebugPrinterOptions options)
     return stream.str();
 }
 
-std::string debug_print(
-    const StatementNode & statement,
-    AstDebugPrinterOptions options
-)
+std::string debug_print(const StatementNode & statement, AstDebugPrinterOptions options)
 {
     std::ostringstream stream;
     debug_print(stream, statement, options);
     return stream.str();
 }
 
-std::string debug_print(
-    const ExpressionNode & expression,
-    AstDebugPrinterOptions options
-)
+std::string debug_print(const ExpressionNode & expression, AstDebugPrinterOptions options)
 {
     std::ostringstream stream;
     debug_print(stream, expression, options);
     return stream.str();
 }
 
-void debug_print(
-    std::ostream & ostream,
-    const AstNode & node,
-    AstDebugPrinterOptions options
-)
+void debug_print(std::ostream & ostream, const AstNode & node, AstDebugPrinterOptions options)
 {
     AstDebugPrinter printer(ostream, options);
     printer.print(node);

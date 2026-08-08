@@ -11,8 +11,7 @@ namespace litedb::core::parser
 
 ParserUpdateWorker::ParserUpdateWorker(ParserContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserUpdateWorker::parse_update_statement()
@@ -21,16 +20,12 @@ ParserUpdateWorker::parse_update_statement()
     context_.advance();
 
     ParserSchemaHelper schema_helper(context_);
-    auto collection = schema_helper.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection = schema_helper.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
-    auto set = context_.consume(
-        TokenType::Set, "Expected SET after collection name"
-    );
+    auto set = context_.consume(TokenType::Set, "Expected SET after collection name");
     if (!set.has_value()) [[unlikely]] {
         return std::unexpected(std::move(set.error()));
     }
@@ -38,16 +33,12 @@ ParserUpdateWorker::parse_update_statement()
     ParserExpressionWorker expression_worker(context_);
     std::vector<ast::Assignment> assignments;
     while (true) {
-        auto column = schema_helper.parse_identifier_string(
-            "Expected column name"
-        );
+        auto column = schema_helper.parse_identifier_string("Expected column name");
         if (!column.has_value()) [[unlikely]] {
             return std::unexpected(std::move(column.error()));
         }
 
-        auto equal = context_.consume(
-            TokenType::Equal, "Expected '=' after column name"
-        );
+        auto equal = context_.consume(TokenType::Equal, "Expected '=' after column name");
         if (!equal.has_value()) {
             return std::unexpected(std::move(equal.error()));
         }
@@ -57,10 +48,12 @@ ParserUpdateWorker::parse_update_statement()
             return std::unexpected(std::move(value.error()));
         }
 
-        assignments.push_back(ast::Assignment {
-            .column_name = std::move(*column),
-            .value = std::move(value->expression),
-        });
+        assignments.push_back(
+            ast::Assignment {
+                .column_name = std::move(*column),
+                .value = std::move(value->expression),
+            }
+        );
 
         if (!context_.match(TokenType::Comma)) {
             break;

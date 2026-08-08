@@ -16,8 +16,7 @@ namespace litedb::core::parser
 
 ParserSelectWorker::ParserSelectWorker(ParserContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserSelectWorker::parse_select_statement()
@@ -41,16 +40,12 @@ ParserSelectWorker::parse_select_statement()
         }
     }
 
-    auto from = context_.consume(
-        TokenType::From, "Expected FROM after select list"
-    );
+    auto from = context_.consume(TokenType::From, "Expected FROM after select list");
     if (!from.has_value()) [[unlikely]] {
         return std::unexpected(std::move(from.error()));
     }
 
-    auto collection = schema_worker.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection = schema_worker.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -66,9 +61,7 @@ ParserSelectWorker::parse_select_statement()
 
     std::vector<ast::OrderByItem> order_by;
     if (context_.match(TokenType::Order)) {
-        auto by = context_.consume(
-            TokenType::By, "Expected BY after ORDER"
-        );
+        auto by = context_.consume(TokenType::By, "Expected BY after ORDER");
         if (!by.has_value()) [[unlikely]] {
             return std::unexpected(std::move(by.error()));
         }
@@ -96,9 +89,7 @@ ParserSelectWorker::parse_select_statement()
 
     std::optional<std::size_t> limit;
     if (context_.match(TokenType::Limit)) {
-        auto value = schema_worker.parse_integer_value(
-            "Expected LIMIT value"
-        );
+        auto value = schema_worker.parse_integer_value("Expected LIMIT value");
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
@@ -107,9 +98,7 @@ ParserSelectWorker::parse_select_statement()
 
     std::optional<std::size_t> offset;
     if (context_.match(TokenType::Offset)) {
-        auto value = schema_worker.parse_integer_value(
-            "Expected OFFSET value"
-        );
+        auto value = schema_worker.parse_integer_value("Expected OFFSET value");
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
@@ -127,8 +116,7 @@ ParserSelectWorker::parse_select_statement()
     );
 }
 
-std::expected<ParsedExpression, ParserError>
-ParserSelectWorker::parse_select_item()
+std::expected<ParsedExpression, ParserError> ParserSelectWorker::parse_select_item()
 {
     if (context_.check(TokenType::Star)) {
         const Token star = context_.advance();
@@ -144,9 +132,8 @@ ParserSelectWorker::parse_select_item()
         };
     }
 
-    if (context_.check(TokenType::Identifier)
-        && context_.peek_next().type() == TokenType::Dot
-        && context_.peek_after_next().type() == TokenType::Star) {
+    if (context_.check(TokenType::Identifier) && context_.peek_next().type() == TokenType::Dot &&
+        context_.peek_after_next().type() == TokenType::Star) {
         const Token qualifier = context_.advance();
         context_.advance();
         context_.advance();
@@ -184,10 +171,7 @@ ParserSelectWorker::parse_select_item()
         return std::unexpected(std::move(alias.error()));
     }
 
-    auto depth = context_.make_expression_parent_depth(
-        expression->depth,
-        alias->location()
-    );
+    auto depth = context_.make_expression_parent_depth(expression->depth, alias->location());
     if (!depth.has_value()) [[unlikely]] {
         return std::unexpected(std::move(depth.error()));
     }

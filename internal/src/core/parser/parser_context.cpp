@@ -122,8 +122,8 @@ ParserError ParserContext::make_error(
     return make_parser_error(code, location, message);
 }
 
-std::expected<ParserContext::ExpressionNestingGuard, ParserError> ParserContext::
-    enter_expression_nesting(TokenLocation location)
+std::expected<ParserContext::ExpressionNestingGuard, ParserError>
+ParserContext::enter_expression_nesting(TokenLocation location)
 {
     if (expression_nesting_limit_reached()) [[unlikely]] {
         return std::unexpected(make_expression_nesting_error(location));
@@ -168,11 +168,8 @@ void ParserContext::leave_expression_nesting() noexcept
     --expression_nesting_depth_;
 }
 
-std::expected<Token, ParserError> ParserContext::consume(
-    TokenType type,
-    std::string_view message,
-    ParserErrorCode code
-)
+std::expected<Token, ParserError>
+ParserContext::consume(TokenType type, std::string_view message, ParserErrorCode code)
 {
     if (!check(type)) [[unlikely]] {
         return std::unexpected(make_current_error(code, message));
@@ -193,4 +190,4 @@ ast::AstNodeLocation ParserContext::ast_location(TokenLocation location) const n
     return ast::AstNodeLocation {location.line, location.column};
 }
 
-}  // namespace litedb::core::parser
+} // namespace litedb::core::parser

@@ -10,8 +10,7 @@ namespace litedb::core::parser
 
 ParserDescribeWorker::ParserDescribeWorker(ParserContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserDescribeWorker::parse_describe_collection_statement()

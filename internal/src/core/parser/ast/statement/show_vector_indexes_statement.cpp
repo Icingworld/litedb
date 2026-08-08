@@ -1,7 +1,7 @@
 #include "core/parser/ast/statement/show_vector_indexes_statement.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::parser::ast
 {

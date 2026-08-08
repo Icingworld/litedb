@@ -5,8 +5,7 @@ namespace litedb::core::parser::ast
 
 AstNode::AstNode(AstNodeLocation location) noexcept
     : location_(location)
-{
-}
+{}
 
 AstNodeLocation AstNode::location() const noexcept
 {

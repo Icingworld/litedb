@@ -11,10 +11,7 @@ namespace litedb::core::parser::ast
 class ShowVectorIndexesStatement final : public StatementNode
 {
 public:
-    ShowVectorIndexesStatement(
-        std::string collection_name,
-        AstNodeLocation location
-    );
+    ShowVectorIndexesStatement(std::string collection_name, AstNodeLocation location);
 
 public:
     // 获取节点类型

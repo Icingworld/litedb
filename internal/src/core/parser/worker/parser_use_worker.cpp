@@ -10,18 +10,16 @@ namespace litedb::core::parser
 
 ParserUseWorker::ParserUseWorker(ParserContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
-std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserUseWorker::parse_use_statement()
+std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
+ParserUseWorker::parse_use_statement()
 {
     const TokenLocation location = context_.current().location();
     context_.advance();
 
     ParserSchemaHelper schema_helper(context_);
-    auto database = schema_helper.parse_identifier_string(
-        "Expected database name"
-    );
+    auto database = schema_helper.parse_identifier_string("Expected database name");
     if (!database.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database.error()));
     }

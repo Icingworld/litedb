@@ -14,8 +14,8 @@
 #include "core/parser/ast/expression/literal_expression.hpp"
 #include "core/parser/ast/expression/unary_expression.hpp"
 #include "core/parser/ast/expression/vector_expression.hpp"
-#include "core/parser/token.hpp"
 #include "core/parser/parser_limits.hpp"
+#include "core/parser/token.hpp"
 
 namespace litedb::core::parser
 {
@@ -76,17 +76,14 @@ std::optional<int> infix_precedence(TokenType type) noexcept
 
 bool is_not_comparison(TokenType type) noexcept
 {
-    return type == TokenType::Like
-        || type == TokenType::In
-        || type == TokenType::Between;
+    return type == TokenType::Like || type == TokenType::In || type == TokenType::Between;
 }
 
 } // namespace
 
 ParserExpressionWorker::ParserExpressionWorker(ParserContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expression()
 {
@@ -118,10 +115,8 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
             not_operators.push_back(op);
 
             if (not_operators.size() > MaxExpressionDepth) [[unlikely]] {
-                auto depth = context_.make_expression_parent_depth(
-                    MaxExpressionDepth,
-                    op.location()
-                );
+                auto depth =
+                    context_.make_expression_parent_depth(MaxExpressionDepth, op.location());
                 return std::unexpected(std::move(depth.error()));
             }
         }
@@ -131,21 +126,14 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
     bool comparison_consumed = false;
     if (!not_operators.empty()) {
         bool operand_comparison_consumed = false;
-        auto operand = parse_expression_precedence(
-            COMPARISON_PRECEDENCE,
-            false,
-            &operand_comparison_consumed
-        );
+        auto operand =
+            parse_expression_precedence(COMPARISON_PRECEDENCE, false, &operand_comparison_consumed);
         if (!operand.has_value()) [[unlikely]] {
             return std::unexpected(std::move(operand.error()));
         }
 
         for (auto it = not_operators.rbegin(); it != not_operators.rend(); ++it) {
-            auto wrapped = make_unary(
-                std::move(*operand),
-                it->type(),
-                it->location()
-            );
+            auto wrapped = make_unary(std::move(*operand), it->type(), it->location());
             if (!wrapped.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(wrapped.error()));
             }
@@ -160,10 +148,8 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
             unary_operators.push_back(op);
 
             if (unary_operators.size() > MaxExpressionDepth) [[unlikely]] {
-                auto depth = context_.make_expression_parent_depth(
-                    MaxExpressionDepth,
-                    op.location()
-                );
+                auto depth =
+                    context_.make_expression_parent_depth(MaxExpressionDepth, op.location());
                 return std::unexpected(std::move(depth.error()));
             }
         }
@@ -174,11 +160,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
         }
 
         for (auto it = unary_operators.rbegin(); it != unary_operators.rend(); ++it) {
-            auto wrapped = make_unary(
-                std::move(*operand),
-                it->type(),
-                it->location()
-            );
+            auto wrapped = make_unary(std::move(*operand), it->type(), it->location());
             if (!wrapped.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(wrapped.error()));
             }
@@ -206,9 +188,8 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
         }
 
         const auto precedence = infix_precedence(context_.current().type());
-        if (!precedence.has_value()
-            || *precedence < minimum_precedence
-            || (comparison_consumed && *precedence == COMPARISON_PRECEDENCE)) {
+        if (!precedence.has_value() || *precedence < minimum_precedence ||
+            (comparison_consumed && *precedence == COMPARISON_PRECEDENCE)) {
             break;
         }
 
@@ -216,20 +197,13 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
 
         if (is_comparison_operator(op.type())) {
             comparison_consumed = true;
-            auto right = parse_expression_precedence(
-                ADDITIVE_PRECEDENCE,
-                false
-            );
+            auto right = parse_expression_precedence(ADDITIVE_PRECEDENCE, false);
             if (!right.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(right.error()));
             }
 
-            auto combined = make_binary(
-                std::move(*left),
-                op.type(),
-                std::move(*right),
-                op.location()
-            );
+            auto combined =
+                make_binary(std::move(*left), op.type(), std::move(*right), op.location());
             if (!combined.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(combined.error()));
             }
@@ -239,10 +213,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
 
         if (op.type() == TokenType::Like) {
             comparison_consumed = true;
-            auto pattern = parse_expression_precedence(
-                ADDITIVE_PRECEDENCE,
-                false
-            );
+            auto pattern = parse_expression_precedence(ADDITIVE_PRECEDENCE, false);
             if (!pattern.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(pattern.error()));
             }
@@ -264,11 +235,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
                 *depth,
             };
             if (negated) {
-                auto wrapped = make_unary(
-                    std::move(expression),
-                    TokenType::Not,
-                    not_location
-                );
+                auto wrapped = make_unary(std::move(expression), TokenType::Not, not_location);
                 if (!wrapped.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(wrapped.error()));
                 }
@@ -281,9 +248,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
 
         if (op.type() == TokenType::In) {
             comparison_consumed = true;
-            auto left_paren = context_.consume(
-                TokenType::LeftParen, "Expected '(' after IN"
-            );
+            auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after IN");
             if (!left_paren.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(left_paren.error()));
             }
@@ -299,9 +264,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
             while (true) {
                 const auto nested_location = left_paren->location();
                 if (context_.expression_nesting_limit_reached()) [[unlikely]] {
-                    return std::unexpected(
-                        context_.make_expression_nesting_error(nested_location)
-                    );
+                    return std::unexpected(context_.make_expression_nesting_error(nested_location));
                 }
 
                 auto value = parse_nested_expression(nested_location);
@@ -316,9 +279,8 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
                 }
             }
 
-            auto right_paren = context_.consume(
-                TokenType::RightParen, "Expected ')' after IN values"
-            );
+            auto right_paren =
+                context_.consume(TokenType::RightParen, "Expected ')' after IN values");
             if (!right_paren.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(right_paren.error()));
             }
@@ -340,11 +302,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
                 *depth,
             };
             if (negated) {
-                auto wrapped = make_unary(
-                    std::move(expression),
-                    TokenType::Not,
-                    not_location
-                );
+                auto wrapped = make_unary(std::move(expression), TokenType::Not, not_location);
                 if (!wrapped.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(wrapped.error()));
                 }
@@ -357,25 +315,17 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
 
         if (op.type() == TokenType::Between) {
             comparison_consumed = true;
-            auto lower = parse_expression_precedence(
-                ADDITIVE_PRECEDENCE,
-                false
-            );
+            auto lower = parse_expression_precedence(ADDITIVE_PRECEDENCE, false);
             if (!lower.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(lower.error()));
             }
 
-            auto and_token = context_.consume(
-                TokenType::And, "Expected AND in BETWEEN expression"
-            );
+            auto and_token = context_.consume(TokenType::And, "Expected AND in BETWEEN expression");
             if (!and_token.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(and_token.error()));
             }
 
-            auto upper = parse_expression_precedence(
-                ADDITIVE_PRECEDENCE,
-                false
-            );
+            auto upper = parse_expression_precedence(ADDITIVE_PRECEDENCE, false);
             if (!upper.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(upper.error()));
             }
@@ -398,11 +348,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
                 *depth,
             };
             if (negated) {
-                auto wrapped = make_unary(
-                    std::move(expression),
-                    TokenType::Not,
-                    not_location
-                );
+                auto wrapped = make_unary(std::move(expression), TokenType::Not, not_location);
                 if (!wrapped.has_value()) [[unlikely]] {
                     return std::unexpected(std::move(wrapped.error()));
                 }
@@ -413,20 +359,12 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_expre
             continue;
         }
 
-        auto right = parse_expression_precedence(
-            *precedence + 1,
-            *precedence <= AND_PRECEDENCE
-        );
+        auto right = parse_expression_precedence(*precedence + 1, *precedence <= AND_PRECEDENCE);
         if (!right.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right.error()));
         }
 
-        auto combined = make_binary(
-            std::move(*left),
-            op.type(),
-            std::move(*right),
-            op.location()
-        );
+        auto combined = make_binary(std::move(*left), op.type(), std::move(*right), op.location());
         if (!combined.has_value()) [[unlikely]] {
             return std::unexpected(std::move(combined.error()));
         }
@@ -446,12 +384,10 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_prima
     }
     if (context_.check(TokenType::Identifier)) {
         if (context_.peek_next().type() == TokenType::LeftParen) {
-            if (context_.expression_nesting_limit_reached()
-                && context_.peek_after_next().type() != TokenType::RightParen) [[unlikely]] {
+            if (context_.expression_nesting_limit_reached() &&
+                context_.peek_after_next().type() != TokenType::RightParen) [[unlikely]] {
                 return std::unexpected(
-                    context_.make_expression_nesting_error(
-                        context_.peek_next().location()
-                    )
+                    context_.make_expression_nesting_error(context_.peek_next().location())
                 );
             }
             return parse_function_call_expression();
@@ -461,9 +397,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_prima
     if (context_.check(TokenType::LeftBracket)) {
         if (context_.expression_nesting_limit_reached()) [[unlikely]] {
             return std::unexpected(
-                context_.make_expression_nesting_error(
-                    context_.current().location()
-                )
+                context_.make_expression_nesting_error(context_.current().location())
             );
         }
         return parse_vector_expression();
@@ -471,9 +405,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_prima
     if (context_.check(TokenType::LeftParen)) {
         const Token left_paren = context_.advance();
         if (context_.expression_nesting_limit_reached()) [[unlikely]] {
-            return std::unexpected(
-                context_.make_expression_nesting_error(left_paren.location())
-            );
+            return std::unexpected(context_.make_expression_nesting_error(left_paren.location()));
         }
 
         auto guard = context_.enter_expression_nesting(left_paren.location());
@@ -486,9 +418,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_prima
             return std::unexpected(std::move(expression.error()));
         }
 
-        auto right_paren = context_.consume(
-            TokenType::RightParen, "Expected ')' after expression"
-        );
+        auto right_paren = context_.consume(TokenType::RightParen, "Expected ')' after expression");
         if (!right_paren.has_value()) [[unlikely]] {
             return std::unexpected(std::move(right_paren.error()));
         }
@@ -496,16 +426,15 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_prima
         return expression;
     }
 
-    return std::unexpected(context_.make_current_error(
-        ParserErrorCode::ExpectedExpression, "Expected expression"
-    ));
+    return std::unexpected(
+        context_.make_current_error(ParserErrorCode::ExpectedExpression, "Expected expression")
+    );
 }
 
-std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_column_reference_expression()
+std::expected<ParsedExpression, ParserError>
+ParserExpressionWorker::parse_column_reference_expression()
 {
-    auto first = context_.consume(
-        TokenType::Identifier, "Expected column name"
-    );
+    auto first = context_.consume(TokenType::Identifier, "Expected column name");
     if (!first.has_value()) [[unlikely]] {
         return std::unexpected(std::move(first.error()));
     }
@@ -516,9 +445,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_colum
     if (context_.match(TokenType::Dot)) {
         qualifier = std::move(column);
 
-        auto second = context_.consume(
-            TokenType::Identifier, "Expected column name after '.'"
-        );
+        auto second = context_.consume(TokenType::Identifier, "Expected column name after '.'");
         if (!second.has_value()) [[unlikely]] {
             return std::unexpected(std::move(second.error()));
         }
@@ -535,18 +462,15 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_colum
     };
 }
 
-std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_function_call_expression()
+std::expected<ParsedExpression, ParserError>
+ParserExpressionWorker::parse_function_call_expression()
 {
-    auto name = context_.consume(
-        TokenType::Identifier, "Expected function name"
-    );
+    auto name = context_.consume(TokenType::Identifier, "Expected function name");
     if (!name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(name.error()));
     }
 
-    auto left_paren = context_.consume(
-        TokenType::LeftParen, "Expected '(' after function name"
-    );
+    auto left_paren = context_.consume(TokenType::LeftParen, "Expected '(' after function name");
     if (!left_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(left_paren.error()));
     }
@@ -573,17 +497,13 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_funct
         }
     }
 
-    auto right_paren = context_.consume(
-        TokenType::RightParen, "Expected ')' after function arguments"
-    );
+    auto right_paren =
+        context_.consume(TokenType::RightParen, "Expected ')' after function arguments");
     if (!right_paren.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_paren.error()));
     }
 
-    auto depth = context_.make_expression_parent_depth(
-        arguments_depth,
-        left_paren->location()
-    );
+    auto depth = context_.make_expression_parent_depth(arguments_depth, left_paren->location());
     if (!depth.has_value()) [[unlikely]] {
         return std::unexpected(std::move(depth.error()));
     }
@@ -605,9 +525,9 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_liter
     }
 
     if (!is_literal_token(context_.current().type())) [[unlikely]] {
-        return std::unexpected(context_.make_current_error(
-            ParserErrorCode::ExpectedLiteral, "Expected literal"
-        ));
+        return std::unexpected(
+            context_.make_current_error(ParserErrorCode::ExpectedLiteral, "Expected literal")
+        );
     }
 
     const Token token = context_.advance();
@@ -635,9 +555,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_vecto
     std::size_t elements_depth = 0;
     while (true) {
         if (context_.expression_nesting_limit_reached()) [[unlikely]] {
-            return std::unexpected(
-                context_.make_expression_nesting_error(left_bracket.location())
-            );
+            return std::unexpected(context_.make_expression_nesting_error(left_bracket.location()));
         }
 
         auto element = parse_nested_expression(left_bracket.location());
@@ -652,17 +570,13 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::parse_vecto
         }
     }
 
-    auto right_bracket = context_.consume(
-        TokenType::RightBracket, "Expected ']' after vector literal"
-    );
+    auto right_bracket =
+        context_.consume(TokenType::RightBracket, "Expected ']' after vector literal");
     if (!right_bracket.has_value()) [[unlikely]] {
         return std::unexpected(std::move(right_bracket.error()));
     }
 
-    auto depth = context_.make_expression_parent_depth(
-        elements_depth,
-        left_bracket.location()
-    );
+    auto depth = context_.make_expression_parent_depth(elements_depth, left_bracket.location());
     if (!depth.has_value()) [[unlikely]] {
         return std::unexpected(std::move(depth.error()));
     }
@@ -682,10 +596,7 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::make_unary(
     TokenLocation location
 ) const
 {
-    auto depth = context_.make_expression_parent_depth(
-        operand.depth,
-        location
-    );
+    auto depth = context_.make_expression_parent_depth(operand.depth, location);
     if (!depth.has_value()) [[unlikely]] {
         return std::unexpected(std::move(depth.error()));
     }
@@ -707,10 +618,8 @@ std::expected<ParsedExpression, ParserError> ParserExpressionWorker::make_binary
     TokenLocation location
 ) const
 {
-    auto depth = context_.make_expression_parent_depth(
-        max_depth(left.depth, right.depth),
-        location
-    );
+    auto depth =
+        context_.make_expression_parent_depth(max_depth(left.depth, right.depth), location);
     if (!depth.has_value()) [[unlikely]] {
         return std::unexpected(std::move(depth.error()));
     }

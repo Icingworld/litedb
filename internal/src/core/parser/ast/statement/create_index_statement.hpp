@@ -10,8 +10,8 @@ namespace litedb::core::parser::ast
 // 创建索引方法
 enum class CreateIndexMethod
 {
-    Default,                // 默认
-    BTree,                  // B+ 树
+    Default, // 默认
+    BTree, // B+ 树
 };
 
 // CREATE INDEX 语句节点

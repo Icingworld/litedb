@@ -1,15 +1,12 @@
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::parser::ast
 {
 
-ShowIndexesStatement::ShowIndexesStatement(
-    std::string collection_name,
-    AstNodeLocation location
-)
+ShowIndexesStatement::ShowIndexesStatement(std::string collection_name, AstNodeLocation location)
     : StatementNode(location)
     , collection_name_(std::move(collection_name))
 {

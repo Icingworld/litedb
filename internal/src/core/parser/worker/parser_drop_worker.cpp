@@ -14,8 +14,7 @@ namespace litedb::core::parser
 ParserDropWorker::ParserDropWorker(ParserContext & context) noexcept
     : context_(context)
     , schema_helper_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserDropWorker::parse_drop_statement()
@@ -53,9 +52,7 @@ ParserDropWorker::parse_drop_database_statement(TokenLocation location)
         return std::unexpected(std::move(if_exists.error()));
     }
 
-    auto database = schema_helper_.parse_identifier_string(
-        "Expected database name"
-    );
+    auto database = schema_helper_.parse_identifier_string("Expected database name");
     if (!database.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database.error()));
     }
@@ -75,9 +72,7 @@ ParserDropWorker::parse_drop_collection_statement(TokenLocation location)
         return std::unexpected(std::move(if_exists.error()));
     }
 
-    auto collection = schema_helper_.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -97,23 +92,17 @@ ParserDropWorker::parse_drop_index_statement(TokenLocation location)
         return std::unexpected(std::move(if_exists.error()));
     }
 
-    auto index_name = schema_helper_.parse_identifier_string(
-        "Expected index name"
-    );
+    auto index_name = schema_helper_.parse_identifier_string("Expected index name");
     if (!index_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(index_name.error()));
     }
 
-    auto on = context_.consume(
-        TokenType::On, "Expected ON after index name"
-    );
+    auto on = context_.consume(TokenType::On, "Expected ON after index name");
     if (!on.has_value()) [[unlikely]] {
         return std::unexpected(std::move(on.error()));
     }
 
-    auto collection_name = schema_helper_.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection_name.error()));
     }
@@ -134,23 +123,17 @@ ParserDropWorker::parse_drop_vector_index_statement(TokenLocation location)
         return std::unexpected(std::move(if_exists.error()));
     }
 
-    auto index_name = schema_helper_.parse_identifier_string(
-        "Expected vector index name"
-    );
+    auto index_name = schema_helper_.parse_identifier_string("Expected vector index name");
     if (!index_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(index_name.error()));
     }
 
-    auto on = context_.consume(
-        TokenType::On, "Expected ON after vector index name"
-    );
+    auto on = context_.consume(TokenType::On, "Expected ON after vector index name");
     if (!on.has_value()) [[unlikely]] {
         return std::unexpected(std::move(on.error()));
     }
 
-    auto collection_name = schema_helper_.parse_identifier_string(
-        "Expected collection name"
-    );
+    auto collection_name = schema_helper_.parse_identifier_string("Expected collection name");
     if (!collection_name.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection_name.error()));
     }

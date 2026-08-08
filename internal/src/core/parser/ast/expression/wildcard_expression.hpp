@@ -15,10 +15,7 @@ class WildcardExpression final : public ExpressionNode
 public:
     explicit WildcardExpression(AstNodeLocation location) noexcept;
 
-    WildcardExpression(
-        std::optional<std::string> qualifier,
-        AstNodeLocation location
-    );
+    WildcardExpression(std::optional<std::string> qualifier, AstNodeLocation location);
 
 public:
     // 获取节点类型

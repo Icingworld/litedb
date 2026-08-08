@@ -19,8 +19,7 @@ namespace litedb::core::parser
 
 ParserWorker::ParserWorker(Lexer & lexer)
     : context_(lexer)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::parse()
 {
@@ -29,18 +28,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     // 检查是否为空语句或词法错误
     if (context_.current().type() == TokenType::EoF) [[unlikely]] {
         return std::unexpected(
-            context_.make_current_error(
-                ParserErrorCode::EmptyStatement,
-                "Empty statement"
-            )
+            context_.make_current_error(ParserErrorCode::EmptyStatement, "Empty statement")
         );
     }
     if (context_.current().type() == TokenType::Error) [[unlikely]] {
         return std::unexpected(
-            context_.make_current_error(
-                ParserErrorCode::LexicalError,
-                "Invalid token"
-            )
+            context_.make_current_error(ParserErrorCode::LexicalError, "Invalid token")
         );
     }
 
@@ -56,18 +49,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     // 主工作器统一处理语句后的非法尾随 token
     if (context_.current().type() == TokenType::Error) [[unlikely]] {
         return std::unexpected(
-            context_.make_current_error(
-                ParserErrorCode::LexicalError,
-                "Invalid token"
-            )
+            context_.make_current_error(ParserErrorCode::LexicalError, "Invalid token")
         );
     }
     if (context_.current().type() != TokenType::EoF) [[unlikely]] {
         return std::unexpected(
-            context_.make_current_error(
-                ParserErrorCode::UnexpectedToken,
-                "Unexpected token"
-            )
+            context_.make_current_error(ParserErrorCode::UnexpectedToken, "Unexpected token")
         );
     }
 
@@ -107,13 +94,12 @@ std::expected<std::unique_ptr<ast::StatementNode>, ParserError> ParserWorker::pa
     case TokenType::Select: {
         return ParserSelectWorker(context_).parse_select_statement();
     }
-    [[unlikely]] default:
-        return std::unexpected(
-            context_.make_current_error(
-                ParserErrorCode::UnexpectedStatement,
-                "Unexpected statement"
-            )
-        );
+    [[unlikely]]
+    default:
+        return std::unexpected(context_.make_current_error(
+            ParserErrorCode::UnexpectedStatement,
+            "Unexpected statement"
+        ));
     }
 }
 

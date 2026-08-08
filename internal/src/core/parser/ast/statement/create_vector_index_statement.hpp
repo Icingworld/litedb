@@ -12,26 +12,26 @@ namespace litedb::core::parser::ast
 // 创建向量索引方法
 enum class CreateVectorIndexMethod
 {
-    Hnsw,                     // HNSW
+    Hnsw, // HNSW
 };
 
 // 向量索引指标
 enum class VectorIndexMetric
 {
-    Default,                  // 默认
-    L2,                       // L2
-    InnerProduct,             // InnerProduct
-    Cosine,                   // Cosine
+    Default, // 默认
+    L2, // L2
+    InnerProduct, // InnerProduct
+    Cosine, // Cosine
 };
 
 // 向量索引选项
 struct VectorIndexOptions
 {
-    VectorIndexMetric metric {VectorIndexMetric::Default};   // 指标
-    std::optional<std::size_t> max_neighbors;                // 最大邻居数
-    std::optional<std::size_t> ef_construction;              // 构建时邻居数
-    std::optional<std::size_t> ef_search;                    // 搜索时邻居数
-    std::optional<std::size_t> random_seed;                  // 随机种子
+    VectorIndexMetric metric {VectorIndexMetric::Default}; // 指标
+    std::optional<std::size_t> max_neighbors; // 最大邻居数
+    std::optional<std::size_t> ef_construction; // 构建时邻居数
+    std::optional<std::size_t> ef_search; // 搜索时邻居数
+    std::optional<std::size_t> random_seed; // 随机种子
 };
 
 // 创建向量索引语句节点

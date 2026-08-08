@@ -14,8 +14,7 @@ namespace litedb::core::parser
 
 ParserShowWorker::ParserShowWorker(ParserContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserShowWorker::parse_show_statement()
@@ -48,9 +47,7 @@ ParserShowWorker::parse_show_statement()
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
 ParserShowWorker::parse_show_databases_statement(TokenLocation location)
 {
-    return std::make_unique<ast::ShowDatabasesStatement>(
-        context_.ast_location(location)
-    );
+    return std::make_unique<ast::ShowDatabasesStatement>(context_.ast_location(location));
 }
 
 std::expected<std::unique_ptr<ast::StatementNode>, ParserError>

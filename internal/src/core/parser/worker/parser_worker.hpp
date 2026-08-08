@@ -18,9 +18,7 @@ class StatementNode;
 
 } // namespace ast
 
-/**
- * @brief 解析器主工作器
- */
+// 解析器主工作器
 class ParserWorker
 {
 public:

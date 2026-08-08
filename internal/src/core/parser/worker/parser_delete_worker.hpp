@@ -25,8 +25,7 @@ public:
 public:
     // 解析 DELETE 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_delete_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_delete_statement();
 
 private:
     ParserContext & context_;

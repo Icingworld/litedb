@@ -39,7 +39,7 @@ public:
         explicit ExpressionNestingGuard(ParserContext & context) noexcept;
 
     private:
-        ParserContext * context_;  // 解析上下文
+        ParserContext * context_; // 解析上下文
     };
 
 public:
@@ -77,11 +77,8 @@ public:
 
     // 创建指定位置和消息的错误
     [[nodiscard]]
-    ParserError make_error(
-        ParserErrorCode code,
-        TokenLocation location,
-        std::string_view message
-    ) const;
+    ParserError
+    make_error(ParserErrorCode code, TokenLocation location, std::string_view message) const;
 
     // 进入表达式嵌套
     [[nodiscard]]
@@ -99,10 +96,8 @@ public:
 
     // 计算表达式嵌套深度
     [[nodiscard]]
-    std::expected<std::size_t, ParserError> make_expression_parent_depth(
-        std::size_t max_child_depth,
-        TokenLocation location
-    ) const;
+    std::expected<std::size_t, ParserError>
+    make_expression_parent_depth(std::size_t max_child_depth, TokenLocation location) const;
 
     // 消费指定 Token 类型，如果失败则返回指定错误
     [[nodiscard]]
@@ -128,7 +123,7 @@ private:
     Token current_token_;
     Token next_token_;
     Token next_after_next_token_;
-    std::size_t expression_nesting_depth_;  // 表达式嵌套深度
+    std::size_t expression_nesting_depth_; // 表达式嵌套深度
 };
 
-}  // namespace litedb::core::parser
+} // namespace litedb::core::parser

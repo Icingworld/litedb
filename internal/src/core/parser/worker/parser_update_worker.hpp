@@ -25,8 +25,7 @@ public:
 public:
     // 解析 UPDATE 语句
     [[nodiscard]]
-    std::expected<std::unique_ptr<ast::StatementNode>, ParserError>
-    parse_update_statement();
+    std::expected<std::unique_ptr<ast::StatementNode>, ParserError> parse_update_statement();
 
 private:
     ParserContext & context_;

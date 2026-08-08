@@ -12,8 +12,7 @@ Lexer::Lexer(std::string input)
     , position_(0)
     , location_({1, 1})
     , peeked_token_(std::nullopt)
-{
-}
+{}
 
 Token Lexer::next()
 {
@@ -89,11 +88,7 @@ Token Lexer::next_internal()
 
     switch (c) {
     case '=':
-        return Token(
-            TokenType::Equal,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Equal, std::string_view(input_).substr(start_position, 1), start);
     case '!':
         if (match('=')) {
             return Token(
@@ -102,11 +97,7 @@ Token Lexer::next_internal()
                 start
             );
         }
-        return Token(
-            TokenType::Error,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Error, std::string_view(input_).substr(start_position, 1), start);
     case '<':
         if (match('=')) {
             return Token(
@@ -141,41 +132,17 @@ Token Lexer::next_internal()
             start
         );
     case '+':
-        return Token(
-            TokenType::Plus,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Plus, std::string_view(input_).substr(start_position, 1), start);
     case '-':
-        return Token(
-            TokenType::Minus,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Minus, std::string_view(input_).substr(start_position, 1), start);
     case '*':
-        return Token(
-            TokenType::Star,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Star, std::string_view(input_).substr(start_position, 1), start);
     case '/':
-        return Token(
-            TokenType::Slash,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Slash, std::string_view(input_).substr(start_position, 1), start);
     case '%':
-        return Token(
-            TokenType::Modulo,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Modulo, std::string_view(input_).substr(start_position, 1), start);
     case ',':
-        return Token(
-            TokenType::Comma,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Comma, std::string_view(input_).substr(start_position, 1), start);
     case ';':
         return Token(
             TokenType::Semicolon,
@@ -183,11 +150,7 @@ Token Lexer::next_internal()
             start
         );
     case '.':
-        return Token(
-            TokenType::Dot,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Dot, std::string_view(input_).substr(start_position, 1), start);
     case '(':
         return Token(
             TokenType::LeftParen,
@@ -213,11 +176,7 @@ Token Lexer::next_internal()
             start
         );
     default:
-        return Token(
-            TokenType::Error,
-            std::string_view(input_).substr(start_position, 1),
-            start
-        );
+        return Token(TokenType::Error, std::string_view(input_).substr(start_position, 1), start);
     }
 }
 
@@ -240,18 +199,12 @@ Token Lexer::read_identifier_or_keyword()
         advance();
     }
 
-    const std::string_view value = std::string_view(input_).substr(
-        start_position,
-        position_ - start_position
-    );
+    const std::string_view value =
+        std::string_view(input_).substr(start_position, position_ - start_position);
     std::string upper_value;
     upper_value.reserve(value.length());
     for (const char c : value) {
-        upper_value.push_back(
-            static_cast<char>(
-                std::toupper(static_cast<unsigned char>(c))
-            )
-        );
+        upper_value.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
     }
 
     if (const auto type = keyword_type(upper_value); type.has_value()) {
@@ -271,8 +224,8 @@ Token Lexer::read_number()
     }
 
     TokenType type = TokenType::IntegerLiteral;
-    if (current_char() == '.' && position_ + 1 < input_.length()
-        && is_digit(input_[position_ + 1])) {
+    if (current_char() == '.' && position_ + 1 < input_.length() &&
+        is_digit(input_[position_ + 1])) {
         type = TokenType::FloatLiteral;
         advance();
         while (is_digit(current_char())) {
@@ -280,9 +233,9 @@ Token Lexer::read_number()
         }
     }
 
-    return Token(type, std::string_view(input_).substr(
-        start_position,
-        position_ - start_position),
+    return Token(
+        type,
+        std::string_view(input_).substr(start_position, position_ - start_position),
         start
     );
 }
@@ -301,10 +254,7 @@ Token Lexer::read_string()
             advance();
             return Token(
                 TokenType::StringLiteral,
-                std::string_view(input_).substr(
-                    value_position,
-                    value_length
-                ),
+                std::string_view(input_).substr(value_position, value_length),
                 start
             );
         }
@@ -316,10 +266,7 @@ Token Lexer::read_string()
 
     return Token(
         TokenType::Error,
-        std::string_view(input_).substr(
-            quote_position,
-            position_ - quote_position
-        ),
+        std::string_view(input_).substr(quote_position, position_ - quote_position),
         start
     );
 }

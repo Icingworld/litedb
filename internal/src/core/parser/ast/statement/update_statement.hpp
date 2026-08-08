@@ -1,12 +1,12 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-#include <optional>
 
-#include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/ast/expression/expression_node.hpp"
+#include "core/parser/ast/statement/statement_node.hpp"
 
 namespace litedb::core::parser::ast
 {
@@ -14,8 +14,8 @@ namespace litedb::core::parser::ast
 // 赋值项
 struct Assignment
 {
-    std::string column_name;                        // 列名
-    std::unique_ptr<ExpressionNode> value;          // 值
+    std::string column_name; // 列名
+    std::unique_ptr<ExpressionNode> value; // 值
 };
 
 // UPDATE 语句节点

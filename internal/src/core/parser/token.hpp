@@ -1,9 +1,9 @@
 #pragma once
 
-#include <cstddef>
-#include <string_view>
-#include <optional>
 #include <array>
+#include <cstddef>
+#include <optional>
+#include <string_view>
 
 namespace litedb::core::parser
 {
@@ -11,7 +11,7 @@ namespace litedb::core::parser
 // Token 类型
 enum class TokenType
 {
-    EoF,                // 结束标记
+    EoF, // 结束标记
 
     Select,
     Create,
@@ -71,39 +71,39 @@ enum class TokenType
     Boolean,
     Vector,
 
-    Identifier,         // 标识符
-    StringLiteral,      // 字符串字面量
-    IntegerLiteral,     // 整数字面量
-    FloatLiteral,       // 浮点数字面量
+    Identifier, // 标识符
+    StringLiteral, // 字符串字面量
+    IntegerLiteral, // 整数字面量
+    FloatLiteral, // 浮点数字面量
 
-    Equal,              // =
-    NotEqual,           // != or <>
-    LessThan,           // <
-    GreaterThan,        // >
-    LessEqual,          // <=
-    GreaterEqual,       // >=
-    Plus,               // +
-    Minus,              // -
-    Star,               // *
-    Slash,              // /
-    Modulo,             // %
+    Equal, // =
+    NotEqual, // != or <>
+    LessThan, // <
+    GreaterThan, // >
+    LessEqual, // <=
+    GreaterEqual, // >=
+    Plus, // +
+    Minus, // -
+    Star, // *
+    Slash, // /
+    Modulo, // %
 
-    Comma,              // ,
-    Semicolon,          // ;
-    Dot,                // .
-    LeftParen,          // (
-    RightParen,         // )
-    LeftBracket,        // [
-    RightBracket,       // ]
+    Comma, // ,
+    Semicolon, // ;
+    Dot, // .
+    LeftParen, // (
+    RightParen, // )
+    LeftBracket, // [
+    RightBracket, // ]
 
-    Error,              // 错误标记
+    Error, // 错误标记
 };
 
 // Token 位置
 struct TokenLocation
 {
-    std::size_t line;       // 行号
-    std::size_t column;     // 列号
+    std::size_t line; // 行号
+    std::size_t column; // 列号
 };
 
 // 词法单元
