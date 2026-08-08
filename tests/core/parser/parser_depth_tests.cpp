@@ -96,6 +96,21 @@ std::string nested_vector_expression(std::size_t count)
     return expression;
 }
 
+std::string nested_literal_vector_expression(std::size_t count)
+{
+    std::string expression {"1"};
+    for (std::size_t index = 0; index < count; ++index) {
+        expression = "[" + std::move(expression) + "]";
+    }
+    return expression;
+}
+
+std::string create_collection_with_default(std::string expression)
+{
+    return "CREATE COLLECTION docs (embedding VECTOR(1) DEFAULT "
+        + std::move(expression) + ");";
+}
+
 std::string nested_in_expression(std::size_t count)
 {
     std::string expression {"age"};
@@ -231,6 +246,29 @@ void test_composite_ast_depth()
     );
 }
 
+void test_ddl_default_depth_error_propagation()
+{
+    parse_ok(create_collection_with_default(
+        nested_literal_vector_expression(255)
+    ));
+
+    auto ast_error = parse_error(create_collection_with_default(
+        nested_literal_vector_expression(256)
+    ));
+    require_depth_error(
+        ast_error,
+        "Maximum AST expression depth exceeded (limit: 256)"
+    );
+
+    auto nesting_error = parse_error(create_collection_with_default(
+        nested_literal_vector_expression(257)
+    ));
+    require_depth_error(
+        nesting_error,
+        "Maximum expression nesting depth exceeded (limit: 256)"
+    );
+}
+
 void test_shallow_width_and_stress()
 {
     const auto values = repeated_list(300);
@@ -259,6 +297,7 @@ int main()
         test_syntax_nesting_depth();
         test_unary_and_binary_ast_depth();
         test_composite_ast_depth();
+        test_ddl_default_depth_error_propagation();
         test_shallow_width_and_stress();
     } catch (const std::exception & exception) {
         std::cerr << exception.what() << '\n';

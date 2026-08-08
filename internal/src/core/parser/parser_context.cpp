@@ -10,9 +10,40 @@
 namespace litedb::core::parser
 {
 
-ParserContext::ExpressionNestingGuard::ExpressionNestingGuard(ParserContext & context) noexcept
-    : context_(context)
+ParserContext::ExpressionNestingGuard::ExpressionNestingGuard() noexcept
+    : context_(nullptr)
 {
+}
+
+ParserContext::ExpressionNestingGuard::ExpressionNestingGuard(ParserContext & context) noexcept
+    : context_(&context)
+{
+}
+
+ParserContext::ExpressionNestingGuard::ExpressionNestingGuard(ExpressionNestingGuard && other) noexcept
+    : context_(std::exchange(other.context_, nullptr))
+{
+}
+
+ParserContext::ExpressionNestingGuard &
+ParserContext::ExpressionNestingGuard::operator=(ExpressionNestingGuard && other) noexcept
+{
+    if (this == &other) {
+        return *this;
+    }
+
+    if (context_ != nullptr) {
+        context_->leave_expression_nesting();
+    }
+    context_ = std::exchange(other.context_, nullptr);
+    return *this;
+}
+
+ParserContext::ExpressionNestingGuard::~ExpressionNestingGuard()
+{
+    if (context_ != nullptr) {
+        context_->leave_expression_nesting();
+    }
 }
 
 ParserContext::ParserContext(Lexer & lexer) noexcept
@@ -21,11 +52,6 @@ ParserContext::ParserContext(Lexer & lexer) noexcept
     , next_token_(TokenType::EoF, "", TokenLocation {1, 1})
     , next_after_next_token_(TokenType::EoF, "", TokenLocation {1, 1})
 {
-}
-
-ParserContext::ExpressionNestingGuard::~ExpressionNestingGuard()
-{
-    context_.leave_expression_nesting();
 }
 
 void ParserContext::initialize()

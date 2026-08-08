@@ -164,8 +164,17 @@ std::expected<ast::ColumnDefinitionSyntax, ParserError> ParserSchemaHelper::pars
         } else if (context_.match(TokenType::Default)) {
             auto default_value = expression_worker_.parse_literal_expression();
             if (!default_value.has_value()) [[unlikely]] {
+                // 解析失败可能包含两种原因：
+                // 1. ExpectedLiteral 未解析到字面量表达式
+                // 2. 递归深度超出限制或向量解析失败等，错误原样返回
+                auto error = std::move(default_value.error());
+                if (!error.is(ParserErrorCode::ExpectedLiteral)) {
+                    return std::unexpected(std::move(error));
+                }
+                // 创建新错误的目的是传入更具体的错误信息
                 return std::unexpected(context_.make_current_error(
-                    ParserErrorCode::ExpectedLiteral, "Expected literal after DEFAULT"
+                    ParserErrorCode::ExpectedLiteral,
+                    "Expected literal after DEFAULT"
                 ));
             }
             column.default_value = std::move(default_value->expression);

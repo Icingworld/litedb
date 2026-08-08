@@ -23,13 +23,15 @@ public:
         friend class ParserContext;
 
     public:
+        ExpressionNestingGuard() noexcept;
+
         ExpressionNestingGuard(const ExpressionNestingGuard &) = delete;
 
         ExpressionNestingGuard & operator=(const ExpressionNestingGuard &) = delete;
 
-        ExpressionNestingGuard(ExpressionNestingGuard && other) noexcept = default;
+        ExpressionNestingGuard(ExpressionNestingGuard && other) noexcept;
 
-        ExpressionNestingGuard & operator=(ExpressionNestingGuard && other) noexcept = delete;
+        ExpressionNestingGuard & operator=(ExpressionNestingGuard && other) noexcept;
 
         ~ExpressionNestingGuard();
 
@@ -37,7 +39,7 @@ public:
         explicit ExpressionNestingGuard(ParserContext & context) noexcept;
 
     private:
-        ParserContext & context_;       // 解析上下文
+        ParserContext * context_;       // 解析上下文
     };
 
 public:
