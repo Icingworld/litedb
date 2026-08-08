@@ -145,12 +145,4 @@ using ConstAstStatementDispatcher = AstStatementDispatcher<
     true
 >;
 
-// 可变 AST 语句调度器
-template <typename Derived, typename ReturnType>
-using MutableAstStatementDispatcher = AstStatementDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
-
 } // namespace litedb::core::parser::ast

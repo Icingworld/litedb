@@ -81,8 +81,6 @@ void AstDebugPrinter::print(const AstNode & node)
         print(static_cast<const StatementNode &>(node));
         return;
 
-    case AstNodeKind::Identifier:
-        [[fallthrough]];
     case AstNodeKind::Wildcard:
         [[fallthrough]];
     case AstNodeKind::Literal:
@@ -406,15 +404,6 @@ void AstDebugPrinter::visit_use_statement(const UseStatement & statement)
     write_node_header("UseStatement", statement.location());
     IndentScope scope(*this);
     write_field("database_name", statement.database_name());
-}
-
-void AstDebugPrinter::visit_identifier_expression(
-    const IdentifierExpression & expression
-)
-{
-    write_node_header("IdentifierExpression", expression.location());
-    IndentScope scope(*this);
-    write_field("name", expression.name());
 }
 
 void AstDebugPrinter::visit_wildcard_expression(

@@ -14,7 +14,6 @@ std::string_view token_type_name(TokenType type) noexcept
     case TokenType::Update: return "Update";
     case TokenType::Drop: return "Drop";
     case TokenType::Use: return "Use";
-    case TokenType::Alter: return "Alter";
     case TokenType::Show: return "Show";
     case TokenType::Describe: return "Describe";
     case TokenType::Desc: return "Desc";
@@ -26,9 +25,7 @@ std::string_view token_type_name(TokenType type) noexcept
     case TokenType::Collections: return "Collections";
     case TokenType::Indexes: return "Indexes";
     case TokenType::VIndexes: return "VIndexes";
-    case TokenType::Group: return "Group";
     case TokenType::By: return "By";
-    case TokenType::Having: return "Having";
     case TokenType::Order: return "Order";
     case TokenType::Asc: return "Asc";
     case TokenType::Limit: return "Limit";
@@ -36,15 +33,7 @@ std::string_view token_type_name(TokenType type) noexcept
     case TokenType::In: return "In";
     case TokenType::Between: return "Between";
     case TokenType::Like: return "Like";
-    case TokenType::Add: return "Add";
-    case TokenType::Modify: return "Modify";
-    case TokenType::Rename: return "Rename";
-    case TokenType::Column: return "Column";
-    case TokenType::To: return "To";
-    case TokenType::Primary: return "Primary";
-    case TokenType::Key: return "Key";
     case TokenType::Unique: return "Unique";
-    case TokenType::AutoIncrement: return "AutoIncrement";
     case TokenType::Default: return "Default";
     case TokenType::Comment: return "Comment";
     case TokenType::Using: return "Using";
@@ -62,7 +51,6 @@ std::string_view token_type_name(TokenType type) noexcept
     case TokenType::On: return "On";
     case TokenType::If: return "If";
     case TokenType::Exists: return "Exists";
-    case TokenType::Is: return "Is";
     case TokenType::Null: return "Null";
     case TokenType::True: return "True";
     case TokenType::False: return "False";

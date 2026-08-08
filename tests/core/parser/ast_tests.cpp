@@ -1,7 +1,7 @@
 #include "core/common/logical_type.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
+#include "core/parser/ast/expression/column_reference_expression.hpp"
 #include "core/parser/ast/expression/expression_node.hpp"
-#include "core/parser/ast/expression/identifier_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
@@ -32,21 +32,29 @@ void require(bool condition, const char * message)
 
 void test_expression_nodes()
 {
-    auto left = std::make_unique<IdentifierExpression>("age", AstNodeLocation {1, 7});
+    auto left = std::make_unique<ColumnReferenceExpression>(
+        std::nullopt,
+        "age",
+        AstNodeLocation {1, 7}
+    );
     auto right = std::make_unique<LiteralExpression>(TokenType::IntegerLiteral, "18", AstNodeLocation {1, 14});
     BinaryExpression expression(std::move(left), TokenType::GreaterEqual, std::move(right), AstNodeLocation {1, 7});
 
     require(expression.kind() == AstNodeKind::Binary, "binary expression kind mismatch");
     require(expression.location().line == 1, "binary expression line mismatch");
     require(expression.location().column == 7, "binary expression column mismatch");
-    require(expression.left().kind() == AstNodeKind::Identifier, "left expression kind mismatch");
+    require(expression.left().kind() == AstNodeKind::ColumnReference, "left expression kind mismatch");
     require(expression.right().kind() == AstNodeKind::Literal, "right expression kind mismatch");
 }
 
 void test_statement_nodes()
 {
     std::vector<std::unique_ptr<ExpressionNode>> select_list;
-    select_list.push_back(std::make_unique<IdentifierExpression>("name", AstNodeLocation {1, 8}));
+    select_list.push_back(std::make_unique<ColumnReferenceExpression>(
+        std::nullopt,
+        "name",
+        AstNodeLocation {1, 8}
+    ));
 
     SelectStatement statement(
         std::move(select_list),

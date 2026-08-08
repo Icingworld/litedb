@@ -19,7 +19,6 @@ set(PARSER_SOURCES
     ast/ast_node.cpp
     ast/expression/expression_node.cpp
     ast/expression/alias_expression.cpp
-    ast/expression/identifier_expression.cpp
     ast/expression/literal_expression.cpp
     ast/expression/column_reference_expression.cpp
     ast/expression/wildcard_expression.cpp

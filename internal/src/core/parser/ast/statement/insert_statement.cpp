@@ -25,9 +25,7 @@ InsertStatement::InsertStatement(
     for (const auto & value : values_) {
         assert(value != nullptr);
     }
-    if (!columns_.empty()) {
-        assert(columns_.size() == values_.size());
-    }
+    // 不验证 columns_ 和 values_ 的大小是否相同，如果不同，将在 binder 验证并报错
 }
 
 AstNodeKind InsertStatement::kind() const noexcept

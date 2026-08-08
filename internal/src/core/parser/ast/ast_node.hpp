@@ -35,7 +35,6 @@ enum class AstNodeKind : std::uint8_t
     Update,
     Use,
 
-    Identifier,             // 标识符
     Wildcard,               // *
     Literal,                // 字面量
     FunctionCall,           // 函数调用

@@ -81,10 +81,10 @@ private:
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
     parse_column_reference_expression();
 
-    // 解析函数调用或列引用
+    // 解析函数调用
     [[nodiscard]]
     std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
-    parse_function_call_or_column_reference();
+    parse_function_call_expression();
 
     // 解析向量表达式
     [[nodiscard]]

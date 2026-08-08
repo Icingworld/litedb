@@ -339,7 +339,18 @@ void test_parse_select_statement()
     auto columns = parse_ok("SELECT id, users.name, *, users.* FROM users;");
     const auto * column_select = static_cast<const SelectStatement *>(columns.get());
     require(column_select->select_list().size() == 4, "SELECT qualified list size mismatch");
+    require(column_select->select_list()[0]->kind() == AstNodeKind::ColumnReference, "SELECT column mismatch");
+    const auto * unqualified_column = static_cast<const ColumnReferenceExpression *>(
+        column_select->select_list()[0].get()
+    );
+    require(!unqualified_column->qualifier().has_value(), "SELECT column qualifier mismatch");
+    require(unqualified_column->column_name() == "id", "SELECT column name mismatch");
     require(column_select->select_list()[1]->kind() == AstNodeKind::ColumnReference, "SELECT qualified column mismatch");
+    const auto * qualified_column = static_cast<const ColumnReferenceExpression *>(
+        column_select->select_list()[1].get()
+    );
+    require(qualified_column->qualifier().value() == "users", "SELECT qualified column qualifier mismatch");
+    require(qualified_column->column_name() == "name", "SELECT qualified column name mismatch");
     require(column_select->select_list()[2]->kind() == AstNodeKind::Wildcard, "SELECT wildcard mismatch");
     require(column_select->select_list()[3]->kind() == AstNodeKind::Wildcard, "SELECT qualified wildcard mismatch");
 

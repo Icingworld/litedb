@@ -9,7 +9,6 @@
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 #include "core/parser/ast/expression/expression_node.hpp"
 #include "core/parser/ast/expression/function_call_expression.hpp"
-#include "core/parser/ast/expression/identifier_expression.hpp"
 #include "core/parser/ast/expression/in_expression.hpp"
 #include "core/parser/ast/expression/like_expression.hpp"
 #include "core/parser/ast/expression/literal_expression.hpp"
@@ -45,10 +44,6 @@ protected:
     ReturnType dispatch_expression(ReferenceType<ExpressionNode> expression)
     {
         switch (expression.kind()) {
-        case AstNodeKind::Identifier:
-            return derived().visit_identifier_expression(
-                static_cast<ReferenceType<IdentifierExpression>>(expression)
-            );
         case AstNodeKind::Wildcard:
             return derived().visit_wildcard_expression(
                 static_cast<ReferenceType<WildcardExpression>>(expression)
@@ -113,14 +108,6 @@ using ConstAstExpressionDispatcher = AstExpressionDispatcher<
     Derived,
     ReturnType,
     true
->;
-
-// 可变 AST 表达式调度器
-template <typename Derived, typename ReturnType>
-using MutableAstExpressionDispatcher = AstExpressionDispatcher<
-    Derived,
-    ReturnType,
-    false
 >;
 
 } // namespace litedb::core::parser::ast

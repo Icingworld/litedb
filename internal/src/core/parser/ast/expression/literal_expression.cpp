@@ -15,7 +15,8 @@ LiteralExpression::LiteralExpression(
     , literal_type_(literal_type)
     , value_(std::move(value))
 {
-    assert(literal_type_ == TokenType::Null || !value_.empty());
+    // 不验证 value 是否为空，Lexer 可以合法产出空字符串
+    // 比如：COMMENT "", 或者：VALUES ("", 1) 等
 }
 
 AstNodeKind LiteralExpression::kind() const noexcept

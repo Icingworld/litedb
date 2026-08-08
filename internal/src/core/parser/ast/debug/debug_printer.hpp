@@ -201,14 +201,6 @@ private:
     );
 
     /**
-     * @brief 访问标识符表达式
-     * @param expression 标识符表达式
-     */
-    void visit_identifier_expression(
-        const IdentifierExpression & expression
-    );
-
-    /**
      * @brief 访问通配符表达式
      * @param expression 通配符表达式
      */

@@ -334,7 +334,10 @@ ParserExpressionWorker::parse_primary_expression()
         return parse_literal_expression();
     }
     if (context_.check(TokenType::Identifier)) {
-        return parse_function_call_or_column_reference();
+        if (context_.peek_next().type() == TokenType::LeftParen) {
+            return parse_function_call_expression();
+        }
+        return parse_column_reference_expression();
     }
     if (context_.check(TokenType::LeftBracket)) {
         return parse_vector_expression();
@@ -393,61 +396,47 @@ ParserExpressionWorker::parse_column_reference_expression()
 }
 
 std::expected<std::unique_ptr<ast::ExpressionNode>, ParserError>
-ParserExpressionWorker::parse_function_call_or_column_reference()
+ParserExpressionWorker::parse_function_call_expression()
 {
-    auto first = context_.consume(
-        TokenType::Identifier, "Expected function or column name"
+    auto name = context_.consume(
+        TokenType::Identifier, "Expected function name"
     );
-    if (!first.has_value()) [[unlikely]] {
-        return std::unexpected(std::move(first.error()));
+    if (!name.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(name.error()));
     }
 
-    std::string name(first->value());
-    if (context_.match(TokenType::LeftParen)) {
-        std::vector<std::unique_ptr<ast::ExpressionNode>> arguments;
-        if (!context_.check(TokenType::RightParen)) {
-            while (true) {
-                auto argument = parse_expression();
-                if (!argument.has_value()) [[unlikely]] {
-                    return std::unexpected(std::move(argument.error()));
-                }
-                arguments.push_back(std::move(*argument));
-                if (!context_.match(TokenType::Comma)) {
-                    break;
-                }
+    auto left_paren = context_.consume(
+        TokenType::LeftParen, "Expected '(' after function name"
+    );
+    if (!left_paren.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(left_paren.error()));
+    }
+
+    std::vector<std::unique_ptr<ast::ExpressionNode>> arguments;
+    if (!context_.check(TokenType::RightParen)) {
+        while (true) {
+            auto argument = parse_expression();
+            if (!argument.has_value()) [[unlikely]] {
+                return std::unexpected(std::move(argument.error()));
+            }
+            arguments.push_back(std::move(*argument));
+            if (!context_.match(TokenType::Comma)) {
+                break;
             }
         }
-
-        auto right_paren = context_.consume(
-            TokenType::RightParen, "Expected ')' after function arguments"
-        );
-        if (!right_paren.has_value()) [[unlikely]] {
-            return std::unexpected(std::move(right_paren.error()));
-        }
-
-        return std::make_unique<ast::FunctionCallExpression>(
-            std::move(name),
-            std::move(arguments),
-            context_.ast_location(first->location())
-        );
     }
 
-    std::optional<std::string> qualifier;
-    if (context_.match(TokenType::Dot)) {
-        qualifier = std::move(name);
-        auto second = context_.consume(
-            TokenType::Identifier, "Expected column name after '.'"
-        );
-        if (!second.has_value()) [[unlikely]] {
-            return std::unexpected(std::move(second.error()));
-        }
-        name = std::string(second->value());
+    auto right_paren = context_.consume(
+        TokenType::RightParen, "Expected ')' after function arguments"
+    );
+    if (!right_paren.has_value()) [[unlikely]] {
+        return std::unexpected(std::move(right_paren.error()));
     }
 
-    return std::make_unique<ast::ColumnReferenceExpression>(
-        std::move(qualifier),
-        std::move(name),
-        context_.ast_location(first->location())
+    return std::make_unique<ast::FunctionCallExpression>(
+        std::string(name->value()),
+        std::move(arguments),
+        context_.ast_location(name->location())
     );
 }
 
