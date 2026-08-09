@@ -29,11 +29,13 @@ namespace litedb::core::parser::ast
 // AST 语句调度器
 // 基于 CRTP 实现，Derived 为派生类类型，ReturnType 为返回类型
 // IsConst 为是否为常量，当调度器会修改节点时，传入 false，否则传入 true
-template <typename Derived, typename ReturnType, bool IsConst> class AstStatementDispatcher
+template <typename Derived, typename ReturnType, bool IsConst>
+class AstStatementDispatcher
 {
 protected:
     // 引用类型
-    template <typename T> using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
+    template <typename T>
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
     // 调度语句

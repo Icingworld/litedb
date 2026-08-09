@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/parser/ast/column_definition.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
