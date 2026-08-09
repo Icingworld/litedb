@@ -64,16 +64,21 @@ BinderCreateWorker::bind_create_collection(const CreateCollectionStatement & sta
         ));
     }
 
-    auto columns = helper.bind_column_definitions(statement.columns());
-    if (!columns.has_value()) [[unlikely]] {
-        return std::unexpected(std::move(columns.error()));
+    std::vector<meta::ColumnDefinition> columns;
+    if (collection == nullptr) [[likely]] {
+        // 需要创建新集合时才绑定列定义
+        auto column_definitions = helper.bind_column_definitions(statement.columns());
+        if (!column_definitions.has_value()) [[unlikely]] {
+            return std::unexpected(std::move(column_definitions.error()));
+        }
+        columns = std::move(*column_definitions);
     }
 
     return std::make_unique<BoundCreateCollectionStatement>(
         *database_id,
         collection == nullptr ? std::optional<std::string>(statement.collection_name())
                               : std::nullopt,
-        std::move(*columns),
+        std::move(columns),
         statement.comment()
     );
 }
@@ -102,35 +107,44 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
     }
 
     // 查找列
-    const auto * column =
-        context_.meta().find_column(collection->collection->id(), statement.column_name());
-    if (column == nullptr) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::ColumnNotFound,
-            "Column not found: " + statement.column_name()
-        ));
-    }
+    common::ColumnId column_id = 0;
+    if (index == nullptr) [[likely]] {
+        // 需要创建新索引时，查找列
+        const auto * column =
+            context_.meta().find_column(collection->collection->id(), statement.column_name());
+        if (column == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::ColumnNotFound,
+                "Column not found: " + statement.column_name()
+            ));
+        }
 
-    // 检查列类型是否为向量，不允许在向量类型列上创建普通索引
-    if (column->type().id == LogicalTypeId::Vector) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::InvalidType,
-            "Scalar index cannot be created on VECTOR column: " + column->name()
-        ));
+        // 检查列类型是否为向量，不允许在向量类型列上创建普通索引
+        if (column->type().id == LogicalTypeId::Vector) [[unlikely]] {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidType,
+                "Scalar index cannot be created on VECTOR column: " + column->name()
+            ));
+        }
+
+        column_id = column->id();
     }
 
     // 绑定索引类型
     meta::entry::IndexKind index_kind = meta::entry::IndexKind::BTree;
-    switch (statement.method()) {
-    case CreateIndexMethod::Default:
-        [[fallthrough]];
-    case CreateIndexMethod::BTree:
-        index_kind = meta::entry::IndexKind::BTree;
-        break;
+    if (index == nullptr) [[likely]] {
+        // 需要创建新索引时，绑定索引类型
+        switch (statement.method()) {
+        case CreateIndexMethod::Default:
+            [[fallthrough]];
+        case CreateIndexMethod::BTree:
+            index_kind = meta::entry::IndexKind::BTree;
+            break;
+        }
     }
 
     return std::make_unique<BoundCreateIndexStatement>(
-        column->id(),
+        column_id,
         index == nullptr ? std::optional<std::string>(statement.index_name()) : std::nullopt,
         index_kind,
         statement.unique()
@@ -152,70 +166,82 @@ BinderCreateWorker::bind_create_vector_index(const CreateVectorIndexStatement & 
     const auto * index =
         context_.meta().find_vector_index(collection->collection->id(), statement.index_name());
     if (index != nullptr && !statement.if_not_exists()) [[unlikely]] {
+        // 向量索引已存在，且用户未指定 if_not_exists 选项
         return std::unexpected(make_binder_error(
             BinderErrorCode::VectorIndexAlreadyExists,
             "Vector index already exists: " + statement.index_name()
         ));
     }
 
-    // 查找列
-    const auto * column =
-        context_.meta().find_column(collection->collection->id(), statement.column_name());
-    if (column == nullptr) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::ColumnNotFound,
-            "Column not found: " + statement.column_name()
-        ));
-    }
-
-    // 检查列类型是否为向量，并且维度大于 0
-    // 理论上不会出现 dimension <= 0 的情况
-    if (column->type().id != LogicalTypeId::Vector || !column->type().parameter.has_value() ||
-        column->type().parameter.value() == 0) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::InvalidType,
-            "Vector index can only be created on VECTOR(n) column: " + column->name()
-        ));
-    }
-
-    // 验证向量索引选项
-    const auto max_neighbors = statement.options().max_neighbors.value_or(16);
-    const auto ef_construction = statement.options().ef_construction.value_or(200);
-    const auto ef_search = statement.options().ef_search.value_or(64);
-    if (max_neighbors == 0 || ef_construction < max_neighbors || ef_search == 0) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::InvalidIndexOptions,
-            "HNSW options require max_neighbors > 0, "
-            "ef_construction >= max_neighbors, and ef_search > 0"
-        ));
-    }
-
-    // 绑定向量距离度量
+    // 需要创建新向量索引时才绑定列、选项与度量
+    common::ColumnId column_id = 0;
     meta::entry::VectorDistanceMetric metric = meta::entry::VectorDistanceMetric::L2;
-    switch (statement.options().metric) {
-    case VectorIndexMetric::Default:
-        metric = meta::entry::VectorDistanceMetric::L2;
-        break;
-    case VectorIndexMetric::L2:
-        metric = meta::entry::VectorDistanceMetric::L2;
-        break;
-    case VectorIndexMetric::InnerProduct:
-        metric = meta::entry::VectorDistanceMetric::InnerProduct;
-        break;
-    case VectorIndexMetric::Cosine:
-        metric = meta::entry::VectorDistanceMetric::Cosine;
-        break;
+    std::size_t max_neighbors = 0;
+    std::size_t ef_construction = 0;
+    std::size_t ef_search = 0;
+    std::size_t random_seed = 0;
+    if (index == nullptr) [[likely]] {
+        // 查找列
+        const auto * column =
+            context_.meta().find_column(collection->collection->id(), statement.column_name());
+        if (column == nullptr) [[unlikely]] {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::ColumnNotFound,
+                "Column not found: " + statement.column_name()
+            ));
+        }
+
+        // 检查列类型是否为向量，并且维度大于 0
+        // 理论上不会出现 dimension <= 0 的情况
+        if (column->type().id != LogicalTypeId::Vector || !column->type().parameter.has_value() ||
+            column->type().parameter.value() == 0) [[unlikely]] {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidType,
+                "Vector index can only be created on VECTOR(n) column: " + column->name()
+            ));
+        }
+
+        // 验证向量索引选项
+        max_neighbors = statement.options().max_neighbors.value_or(16);
+        ef_construction = statement.options().ef_construction.value_or(200);
+        ef_search = statement.options().ef_search.value_or(64);
+        if (max_neighbors == 0 || ef_construction < max_neighbors || ef_search == 0) [[unlikely]] {
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidIndexOptions,
+                "HNSW options require max_neighbors > 0, "
+                "ef_construction >= max_neighbors, and ef_search > 0"
+            ));
+        }
+
+        // 绑定向量距离度量
+        switch (statement.options().metric) {
+        case VectorIndexMetric::Default:
+            metric = meta::entry::VectorDistanceMetric::L2;
+            break;
+        case VectorIndexMetric::L2:
+            metric = meta::entry::VectorDistanceMetric::L2;
+            break;
+        case VectorIndexMetric::InnerProduct:
+            metric = meta::entry::VectorDistanceMetric::InnerProduct;
+            break;
+        case VectorIndexMetric::Cosine:
+            metric = meta::entry::VectorDistanceMetric::Cosine;
+            break;
+        }
+
+        column_id = column->id();
+        random_seed = statement.options().random_seed.value_or(0);
     }
 
     return std::make_unique<BoundCreateVectorIndexStatement>(
-        column->id(),
+        column_id,
         index == nullptr ? std::optional<std::string>(statement.index_name()) : std::nullopt,
         meta::entry::VectorIndexKind::Hnsw,
         metric,
         max_neighbors,
         ef_construction,
         ef_search,
-        statement.options().random_seed.value_or(0)
+        random_seed
     );
 }
 
