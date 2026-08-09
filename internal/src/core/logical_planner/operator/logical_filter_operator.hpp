@@ -23,6 +23,7 @@ public:
     const binder::bound::BoundExpression & predicate() const noexcept;
 
     // 获取谓词所有权
+    // 调用后 predicate() 不可调用；再次调用返回 nullptr
     [[nodiscard]]
     std::unique_ptr<binder::bound::BoundExpression> take_predicate() noexcept;
 

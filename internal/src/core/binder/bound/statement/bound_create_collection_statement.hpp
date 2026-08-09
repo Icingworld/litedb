@@ -30,13 +30,28 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & collection_name() const noexcept;
 
+    // 获取集合名称所有权
+    // 调用后 collection_name() 返回 nullopt；再次调用返回 nullopt
+    [[nodiscard]]
+    std::optional<std::string> take_collection_name() noexcept;
+
     // 获取列定义列表
     [[nodiscard]]
     const std::vector<meta::ColumnDefinition> & columns() const noexcept;
 
+    // 获取列定义列表所有权
+    // 调用后 columns() 为空；再次调用返回空列表
+    [[nodiscard]]
+    std::vector<meta::ColumnDefinition> take_columns() noexcept;
+
     // 获取集合注释
     [[nodiscard]]
     const std::optional<std::string> & comment() const noexcept;
+
+    // 获取集合注释所有权
+    // 调用后 comment() 返回 nullopt；再次调用返回 nullopt
+    [[nodiscard]]
+    std::optional<std::string> take_comment() noexcept;
 
 private:
     common::DatabaseId database_id_;

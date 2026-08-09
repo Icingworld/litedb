@@ -24,6 +24,7 @@ public:
     const std::vector<binder::bound::BoundProjectionItem> & projections() const noexcept;
 
     // 获取投影项所有权
+    // 调用后 projections() 为空；再次调用返回空列表
     [[nodiscard]]
     std::vector<binder::bound::BoundProjectionItem> take_projections() noexcept;
 

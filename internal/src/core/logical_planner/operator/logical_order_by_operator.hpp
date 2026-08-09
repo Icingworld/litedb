@@ -24,6 +24,7 @@ public:
     const std::vector<binder::bound::BoundOrderByItem> & order_by() const noexcept;
 
     // 获取排序项所有权
+    // 调用后 order_by() 为空；再次调用返回空列表
     [[nodiscard]]
     std::vector<binder::bound::BoundOrderByItem> take_order_by() noexcept;
 

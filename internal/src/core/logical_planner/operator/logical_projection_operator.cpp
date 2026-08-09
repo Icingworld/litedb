@@ -22,7 +22,7 @@ LogicalProjectionOperator::projections() const noexcept
 std::vector<binder::bound::BoundProjectionItem>
 LogicalProjectionOperator::take_projections() noexcept
 {
-    return std::move(projections_);
+    return std::exchange(projections_, {});
 }
 
 } // namespace litedb::core::logical_planner::op

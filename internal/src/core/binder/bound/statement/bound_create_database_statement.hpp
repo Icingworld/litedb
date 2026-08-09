@@ -19,6 +19,11 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & database_name() const noexcept;
 
+    // 获取数据库名称所有权
+    // 调用后 database_name() 返回 nullopt；再次调用返回 nullopt
+    [[nodiscard]]
+    std::optional<std::string> take_database_name() noexcept;
+
 private:
     // database_name_ = nullopt 时表示用户传入了重复数据库名但是用了 IF NOT EXISTS
     std::optional<std::string> database_name_;

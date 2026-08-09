@@ -23,6 +23,11 @@ const std::optional<std::string> & BoundCreateIndexStatement::index_name() const
     return index_name_;
 }
 
+std::optional<std::string> BoundCreateIndexStatement::take_index_name() noexcept
+{
+    return std::exchange(index_name_, std::nullopt);
+}
+
 common::ColumnId BoundCreateIndexStatement::column_id() const noexcept
 {
     return column_id_;

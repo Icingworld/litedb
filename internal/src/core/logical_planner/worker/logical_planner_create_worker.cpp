@@ -15,43 +15,43 @@ namespace litedb::core::logical_planner
 using namespace litedb::core::binder::bound;
 
 std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_database(
-    const BoundCreateDatabaseStatement & statement
+    BoundCreateDatabaseStatement & statement
 )
 {
-    return std::make_unique<plan::CreateDatabasePlan>(statement.database_name());
+    return std::make_unique<plan::CreateDatabasePlan>(statement.take_database_name());
 }
 
 std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_collection(
-    const BoundCreateCollectionStatement & statement
+    BoundCreateCollectionStatement & statement
 )
 {
     return std::make_unique<plan::CreateCollectionPlan>(
         statement.database_id(),
-        statement.collection_name(),
-        statement.columns(),
-        statement.comment()
+        statement.take_collection_name(),
+        statement.take_columns(),
+        statement.take_comment()
     );
 }
 
 std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_index(
-    const BoundCreateIndexStatement & statement
+    BoundCreateIndexStatement & statement
 )
 {
     return std::make_unique<plan::CreateIndexPlan>(
         statement.column_id(),
-        statement.index_name(),
+        statement.take_index_name(),
         statement.index_kind(),
         statement.unique()
     );
 }
 
 std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_vector_index(
-    const BoundCreateVectorIndexStatement & statement
+    BoundCreateVectorIndexStatement & statement
 )
 {
     return std::make_unique<plan::CreateVectorIndexPlan>(
         statement.column_id(),
-        statement.vector_index_name(),
+        statement.take_vector_index_name(),
         statement.vector_index_kind(),
         statement.metric(),
         statement.max_neighbors(),

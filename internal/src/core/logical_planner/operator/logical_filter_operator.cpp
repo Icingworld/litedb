@@ -20,7 +20,7 @@ const binder::bound::BoundExpression & LogicalFilterOperator::predicate() const 
 
 std::unique_ptr<binder::bound::BoundExpression> LogicalFilterOperator::take_predicate() noexcept
 {
-    return std::move(predicate_);
+    return std::exchange(predicate_, nullptr);
 }
 
 } // namespace litedb::core::logical_planner::op

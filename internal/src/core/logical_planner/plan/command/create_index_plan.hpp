@@ -30,6 +30,11 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & index_name() const noexcept;
 
+    // 获取索引名称所有权
+    // 调用后 index_name() 返回 nullopt；再次调用返回 nullopt
+    [[nodiscard]]
+    std::optional<std::string> take_index_name() noexcept;
+
     // 获取索引类型
     [[nodiscard]]
     meta::entry::IndexKind index_kind() const noexcept;

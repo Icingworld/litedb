@@ -27,6 +27,7 @@ public:
     const op::LogicalPlanOperator & root_operator() const noexcept;
 
     // 获取根算子所有权
+    // 调用后 root_operator() 不可调用；再次调用返回 nullptr
     [[nodiscard]]
     std::unique_ptr<op::LogicalPlanOperator> take_root_operator() noexcept;
 
@@ -39,6 +40,7 @@ public:
     const std::vector<binder::bound::BoundAssignment> & assignments() const noexcept;
 
     // 获取赋值列表所有权
+    // 调用后 assignments() 为空；再次调用返回空列表
     [[nodiscard]]
     std::vector<binder::bound::BoundAssignment> take_assignments() noexcept;
 

@@ -36,6 +36,11 @@ const std::optional<std::string> & CreateVectorIndexPlan::vector_index_name() co
     return vector_index_name_;
 }
 
+std::optional<std::string> CreateVectorIndexPlan::take_vector_index_name() noexcept
+{
+    return std::exchange(vector_index_name_, std::nullopt);
+}
+
 meta::entry::VectorIndexKind CreateVectorIndexPlan::vector_index_kind() const noexcept
 {
     return vector_index_kind_;

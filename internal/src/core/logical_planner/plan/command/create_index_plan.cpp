@@ -28,6 +28,11 @@ const std::optional<std::string> & CreateIndexPlan::index_name() const noexcept
     return index_name_;
 }
 
+std::optional<std::string> CreateIndexPlan::take_index_name() noexcept
+{
+    return std::exchange(index_name_, std::nullopt);
+}
+
 meta::entry::IndexKind CreateIndexPlan::index_kind() const noexcept
 {
     return index_kind_;

@@ -32,6 +32,11 @@ BoundCreateVectorIndexStatement::vector_index_name() const noexcept
     return vector_index_name_;
 }
 
+std::optional<std::string> BoundCreateVectorIndexStatement::take_vector_index_name() noexcept
+{
+    return std::exchange(vector_index_name_, std::nullopt);
+}
+
 common::ColumnId BoundCreateVectorIndexStatement::column_id() const noexcept
 {
     return column_id_;

@@ -43,7 +43,7 @@ std::unique_ptr<plan::PhysicalPlan> PhysicalCommandWorker::plan_create_database(
     logical_planner::plan::CreateDatabasePlan & logical_plan
 )
 {
-    return std::make_unique<plan::CreateDatabasePlan>(logical_plan.database_name());
+    return std::make_unique<plan::CreateDatabasePlan>(logical_plan.take_database_name());
 }
 
 std::unique_ptr<plan::PhysicalPlan> PhysicalCommandWorker::plan_create_collection(
@@ -52,9 +52,9 @@ std::unique_ptr<plan::PhysicalPlan> PhysicalCommandWorker::plan_create_collectio
 {
     return std::make_unique<plan::CreateCollectionPlan>(
         logical_plan.database_id(),
-        logical_plan.collection_name(),
-        logical_plan.columns(),
-        logical_plan.comment()
+        logical_plan.take_collection_name(),
+        logical_plan.take_columns(),
+        logical_plan.take_comment()
     );
 }
 
@@ -64,7 +64,7 @@ std::unique_ptr<plan::PhysicalPlan> PhysicalCommandWorker::plan_create_index(
 {
     return std::make_unique<plan::CreateIndexPlan>(
         logical_plan.column_id(),
-        logical_plan.index_name(),
+        logical_plan.take_index_name(),
         logical_plan.index_kind(),
         logical_plan.unique()
     );
@@ -76,7 +76,7 @@ std::unique_ptr<plan::PhysicalPlan> PhysicalCommandWorker::plan_create_vector_in
 {
     return std::make_unique<plan::CreateVectorIndexPlan>(
         logical_plan.column_id(),
-        logical_plan.vector_index_name(),
+        logical_plan.take_vector_index_name(),
         logical_plan.vector_index_kind(),
         logical_plan.metric(),
         logical_plan.max_neighbors(),

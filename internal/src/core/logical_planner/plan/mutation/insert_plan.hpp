@@ -29,6 +29,7 @@ public:
     const std::vector<std::unique_ptr<binder::bound::BoundExpression>> & values() const noexcept;
 
     // 获取插入值所有权
+    // 调用后 values() 为空；再次调用返回空列表
     [[nodiscard]]
     std::vector<std::unique_ptr<binder::bound::BoundExpression>> take_values() noexcept;
 

@@ -24,7 +24,7 @@ class LogicalPlanner
 {
 public:
     // 生成逻辑计划
-    // 该过程可能会获取 statement 成员的所有权
+    // 消费 statement 本身，并将其中的拥有型成员转移到逻辑计划
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan> plan(
         std::unique_ptr<binder::bound::BoundStatement> statement

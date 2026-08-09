@@ -21,7 +21,7 @@ const op::LogicalPlanOperator & DeletePlan::root_operator() const noexcept
 
 std::unique_ptr<op::LogicalPlanOperator> DeletePlan::take_root_operator() noexcept
 {
-    return std::move(root_operator_);
+    return std::exchange(root_operator_, nullptr);
 }
 
 common::CollectionId DeletePlan::collection_id() const noexcept

@@ -46,5 +46,4 @@ target_include_directories(litedb_logical_planner PUBLIC ${CMAKE_CURRENT_SOURCE_
 
 target_link_libraries(litedb_logical_planner PUBLIC
     litedb_binder
-    litedb_index
 )

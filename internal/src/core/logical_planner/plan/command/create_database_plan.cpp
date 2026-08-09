@@ -15,4 +15,9 @@ const std::optional<std::string> & CreateDatabasePlan::database_name() const noe
     return database_name_;
 }
 
+std::optional<std::string> CreateDatabasePlan::take_database_name() noexcept
+{
+    return std::exchange(database_name_, std::nullopt);
+}
+
 } // namespace litedb::core::logical_planner::plan

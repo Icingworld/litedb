@@ -35,6 +35,11 @@ public:
     [[nodiscard]]
     const std::optional<std::string> & vector_index_name() const noexcept;
 
+    // 获取索引名称所有权
+    // 调用后 vector_index_name() 返回 nullopt；再次调用返回 nullopt
+    [[nodiscard]]
+    std::optional<std::string> take_vector_index_name() noexcept;
+
     // 获取索引类型
     [[nodiscard]]
     meta::entry::VectorIndexKind vector_index_kind() const noexcept;

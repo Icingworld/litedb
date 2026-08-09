@@ -24,6 +24,7 @@ public:
     const op::LogicalPlanOperator & root_operator() const noexcept;
 
     // 获取根算子所有权
+    // 调用后 root_operator() 不可调用；再次调用返回 nullptr
     [[nodiscard]]
     std::unique_ptr<op::LogicalPlanOperator> take_root_operator() noexcept;
 

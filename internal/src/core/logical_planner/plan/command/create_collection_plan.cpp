@@ -28,6 +28,11 @@ const std::optional<std::string> & CreateCollectionPlan::collection_name() const
     return collection_name_;
 }
 
+std::optional<std::string> CreateCollectionPlan::take_collection_name() noexcept
+{
+    return std::exchange(collection_name_, std::nullopt);
+}
+
 const std::vector<meta::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
 {
     return columns_;
@@ -35,12 +40,17 @@ const std::vector<meta::ColumnDefinition> & CreateCollectionPlan::columns() cons
 
 std::vector<meta::ColumnDefinition> CreateCollectionPlan::take_columns() noexcept
 {
-    return std::move(columns_);
+    return std::exchange(columns_, {});
 }
 
 const std::optional<std::string> & CreateCollectionPlan::comment() const noexcept
 {
     return comment_;
+}
+
+std::optional<std::string> CreateCollectionPlan::take_comment() noexcept
+{
+    return std::exchange(comment_, std::nullopt);
 }
 
 } // namespace litedb::core::logical_planner::plan

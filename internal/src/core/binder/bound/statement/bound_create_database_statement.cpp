@@ -17,4 +17,9 @@ const std::optional<std::string> & BoundCreateDatabaseStatement::database_name()
     return database_name_;
 }
 
+std::optional<std::string> BoundCreateDatabaseStatement::take_database_name() noexcept
+{
+    return std::exchange(database_name_, std::nullopt);
+}
+
 } // namespace litedb::core::binder::bound

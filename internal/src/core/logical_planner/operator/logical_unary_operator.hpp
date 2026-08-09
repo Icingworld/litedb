@@ -22,6 +22,7 @@ public:
     const LogicalPlanOperator & child() const noexcept;
 
     // 获取子算子所有权
+    // 调用后 child() 不可调用；再次调用返回 nullptr
     [[nodiscard]]
     std::unique_ptr<LogicalPlanOperator> take_child() noexcept;
 

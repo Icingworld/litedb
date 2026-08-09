@@ -23,7 +23,7 @@ const op::LogicalPlanOperator & UpdatePlan::root_operator() const noexcept
 
 std::unique_ptr<op::LogicalPlanOperator> UpdatePlan::take_root_operator() noexcept
 {
-    return std::move(root_operator_);
+    return std::exchange(root_operator_, nullptr);
 }
 
 common::CollectionId UpdatePlan::collection_id() const noexcept
@@ -38,7 +38,7 @@ const std::vector<binder::bound::BoundAssignment> & UpdatePlan::assignments() co
 
 std::vector<binder::bound::BoundAssignment> UpdatePlan::take_assignments() noexcept
 {
-    return std::move(assignments_);
+    return std::exchange(assignments_, {});
 }
 
 } // namespace litedb::core::logical_planner::plan
