@@ -19,21 +19,14 @@ class LogicalPlan;
 namespace litedb::core::logical_planner
 {
 
-/**
- * @brief SELECT 语句逻辑计划工作器
- */
+// SELECT 语句逻辑计划工作器
 class LogicalPlannerSelectWorker
 {
 public:
     LogicalPlannerSelectWorker() = default;
 
 public:
-    /**
-     * @brief 规划 SELECT 语句
-     * @param statement SELECT 语句
-     * @return 逻辑计划
-     * @warning 该成员函数将会移动消费 statement 的成员变量
-     */
+    // 规划 SELECT 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_select(

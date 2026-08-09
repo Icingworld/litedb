@@ -6,24 +6,19 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief SHOW INDEXES 语句计划
- */
+// SHOW INDEXES 语句逻辑计划
 class ShowIndexesPlan final : public LogicalPlan
 {
 public:
     explicit ShowIndexesPlan(common::CollectionId collection_id) noexcept;
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
 private:
-    common::CollectionId collection_id_;        // 集合 ID
+    common::CollectionId collection_id_;
 };
 
 } // namespace litedb::core::logical_planner::plan

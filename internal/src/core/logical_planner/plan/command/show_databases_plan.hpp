@@ -5,9 +5,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief SHOW DATABASES 语句计划
- */
+// SHOW DATABASES 语句逻辑计划
 class ShowDatabasesPlan final : public LogicalPlan
 {
 public:

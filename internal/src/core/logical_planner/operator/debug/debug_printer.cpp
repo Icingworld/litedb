@@ -27,7 +27,7 @@ public:
     }
 
 private:
-    LogicalPlanOperatorDebugPrinter & printer_;     // 打印器
+    LogicalPlanOperatorDebugPrinter & printer_;
 };
 
 LogicalPlanOperatorDebugPrinter::LogicalPlanOperatorDebugPrinter(

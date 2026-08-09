@@ -19,20 +19,14 @@ class LogicalPlan;
 namespace litedb::core::logical_planner
 {
 
-/**
- * @brief USE 语句逻辑计划工作器
- */
+// USE 语句逻辑计划工作器
 class LogicalPlannerUseWorker
 {
 public:
     LogicalPlannerUseWorker() = default;
 
 public:
-    /**
-     * @brief 规划 USE 语句
-     * @param statement USE 语句
-     * @return 逻辑计划
-     */
+    // 规划 USE 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_use(

@@ -10,9 +10,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief INSERT 语句计划
- */
+// INSERT 语句逻辑计划
 class InsertPlan final : public LogicalPlan
 {
 public:
@@ -22,32 +20,24 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
-    /**
-     * @brief 获取值
-     * @return 值
-     */
+    // 获取值
     [[nodiscard]]
     const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
     values() const noexcept;
 
-    /**
-     * @brief 移出插入值
-     * @return 插入值所有权
-     */
+    // 获取插入值所有权
     [[nodiscard]]
     std::vector<std::unique_ptr<binder::bound::BoundExpression>>
     take_values() noexcept;
 
 private:
-    common::CollectionId collection_id_;                                        // 集合 ID
-    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;       // 值
+    // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销
+    common::CollectionId collection_id_;
+    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;
 };
 
 } // namespace litedb::core::logical_planner::plan

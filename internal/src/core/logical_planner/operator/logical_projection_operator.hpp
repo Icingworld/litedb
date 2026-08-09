@@ -9,9 +9,7 @@
 namespace litedb::core::logical_planner::op
 {
 
-/**
- * @brief 逻辑投影算子
- */
+// 逻辑投影算子
 class LogicalProjectionOperator final : public LogicalUnaryOperator
 {
 public:
@@ -21,24 +19,18 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取投影项
-     * @return 投影项
-     */
+    // 获取投影项
     [[nodiscard]]
     const std::vector<binder::bound::BoundProjectionItem> &
     projections() const noexcept;
 
-    /**
-     * @brief 移出投影项
-     * @return 投影项所有权
-     */
+    // 获取投影项所有权
     [[nodiscard]]
     std::vector<binder::bound::BoundProjectionItem>
     take_projections() noexcept;
 
 private:
-    std::vector<binder::bound::BoundProjectionItem> projections_;   // 投影项
+    std::vector<binder::bound::BoundProjectionItem> projections_;
 };
 
 } // namespace litedb::core::logical_planner::op

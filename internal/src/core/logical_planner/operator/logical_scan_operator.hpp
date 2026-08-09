@@ -6,25 +6,21 @@
 namespace litedb::core::logical_planner::op
 {
 
-/**
- * @brief 逻辑扫描算子
- * @details 叶子算子，没有子算子，直接继承自 LogicalPlanOperator
- */
+// 逻辑扫描算子
+// 叶子算子，没有子算子，直接继承自 LogicalPlanOperator
+// 该算子的含义是扫描一个集合
 class LogicalScanOperator final : public LogicalPlanOperator
 {
 public:
     LogicalScanOperator(common::CollectionId collection_id);
 
 public:
-    /**
-     * @brief 获取集合ID
-     * @return 集合ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
 private:
-    common::CollectionId collection_id_;             // 集合 ID
+    common::CollectionId collection_id_;
 };
 
 } // namespace litedb::core::logical_planner::op

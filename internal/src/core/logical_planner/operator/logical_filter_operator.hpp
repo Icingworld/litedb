@@ -8,9 +8,7 @@
 namespace litedb::core::logical_planner::op
 {
 
-/**
- * @brief 逻辑过滤算子
- */
+// 逻辑过滤算子
 class LogicalFilterOperator final : public LogicalUnaryOperator
 {
 public:
@@ -20,23 +18,16 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取谓词
-     * @return 谓词
-     */
+    // 获取谓词
     [[nodiscard]]
     const binder::bound::BoundExpression & predicate() const noexcept;
 
-    /**
-     * @brief 移出谓词
-     * @return 谓词所有权
-     * @warning 调用后不可再调用 predicate()
-     */
+    // 获取谓词所有权
     [[nodiscard]]
     std::unique_ptr<binder::bound::BoundExpression> take_predicate() noexcept;
 
 private:
-    std::unique_ptr<binder::bound::BoundExpression> predicate_;   // 谓词
+    std::unique_ptr<binder::bound::BoundExpression> predicate_;
 };
 
 } // namespace litedb::core::logical_planner::op

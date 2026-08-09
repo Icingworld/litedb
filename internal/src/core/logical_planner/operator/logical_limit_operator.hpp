@@ -9,9 +9,7 @@
 namespace litedb::core::logical_planner::op
 {
 
-/**
- * @brief 逻辑限制算子
- */
+// 逻辑限制算子
 class LogicalLimitOperator final : public LogicalUnaryOperator
 {
 public:
@@ -22,23 +20,17 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取限制
-     * @return 限制
-     */
+    // 获取限制
     [[nodiscard]]
     std::optional<std::size_t> limit() const noexcept;
 
-    /**
-     * @brief 获取偏移
-     * @return 偏移
-     */
+    // 获取偏移
     [[nodiscard]]
     std::optional<std::size_t> offset() const noexcept;
 
 private:
-    std::optional<std::size_t> limit_;               // 限制
-    std::optional<std::size_t> offset_;              // 偏移
+    std::optional<std::size_t> limit_;
+    std::optional<std::size_t> offset_;
 };
 
 } // namespace litedb::core::logical_planner::op

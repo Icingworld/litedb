@@ -1,7 +1,5 @@
 #include "core/logical_planner/worker/logical_planner_show_worker.hpp"
 
-#include <memory>
-
 #include "core/binder/bound/statement/bound_show_collections_statement.hpp"
 #include "core/binder/bound/statement/bound_show_databases_statement.hpp"
 #include "core/binder/bound/statement/bound_show_indexes_statement.hpp"

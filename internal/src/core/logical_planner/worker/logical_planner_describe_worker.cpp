@@ -1,7 +1,5 @@
 #include "core/logical_planner/worker/logical_planner_describe_worker.hpp"
 
-#include <memory>
-
 #include "core/binder/bound/statement/bound_describe_collection_statement.hpp"
 #include "core/logical_planner/plan/command/describe_collection_plan.hpp"
 

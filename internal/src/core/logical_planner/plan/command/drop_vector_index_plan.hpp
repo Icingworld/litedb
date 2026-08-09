@@ -8,9 +8,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief DROP VINDEX 语句计划
- */
+// DROP VINDEX 语句逻辑计划
 class DropVectorIndexPlan final : public LogicalPlan
 {
 public:
@@ -19,15 +17,12 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取向量索引 ID
-     * @return 向量索引 ID
-     */
+    // 获取向量索引 ID
     [[nodiscard]]
     std::optional<common::VIndexId> vector_index_id() const noexcept;
 
 private:
-    std::optional<common::VIndexId> vector_index_id_;  // 向量索引 ID
+    std::optional<common::VIndexId> vector_index_id_;
 };
 
 } // namespace litedb::core::logical_planner::plan

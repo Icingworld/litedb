@@ -1,7 +1,5 @@
 #include "core/logical_planner/worker/logical_planner_drop_worker.hpp"
 
-#include <memory>
-
 #include "core/binder/bound/statement/bound_drop_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_database_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_index_statement.hpp"

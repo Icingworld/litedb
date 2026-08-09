@@ -19,20 +19,14 @@ class LogicalPlan;
 namespace litedb::core::logical_planner
 {
 
-/**
- * @brief DESCRIBE 语句逻辑计划工作器
- */
+// DESCRIBE 语句逻辑计划工作器
 class LogicalPlannerDescribeWorker
 {
 public:
     LogicalPlannerDescribeWorker() = default;
 
 public:
-    /**
-     * @brief 规划 DESCRIBE COLLECTION 语句
-     * @param statement DESCRIBE COLLECTION 语句
-     * @return 逻辑计划
-     */
+    // 规划 DESCRIBE COLLECTION 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_describe_collection(

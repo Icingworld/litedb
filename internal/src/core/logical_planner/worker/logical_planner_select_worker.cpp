@@ -1,6 +1,5 @@
 #include "core/logical_planner/worker/logical_planner_select_worker.hpp"
 
-#include <memory>
 #include <utility>
 
 #include "core/binder/bound/statement/bound_select_statement.hpp"

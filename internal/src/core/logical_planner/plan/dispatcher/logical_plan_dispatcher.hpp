@@ -26,12 +26,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief 逻辑计划调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- * @tparam IsConst 是否为常量
- */
+// 逻辑计划调度器
 template <
     typename Derived,
     typename ReturnType,
@@ -40,9 +35,7 @@ template <
 class LogicalPlanDispatcher
 {
 protected:
-    /**
-     * @brief 引用类型
-     */
+    // 引用类型
     template <typename T>
     using ReferenceType = std::conditional_t<
         IsConst,
@@ -51,11 +44,7 @@ protected:
     >;
 
 protected:
-    /**
-     * @brief 调度逻辑计划
-     * @param plan 逻辑计划
-     * @return 返回值
-     */
+    // 调度逻辑计划
     [[nodiscard]]
     ReturnType dispatch_plan(ReferenceType<LogicalPlan> plan)
     {
@@ -143,10 +132,7 @@ protected:
     }
 
 private:
-    /**
-     * @brief 获取派生类引用
-     * @return 派生类引用
-     */
+    // 获取派生类引用
     [[nodiscard]]
     Derived & derived() noexcept
     {
@@ -154,11 +140,7 @@ private:
     }
 };
 
-/**
- * @brief 常量逻辑计划调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 常量逻辑计划调度器
 template <typename Derived, typename ReturnType>
 using ConstLogicalPlanDispatcher = LogicalPlanDispatcher<
     Derived,
@@ -166,11 +148,7 @@ using ConstLogicalPlanDispatcher = LogicalPlanDispatcher<
     true
 >;
 
-/**
- * @brief 可变逻辑计划调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 可变逻辑计划调度器
 template <typename Derived, typename ReturnType>
 using MutableLogicalPlanDispatcher = LogicalPlanDispatcher<
     Derived,

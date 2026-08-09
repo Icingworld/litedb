@@ -6,9 +6,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief SHOW VINDEXES 语句计划
- */
+// SHOW VINDEXES 语句逻辑计划
 class ShowVectorIndexesPlan final : public LogicalPlan
 {
 public:
@@ -17,15 +15,12 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
 private:
-    common::CollectionId collection_id_;        // 集合 ID
+    common::CollectionId collection_id_;
 };
 
 } // namespace litedb::core::logical_planner::plan

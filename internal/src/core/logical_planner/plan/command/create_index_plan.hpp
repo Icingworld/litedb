@@ -10,9 +10,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief CREATE INDEX 语句计划
- */
+// CREATE INDEX 语句逻辑计划
 class CreateIndexPlan final : public LogicalPlan
 {
 public:
@@ -24,39 +22,27 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取列 ID
-     * @return 列 ID
-     */
+    // 获取列 ID
     [[nodiscard]]
     common::ColumnId column_id() const noexcept;
 
-    /**
-     * @brief 获取索引名称
-     * @return 索引名称
-     */
+    // 获取索引名称
     [[nodiscard]]
     const std::optional<std::string> & index_name() const noexcept;
 
-    /**
-     * @brief 获取索引类型
-     * @return 索引类型
-     */
+    // 获取索引类型
     [[nodiscard]]
     meta::entry::IndexKind index_kind() const noexcept;
 
-    /**
-     * @brief 是否唯一
-     * @return 是否唯一
-     */
+    // 是否唯一
     [[nodiscard]]
     bool unique() const noexcept;
 
 private:
-    common::ColumnId column_id_;                // 列 ID
-    std::optional<std::string> index_name_;     // 索引名称
-    meta::entry::IndexKind index_kind_;         // 索引类型
-    bool unique_;                               // 是否唯一
+    common::ColumnId column_id_;
+    std::optional<std::string> index_name_;
+    meta::entry::IndexKind index_kind_;
+    bool unique_;
 };
 
 } // namespace litedb::core::logical_planner::plan

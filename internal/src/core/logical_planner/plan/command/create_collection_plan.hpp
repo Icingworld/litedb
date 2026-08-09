@@ -11,9 +11,7 @@
 namespace litedb::core::logical_planner::plan
 {
 
-/**
- * @brief CREATE COLLECTION 语句计划
- */
+// CREATE COLLECTION 语句逻辑计划
 class CreateCollectionPlan final : public LogicalPlan
 {
 public:
@@ -25,39 +23,31 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
+    // 获取数据库 ID
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
+    // 获取集合名称
     [[nodiscard]]
     const std::optional<std::string> & collection_name() const noexcept;
 
-    /**
-     * @brief 获取列定义
-     * @return 列定义
-     */
+    // 获取列定义
     [[nodiscard]]
     const std::vector<meta::ColumnDefinition> & columns() const noexcept;
 
-    /**
-     * @brief 获取集合注释
-     * @return 集合注释
-     */
+    // 获取列定义所有权
+    [[nodiscard]]
+    std::vector<meta::ColumnDefinition> take_columns() noexcept;
+
+    // 获取集合注释
     [[nodiscard]]
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    common::DatabaseId database_id_;                                // 数据库 ID
-    std::optional<std::string> collection_name_;                    // 集合名称
-    std::vector<meta::ColumnDefinition> columns_;                   // 列定义列表
-    std::optional<std::string> comment_;                            // 集合注释
+    common::DatabaseId database_id_;
+    std::optional<std::string> collection_name_;
+    std::vector<meta::ColumnDefinition> columns_;
+    std::optional<std::string> comment_;
 };
 
 } // namespace litedb::core::logical_planner::plan

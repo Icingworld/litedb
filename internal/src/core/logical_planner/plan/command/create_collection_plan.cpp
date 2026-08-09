@@ -36,6 +36,11 @@ CreateCollectionPlan::columns() const noexcept
     return columns_;
 }
 
+std::vector<meta::ColumnDefinition> CreateCollectionPlan::take_columns() noexcept
+{
+    return std::move(columns_);
+}
+
 const std::optional<std::string> &
 CreateCollectionPlan::comment() const noexcept
 {

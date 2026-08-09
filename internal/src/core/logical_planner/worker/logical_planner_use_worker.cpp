@@ -1,7 +1,5 @@
 #include "core/logical_planner/worker/logical_planner_use_worker.hpp"
 
-#include <memory>
-
 #include "core/binder/bound/statement/bound_use_statement.hpp"
 #include "core/logical_planner/plan/command/use_plan.hpp"
 

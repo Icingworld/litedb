@@ -22,53 +22,35 @@ class LogicalPlan;
 namespace litedb::core::logical_planner
 {
 
-/**
- * @brief SHOW 语句逻辑计划工作器
- */
+// SHOW 语句逻辑计划工作器
 class LogicalPlannerShowWorker
 {
 public:
     LogicalPlannerShowWorker() = default;
 
 public:
-    /**
-     * @brief 规划 SHOW DATABASES 语句
-     * @param statement SHOW DATABASES 语句
-     * @return 逻辑计划
-     */
+    // 规划 SHOW DATABASES 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_show_databases(
         const binder::bound::BoundShowDatabasesStatement & statement
     );
 
-    /**
-     * @brief 规划 SHOW COLLECTIONS 语句
-     * @param statement SHOW COLLECTIONS 语句
-     * @return 逻辑计划
-     */
+    // 规划 SHOW COLLECTIONS 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_show_collections(
         const binder::bound::BoundShowCollectionsStatement & statement
     );
 
-    /**
-     * @brief 规划 SHOW INDEXES 语句
-     * @param statement SHOW INDEXES 语句
-     * @return 逻辑计划
-     */
+    // 规划 SHOW INDEXES 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_show_indexes(
         const binder::bound::BoundShowIndexesStatement & statement
     );
 
-    /**
-     * @brief 规划 SHOW VINDEXES 语句
-     * @param statement SHOW VINDEXES 语句
-     * @return 逻辑计划
-     */
+    // 规划 SHOW VINDEXES 语句
     [[nodiscard]]
     std::unique_ptr<plan::LogicalPlan>
     plan_show_vector_indexes(

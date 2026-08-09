@@ -1,7 +1,5 @@
 #include "core/logical_planner/worker/logical_planner_insert_worker.hpp"
 
-#include <memory>
-
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/logical_planner/plan/mutation/insert_plan.hpp"
 
