@@ -50,7 +50,7 @@ void test_where_order_limit_and_offset()
         "SELECT id, name FROM users WHERE age >= 18 "
         "ORDER BY age DESC LIMIT 10 OFFSET 20;"
     );
-    require(select->where() != nullptr, "WHERE missing");
+    require(select->where().has_value(), "WHERE missing");
     require(select->where()->type().id == LogicalTypeId::Boolean, "WHERE type mismatch");
     require(select->order_by().size() == 1, "ORDER BY count mismatch");
     require(!select->order_by()[0].ascending, "ORDER BY direction mismatch");

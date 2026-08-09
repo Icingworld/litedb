@@ -98,7 +98,7 @@ void test_predicates_and_string_compatibility()
     require(between.upper().type().id == LogicalTypeId::Double, "BETWEEN upper coercion mismatch");
 
     require(projection(*select, 2).kind() == BoundExpressionKind::Like, "LIKE kind mismatch");
-    require(select->where() != nullptr, "VARCHAR equality WHERE missing");
+    require(select->where().has_value(), "VARCHAR equality WHERE missing");
     require(select->where()->type().id == LogicalTypeId::Boolean, "VARCHAR equality type mismatch");
 }
 

@@ -520,6 +520,23 @@ void BoundDebugPrinter::write_child_field(std::string_view name, const BoundExpr
     print(*expression);
 }
 
+void BoundDebugPrinter::write_child_field(
+    std::string_view name,
+    std::optional<const BoundExpression &> expression
+)
+{
+    write_indent();
+    ostream_ << name << ':';
+    if (!expression) {
+        ostream_ << " <none>\n";
+        return;
+    }
+
+    ostream_ << '\n';
+    IndentScope scope(*this);
+    print(*expression);
+}
+
 std::string debug_print(const BoundStatement & statement, BoundDebugPrinterOptions options)
 {
     std::ostringstream stream;

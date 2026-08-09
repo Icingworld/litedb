@@ -92,7 +92,7 @@ void test_update_binding()
     require(update->assignments()[0].value->kind() == BoundExpressionKind::Binary, "row expression missing");
     require(update->assignments()[1].column_id == fixture.id_column_id, "id assignment id mismatch");
     require(update->assignments()[1].value->kind() == BoundExpressionKind::Cast, "assignment cast missing");
-    require(update->where() != nullptr, "UPDATE WHERE missing");
+    require(update->where().has_value(), "UPDATE WHERE missing");
     require(update->where()->type().id == LogicalTypeId::Boolean, "UPDATE WHERE type mismatch");
 }
 
@@ -119,13 +119,13 @@ void test_delete_binding_and_errors()
     Fixture fixture;
     auto unconditional = bind_ok<BoundDeleteStatement>(fixture, "DELETE FROM users;");
     require(unconditional->collection_id() == fixture.users_id, "DELETE collection id mismatch");
-    require(unconditional->where() == nullptr, "DELETE without WHERE mismatch");
+    require(!unconditional->where().has_value(), "DELETE without WHERE mismatch");
 
     auto conditional = bind_ok<BoundDeleteStatement>(
         fixture,
         "DELETE FROM users WHERE id = 1;"
     );
-    require(conditional->where() != nullptr, "DELETE WHERE missing");
+    require(conditional->where().has_value(), "DELETE WHERE missing");
     require(conditional->where()->type().id == LogicalTypeId::Boolean, "DELETE WHERE type mismatch");
 
     require_error(
