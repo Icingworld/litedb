@@ -16,22 +16,19 @@ CreateCollectionPlan::CreateCollectionPlan(
     , collection_name_(std::move(collection_name))
     , columns_(std::move(columns))
     , comment_(std::move(comment))
-{
-}
+{}
 
 common::DatabaseId CreateCollectionPlan::database_id() const noexcept
 {
     return database_id_;
 }
 
-const std::optional<std::string> &
-CreateCollectionPlan::collection_name() const noexcept
+const std::optional<std::string> & CreateCollectionPlan::collection_name() const noexcept
 {
     return collection_name_;
 }
 
-const std::vector<meta::ColumnDefinition> &
-CreateCollectionPlan::columns() const noexcept
+const std::vector<meta::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
 {
     return columns_;
 }
@@ -41,8 +38,7 @@ std::vector<meta::ColumnDefinition> CreateCollectionPlan::take_columns() noexcep
     return std::move(columns_);
 }
 
-const std::optional<std::string> &
-CreateCollectionPlan::comment() const noexcept
+const std::optional<std::string> & CreateCollectionPlan::comment() const noexcept
 {
     return comment_;
 }

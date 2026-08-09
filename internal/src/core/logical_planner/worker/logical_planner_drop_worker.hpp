@@ -22,7 +22,6 @@ class LogicalPlan;
 namespace litedb::core::logical_planner
 {
 
-
 // DROP 语句逻辑计划工作器
 class LogicalPlannerDropWorker
 {
@@ -32,29 +31,25 @@ public:
 public:
     // 规划 DROP DATABASE 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_drop_database(
+    std::unique_ptr<plan::LogicalPlan> plan_drop_database(
         const binder::bound::BoundDropDatabaseStatement & statement
     );
 
     // 规划 DROP COLLECTION 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_drop_collection(
+    std::unique_ptr<plan::LogicalPlan> plan_drop_collection(
         const binder::bound::BoundDropCollectionStatement & statement
     );
 
     // 规划 DROP INDEX 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_drop_index(
+    std::unique_ptr<plan::LogicalPlan> plan_drop_index(
         const binder::bound::BoundDropIndexStatement & statement
     );
 
     // 规划 DROP VINDEX 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_drop_vector_index(
+    std::unique_ptr<plan::LogicalPlan> plan_drop_vector_index(
         const binder::bound::BoundDropVectorIndexStatement & statement
     );
 };

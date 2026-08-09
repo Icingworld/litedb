@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -10,9 +10,7 @@ namespace litedb::core::logical_planner::plan
 class DescribeCollectionPlan final : public LogicalPlan
 {
 public:
-    explicit DescribeCollectionPlan(
-        common::CollectionId collection_id
-    ) noexcept;
+    explicit DescribeCollectionPlan(common::CollectionId collection_id) noexcept;
 
 public:
     // 获取集合 ID

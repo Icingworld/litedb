@@ -3,9 +3,9 @@
 #include <memory>
 #include <vector>
 
-#include "core/logical_planner/plan/logical_plan.hpp"
-#include "core/common/ids.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
+#include "core/common/ids.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -26,13 +26,11 @@ public:
 
     // 获取值
     [[nodiscard]]
-    const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
-    values() const noexcept;
+    const std::vector<std::unique_ptr<binder::bound::BoundExpression>> & values() const noexcept;
 
     // 获取插入值所有权
     [[nodiscard]]
-    std::vector<std::unique_ptr<binder::bound::BoundExpression>>
-    take_values() noexcept;
+    std::vector<std::unique_ptr<binder::bound::BoundExpression>> take_values() noexcept;
 
 private:
     // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销

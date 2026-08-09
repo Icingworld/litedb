@@ -31,29 +31,25 @@ public:
 public:
     // 规划 SHOW DATABASES 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_show_databases(
+    std::unique_ptr<plan::LogicalPlan> plan_show_databases(
         const binder::bound::BoundShowDatabasesStatement & statement
     );
 
     // 规划 SHOW COLLECTIONS 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_show_collections(
+    std::unique_ptr<plan::LogicalPlan> plan_show_collections(
         const binder::bound::BoundShowCollectionsStatement & statement
     );
 
     // 规划 SHOW INDEXES 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_show_indexes(
+    std::unique_ptr<plan::LogicalPlan> plan_show_indexes(
         const binder::bound::BoundShowIndexesStatement & statement
     );
 
     // 规划 SHOW VINDEXES 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_show_vector_indexes(
+    std::unique_ptr<plan::LogicalPlan> plan_show_vector_indexes(
         const binder::bound::BoundShowVectorIndexesStatement & statement
     );
 };

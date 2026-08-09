@@ -11,22 +11,17 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerUpdateWorker::plan_update(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerUpdateWorker::plan_update(
     BoundUpdateStatement & statement
 )
 {
     std::unique_ptr<op::LogicalPlanOperator> root_operator =
-        std::make_unique<op::LogicalScanOperator>(
-        statement.collection_id()
-    );
+        std::make_unique<op::LogicalScanOperator>(statement.collection_id());
 
     auto where = statement.take_where();
     if (where != nullptr) {
-        root_operator = std::make_unique<op::LogicalFilterOperator>(
-            std::move(root_operator),
-            std::move(where)
-        );
+        root_operator =
+            std::make_unique<op::LogicalFilterOperator>(std::move(root_operator), std::move(where));
     }
 
     return std::make_unique<plan::UpdatePlan>(

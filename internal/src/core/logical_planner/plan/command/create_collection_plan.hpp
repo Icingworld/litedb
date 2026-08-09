@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/meta/meta_request.hpp"
 
 namespace litedb::core::logical_planner::plan

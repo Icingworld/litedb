@@ -28,10 +28,7 @@ public:
 public:
     // 规划 DELETE 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_delete(
-        binder::bound::BoundDeleteStatement & statement
-    );
+    std::unique_ptr<plan::LogicalPlan> plan_delete(binder::bound::BoundDeleteStatement & statement);
 };
 
 } // namespace litedb::core::logical_planner

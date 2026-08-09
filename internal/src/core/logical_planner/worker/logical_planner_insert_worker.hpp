@@ -28,10 +28,7 @@ public:
 public:
     // 规划 INSERT 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_insert(
-        binder::bound::BoundInsertStatement & statement
-    );
+    std::unique_ptr<plan::LogicalPlan> plan_insert(binder::bound::BoundInsertStatement & statement);
 };
 
 } // namespace litedb::core::logical_planner

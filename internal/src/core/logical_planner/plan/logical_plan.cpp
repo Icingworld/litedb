@@ -5,8 +5,7 @@ namespace litedb::core::logical_planner::plan
 
 LogicalPlan::LogicalPlan(LogicalPlanKind kind) noexcept
     : kind_(kind)
-{
-}
+{}
 
 LogicalPlanKind LogicalPlan::kind() const noexcept
 {

@@ -14,16 +14,14 @@ UpdatePlan::UpdatePlan(
     , collection_id_(collection_id)
     , assignments_(std::move(assignments))
     , root_operator_(std::move(root_operator))
-{
-}
+{}
 
 const op::LogicalPlanOperator & UpdatePlan::root_operator() const noexcept
 {
     return *root_operator_;
 }
 
-std::unique_ptr<op::LogicalPlanOperator>
-UpdatePlan::take_root_operator() noexcept
+std::unique_ptr<op::LogicalPlanOperator> UpdatePlan::take_root_operator() noexcept
 {
     return std::move(root_operator_);
 }
@@ -33,14 +31,12 @@ common::CollectionId UpdatePlan::collection_id() const noexcept
     return collection_id_;
 }
 
-const std::vector<binder::bound::BoundAssignment> &
-UpdatePlan::assignments() const noexcept
+const std::vector<binder::bound::BoundAssignment> & UpdatePlan::assignments() const noexcept
 {
     return assignments_;
 }
 
-std::vector<binder::bound::BoundAssignment>
-UpdatePlan::take_assignments() noexcept
+std::vector<binder::bound::BoundAssignment> UpdatePlan::take_assignments() noexcept
 {
     return std::move(assignments_);
 }

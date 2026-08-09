@@ -28,8 +28,7 @@ public:
 public:
     // 规划 DESCRIBE COLLECTION 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_describe_collection(
+    std::unique_ptr<plan::LogicalPlan> plan_describe_collection(
         const binder::bound::BoundDescribeCollectionStatement & statement
     );
 };

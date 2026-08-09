@@ -1,7 +1,7 @@
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #include "core/logical_planner/operator/logical_filter_operator.hpp"
 #include "core/logical_planner/operator/logical_limit_operator.hpp"
@@ -14,21 +14,13 @@ namespace litedb::core::logical_planner::op
 {
 
 // 逻辑算子调度器
-template <
-    typename Derived,
-    typename ReturnType,
-    bool IsConst
->
+template <typename Derived, typename ReturnType, bool IsConst>
 class LogicalOperatorDispatcher
 {
 protected:
     // 引用类型
     template <typename T>
-    using ReferenceType = std::conditional_t<
-        IsConst,
-        const T &,
-        T &
-    >;
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
     // 调度逻辑算子
@@ -72,18 +64,10 @@ private:
 
 // 常量逻辑算子调度器
 template <typename Derived, typename ReturnType>
-using ConstLogicalOperatorDispatcher = LogicalOperatorDispatcher<
-    Derived,
-    ReturnType,
-    true
->;
+using ConstLogicalOperatorDispatcher = LogicalOperatorDispatcher<Derived, ReturnType, true>;
 
 // 可变逻辑算子调度器
 template <typename Derived, typename ReturnType>
-using MutableLogicalOperatorDispatcher = LogicalOperatorDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
+using MutableLogicalOperatorDispatcher = LogicalOperatorDispatcher<Derived, ReturnType, false>;
 
 } // namespace litedb::core::logical_planner::op

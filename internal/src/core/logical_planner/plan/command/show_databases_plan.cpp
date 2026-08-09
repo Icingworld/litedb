@@ -5,7 +5,6 @@ namespace litedb::core::logical_planner::plan
 
 ShowDatabasesPlan::ShowDatabasesPlan() noexcept
     : LogicalPlan(LogicalPlanKind::ShowDatabases)
-{
-}
+{}
 
 } // namespace litedb::core::logical_planner::plan

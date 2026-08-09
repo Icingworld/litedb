@@ -8,15 +8,11 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerInsertWorker::plan_insert(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerInsertWorker::plan_insert(
     BoundInsertStatement & statement
 )
 {
-    return std::make_unique<plan::InsertPlan>(
-        statement.collection_id(),
-        statement.take_values()
-    );
+    return std::make_unique<plan::InsertPlan>(statement.collection_id(), statement.take_values());
 }
 
 } // namespace litedb::core::logical_planner

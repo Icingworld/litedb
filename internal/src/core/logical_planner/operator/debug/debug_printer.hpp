@@ -14,15 +14,9 @@ namespace litedb::core::logical_planner::op
 
 // 逻辑算子调试打印器
 class LogicalPlanOperatorDebugPrinter
-    : private ConstLogicalOperatorDispatcher<
-          LogicalPlanOperatorDebugPrinter,
-          void
-      >
+    : private ConstLogicalOperatorDispatcher<LogicalPlanOperatorDebugPrinter, void>
 {
-    friend ConstLogicalOperatorDispatcher<
-        LogicalPlanOperatorDebugPrinter,
-        void
-    >;
+    friend ConstLogicalOperatorDispatcher<LogicalPlanOperatorDebugPrinter, void>;
 
 public:
     explicit LogicalPlanOperatorDebugPrinter(std::ostream & ostream);
@@ -64,22 +58,13 @@ private:
     void write_field(std::string_view name, std::size_t value);
 
     // 写入可选字段
-    void write_optional_field(
-        std::string_view name,
-        const std::optional<std::string> & value
-    );
+    void write_optional_field(std::string_view name, const std::optional<std::string> & value);
 
     // 写入可选字段
-    void write_optional_field(
-        std::string_view name,
-        const std::optional<std::size_t> & value
-    );
+    void write_optional_field(std::string_view name, const std::optional<std::size_t> & value);
 
     // 写入逻辑类型字段
-    void write_type_field(
-        std::string_view name,
-        const common::LogicalType & type
-    );
+    void write_type_field(std::string_view name, const common::LogicalType & type);
 
     // 写入绑定表达式字段
     void write_expression_field(
@@ -88,10 +73,7 @@ private:
     );
 
     // 写入子算子字段
-    void write_child_field(
-        std::string_view name,
-        const LogicalPlanOperator * child
-    );
+    void write_child_field(std::string_view name, const LogicalPlanOperator * child);
 
     // 缩进作用域
     class IndentScope;
@@ -107,9 +89,6 @@ private:
 std::string debug_print(const LogicalPlanOperator & op);
 
 // 调试打印逻辑算子
-void debug_print(
-    std::ostream & ostream,
-    const LogicalPlanOperator & op
-);
+void debug_print(std::ostream & ostream, const LogicalPlanOperator & op);
 
 } // namespace litedb::core::logical_planner::op

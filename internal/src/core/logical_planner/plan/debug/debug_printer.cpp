@@ -26,15 +26,14 @@ public:
     }
 
 private:
-    LogicalPlanDebugPrinter & printer_;     // 打印器
+    LogicalPlanDebugPrinter & printer_; // 打印器
 };
 
 LogicalPlanDebugPrinter::LogicalPlanDebugPrinter(std::ostream & ostream)
     : ostream_(ostream)
     , indent_(0)
     , pending_str_()
-{
-}
+{}
 
 void LogicalPlanDebugPrinter::print(const LogicalPlan & plan)
 {
@@ -48,18 +47,14 @@ void LogicalPlanDebugPrinter::visit_use_plan(const UsePlan & plan)
     write_field("database_id", plan.database_id());
 }
 
-void LogicalPlanDebugPrinter::visit_create_database_plan(
-    const CreateDatabasePlan & plan
-)
+void LogicalPlanDebugPrinter::visit_create_database_plan(const CreateDatabasePlan & plan)
 {
     write_node_header("CreateDatabasePlan");
     IndentScope scope(*this);
     write_optional_field("database_name", plan.database_name());
 }
 
-void LogicalPlanDebugPrinter::visit_create_collection_plan(
-    const CreateCollectionPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_create_collection_plan(const CreateCollectionPlan & plan)
 {
     write_node_header("CreateCollectionPlan");
     IndentScope scope(*this);
@@ -82,40 +77,29 @@ void LogicalPlanDebugPrinter::visit_create_collection_plan(
         ostream_ << '[' << index << "] ColumnDefinition\n";
         IndentScope column_scope(*this);
         write_field("name", column.name);
-        write_field(
-            "type",
-            binder::bound::logical_type_text(column.type)
-        );
+        write_field("type", binder::bound::logical_type_text(column.type));
         write_field("unique", column.unique);
         write_field("nullable", column.nullable);
         write_field(
             "default_expression",
-            column.default_expression.has_value()
-                ? std::string_view("<present>")
-                : std::string_view("<none>")
+            column.default_expression.has_value() ? std::string_view("<present>")
+                                                  : std::string_view("<none>")
         );
         write_optional_field("comment", column.comment);
     }
 }
 
-void LogicalPlanDebugPrinter::visit_create_index_plan(
-    const CreateIndexPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_create_index_plan(const CreateIndexPlan & plan)
 {
     write_node_header("CreateIndexPlan");
     IndentScope scope(*this);
     write_field("column_id", plan.column_id());
     write_optional_field("index_name", plan.index_name());
-    write_field(
-        "index_kind",
-        binder::bound::index_kind_name(plan.index_kind())
-    );
+    write_field("index_kind", binder::bound::index_kind_name(plan.index_kind()));
     write_field("unique", plan.unique());
 }
 
-void LogicalPlanDebugPrinter::visit_create_vector_index_plan(
-    const CreateVectorIndexPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_create_vector_index_plan(const CreateVectorIndexPlan & plan)
 {
     write_node_header("CreateVectorIndexPlan");
     IndentScope scope(*this);
@@ -125,46 +109,35 @@ void LogicalPlanDebugPrinter::visit_create_vector_index_plan(
         "vector_index_kind",
         binder::bound::vector_index_kind_name(plan.vector_index_kind())
     );
-    write_field(
-        "metric",
-        binder::bound::vector_distance_metric_name(plan.metric())
-    );
+    write_field("metric", binder::bound::vector_distance_metric_name(plan.metric()));
     write_field("max_neighbors", plan.max_neighbors());
     write_field("ef_construction", plan.ef_construction());
     write_field("ef_search_default", plan.ef_search_default());
     write_field("random_seed", plan.random_seed());
 }
 
-void LogicalPlanDebugPrinter::visit_drop_database_plan(
-    const DropDatabasePlan & plan
-)
+void LogicalPlanDebugPrinter::visit_drop_database_plan(const DropDatabasePlan & plan)
 {
     write_node_header("DropDatabasePlan");
     IndentScope scope(*this);
     write_optional_field("database_id", plan.database_id());
 }
 
-void LogicalPlanDebugPrinter::visit_drop_collection_plan(
-    const DropCollectionPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_drop_collection_plan(const DropCollectionPlan & plan)
 {
     write_node_header("DropCollectionPlan");
     IndentScope scope(*this);
     write_optional_field("collection_id", plan.collection_id());
 }
 
-void LogicalPlanDebugPrinter::visit_drop_index_plan(
-    const DropIndexPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_drop_index_plan(const DropIndexPlan & plan)
 {
     write_node_header("DropIndexPlan");
     IndentScope scope(*this);
     write_optional_field("index_id", plan.index_id());
 }
 
-void LogicalPlanDebugPrinter::visit_drop_vector_index_plan(
-    const DropVectorIndexPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_drop_vector_index_plan(const DropVectorIndexPlan & plan)
 {
     write_node_header("DropVectorIndexPlan");
     IndentScope scope(*this);
@@ -178,36 +151,28 @@ void LogicalPlanDebugPrinter::visit_show_databases_plan(
     write_node_header("ShowDatabasesPlan");
 }
 
-void LogicalPlanDebugPrinter::visit_show_collections_plan(
-    const ShowCollectionsPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_show_collections_plan(const ShowCollectionsPlan & plan)
 {
     write_node_header("ShowCollectionsPlan");
     IndentScope scope(*this);
     write_field("database_id", plan.database_id());
 }
 
-void LogicalPlanDebugPrinter::visit_show_indexes_plan(
-    const ShowIndexesPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_show_indexes_plan(const ShowIndexesPlan & plan)
 {
     write_node_header("ShowIndexesPlan");
     IndentScope scope(*this);
     write_field("collection_id", plan.collection_id());
 }
 
-void LogicalPlanDebugPrinter::visit_show_vector_indexes_plan(
-    const ShowVectorIndexesPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_show_vector_indexes_plan(const ShowVectorIndexesPlan & plan)
 {
     write_node_header("ShowVectorIndexesPlan");
     IndentScope scope(*this);
     write_field("collection_id", plan.collection_id());
 }
 
-void LogicalPlanDebugPrinter::visit_describe_collection_plan(
-    const DescribeCollectionPlan & plan
-)
+void LogicalPlanDebugPrinter::visit_describe_collection_plan(const DescribeCollectionPlan & plan)
 {
     write_node_header("DescribeCollectionPlan");
     IndentScope scope(*this);
@@ -230,10 +195,7 @@ void LogicalPlanDebugPrinter::visit_insert_plan(const InsertPlan & plan)
     ostream_ << '\n';
     IndentScope values_scope(*this);
     for (std::size_t index = 0; index < plan.values().size(); ++index) {
-        write_expression_field(
-            '[' + std::to_string(index) + ']',
-            *plan.values()[index]
-        );
+        write_expression_field('[' + std::to_string(index) + ']', *plan.values()[index]);
     }
 }
 
@@ -295,30 +257,18 @@ void LogicalPlanDebugPrinter::write_node_header(std::string_view name)
     ostream_ << name << '\n';
 }
 
-void LogicalPlanDebugPrinter::write_field(
-    std::string_view name,
-    std::string_view value
-)
+void LogicalPlanDebugPrinter::write_field(std::string_view name, std::string_view value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
 }
 
-void LogicalPlanDebugPrinter::write_field(
-    std::string_view name,
-    bool value
-)
+void LogicalPlanDebugPrinter::write_field(std::string_view name, bool value)
 {
-    write_field(
-        name,
-        value ? std::string_view("true") : std::string_view("false")
-    );
+    write_field(name, value ? std::string_view("true") : std::string_view("false"));
 }
 
-void LogicalPlanDebugPrinter::write_field(
-    std::string_view name,
-    std::size_t value
-)
+void LogicalPlanDebugPrinter::write_field(std::string_view name, std::size_t value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -329,10 +279,7 @@ void LogicalPlanDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(
-        name,
-        value ? std::string_view(*value) : std::string_view("<none>")
-    );
+    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
 }
 
 void LogicalPlanDebugPrinter::write_optional_field(
@@ -410,10 +357,7 @@ std::string debug_print(const LogicalPlan & plan)
     return stream.str();
 }
 
-void debug_print(
-    std::ostream & ostream,
-    const LogicalPlan & plan
-)
+void debug_print(std::ostream & ostream, const LogicalPlan & plan)
 {
     LogicalPlanDebugPrinter printer(ostream);
     printer.print(plan);

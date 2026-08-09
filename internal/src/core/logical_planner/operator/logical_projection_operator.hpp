@@ -21,13 +21,11 @@ public:
 public:
     // 获取投影项
     [[nodiscard]]
-    const std::vector<binder::bound::BoundProjectionItem> &
-    projections() const noexcept;
+    const std::vector<binder::bound::BoundProjectionItem> & projections() const noexcept;
 
     // 获取投影项所有权
     [[nodiscard]]
-    std::vector<binder::bound::BoundProjectionItem>
-    take_projections() noexcept;
+    std::vector<binder::bound::BoundProjectionItem> take_projections() noexcept;
 
 private:
     std::vector<binder::bound::BoundProjectionItem> projections_;

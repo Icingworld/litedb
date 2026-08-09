@@ -28,10 +28,7 @@ public:
 public:
     // 规划 UPDATE 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_update(
-        binder::bound::BoundUpdateStatement & statement
-    );
+    std::unique_ptr<plan::LogicalPlan> plan_update(binder::bound::BoundUpdateStatement & statement);
 };
 
 } // namespace litedb::core::logical_planner

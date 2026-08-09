@@ -9,22 +9,16 @@ LogicalFilterOperator::LogicalFilterOperator(
     std::unique_ptr<LogicalPlanOperator> child,
     std::unique_ptr<binder::bound::BoundExpression> predicate
 )
-    : LogicalUnaryOperator(
-        LogicalPlanOperatorKind::Filter,
-        std::move(child)
-    )
+    : LogicalUnaryOperator(LogicalPlanOperatorKind::Filter, std::move(child))
     , predicate_(std::move(predicate))
-{
-}
+{}
 
-const binder::bound::BoundExpression &
-LogicalFilterOperator::predicate() const noexcept
+const binder::bound::BoundExpression & LogicalFilterOperator::predicate() const noexcept
 {
     return *predicate_;
 }
 
-std::unique_ptr<binder::bound::BoundExpression>
-LogicalFilterOperator::take_predicate() noexcept
+std::unique_ptr<binder::bound::BoundExpression> LogicalFilterOperator::take_predicate() noexcept
 {
     return std::move(predicate_);
 }

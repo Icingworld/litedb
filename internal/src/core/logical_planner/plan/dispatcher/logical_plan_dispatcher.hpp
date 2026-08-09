@@ -1,7 +1,7 @@
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #include "core/logical_planner/plan/command/create_collection_plan.hpp"
 #include "core/logical_planner/plan/command/create_database_plan.hpp"
@@ -27,21 +27,13 @@ namespace litedb::core::logical_planner::plan
 {
 
 // 逻辑计划调度器
-template <
-    typename Derived,
-    typename ReturnType,
-    bool IsConst
->
+template <typename Derived, typename ReturnType, bool IsConst>
 class LogicalPlanDispatcher
 {
 protected:
     // 引用类型
     template <typename T>
-    using ReferenceType = std::conditional_t<
-        IsConst,
-        const T &,
-        T &
-    >;
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
     // 调度逻辑计划
@@ -51,9 +43,7 @@ protected:
         switch (plan.kind()) {
         // command
         case LogicalPlanKind::Use:
-            return derived().visit_use_plan(
-                static_cast<ReferenceType<UsePlan>>(plan)
-            );
+            return derived().visit_use_plan(static_cast<ReferenceType<UsePlan>>(plan));
         case LogicalPlanKind::CreateDatabase:
             return derived().visit_create_database_plan(
                 static_cast<ReferenceType<CreateDatabasePlan>>(plan)
@@ -79,9 +69,7 @@ protected:
                 static_cast<ReferenceType<DropCollectionPlan>>(plan)
             );
         case LogicalPlanKind::DropIndex:
-            return derived().visit_drop_index_plan(
-                static_cast<ReferenceType<DropIndexPlan>>(plan)
-            );
+            return derived().visit_drop_index_plan(static_cast<ReferenceType<DropIndexPlan>>(plan));
         case LogicalPlanKind::DropVectorIndex:
             return derived().visit_drop_vector_index_plan(
                 static_cast<ReferenceType<DropVectorIndexPlan>>(plan)
@@ -109,23 +97,15 @@ protected:
 
         // mutation
         case LogicalPlanKind::Insert:
-            return derived().visit_insert_plan(
-                static_cast<ReferenceType<InsertPlan>>(plan)
-            );
+            return derived().visit_insert_plan(static_cast<ReferenceType<InsertPlan>>(plan));
         case LogicalPlanKind::Update:
-            return derived().visit_update_plan(
-                static_cast<ReferenceType<UpdatePlan>>(plan)
-            );
+            return derived().visit_update_plan(static_cast<ReferenceType<UpdatePlan>>(plan));
         case LogicalPlanKind::Delete:
-            return derived().visit_delete_plan(
-                static_cast<ReferenceType<DeletePlan>>(plan)
-            );
+            return derived().visit_delete_plan(static_cast<ReferenceType<DeletePlan>>(plan));
 
         // query
         case LogicalPlanKind::Query:
-            return derived().visit_query_plan(
-                static_cast<ReferenceType<QueryPlan>>(plan)
-            );
+            return derived().visit_query_plan(static_cast<ReferenceType<QueryPlan>>(plan));
         default:
             std::unreachable();
         }
@@ -142,18 +122,10 @@ private:
 
 // 常量逻辑计划调度器
 template <typename Derived, typename ReturnType>
-using ConstLogicalPlanDispatcher = LogicalPlanDispatcher<
-    Derived,
-    ReturnType,
-    true
->;
+using ConstLogicalPlanDispatcher = LogicalPlanDispatcher<Derived, ReturnType, true>;
 
 // 可变逻辑计划调度器
 template <typename Derived, typename ReturnType>
-using MutableLogicalPlanDispatcher = LogicalPlanDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
+using MutableLogicalPlanDispatcher = LogicalPlanDispatcher<Derived, ReturnType, false>;
 
 } // namespace litedb::core::logical_planner::plan

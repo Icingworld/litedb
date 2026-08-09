@@ -12,16 +12,14 @@ DeletePlan::DeletePlan(
     : LogicalPlan(LogicalPlanKind::Delete)
     , collection_id_(collection_id)
     , root_operator_(std::move(root_operator))
-{
-}
+{}
 
 const op::LogicalPlanOperator & DeletePlan::root_operator() const noexcept
 {
     return *root_operator_;
 }
 
-std::unique_ptr<op::LogicalPlanOperator>
-DeletePlan::take_root_operator() noexcept
+std::unique_ptr<op::LogicalPlanOperator> DeletePlan::take_root_operator() noexcept
 {
     return std::move(root_operator_);
 }

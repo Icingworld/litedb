@@ -24,28 +24,24 @@ CreateVectorIndexPlan::CreateVectorIndexPlan(
     , ef_construction_(ef_construction)
     , ef_search_default_(ef_search_default)
     , random_seed_(random_seed)
-{
-}
+{}
 
 common::ColumnId CreateVectorIndexPlan::column_id() const noexcept
 {
     return column_id_;
 }
 
-const std::optional<std::string> &
-CreateVectorIndexPlan::vector_index_name() const noexcept
+const std::optional<std::string> & CreateVectorIndexPlan::vector_index_name() const noexcept
 {
     return vector_index_name_;
 }
 
-meta::entry::VectorIndexKind
-CreateVectorIndexPlan::vector_index_kind() const noexcept
+meta::entry::VectorIndexKind CreateVectorIndexPlan::vector_index_kind() const noexcept
 {
     return vector_index_kind_;
 }
 
-meta::entry::VectorDistanceMetric
-CreateVectorIndexPlan::metric() const noexcept
+meta::entry::VectorDistanceMetric CreateVectorIndexPlan::metric() const noexcept
 {
     return metric_;
 }

@@ -3,13 +3,10 @@
 namespace litedb::core::logical_planner::plan
 {
 
-ShowCollectionsPlan::ShowCollectionsPlan(
-    common::DatabaseId database_id
-) noexcept
+ShowCollectionsPlan::ShowCollectionsPlan(common::DatabaseId database_id) noexcept
     : LogicalPlan(LogicalPlanKind::ShowCollections)
     , database_id_(database_id)
-{
-}
+{}
 
 common::DatabaseId ShowCollectionsPlan::database_id() const noexcept
 {

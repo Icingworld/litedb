@@ -3,12 +3,9 @@
 namespace litedb::core::logical_planner::op
 {
 
-LogicalPlanOperator::LogicalPlanOperator(
-    LogicalPlanOperatorKind kind
-) noexcept
+LogicalPlanOperator::LogicalPlanOperator(LogicalPlanOperatorKind kind) noexcept
     : kind_(kind)
-{
-}
+{}
 
 LogicalPlanOperatorKind LogicalPlanOperator::kind() const noexcept
 {

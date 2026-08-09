@@ -2,14 +2,13 @@
 
 #include <cassert>
 
-#include "core/logical_planner/worker/logical_planner_worker.hpp"
 #include "core/logical_planner/plan/logical_plan.hpp"
+#include "core/logical_planner/worker/logical_planner_worker.hpp"
 
 namespace litedb::core::logical_planner
 {
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlanner::plan(
+std::unique_ptr<plan::LogicalPlan> LogicalPlanner::plan(
     std::unique_ptr<binder::bound::BoundStatement> statement
 ) const
 {

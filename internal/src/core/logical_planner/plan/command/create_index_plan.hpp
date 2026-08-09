@@ -3,8 +3,8 @@
 #include <optional>
 #include <string>
 
-#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/meta/entry/index_entry.hpp"
 
 namespace litedb::core::logical_planner::plan

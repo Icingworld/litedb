@@ -16,8 +16,7 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerSelectWorker::plan_select(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerSelectWorker::plan_select(
     BoundSelectStatement & statement
 )
 {
@@ -30,10 +29,7 @@ LogicalPlannerSelectWorker::plan_select(
     // 将 Scan 算子挂在 Filter 算子上
     auto where = statement.take_where();
     if (where != nullptr) {
-        current = std::make_unique<op::LogicalFilterOperator>(
-            std::move(current),
-            std::move(where)
-        );
+        current = std::make_unique<op::LogicalFilterOperator>(std::move(current), std::move(where));
     }
 
     // 将 Filter 算子挂在 Projection 算子上
@@ -45,10 +41,8 @@ LogicalPlannerSelectWorker::plan_select(
     // 将 Projection 算子挂在 Order By 算子上
     auto order_by = statement.take_order_by();
     if (!order_by.empty()) {
-        current = std::make_unique<op::LogicalOrderByOperator>(
-            std::move(current),
-            std::move(order_by)
-        );
+        current =
+            std::make_unique<op::LogicalOrderByOperator>(std::move(current), std::move(order_by));
     }
 
     // 将 Order By 算子挂在 Limit 算子上

@@ -21,13 +21,11 @@ public:
 public:
     // 获取排序项
     [[nodiscard]]
-    const std::vector<binder::bound::BoundOrderByItem> &
-    order_by() const noexcept;
+    const std::vector<binder::bound::BoundOrderByItem> & order_by() const noexcept;
 
     // 获取排序项所有权
     [[nodiscard]]
-    std::vector<binder::bound::BoundOrderByItem>
-    take_order_by() noexcept;
+    std::vector<binder::bound::BoundOrderByItem> take_order_by() noexcept;
 
 private:
     std::vector<binder::bound::BoundOrderByItem> order_by_;

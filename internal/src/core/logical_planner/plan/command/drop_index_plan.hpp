@@ -2,8 +2,8 @@
 
 #include <optional>
 
-#include "core/logical_planner/plan/logical_plan.hpp"
 #include "core/common/ids.hpp"
+#include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -12,9 +12,7 @@ namespace litedb::core::logical_planner::plan
 class DropIndexPlan final : public LogicalPlan
 {
 public:
-    explicit DropIndexPlan(
-        std::optional<common::IndexId> index_id
-    ) noexcept;
+    explicit DropIndexPlan(std::optional<common::IndexId> index_id) noexcept;
 
 public:
     // 获取索引 ID

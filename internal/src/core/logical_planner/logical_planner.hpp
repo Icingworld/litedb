@@ -26,8 +26,7 @@ public:
     // 生成逻辑计划
     // 该过程可能会获取 statement 成员的所有权
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan(
+    std::unique_ptr<plan::LogicalPlan> plan(
         std::unique_ptr<binder::bound::BoundStatement> statement
     ) const;
 };

@@ -3,13 +3,10 @@
 namespace litedb::core::logical_planner::op
 {
 
-LogicalScanOperator::LogicalScanOperator(
-    common::CollectionId collection_id
-)
+LogicalScanOperator::LogicalScanOperator(common::CollectionId collection_id)
     : LogicalPlanOperator(LogicalPlanOperatorKind::Scan)
     , collection_id_(collection_id)
-{
-}
+{}
 
 common::CollectionId LogicalScanOperator::collection_id() const noexcept
 {

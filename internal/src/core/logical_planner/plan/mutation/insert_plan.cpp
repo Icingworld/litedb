@@ -12,10 +12,10 @@ InsertPlan::InsertPlan(
     : LogicalPlan(LogicalPlanKind::Insert)
     , collection_id_(collection_id)
     , values_(std::move(values))
-{
-}
+{}
 
-common::CollectionId InsertPlan::collection_id() const noexcept {
+common::CollectionId InsertPlan::collection_id() const noexcept
+{
     return collection_id_;
 }
 
@@ -25,8 +25,7 @@ InsertPlan::values() const noexcept
     return values_;
 }
 
-std::vector<std::unique_ptr<binder::bound::BoundExpression>>
-InsertPlan::take_values() noexcept
+std::vector<std::unique_ptr<binder::bound::BoundExpression>> InsertPlan::take_values() noexcept
 {
     return std::move(values_);
 }

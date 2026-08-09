@@ -28,10 +28,7 @@ public:
 public:
     // 规划 SELECT 语句
     [[nodiscard]]
-    std::unique_ptr<plan::LogicalPlan>
-    plan_select(
-        binder::bound::BoundSelectStatement & statement
-    );
+    std::unique_ptr<plan::LogicalPlan> plan_select(binder::bound::BoundSelectStatement & statement);
 };
 
 } // namespace litedb::core::logical_planner

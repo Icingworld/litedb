@@ -3,9 +3,9 @@
 #include <memory>
 #include <vector>
 
-#include "core/logical_planner/operator/logical_plan_operator.hpp"
-#include "core/common/ids.hpp"
 #include "core/binder/bound/bound_assignment.hpp"
+#include "core/common/ids.hpp"
+#include "core/logical_planner/operator/logical_plan_operator.hpp"
 #include "core/logical_planner/plan/logical_plan.hpp"
 
 namespace litedb::core::logical_planner::plan
@@ -36,8 +36,7 @@ public:
 
     // 获取赋值
     [[nodiscard]]
-    const std::vector<binder::bound::BoundAssignment> &
-    assignments() const noexcept;
+    const std::vector<binder::bound::BoundAssignment> & assignments() const noexcept;
 
     // 获取赋值列表所有权
     [[nodiscard]]

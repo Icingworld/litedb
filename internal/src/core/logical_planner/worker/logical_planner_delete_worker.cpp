@@ -11,28 +11,20 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerDeleteWorker::plan_delete(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerDeleteWorker::plan_delete(
     BoundDeleteStatement & statement
 )
 {
     std::unique_ptr<op::LogicalPlanOperator> root_operator =
-        std::make_unique<op::LogicalScanOperator>(
-        statement.collection_id()
-    );
+        std::make_unique<op::LogicalScanOperator>(statement.collection_id());
 
     auto where = statement.take_where();
     if (where != nullptr) {
-        root_operator = std::make_unique<op::LogicalFilterOperator>(
-            std::move(root_operator),
-            std::move(where)
-        );
+        root_operator =
+            std::make_unique<op::LogicalFilterOperator>(std::move(root_operator), std::move(where));
     }
 
-    return std::make_unique<plan::DeletePlan>(
-        statement.collection_id(),
-        std::move(root_operator)
-    );
+    return std::make_unique<plan::DeletePlan>(statement.collection_id(), std::move(root_operator));
 }
 
 } // namespace litedb::core::logical_planner

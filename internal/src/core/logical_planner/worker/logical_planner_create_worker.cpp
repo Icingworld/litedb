@@ -14,18 +14,14 @@ namespace litedb::core::logical_planner
 
 using namespace litedb::core::binder::bound;
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerCreateWorker::plan_create_database(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_database(
     const BoundCreateDatabaseStatement & statement
 )
 {
-    return std::make_unique<plan::CreateDatabasePlan>(
-        statement.database_name()
-    );
+    return std::make_unique<plan::CreateDatabasePlan>(statement.database_name());
 }
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerCreateWorker::plan_create_collection(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_collection(
     const BoundCreateCollectionStatement & statement
 )
 {
@@ -37,8 +33,7 @@ LogicalPlannerCreateWorker::plan_create_collection(
     );
 }
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerCreateWorker::plan_create_index(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_index(
     const BoundCreateIndexStatement & statement
 )
 {
@@ -50,8 +45,7 @@ LogicalPlannerCreateWorker::plan_create_index(
     );
 }
 
-std::unique_ptr<plan::LogicalPlan>
-LogicalPlannerCreateWorker::plan_create_vector_index(
+std::unique_ptr<plan::LogicalPlan> LogicalPlannerCreateWorker::plan_create_vector_index(
     const BoundCreateVectorIndexStatement & statement
 )
 {

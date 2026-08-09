@@ -12,8 +12,7 @@ namespace litedb::core::logical_planner::plan
 {
 
 // 逻辑计划调试打印器
-class LogicalPlanDebugPrinter
-    : private ConstLogicalPlanDispatcher<LogicalPlanDebugPrinter, void>
+class LogicalPlanDebugPrinter : private ConstLogicalPlanDispatcher<LogicalPlanDebugPrinter, void>
 {
     friend ConstLogicalPlanDispatcher<LogicalPlanDebugPrinter, void>;
 
@@ -96,16 +95,10 @@ private:
     void write_field(std::string_view name, std::size_t value);
 
     // 写入可选字段
-    void write_optional_field(
-        std::string_view name,
-        const std::optional<std::string> & value
-    );
+    void write_optional_field(std::string_view name, const std::optional<std::string> & value);
 
     // 写入可选字段
-    void write_optional_field(
-        std::string_view name,
-        const std::optional<std::size_t> & value
-    );
+    void write_optional_field(std::string_view name, const std::optional<std::size_t> & value);
 
     // 写入绑定表达式字段
     void write_expression_field(
@@ -114,10 +107,7 @@ private:
     );
 
     // 写入子算子字段
-    void write_operator_field(
-        std::string_view name,
-        const op::LogicalPlanOperator * child
-    );
+    void write_operator_field(std::string_view name, const op::LogicalPlanOperator * child);
 
     // 缩进作用域
     class IndentScope;
@@ -133,9 +123,6 @@ private:
 std::string debug_print(const LogicalPlan & plan);
 
 // 调试打印逻辑计划
-void debug_print(
-    std::ostream & ostream,
-    const LogicalPlan & plan
-);
+void debug_print(std::ostream & ostream, const LogicalPlan & plan);
 
 } // namespace litedb::core::logical_planner::plan

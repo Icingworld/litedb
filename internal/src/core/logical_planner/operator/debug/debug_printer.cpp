@@ -13,9 +13,7 @@ namespace litedb::core::logical_planner::op
 class LogicalPlanOperatorDebugPrinter::IndentScope
 {
 public:
-    explicit IndentScope(
-        LogicalPlanOperatorDebugPrinter & printer
-    ) noexcept
+    explicit IndentScope(LogicalPlanOperatorDebugPrinter & printer) noexcept
         : printer_(printer)
     {
         ++printer_.indent_;
@@ -30,32 +28,25 @@ private:
     LogicalPlanOperatorDebugPrinter & printer_;
 };
 
-LogicalPlanOperatorDebugPrinter::LogicalPlanOperatorDebugPrinter(
-    std::ostream & ostream
-)
+LogicalPlanOperatorDebugPrinter::LogicalPlanOperatorDebugPrinter(std::ostream & ostream)
     : ostream_(ostream)
     , indent_(0)
     , pending_str_()
-{
-}
+{}
 
 void LogicalPlanOperatorDebugPrinter::print(const LogicalPlanOperator & op)
 {
     dispatch_operator(op);
 }
 
-void LogicalPlanOperatorDebugPrinter::visit_scan_operator(
-    const LogicalScanOperator & op
-)
+void LogicalPlanOperatorDebugPrinter::visit_scan_operator(const LogicalScanOperator & op)
 {
     write_node_header("LogicalScanOperator");
     IndentScope scope(*this);
     write_field("collection_id", op.collection_id());
 }
 
-void LogicalPlanOperatorDebugPrinter::visit_filter_operator(
-    const LogicalFilterOperator & op
-)
+void LogicalPlanOperatorDebugPrinter::visit_filter_operator(const LogicalFilterOperator & op)
 {
     write_node_header("LogicalFilterOperator");
     IndentScope scope(*this);
@@ -83,9 +74,7 @@ void LogicalPlanOperatorDebugPrinter::visit_projection_operator(
     write_child_field("child", &op.child());
 }
 
-void LogicalPlanOperatorDebugPrinter::visit_order_by_operator(
-    const LogicalOrderByOperator & op
-)
+void LogicalPlanOperatorDebugPrinter::visit_order_by_operator(const LogicalOrderByOperator & op)
 {
     write_node_header("LogicalOrderByOperator");
     IndentScope scope(*this);
@@ -103,9 +92,7 @@ void LogicalPlanOperatorDebugPrinter::visit_order_by_operator(
     write_child_field("child", &op.child());
 }
 
-void LogicalPlanOperatorDebugPrinter::visit_limit_operator(
-    const LogicalLimitOperator & op
-)
+void LogicalPlanOperatorDebugPrinter::visit_limit_operator(const LogicalLimitOperator & op)
 {
     write_node_header("LogicalLimitOperator");
     IndentScope scope(*this);
@@ -131,27 +118,18 @@ void LogicalPlanOperatorDebugPrinter::write_node_header(std::string_view name)
     ostream_ << name << '\n';
 }
 
-void LogicalPlanOperatorDebugPrinter::write_field(
-    std::string_view name,
-    std::string_view value
-)
+void LogicalPlanOperatorDebugPrinter::write_field(std::string_view name, std::string_view value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
 }
 
-void LogicalPlanOperatorDebugPrinter::write_field(
-    std::string_view name,
-    bool value
-)
+void LogicalPlanOperatorDebugPrinter::write_field(std::string_view name, bool value)
 {
     write_field(name, value ? std::string_view("true") : std::string_view("false"));
 }
 
-void LogicalPlanOperatorDebugPrinter::write_field(
-    std::string_view name,
-    std::size_t value
-)
+void LogicalPlanOperatorDebugPrinter::write_field(std::string_view name, std::size_t value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -162,10 +140,7 @@ void LogicalPlanOperatorDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(
-        name,
-        value ? std::string_view(*value) : std::string_view("<none>")
-    );
+    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
 }
 
 void LogicalPlanOperatorDebugPrinter::write_optional_field(
@@ -240,10 +215,7 @@ std::string debug_print(const LogicalPlanOperator & op)
     return stream.str();
 }
 
-void debug_print(
-    std::ostream & ostream,
-    const LogicalPlanOperator & op
-)
+void debug_print(std::ostream & ostream, const LogicalPlanOperator & op)
 {
     LogicalPlanOperatorDebugPrinter printer(ostream);
     printer.print(op);

@@ -3,13 +3,10 @@
 namespace litedb::core::logical_planner::plan
 {
 
-DropIndexPlan::DropIndexPlan(
-    std::optional<common::IndexId> index_id
-) noexcept
+DropIndexPlan::DropIndexPlan(std::optional<common::IndexId> index_id) noexcept
     : LogicalPlan(LogicalPlanKind::DropIndex)
     , index_id_(index_id)
-{
-}
+{}
 
 std::optional<common::IndexId> DropIndexPlan::index_id() const noexcept
 {

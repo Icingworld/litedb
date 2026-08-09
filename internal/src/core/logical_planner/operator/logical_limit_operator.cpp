@@ -13,8 +13,7 @@ LogicalLimitOperator::LogicalLimitOperator(
     : LogicalUnaryOperator(LogicalPlanOperatorKind::Limit, std::move(child))
     , limit_(limit)
     , offset_(offset)
-{
-}
+{}
 
 std::optional<std::size_t> LogicalLimitOperator::limit() const noexcept
 {
