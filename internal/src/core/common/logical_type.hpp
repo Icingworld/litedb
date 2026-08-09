@@ -1,15 +1,13 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <cstddef>
 
 namespace litedb::core::common
 {
 
-/**
- * @brief 逻辑类型 ID
- */
+// 逻辑类型 ID
 enum class LogicalTypeId : std::uint8_t
 {
     Null,
@@ -22,13 +20,13 @@ enum class LogicalTypeId : std::uint8_t
     Vector,
 };
 
-/**
- * @brief 逻辑类型
- */
+// 逻辑类型
+// id 表示逻辑类型
+// parameter 表示逻辑类型的额外参数，如：VARCHAR(n) 中的 n
 struct LogicalType
 {
-    LogicalTypeId id;                           // 逻辑类型 ID
-    std::optional<std::size_t> parameter;       // 逻辑类型参数
+    LogicalTypeId id;
+    std::optional<std::size_t> parameter;
 };
 
 } // namespace litedb::core::common

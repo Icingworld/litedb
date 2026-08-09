@@ -13,8 +13,7 @@ Value::Value() = default;
 
 Value::Value(ValueData data)
     : data_(std::move(data))
-{
-}
+{}
 
 Value Value::null()
 {
@@ -74,7 +73,9 @@ std::string value_to_string(const Value & value)
                 std::ostringstream out;
                 out << '[';
                 for (std::size_t index = 0; index < data.size(); ++index) {
-                    if (index != 0) out << ", ";
+                    if (index != 0) {
+                        out << ", ";
+                    }
                     out << std::setprecision(std::numeric_limits<double>::max_digits10)
                         << data[index];
                 }
