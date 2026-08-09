@@ -33,6 +33,7 @@ ConstructorInitializerIndentWidth: 4                # 构造函数初始化列�
 AccessModifierOffset: -4                            # public 等修饰符相对类缩进 -4，和 class 同级
 ColumnLimit: 100                                    # 目标行宽为 100 列，并非不可超过的硬限制
 PenaltyReturnTypeOnItsOwnLine: 200                  # 返回类型独占一行的惩罚值，200 表示尽量让返回类型与函数名保持同行
+BreakTemplateDeclarations: Yes                      # 模板声明换行
 
 # ======================================================================
 # 大括号换行
