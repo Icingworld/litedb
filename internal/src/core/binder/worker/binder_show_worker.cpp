@@ -6,7 +6,7 @@
 #include "core/binder/bound/statement/bound_show_databases_statement.hpp"
 #include "core/binder/bound/statement/bound_show_indexes_statement.hpp"
 #include "core/binder/bound/statement/bound_show_vector_indexes_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
 #include "core/parser/ast/statement/show_collections_statement.hpp"
 #include "core/parser/ast/statement/show_databases_statement.hpp"
 #include "core/parser/ast/statement/show_indexes_statement.hpp"
@@ -35,7 +35,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
     const ShowCollectionsStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
     // 如果用户指定了数据库名称，则查找数据库
     if (statement.database_name().has_value()) {
@@ -50,8 +50,8 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
         return std::make_unique<BoundShowCollectionsStatement>(database->id());
     }
 
-    // 如果用户没有指定数据库名称，则通过 Helper 获取当前会话数据库
-    auto database_id = helper.require_database();
+    // 如果用户没有指定数据库名称，则获取当前会话数据库
+    auto database_id = resolver.require_database();
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
@@ -63,10 +63,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
     const ShowIndexesStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -77,10 +77,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
 BinderShowWorker::bind_show_vector_indexes(const ShowVectorIndexesStatement & statement)
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }

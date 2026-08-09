@@ -6,7 +6,8 @@
 #include "core/binder/bound/statement/bound_create_database_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_create_vector_index_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
+#include "core/binder/detail/column_definition_binder.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
 #include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
@@ -45,10 +46,10 @@ BinderCreateWorker::bind_create_database(const CreateDatabaseStatement & stateme
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
 BinderCreateWorker::bind_create_collection(const CreateCollectionStatement & statement)
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 获取当前会话数据库
-    auto database_id = helper.require_database();
+    // 获取当前会话数据库
+    auto database_id = resolver.require_database();
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }
@@ -67,7 +68,7 @@ BinderCreateWorker::bind_create_collection(const CreateCollectionStatement & sta
     std::vector<meta::ColumnDefinition> columns;
     if (collection == nullptr) [[likely]] {
         // 需要创建新集合时才绑定列定义
-        auto column_definitions = helper.bind_column_definitions(statement.columns());
+        auto column_definitions = detail::bind_column_definitions(statement.columns());
         if (!column_definitions.has_value()) [[unlikely]] {
             return std::unexpected(std::move(column_definitions.error()));
         }
@@ -87,10 +88,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
     const CreateIndexStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -154,10 +155,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
 BinderCreateWorker::bind_create_vector_index(const CreateVectorIndexStatement & statement)
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }

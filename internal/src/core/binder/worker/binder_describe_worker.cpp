@@ -3,7 +3,7 @@
 #include "core/binder/binder_context.hpp"
 #include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_describe_collection_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
 #include "core/parser/ast/statement/describe_collection_statement.hpp"
 
 namespace litedb::core::binder
@@ -21,10 +21,10 @@ BinderDescribeWorker::BinderDescribeWorker(const BinderContext & context) noexce
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
 BinderDescribeWorker::bind_describe_collection(const DescribeCollectionStatement & statement)
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 获取当前会话数据库
-    auto database_id = helper.require_database();
+    // 获取当前会话数据库
+    auto database_id = resolver.require_database();
     if (!database_id.has_value()) [[unlikely]] {
         return std::unexpected(std::move(database_id.error()));
     }

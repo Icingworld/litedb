@@ -5,8 +5,10 @@
 
 #include "core/binder/binder_context.hpp"
 #include "core/binder/binder_helper.hpp"
+#include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
+#include "core/binder/detail/expression_binder.hpp"
 #include "core/common/identifier.hpp"
 #include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -69,6 +71,37 @@ std::string projection_output_name(
     return "expr" + std::to_string(projection_index + 1);
 }
 
+// 展开通配符表达式
+[[nodiscard]]
+std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> expand_wildcard(
+    const BinderContext & context,
+    const WildcardExpression & expression,
+    const detail::BindingCollection & collection
+)
+{
+    if (expression.qualifier().has_value() &&
+        common::normalize_identifier(expression.qualifier().value()) !=
+            collection.collection->key()) [[unlikely]] {
+        return std::unexpected(make_binder_error(
+            BinderErrorCode::InvalidQualifier,
+            expression.location(),
+            "Wildcard qualifier does not match FROM collection: " + expression.qualifier().value()
+        ));
+    }
+
+    std::vector<std::unique_ptr<BoundExpression>> expressions;
+    for (const auto * column : context.meta().list_columns(collection.collection->id())) {
+        expressions.push_back(
+            std::make_unique<BoundColumnRefExpression>(
+                column->id(),
+                column->ordinal(),
+                column->type()
+            )
+        );
+    }
+    return expressions;
+}
+
 // 排序别名目标
 [[nodiscard]]
 const ExpressionNode * order_by_alias_target(
@@ -96,9 +129,8 @@ const ExpressionNode * order_by_alias_target(
 // 绑定排序表达式
 [[nodiscard]]
 std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expression(
-    const BinderWorkerHelper & helper,
+    detail::ExpressionBinder & expression_binder,
     const ExpressionNode & expression,
-    const BindingCollection & collection,
     const std::unordered_map<std::string, ProjectionAliasBinding> & aliases
 )
 {
@@ -112,10 +144,10 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expre
                 "ORDER BY alias is ambiguous: " + column.column_name()
             ));
         }
-        return helper.bind_expression(*alias_target, collection);
+        return expression_binder.bind(*alias_target);
     }
 
-    return helper.bind_expression(expression, collection);
+    return expression_binder.bind(expression);
 }
 
 } // namespace
@@ -128,13 +160,14 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
     const SelectStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
+    detail::ExpressionBinder expression_binder(context_, *collection);
 
     std::vector<BoundProjectionItem> projections;
     std::unordered_map<std::string, ProjectionAliasBinding> aliases;
@@ -142,8 +175,11 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
     for (const auto & item : statement.select_list()) {
         if (item->kind() == AstNodeKind::Wildcard) {
             // 展开通配符表达式
-            auto expanded =
-                helper.expand_wildcard(static_cast<const WildcardExpression &>(*item), *collection);
+            auto expanded = expand_wildcard(
+                context_,
+                static_cast<const WildcardExpression &>(*item),
+                *collection
+            );
             if (!expanded.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expanded.error()));
             }
@@ -168,7 +204,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
 
         const auto & expression_node = projection_expression(*item);
         auto alias = projection_alias(*item);
-        auto expression = helper.bind_expression(expression_node, *collection);
+        auto expression = expression_binder.bind(expression_node);
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
@@ -191,7 +227,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
     // 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
     if (statement.where()) {
-        auto bound_where = helper.bind_expression(*statement.where(), *collection);
+        auto bound_where = expression_binder.bind(*statement.where());
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
@@ -206,7 +242,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
     // 绑定排序表达式
     std::vector<BoundOrderByItem> order_by;
     for (const auto & item : statement.order_by()) {
-        auto expression = bind_order_by_expression(helper, *item.expression, *collection, aliases);
+        auto expression = bind_order_by_expression(expression_binder, *item.expression, aliases);
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }

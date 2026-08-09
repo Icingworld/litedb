@@ -9,7 +9,9 @@
 #include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/expression/bound_null_expression.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
+#include "core/binder/detail/default_expression_binder.hpp"
+#include "core/binder/detail/expression_binder.hpp"
 #include "core/common/identifier.hpp"
 #include "core/parser/ast/dispatcher/expression_dispatcher.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
@@ -136,13 +138,14 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
     const InsertStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
+    detail::ExpressionBinder expression_binder(context_, *collection);
 
     // 获取集合所有列
     const auto catalog_columns = context_.meta().list_columns(collection->collection->id());
@@ -226,13 +229,13 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
                     "INSERT VALUES expressions cannot reference collection columns"
                 ));
             }
-            auto expression = helper.bind_expression(source_expression, *collection);
+            auto expression = expression_binder.bind(source_expression);
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
             value = std::move(*expression);
         } else if (column.default_expression().has_value()) {
-            auto expression = helper.bind_default_expression(column.default_expression().value());
+            auto expression = detail::bind_default_expression(column.default_expression().value());
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }

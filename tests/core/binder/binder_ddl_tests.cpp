@@ -100,6 +100,14 @@ void test_create_database_and_collection_intent()
         "CREATE COLLECTION IF NOT EXISTS users (id BIGINT NOT NULL);"
     );
     require(!collection_noop->collection_name().has_value(), "CREATE COLLECTION no-op mismatch");
+    auto invalid_collection_noop = bind_ok<BoundCreateCollectionStatement>(
+        fixture,
+        "CREATE COLLECTION IF NOT EXISTS users (id BIGINT, ID INTEGER);"
+    );
+    require(
+        !invalid_collection_noop->collection_name().has_value(),
+        "CREATE COLLECTION invalid payload no-op mismatch"
+    );
     require_error(
         fixture,
         "CREATE COLLECTION users (id BIGINT);",
@@ -155,6 +163,11 @@ void test_scalar_index_intent_and_identity()
         "CREATE INDEX IF NOT EXISTS idx_age ON users (age);"
     );
     require(!create_noop->index_name().has_value(), "CREATE INDEX no-op mismatch");
+    auto missing_column_noop = bind_ok<BoundCreateIndexStatement>(
+        fixture,
+        "CREATE INDEX IF NOT EXISTS idx_age ON users (missing);"
+    );
+    require(!missing_column_noop->index_name().has_value(), "CREATE INDEX invalid payload no-op mismatch");
     require_error(
         fixture,
         "CREATE INDEX idx_age ON users (age);",
@@ -210,6 +223,15 @@ void test_vector_index_intent_options_and_identity()
         "CREATE VINDEX IF NOT EXISTS vidx_embedding ON users (embedding) USING HNSW;"
     );
     require(!create_noop->vector_index_name().has_value(), "CREATE VINDEX no-op mismatch");
+    auto invalid_options_noop = bind_ok<BoundCreateVectorIndexStatement>(
+        fixture,
+        "CREATE VINDEX IF NOT EXISTS vidx_embedding ON users (embedding) USING HNSW "
+        "WITH (max_neighbors = 0);"
+    );
+    require(
+        !invalid_options_noop->vector_index_name().has_value(),
+        "CREATE VINDEX invalid payload no-op mismatch"
+    );
 
     auto drop = bind_ok<BoundDropVectorIndexStatement>(
         fixture,

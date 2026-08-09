@@ -3,7 +3,8 @@
 #include "core/binder/binder_context.hpp"
 #include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
+#include "core/binder/detail/expression_binder.hpp"
 #include "core/common/identifier.hpp"
 #include "core/parser/ast/statement/update_statement.hpp"
 #include <unordered_set>
@@ -24,13 +25,14 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
     const UpdateStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
+    detail::ExpressionBinder expression_binder(context_, *collection);
 
     // 绑定赋值列表
     std::vector<BoundAssignment> assignments;
@@ -54,8 +56,8 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
             ));
         }
 
-        // 通过 Helper 绑定值
-        auto value = helper.bind_expression(*assignment.value, *collection);
+        // 绑定值
+        auto value = expression_binder.bind(*assignment.value);
         if (!value.has_value()) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
@@ -80,10 +82,10 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
         );
     }
 
-    // 通过 Helper 绑定条件表达式
+    // 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
     if (statement.where()) {
-        auto bound_where = helper.bind_expression(*statement.where(), *collection);
+        auto bound_where = expression_binder.bind(*statement.where());
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }

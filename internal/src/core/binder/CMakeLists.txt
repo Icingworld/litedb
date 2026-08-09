@@ -2,8 +2,14 @@ set(BINDER_SOURCES
     binder.cpp
     binder_helper.cpp
     binder_context.cpp
+    detail/catalog_resolver.cpp
+    detail/column_definition_binder.cpp
+    detail/default_expression_binder.cpp
+    detail/expression_binder.cpp
+    detail/expression_binder_operator.cpp
+    detail/expression_binder_predicate.cpp
+    detail/literal_value_parser.cpp
     worker/binder_worker.cpp
-    worker/binder_worker_helper.cpp
     worker/binder_use_worker.cpp
     worker/binder_create_worker.cpp
     worker/binder_drop_worker.cpp

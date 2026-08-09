@@ -3,7 +3,8 @@
 #include "core/binder/binder_context.hpp"
 #include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_delete_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/binder/detail/catalog_resolver.hpp"
+#include "core/binder/detail/expression_binder.hpp"
 #include "core/parser/ast/statement/delete_statement.hpp"
 
 namespace litedb::core::binder
@@ -22,18 +23,19 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDeleteWorker::
     const DeleteStatement & statement
 )
 {
-    BinderWorkerHelper helper(context_);
+    detail::CatalogResolver resolver(context_);
 
-    // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(statement.collection_name());
+    // 解析集合
+    auto collection = resolver.resolve_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
+    detail::ExpressionBinder expression_binder(context_, *collection);
 
-    // 通过 Helper 绑定条件表达式
+    // 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
     if (statement.where()) {
-        auto bound_where = helper.bind_expression(*statement.where(), *collection);
+        auto bound_where = expression_binder.bind(*statement.where());
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
