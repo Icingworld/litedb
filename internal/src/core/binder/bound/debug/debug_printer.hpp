@@ -157,10 +157,8 @@ private:
     void write_child_field(std::string_view name, const BoundExpression * expression);
 
     // 写入可选表达式子字段
-    void write_child_field(
-        std::string_view name,
-        std::optional<const BoundExpression &> expression
-    );
+    void
+    write_child_field(std::string_view name, std::optional<const BoundExpression &> expression);
 
     // 缩进作用域
     class IndentScope;
