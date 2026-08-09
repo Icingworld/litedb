@@ -15,8 +15,7 @@ BoundBinaryExpression::BoundBinaryExpression(
     , left_(std::move(left))
     , op_(op)
     , right_(std::move(right))
-{
-}
+{}
 
 const BoundExpression & BoundBinaryExpression::left() const noexcept
 {

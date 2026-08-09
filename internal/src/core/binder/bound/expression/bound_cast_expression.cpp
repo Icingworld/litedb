@@ -11,8 +11,7 @@ BoundCastExpression::BoundCastExpression(
 )
     : BoundExpression(BoundExpressionKind::Cast, target_type)
     , expression_(std::move(expression))
-{
-}
+{}
 
 const BoundExpression & BoundCastExpression::expression() const noexcept
 {

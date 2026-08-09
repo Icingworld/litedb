@@ -8,26 +8,20 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 CREATE DATABASE 语句
- */
+// 绑定 CREATE DATABASE 语句
 class BoundCreateDatabaseStatement final : public BoundStatement
 {
 public:
-    BoundCreateDatabaseStatement(
-        std::optional<std::string> database_name
-    ) noexcept;
+    BoundCreateDatabaseStatement(std::optional<std::string> database_name) noexcept;
 
 public:
-    /**
-     * @brief 获取数据库名称
-     * @return 数据库名称
-     */
+    // 获取数据库名称
     [[nodiscard]]
     const std::optional<std::string> & database_name() const noexcept;
 
 private:
-    std::optional<std::string> database_name_;         // 数据库名称
+    // database_name_ = nullopt 时表示用户传入了重复数据库名但是用了 IF NOT EXISTS
+    std::optional<std::string> database_name_;
 };
 
 } // namespace litedb::core::binder::bound

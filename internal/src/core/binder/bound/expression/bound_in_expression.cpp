@@ -10,16 +10,12 @@ BoundInExpression::BoundInExpression(
     std::vector<std::unique_ptr<BoundExpression>> values
 )
     : BoundExpression(
-        BoundExpressionKind::In,
-        common::LogicalType {
-            common::LogicalTypeId::Boolean,
-            std::nullopt
-        }
-    )
+          BoundExpressionKind::In,
+          common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt}
+      )
     , expression_(std::move(expression))
     , values_(std::move(values))
-{
-}
+{}
 
 const BoundExpression & BoundInExpression::expression() const noexcept
 {

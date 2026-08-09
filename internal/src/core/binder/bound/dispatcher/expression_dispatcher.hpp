@@ -1,13 +1,13 @@
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <utility>
 
-#include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/expression/bound_between_expression.hpp"
 #include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
+#include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
 #include "core/binder/bound/expression/bound_like_expression.hpp"
@@ -19,36 +19,17 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定表达式调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- * @tparam IsConst 是否为常量
- */
-template <
-    typename Derived,
-    typename ReturnType,
-    bool IsConst
->
+// 绑定表达式调度器
+template <typename Derived, typename ReturnType, bool IsConst>
 class BoundExpressionDispatcher
 {
 protected:
-    /**
-     * @brief 引用类型
-     */
+    // 引用类型
     template <typename T>
-    using ReferenceType = std::conditional_t<
-        IsConst,
-        const T &,
-        T &
-    >;
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
-    /**
-     * @brief 调度表达式
-     * @param expression 表达式
-     * @return 返回值
-     */
+    // 调度表达式
     [[nodiscard]]
     ReturnType dispatch_expression(ReferenceType<BoundExpression> expression)
     {
@@ -103,10 +84,7 @@ protected:
     }
 
 private:
-    /**
-     * @brief 获取派生类引用
-     * @return 派生类引用
-     */
+    // 获取派生类引用
     [[nodiscard]]
     Derived & derived() noexcept
     {
@@ -114,28 +92,12 @@ private:
     }
 };
 
-/**
- * @brief 常量绑定表达式调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 常量绑定表达式调度器
 template <typename Derived, typename ReturnType>
-using ConstBoundExpressionDispatcher = BoundExpressionDispatcher<
-    Derived,
-    ReturnType,
-    true
->;
+using ConstBoundExpressionDispatcher = BoundExpressionDispatcher<Derived, ReturnType, true>;
 
-/**
- * @brief 可变绑定表达式调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 可变绑定表达式调度器
 template <typename Derived, typename ReturnType>
-using MutableBoundExpressionDispatcher = BoundExpressionDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
+using MutableBoundExpressionDispatcher = BoundExpressionDispatcher<Derived, ReturnType, false>;
 
 } // namespace litedb::core::binder::bound

@@ -12,22 +12,19 @@ BoundInsertStatement::BoundInsertStatement(
     : BoundStatement(BoundStatementKind::Insert)
     , collection_id_(collection_id)
     , values_(std::move(values))
-{
-}
+{}
 
 common::CollectionId BoundInsertStatement::collection_id() const noexcept
 {
     return collection_id_;
 }
 
-const std::vector<std::unique_ptr<BoundExpression>> &
-BoundInsertStatement::values() const noexcept
+const std::vector<std::unique_ptr<BoundExpression>> & BoundInsertStatement::values() const noexcept
 {
     return values_;
 }
 
-std::vector<std::unique_ptr<BoundExpression>>
-BoundInsertStatement::take_values() noexcept
+std::vector<std::unique_ptr<BoundExpression>> BoundInsertStatement::take_values() noexcept
 {
     return std::move(values_);
 }

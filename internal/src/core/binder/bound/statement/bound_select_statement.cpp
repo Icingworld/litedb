@@ -20,27 +20,28 @@ BoundSelectStatement::BoundSelectStatement(
     , order_by_(std::move(order_by))
     , limit_(limit)
     , offset_(offset)
-{
-}
+{}
 
 common::CollectionId BoundSelectStatement::collection_id() const noexcept
 {
     return collection_id_;
 }
 
-const std::vector<BoundProjectionItem> &
-BoundSelectStatement::projections() const noexcept
+const std::vector<BoundProjectionItem> & BoundSelectStatement::projections() const noexcept
 {
     return projections_;
 }
 
-const BoundExpression * BoundSelectStatement::where() const noexcept
+std::optional<const BoundExpression &> BoundSelectStatement::where() const noexcept
 {
-    return where_.get();
+    if (!where_) {
+        return std::nullopt;
+    }
+
+    return *where_;
 }
 
-const std::vector<BoundOrderByItem> &
-BoundSelectStatement::order_by() const noexcept
+const std::vector<BoundOrderByItem> & BoundSelectStatement::order_by() const noexcept
 {
     return order_by_;
 }
@@ -55,8 +56,7 @@ std::optional<std::size_t> BoundSelectStatement::offset() const noexcept
     return offset_;
 }
 
-std::vector<BoundProjectionItem>
-BoundSelectStatement::take_projections() noexcept
+std::vector<BoundProjectionItem> BoundSelectStatement::take_projections() noexcept
 {
     return std::move(projections_);
 }

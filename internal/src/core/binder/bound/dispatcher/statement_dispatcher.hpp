@@ -1,7 +1,7 @@
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
 #include "core/binder/bound/statement/bound_create_database_statement.hpp"
@@ -26,36 +26,17 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定语句调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- * @tparam IsConst 是否为常量
- */
-template <
-    typename Derived,
-    typename ReturnType,
-    bool IsConst
->
+// 绑定语句调度器
+template <typename Derived, typename ReturnType, bool IsConst>
 class BoundStatementDispatcher
 {
 protected:
-    /**
-     * @brief 引用类型
-     */
+    // 引用类型
     template <typename T>
-    using ReferenceType = std::conditional_t<
-        IsConst,
-        const T &,
-        T &
-    >;
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
-    /**
-     * @brief 调度语句
-     * @param statement 语句
-     * @return 返回值
-     */
+    // 调度语句
     [[nodiscard]]
     ReturnType dispatch_statement(ReferenceType<BoundStatement> statement)
     {
@@ -138,10 +119,7 @@ protected:
     }
 
 private:
-    /**
-     * @brief 获取派生类引用
-     * @return 派生类引用
-     */
+    // 获取派生类引用
     [[nodiscard]]
     Derived & derived() noexcept
     {
@@ -149,28 +127,12 @@ private:
     }
 };
 
-/**
- * @brief 常量绑定语句调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 常量绑定语句调度器
 template <typename Derived, typename ReturnType>
-using ConstBoundStatementDispatcher = BoundStatementDispatcher<
-    Derived,
-    ReturnType,
-    true
->;
+using ConstBoundStatementDispatcher = BoundStatementDispatcher<Derived, ReturnType, true>;
 
-/**
- * @brief 可变绑定语句调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 可变绑定语句调度器
 template <typename Derived, typename ReturnType>
-using MutableBoundStatementDispatcher = BoundStatementDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
+using MutableBoundStatementDispatcher = BoundStatementDispatcher<Derived, ReturnType, false>;
 
 } // namespace litedb::core::binder::bound

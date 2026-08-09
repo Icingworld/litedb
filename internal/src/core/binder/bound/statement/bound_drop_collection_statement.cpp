@@ -8,11 +8,9 @@ BoundDropCollectionStatement::BoundDropCollectionStatement(
 ) noexcept
     : BoundStatement(BoundStatementKind::DropCollection)
     , collection_id_(collection_id)
-{
-}
+{}
 
-std::optional<common::CollectionId>
-BoundDropCollectionStatement::collection_id() const noexcept
+std::optional<common::CollectionId> BoundDropCollectionStatement::collection_id() const noexcept
 {
     return collection_id_;
 }

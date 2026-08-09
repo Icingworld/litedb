@@ -3,16 +3,12 @@
 namespace litedb::core::binder::bound
 {
 
-BoundShowIndexesStatement::BoundShowIndexesStatement(
-    common::CollectionId collection_id
-) noexcept
+BoundShowIndexesStatement::BoundShowIndexesStatement(common::CollectionId collection_id) noexcept
     : BoundStatement(BoundStatementKind::ShowIndexes)
     , collection_id_(collection_id)
-{
-}
+{}
 
-common::CollectionId
-BoundShowIndexesStatement::collection_id() const noexcept
+common::CollectionId BoundShowIndexesStatement::collection_id() const noexcept
 {
     return collection_id_;
 }

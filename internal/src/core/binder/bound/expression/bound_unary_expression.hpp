@@ -8,9 +8,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定一元表达式
- */
+// 绑定一元表达式
 class BoundUnaryExpression final : public BoundExpression
 {
 public:
@@ -21,30 +19,21 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取一元操作符
-     * @return 一元操作符
-     */
+    // 获取一元操作符
     [[nodiscard]]
     common::UnaryOperator op() const noexcept;
 
-    /**
-     * @brief 获取操作数
-     * @return 操作数
-     */
+    // 获取操作数
     [[nodiscard]]
     const BoundExpression & operand() const noexcept;
 
-    /**
-     * @brief 移出操作数
-     * @return 操作数所有权
-     */
+    // 获取操作数所有权
     [[nodiscard]]
     std::unique_ptr<BoundExpression> take_operand() noexcept;
 
 private:
-    common::UnaryOperator op_;                      // 一元操作符
-    std::unique_ptr<BoundExpression> operand_;      // 操作数
+    common::UnaryOperator op_;
+    std::unique_ptr<BoundExpression> operand_;
 };
 
 } // namespace litedb::core::binder::bound

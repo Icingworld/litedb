@@ -5,7 +5,6 @@ namespace litedb::core::binder::bound
 
 BoundShowDatabasesStatement::BoundShowDatabasesStatement() noexcept
     : BoundStatement(BoundStatementKind::ShowDatabases)
-{
-}
+{}
 
 } // namespace litedb::core::binder::bound

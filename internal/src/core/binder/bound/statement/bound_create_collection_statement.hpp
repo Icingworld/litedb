@@ -10,9 +10,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 CREATE COLLECTION 语句
- */
+// 绑定 CREATE COLLECTION 语句
 class BoundCreateCollectionStatement final : public BoundStatement
 {
 public:
@@ -24,39 +22,28 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
+    // 获取数据库 ID
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
-    /**
-     * @brief 获取集合名称
-     * @return 集合名称
-     */
+    // 获取集合名称
     [[nodiscard]]
     const std::optional<std::string> & collection_name() const noexcept;
 
-    /**
-     * @brief 获取列定义列表
-     * @return 列定义列表
-     */
+    // 获取列定义列表
     [[nodiscard]]
     const std::vector<meta::ColumnDefinition> & columns() const noexcept;
 
-    /**
-     * @brief 获取集合注释
-     * @return 集合注释
-     */
+    // 获取集合注释
     [[nodiscard]]
     const std::optional<std::string> & comment() const noexcept;
 
 private:
-    common::DatabaseId database_id_;                     // 数据库 ID
-    std::optional<std::string> collection_name_;         // 集合名称
-    std::vector<meta::ColumnDefinition> columns_;        // 列定义列表
-    std::optional<std::string> comment_;                 // 集合注释
+    common::DatabaseId database_id_;
+    // collection_name_ 为 nullopt 时表示用户传入了重复集合名但是用了 IF NOT EXISTS
+    std::optional<std::string> collection_name_;
+    std::vector<meta::ColumnDefinition> columns_;
+    std::optional<std::string> comment_;
 };
 
 } // namespace litedb::core::binder::bound

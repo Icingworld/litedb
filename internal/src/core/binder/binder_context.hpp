@@ -7,9 +7,7 @@
 namespace litedb::core::binder
 {
 
-/**
- * @brief 绑定上下文
- */
+// 绑定器上下文
 class BinderContext
 {
 public:
@@ -20,17 +18,11 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取数据库读取器
-     * @return 数据库读取器
-     */
+    // 获取数据库读取器
     [[nodiscard]]
     const meta::CatalogView & meta() const noexcept;
 
-    /**
-     * @brief 获取会话上下文
-     * @return 会话上下文
-     */
+    // 获取会话上下文
     [[nodiscard]]
     const SessionContext & session() const noexcept;
 
@@ -38,9 +30,9 @@ public:
     const function::FunctionCatalog & functions() const noexcept;
 
 private:
-    meta::CatalogView meta_;              // 元数据视图
-    const SessionContext & session_;            // 会话上下文
-    const function::FunctionCatalog & functions_; // 函数目录
+    meta::CatalogView meta_;
+    const SessionContext & session_;
+    const function::FunctionCatalog & functions_;
 };
 
 } // namespace litedb::core::binder

@@ -14,8 +14,7 @@ BoundUpdateStatement::BoundUpdateStatement(
     , collection_id_(collection_id)
     , assignments_(std::move(assignments))
     , where_(std::move(where))
-{
-}
+{}
 
 common::CollectionId BoundUpdateStatement::collection_id() const noexcept
 {
@@ -27,9 +26,13 @@ const std::vector<BoundAssignment> & BoundUpdateStatement::assignments() const n
     return assignments_;
 }
 
-const BoundExpression * BoundUpdateStatement::where() const noexcept
+std::optional<const BoundExpression &> BoundUpdateStatement::where() const noexcept
 {
-    return where_.get();
+    if (!where_) {
+        return std::nullopt;
+    }
+
+    return *where_;
 }
 
 std::vector<BoundAssignment> BoundUpdateStatement::take_assignments() noexcept

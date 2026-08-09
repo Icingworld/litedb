@@ -10,11 +10,9 @@ BoundCreateDatabaseStatement::BoundCreateDatabaseStatement(
 ) noexcept
     : BoundStatement(BoundStatementKind::CreateDatabase)
     , database_name_(std::move(database_name))
-{
-}
+{}
 
-const std::optional<std::string> &
-BoundCreateDatabaseStatement::database_name() const noexcept
+const std::optional<std::string> & BoundCreateDatabaseStatement::database_name() const noexcept
 {
     return database_name_;
 }

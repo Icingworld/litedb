@@ -5,15 +5,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "core/binder/binder_context.hpp"
+#include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/expression/bound_null_expression.hpp"
 #include "core/binder/bound/statement/bound_insert_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
-#include "core/binder/binder_helper.hpp"
-#include "core/binder/binder_context.hpp"
 #include "core/common/identifier.hpp"
 #include "core/parser/ast/dispatcher/expression_dispatcher.hpp"
 #include "core/parser/ast/statement/insert_statement.hpp"
-
 
 namespace litedb::core::binder
 {
@@ -26,22 +25,14 @@ using namespace litedb::core::parser::ast;
 namespace
 {
 
-/**
- * @brief 插入值表达式验证器
- */
+// 插入值表达式验证器
 class InsertValueExpressionValidator final
     : private ConstAstExpressionDispatcher<InsertValueExpressionValidator, bool>
 {
     friend class AstExpressionDispatcher<InsertValueExpressionValidator, bool, true>;
 
-
-
 public:
-    /**
-     * @brief 验证插入值表达式是否合法
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 验证插入值表达式是否合法
     [[nodiscard]]
     bool validate(const ExpressionNode & expression)
     {
@@ -49,44 +40,28 @@ public:
     }
 
 private:
-    /**
-     * @brief 访问通配符表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问通配符表达式
     [[nodiscard]]
     bool visit_wildcard_expression(const WildcardExpression &) const noexcept
     {
         return false;
     }
 
-    /**
-     * @brief 访问字面量表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问字面量表达式
     [[nodiscard]]
     bool visit_literal_expression(const LiteralExpression &) const noexcept
     {
         return true;
     }
 
-    /**
-     * @brief 访问列引用表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问列引用表达式
     [[nodiscard]]
     bool visit_column_reference_expression(const ColumnReferenceExpression &) const noexcept
     {
         return false;
     }
 
-    /**
-     * @brief 访问函数调用表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问函数调用表达式
     [[nodiscard]]
     bool visit_function_call_expression(const FunctionCallExpression & expression)
     {
@@ -95,11 +70,7 @@ private:
         });
     }
 
-    /**
-     * @brief 访问向量表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问向量表达式
     [[nodiscard]]
     bool visit_vector_expression(const VectorExpression & expression)
     {
@@ -108,71 +79,46 @@ private:
         });
     }
 
-    /**
-     * @brief 访问二元表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问二元表达式
     [[nodiscard]]
     bool visit_binary_expression(const BinaryExpression & expression)
     {
         return validate(expression.left()) && validate(expression.right());
     }
 
-    /**
-     * @brief 访问一元表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问一元表达式
     [[nodiscard]]
     bool visit_unary_expression(const UnaryExpression & expression)
     {
         return validate(expression.operand());
     }
 
-    /**
-     * @brief 访问 IN 表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问 IN 表达式
     [[nodiscard]]
     bool visit_in_expression(const InExpression & expression)
     {
-        return validate(expression.expression())
-            && std::ranges::all_of(expression.values(), [this](const auto & value) {
-                return validate(*value);
-            });
+        return validate(expression.expression()) &&
+               std::ranges::all_of(expression.values(), [this](const auto & value) {
+                   return validate(*value);
+               });
     }
 
-    /**
-     * @brief 访问 BETWEEN 表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问 BETWEEN 表达式
     [[nodiscard]]
     bool visit_between_expression(const BetweenExpression & expression)
     {
-        return validate(expression.expression())
-            && validate(expression.lower())
-            && validate(expression.upper());
+        return validate(expression.expression()) && validate(expression.lower()) &&
+               validate(expression.upper());
     }
 
-    /**
-     * @brief 访问 LIKE 表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问 LIKE 表达式
     [[nodiscard]]
     bool visit_like_expression(const LikeExpression & expression)
     {
         return validate(expression.expression()) && validate(expression.pattern());
     }
 
-    /**
-     * @brief 访问别名表达式
-     * @param expression 表达式
-     * @return 是否合法
-     */
+    // 访问别名表达式
     [[nodiscard]]
     bool visit_alias_expression(const AliasExpression & expression)
     {
@@ -184,31 +130,23 @@ private:
 
 BinderInsertWorker::BinderInsertWorker(const BinderContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderInsertWorker::bind_insert(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::bind_insert(
     const InsertStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
 
     // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(
-        statement.collection_name()
-    );
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
 
     // 获取集合所有列
-    const auto catalog_columns = context_.meta().list_columns(
-        collection->collection->id()
-    );
-    std::vector<std::optional<std::size_t>> source_value_by_target(
-        catalog_columns.size()
-    );
+    const auto catalog_columns = context_.meta().list_columns(collection->collection->id());
+    std::vector<std::optional<std::size_t>> source_value_by_target(catalog_columns.size());
     std::unordered_map<ColumnId, std::size_t> target_index_by_column_id;
     target_index_by_column_id.reserve(catalog_columns.size());
     for (std::size_t index = 0; index < catalog_columns.size(); ++index) {
@@ -249,7 +187,10 @@ BinderInsertWorker::bind_insert(
 
         // 遍历指定列，绑定列引用
         for (std::size_t index = 0; index < statement.columns().size(); ++index) {
-            const auto * column = context_.meta().find_column(collection->collection->id(), statement.columns()[index]);
+            const auto * column = context_.meta().find_column(
+                collection->collection->id(),
+                statement.columns()[index]
+            );
             if (column == nullptr) [[unlikely]] {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::ColumnNotFound,
@@ -285,10 +226,7 @@ BinderInsertWorker::bind_insert(
                     "INSERT VALUES expressions cannot reference collection columns"
                 ));
             }
-            auto expression = helper.bind_expression(
-                source_expression,
-                *collection
-            );
+            auto expression = helper.bind_expression(source_expression, *collection);
             if (!expression.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expression.error()));
             }
@@ -312,9 +250,8 @@ BinderInsertWorker::bind_insert(
         if (!can_cast(value->type(), column.type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
-                "INSERT value type " + type_name(value->type())
-                    + " does not match column " + column.name()
-                    + " type " + type_name(column.type())
+                "INSERT value type " + type_name(value->type()) + " does not match column " +
+                    column.name() + " type " + type_name(column.type())
             ));
         }
         // 检查值是否为 NULL

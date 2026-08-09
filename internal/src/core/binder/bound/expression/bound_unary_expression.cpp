@@ -14,8 +14,7 @@ BoundUnaryExpression::BoundUnaryExpression(
     : BoundExpression(BoundExpressionKind::Unary, type)
     , op_(op)
     , operand_(std::move(operand))
-{
-}
+{}
 
 common::UnaryOperator BoundUnaryExpression::op() const noexcept
 {

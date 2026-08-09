@@ -1,12 +1,12 @@
 #include "core/binder/worker/binder_update_worker.hpp"
 
-#include "core/binder/binder_helper.hpp"
 #include "core/binder/binder_context.hpp"
-#include <unordered_set>
+#include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_update_statement.hpp"
-#include "core/parser/ast/statement/update_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
 #include "core/common/identifier.hpp"
+#include "core/parser/ast/statement/update_statement.hpp"
+#include <unordered_set>
 
 namespace litedb::core::binder
 {
@@ -18,20 +18,16 @@ using namespace litedb::core::parser::ast;
 
 BinderUpdateWorker::BinderUpdateWorker(const BinderContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderUpdateWorker::bind_update(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::bind_update(
     const UpdateStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
 
     // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(
-        statement.collection_name()
-    );
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -49,10 +45,8 @@ BinderUpdateWorker::bind_update(
         }
 
         // 查找列
-        const auto * column = context_.meta().find_column(
-            collection->collection->id(),
-            assignment.column_name
-        );
+        const auto * column =
+            context_.meta().find_column(collection->collection->id(), assignment.column_name);
         if (column == nullptr) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::ColumnNotFound,
@@ -78,27 +72,25 @@ BinderUpdateWorker::bind_update(
             ));
         }
 
-        assignments.push_back(BoundAssignment {
-            .column_id = column->id(),
-            .value = cast_if_needed(std::move(*value), column->type()),
-        });
+        assignments.push_back(
+            BoundAssignment {
+                .column_id = column->id(),
+                .value = cast_if_needed(std::move(*value), column->type()),
+            }
+        );
     }
 
     // 通过 Helper 绑定条件表达式
     std::unique_ptr<BoundExpression> where;
     if (statement.where()) {
-        auto bound_where = helper.bind_expression(
-            *statement.where(),
-            *collection
-        );
+        auto bound_where = helper.bind_expression(*statement.where(), *collection);
         if (!bound_where.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_where.error()));
         }
         if (!is_boolean((*bound_where)->type())) [[unlikely]] {
-            return std::unexpected(make_binder_error(
-                BinderErrorCode::InvalidType,
-                "WHERE expression must be BOOLEAN"
-            ));
+            return std::unexpected(
+                make_binder_error(BinderErrorCode::InvalidType, "WHERE expression must be BOOLEAN")
+            );
         }
         where = std::move(*bound_where);
     }

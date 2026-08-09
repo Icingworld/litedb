@@ -5,7 +5,6 @@ namespace litedb::core::binder::bound
 
 BoundNullExpression::BoundNullExpression(common::LogicalType type)
     : BoundExpression(BoundExpressionKind::Null, type)
-{
-}
+{}
 
 } // namespace litedb::core::binder::bound

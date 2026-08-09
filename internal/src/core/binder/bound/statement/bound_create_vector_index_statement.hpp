@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <string>
 #include <optional>
+#include <string>
 
 #include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
@@ -11,9 +11,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 CREATE VINDEX 语句
- */
+// 绑定 CREATE VINDEX 语句
 class BoundCreateVectorIndexStatement final : public BoundStatement
 {
 public:
@@ -29,71 +27,48 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取列 ID
-     * @return 列 ID
-     */
+    // 获取列 ID
     [[nodiscard]]
     common::ColumnId column_id() const noexcept;
 
-    /**
-     * @brief 获取索引名称
-     * @return 索引名称
-     */
+    // 获取索引名称
     [[nodiscard]]
     const std::optional<std::string> & vector_index_name() const noexcept;
 
-    /**
-     * @brief 获取索引类型
-     * @return 索引类型
-     */
+    // 获取索引类型
     [[nodiscard]]
     meta::entry::VectorIndexKind vector_index_kind() const noexcept;
 
-    /**
-     * @brief 获取距离度量
-     * @return 距离度量
-     */
+    // 获取距离度量
     [[nodiscard]]
     meta::entry::VectorDistanceMetric metric() const noexcept;
 
-    /**
-     * @brief 获取最大邻居数
-     * @return 最大邻居数
-     */
+    // 获取最大邻居数
     [[nodiscard]]
     std::size_t max_neighbors() const noexcept;
 
-    /**
-     * @brief 获取构建时 EF 值
-     * @return 构建时 EF 值
-     */
+    // 获取构建时 EF 值
     [[nodiscard]]
     std::size_t ef_construction() const noexcept;
 
-    /**
-     * @brief 获取搜索时默认 EF 值
-     * @return 搜索时默认 EF 值
-     */
+    // 获取搜索时默认 EF 值
     [[nodiscard]]
     std::size_t ef_search_default() const noexcept;
 
-    /**
-     * @brief 获取随机种子
-     * @return 随机种子
-     */
+    // 获取随机种子
     [[nodiscard]]
     std::size_t random_seed() const noexcept;
 
 private:
-    common::ColumnId column_id_;                        // 列 ID
-    std::optional<std::string> vector_index_name_;      // 索引名称
-    meta::entry::VectorIndexKind vector_index_kind_;    // 索引类型
-    meta::entry::VectorDistanceMetric metric_;          // 距离度量
-    std::size_t max_neighbors_;                         // 最大邻居数
-    std::size_t ef_construction_;                       // 构建时 EF 值
-    std::size_t ef_search_default_;                     // 搜索时默认 EF 值
-    std::size_t random_seed_;                           // 随机种子
+    common::ColumnId column_id_;
+    // vector_index_name_ 为 nullopt 时表示用户传入了重复向量索引名但是用了 IF NOT EXISTS
+    std::optional<std::string> vector_index_name_;
+    meta::entry::VectorIndexKind vector_index_kind_;
+    meta::entry::VectorDistanceMetric metric_;
+    std::size_t max_neighbors_;
+    std::size_t ef_construction_;
+    std::size_t ef_search_default_;
+    std::size_t random_seed_;
 };
 
 } // namespace litedb::core::binder::bound

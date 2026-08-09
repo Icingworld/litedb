@@ -1,8 +1,8 @@
 #include "core/binder/worker/binder_worker_helper.hpp"
 
-#include <expected>
 #include <cstdint>
 #include <exception>
+#include <expected>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "core/binder/binder_helper.hpp"
-#include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_between_expression.hpp"
+#include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
@@ -23,7 +23,6 @@
 #include "core/binder/bound/expression/bound_unary_expression.hpp"
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/common/identifier.hpp"
-#include "core/schema/default_expression.hpp"
 #include "core/parser/ast/expression/between_expression.hpp"
 #include "core/parser/ast/expression/binary_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
@@ -35,6 +34,7 @@
 #include "core/parser/ast/expression/unary_expression.hpp"
 #include "core/parser/ast/expression/vector_expression.hpp"
 #include "core/parser/ast/expression/wildcard_expression.hpp"
+#include "core/schema/default_expression.hpp"
 
 namespace litedb::core::binder
 {
@@ -82,10 +82,8 @@ common::BinaryOperator binary_operator(TokenType op)
 }
 
 [[nodiscard]]
-std::optional<common::Value> parse_literal_value(
-    common::LogicalTypeId type_id,
-    const std::string & text
-)
+std::optional<common::Value>
+parse_literal_value(common::LogicalTypeId type_id, const std::string & text)
 {
     try {
         std::size_t parsed = 0;
@@ -100,12 +98,9 @@ std::optional<common::Value> parse_literal_value(
             break;
         case LogicalTypeId::Integer: {
             const auto value = std::stoll(text, &parsed);
-            if (parsed == text.size()
-                && value >= std::numeric_limits<std::int32_t>::min()
-                && value <= std::numeric_limits<std::int32_t>::max()) {
-                return common::Value {
-                    common::ValueData {static_cast<std::int32_t>(value)}
-                };
+            if (parsed == text.size() && value >= std::numeric_limits<std::int32_t>::min() &&
+                value <= std::numeric_limits<std::int32_t>::max()) {
+                return common::Value {common::ValueData {static_cast<std::int32_t>(value)}};
             }
             break;
         }
@@ -146,23 +141,21 @@ std::optional<common::Value> parse_literal_value(
 
 BinderWorkerHelper::BinderWorkerHelper(const BinderContext & context)
     : context_(context)
-{
-}
+{}
 
 std::expected<DatabaseId, BinderError> BinderWorkerHelper::require_database() const
 {
     if (!context_.session().current_database_id.has_value()) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::DatabaseNotSelected,
-            "No database selected"
-        ));
+        return std::unexpected(
+            make_binder_error(BinderErrorCode::DatabaseNotSelected, "No database selected")
+        );
     }
 
-    if (context_.meta().find_database(context_.session().current_database_id.value()) == nullptr) [[unlikely]] {
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::DatabaseNotFound,
-            "Current database not found"
-        ));
+    if (context_.meta().find_database(context_.session().current_database_id.value()) == nullptr)
+        [[unlikely]] {
+        return std::unexpected(
+            make_binder_error(BinderErrorCode::DatabaseNotFound, "Current database not found")
+        );
     }
 
     return context_.session().current_database_id.value();
@@ -192,14 +185,18 @@ std::expected<BindingCollection, BinderError> BinderWorkerHelper::bind_collectio
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_expression(
-    const ExpressionNode & expression, const BindingCollection & collection
+    const ExpressionNode & expression,
+    const BindingCollection & collection
 ) const
 {
     switch (expression.kind()) {
     case AstNodeKind::Literal:
         return bind_literal(static_cast<const LiteralExpression &>(expression));
     case AstNodeKind::ColumnReference:
-        return bind_column_reference(static_cast<const ColumnReferenceExpression &>(expression), collection);
+        return bind_column_reference(
+            static_cast<const ColumnReferenceExpression &>(expression),
+            collection
+        );
     case AstNodeKind::Unary:
         return bind_unary(static_cast<const UnaryExpression &>(expression), collection);
     case AstNodeKind::Binary:
@@ -220,11 +217,11 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         ));
     case AstNodeKind::FunctionCall:
         return bind_function(static_cast<const FunctionCallExpression &>(expression), collection);
-    [[unlikely]] default:
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::UnsupportedExpression,
-            "Unsupported expression"
-        ));
+    [[unlikely]]
+    default:
+        return std::unexpected(
+            make_binder_error(BinderErrorCode::UnsupportedExpression, "Unsupported expression")
+        );
     }
 }
 
@@ -232,8 +229,9 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
     const LiteralExpression & expression
 ) const
 {
-    auto make_literal = [&expression](LogicalTypeId type_id)
-        -> std::expected<std::unique_ptr<BoundExpression>, BinderError> {
+    auto make_literal = [&expression](
+                            LogicalTypeId type_id
+                        ) -> std::expected<std::unique_ptr<BoundExpression>, BinderError> {
         auto value = parse_literal_value(type_id, expression.value());
         if (!value.has_value()) {
             return std::unexpected(make_binder_error(
@@ -242,10 +240,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
                 "Invalid literal: " + expression.value()
             ));
         }
-        return std::make_unique<BoundLiteralExpression>(
-            type(type_id),
-            std::move(*value)
-        );
+        return std::make_unique<BoundLiteralExpression>(type(type_id), std::move(*value));
     };
 
     switch (expression.literal_type()) {
@@ -260,31 +255,32 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         return make_literal(LogicalTypeId::Double);
     case TokenType::StringLiteral:
         return make_literal(LogicalTypeId::Varchar);
-    [[unlikely]] default:
-        return std::unexpected(make_binder_error(
-            BinderErrorCode::InvalidType,
-            "Unsupported literal"
-        ));
+    [[unlikely]]
+    default:
+        return std::unexpected(
+            make_binder_error(BinderErrorCode::InvalidType, "Unsupported literal")
+        );
     }
 }
 
-std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_column_reference(
-    const ColumnReferenceExpression & expression, const BindingCollection & collection
+std::expected<std::unique_ptr<BoundExpression>, BinderError>
+BinderWorkerHelper::bind_column_reference(
+    const ColumnReferenceExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     // 检查限定符是否匹配集合
-    if (expression.qualifier().has_value()
-        && common::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+    if (expression.qualifier().has_value() &&
+        common::normalize_identifier(expression.qualifier().value()) !=
+            collection.collection->key()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidQualifier,
             "Column qualifier does not match FROM collection: " + expression.qualifier().value()
         ));
     }
 
-    const auto * column = context_.meta().find_column(
-        collection.collection->id(),
-        expression.column_name()
-    );
+    const auto * column =
+        context_.meta().find_column(collection.collection->id(), expression.column_name());
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
@@ -300,7 +296,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_function(
-    const FunctionCallExpression & expression, const BindingCollection & collection
+    const FunctionCallExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     std::vector<std::unique_ptr<BoundExpression>> arguments;
@@ -320,20 +317,22 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
     auto binding = context_.functions().bind_scalar(expression.name(), argument_types);
     if (!binding.has_value()) [[unlikely]] {
         const auto code = binding.error().is(function::FunctionErrorCode::FunctionNotFound)
-            ? BinderErrorCode::FunctionNotFound
-            : binding.error().is(function::FunctionErrorCode::AmbiguousOverload)
-                ? BinderErrorCode::AmbiguousFunctionCall
-                : binding.error().is(function::FunctionErrorCode::ConstraintViolation)
-                    ? BinderErrorCode::InvalidType
-                    : BinderErrorCode::NoMatchingFunctionOverload;
+                              ? BinderErrorCode::FunctionNotFound
+                          : binding.error().is(function::FunctionErrorCode::AmbiguousOverload)
+                              ? BinderErrorCode::AmbiguousFunctionCall
+                          : binding.error().is(function::FunctionErrorCode::ConstraintViolation)
+                              ? BinderErrorCode::InvalidType
+                              : BinderErrorCode::NoMatchingFunctionOverload;
         const auto message = binding.error().message();
         auto cause = std::move(binding.error());
-        return std::unexpected(BinderError {
-            code,
-            message,
-            BinderErrorContext {expression.location()},
-            std::move(cause),
-        });
+        return std::unexpected(
+            BinderError {
+                code,
+                message,
+                BinderErrorContext {expression.location()},
+                std::move(cause),
+            }
+        );
     }
 
     for (std::size_t index = 0; index < arguments.size(); ++index) {
@@ -342,25 +341,22 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 expression.arguments()[index]->location(),
-                "Function argument type " + type_name(arguments[index]->type())
-                    + " cannot be cast to " + type_name(target_type)
+                "Function argument type " + type_name(arguments[index]->type()) +
+                    " cannot be cast to " + type_name(target_type)
             ));
         }
-        if (!(arguments[index]->type().id == LogicalTypeId::Vector
-            && target_type.id == LogicalTypeId::Vector
-            && !target_type.parameter.has_value())) {
+        if (!(arguments[index]->type().id == LogicalTypeId::Vector &&
+              target_type.id == LogicalTypeId::Vector && !target_type.parameter.has_value())) {
             arguments[index] = cast_if_needed(std::move(arguments[index]), target_type);
         }
     }
 
-    return std::make_unique<BoundFunctionExpression>(
-        std::move(*binding),
-        std::move(arguments)
-    );
+    return std::make_unique<BoundFunctionExpression>(std::move(*binding), std::move(arguments));
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_unary(
-    const UnaryExpression & expression, const BindingCollection & collection
+    const UnaryExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     auto operand = bind_expression(expression.operand(), collection);
@@ -383,8 +379,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         );
     }
 
-    if ((expression.op() == TokenType::Plus || expression.op() == TokenType::Minus)
-        && is_numeric((*operand)->type())) {
+    if ((expression.op() == TokenType::Plus || expression.op() == TokenType::Minus) &&
+        is_numeric((*operand)->type())) {
         if (expression.op() == TokenType::Plus) {
             return std::move(*operand);
         }
@@ -404,7 +400,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_binary(
-    const BinaryExpression & expression, const BindingCollection & collection
+    const BinaryExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     auto left = bind_expression(expression.left(), collection);
@@ -435,8 +432,9 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         );
     }
 
-    if (token_op == TokenType::Plus || token_op == TokenType::Minus || token_op == TokenType::Star
-        || token_op == TokenType::Slash || token_op == TokenType::Modulo) {
+    if (token_op == TokenType::Plus || token_op == TokenType::Minus ||
+        token_op == TokenType::Star || token_op == TokenType::Slash ||
+        token_op == TokenType::Modulo) {
         if (!is_numeric((*left)->type()) || !is_numeric((*right)->type())) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
@@ -453,8 +451,9 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         );
     }
 
-    if (token_op == TokenType::Equal || token_op == TokenType::NotEqual || token_op == TokenType::LessThan
-        || token_op == TokenType::LessEqual || token_op == TokenType::GreaterThan || token_op == TokenType::GreaterEqual) {
+    if (token_op == TokenType::Equal || token_op == TokenType::NotEqual ||
+        token_op == TokenType::LessThan || token_op == TokenType::LessEqual ||
+        token_op == TokenType::GreaterThan || token_op == TokenType::GreaterEqual) {
         const auto op = binary_operator(token_op);
         if (!can_compare((*left)->type(), (*right)->type(), op)) [[unlikely]] {
             return std::unexpected(make_binder_error(
@@ -484,7 +483,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_vector(
-    const VectorExpression & expression, const BindingCollection & collection
+    const VectorExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     std::vector<std::unique_ptr<BoundExpression>> elements;
@@ -496,21 +496,19 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
             return std::unexpected(std::move(bound_element.error()));
         }
         if (!is_numeric((*bound_element)->type())) [[unlikely]] {
-            return std::unexpected(make_binder_error(
-                BinderErrorCode::InvalidType,
-                "Vector elements must be numeric"
-            ));
+            return std::unexpected(
+                make_binder_error(BinderErrorCode::InvalidType, "Vector elements must be numeric")
+            );
         }
         elements.push_back(cast_if_needed(std::move(*bound_element), type(LogicalTypeId::Double)));
     }
 
-    return std::make_unique<BoundVectorExpression>(
-        std::move(elements)
-    );
+    return std::make_unique<BoundVectorExpression>(std::move(elements));
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_in(
-    const InExpression & expression, const BindingCollection & collection
+    const InExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     auto target = bind_expression(expression.expression(), collection);
@@ -525,11 +523,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         if (!bound_value.has_value()) [[unlikely]] {
             return std::unexpected(std::move(bound_value.error()));
         }
-        if (!can_compare(
-            (*target)->type(),
-            (*bound_value)->type(),
-            common::BinaryOperator::Equal
-        )) [[unlikely]] {
+        if (!can_compare((*target)->type(), (*bound_value)->type(), common::BinaryOperator::Equal))
+            [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::InvalidType,
                 value->location(),
@@ -537,10 +532,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
             ));
         }
         if (is_numeric(comparison_type) && is_numeric((*bound_value)->type())) {
-            comparison_type = common_numeric_type(
-                comparison_type,
-                (*bound_value)->type()
-            );
+            comparison_type = common_numeric_type(comparison_type, (*bound_value)->type());
         }
         values.push_back(std::move(*bound_value));
     }
@@ -556,7 +548,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_between(
-    const BetweenExpression & expression, const BindingCollection & collection
+    const BetweenExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     auto target = bind_expression(expression.expression(), collection);
@@ -576,12 +569,9 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
             (*target)->type(),
             (*lower)->type(),
             common::BinaryOperator::GreaterThanOrEqual
-        )
-        || !can_compare(
-            (*target)->type(),
-            (*upper)->type(),
-            common::BinaryOperator::LessThanOrEqual
-        )) [[unlikely]] {
+        ) ||
+        !can_compare((*target)->type(), (*upper)->type(), common::BinaryOperator::LessThanOrEqual))
+        [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
             expression.location(),
@@ -589,9 +579,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         ));
     }
 
-    if (is_numeric((*target)->type())
-        && is_numeric((*lower)->type())
-        && is_numeric((*upper)->type())) {
+    if (is_numeric((*target)->type()) && is_numeric((*lower)->type()) &&
+        is_numeric((*upper)->type())) {
         const auto comparison_type = common_numeric_type(
             common_numeric_type((*target)->type(), (*lower)->type()),
             (*upper)->type()
@@ -609,7 +598,8 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
 }
 
 std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_like(
-    const LikeExpression & expression, const BindingCollection & collection
+    const LikeExpression & expression,
+    const BindingCollection & collection
 ) const
 {
     auto target = bind_expression(expression.expression(), collection);
@@ -629,18 +619,18 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         ));
     }
 
-    return std::make_unique<BoundLikeExpression>(
-        std::move(*target),
-        std::move(*pattern)
-    );
+    return std::make_unique<BoundLikeExpression>(std::move(*target), std::move(*pattern));
 }
 
-std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> BinderWorkerHelper::expand_wildcard(
-    const WildcardExpression & expression, const BindingCollection & collection
+std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError>
+BinderWorkerHelper::expand_wildcard(
+    const WildcardExpression & expression,
+    const BindingCollection & collection
 ) const
 {
-    if (expression.qualifier().has_value()
-        && common::normalize_identifier(expression.qualifier().value()) != collection.collection->key()) [[unlikely]] {
+    if (expression.qualifier().has_value() &&
+        common::normalize_identifier(expression.qualifier().value()) !=
+            collection.collection->key()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidQualifier,
             expression.location(),
@@ -650,18 +640,19 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> Binder
 
     std::vector<std::unique_ptr<BoundExpression>> expressions;
     for (const auto * column : context_.meta().list_columns(collection.collection->id())) {
-        expressions.push_back(std::make_unique<BoundColumnRefExpression>(
-            column->id(),
-            column->ordinal(),
-            column->type()
-        ));
+        expressions.push_back(
+            std::make_unique<BoundColumnRefExpression>(
+                column->id(),
+                column->ordinal(),
+                column->type()
+            )
+        );
     }
     return expressions;
 }
 
-std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper::bind_default_expression(
-    const schema::DefaultExpression & expression
-) const
+std::expected<std::unique_ptr<BoundExpression>, BinderError>
+BinderWorkerHelper::bind_default_expression(const schema::DefaultExpression & expression) const
 {
     if (expression.kind == schema::DefaultExpressionKind::Vector) {
         std::vector<std::unique_ptr<BoundExpression>> elements;
@@ -677,15 +668,16 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
                     "Vector default elements must be numeric"
                 ));
             }
-            elements.push_back(cast_if_needed(std::move(*bound_element), type(LogicalTypeId::Double)));
+            elements.push_back(
+                cast_if_needed(std::move(*bound_element), type(LogicalTypeId::Double))
+            );
         }
-        return std::make_unique<BoundVectorExpression>(
-            std::move(elements)
-        );
+        return std::make_unique<BoundVectorExpression>(std::move(elements));
     }
 
-    auto make_literal = [&expression](LogicalTypeId type_id)
-        -> std::expected<std::unique_ptr<BoundExpression>, BinderError> {
+    auto make_literal = [&expression](
+                            LogicalTypeId type_id
+                        ) -> std::expected<std::unique_ptr<BoundExpression>, BinderError> {
         auto value = parse_literal_value(type_id, expression.value);
         if (!value.has_value()) {
             return std::unexpected(make_binder_error(
@@ -693,10 +685,7 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
                 "Invalid default literal: " + expression.value
             ));
         }
-        return std::make_unique<BoundLiteralExpression>(
-            type(type_id),
-            std::move(*value)
-        );
+        return std::make_unique<BoundLiteralExpression>(type(type_id), std::move(*value));
     };
 
     switch (expression.literal_kind) {
@@ -712,13 +701,13 @@ std::expected<std::unique_ptr<BoundExpression>, BinderError> BinderWorkerHelper:
         return make_literal(LogicalTypeId::Varchar);
     }
 
-    [[unlikely]] return std::unexpected(make_binder_error(
-        BinderErrorCode::InvalidType,
-        "Unsupported default expression"
-    ));
+    [[unlikely]] return std::unexpected(
+        make_binder_error(BinderErrorCode::InvalidType, "Unsupported default expression")
+    );
 }
 
-std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelper::bind_column_definitions(
+std::expected<std::vector<meta::ColumnDefinition>, BinderError>
+BinderWorkerHelper::bind_column_definitions(
     const std::vector<std::unique_ptr<ColumnDefinitionSyntax>> & columns
 ) const
 {
@@ -752,8 +741,8 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
             if (!bound_default.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(bound_default.error()));
             }
-            if ((*bound_default)->type().id == LogicalTypeId::Null
-                && !column.nullable) [[unlikely]] {
+            if ((*bound_default)->type().id == LogicalTypeId::Null && !column.nullable)
+                [[unlikely]] {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::NotNullable,
                     column.default_value->location(),
@@ -764,21 +753,23 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> BinderWorkerHelp
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::InvalidType,
                     column.default_value->location(),
-                    "DEFAULT value type " + type_name((*bound_default)->type())
-                        + " does not match column " + column.name
-                        + " type " + type_name(*logical_type)
+                    "DEFAULT value type " + type_name((*bound_default)->type()) +
+                        " does not match column " + column.name + " type " +
+                        type_name(*logical_type)
                 ));
             }
         }
 
-        result.push_back(meta::ColumnDefinition {
-            .name = column.name,
-            .type = *logical_type,
-            .unique = column.unique,
-            .nullable = column.nullable,
-            .default_expression = std::move(default_expression),
-            .comment = column.comment,
-        });
+        result.push_back(
+            meta::ColumnDefinition {
+                .name = column.name,
+                .type = *logical_type,
+                .unique = column.unique,
+                .nullable = column.nullable,
+                .default_expression = std::move(default_expression),
+                .comment = column.comment,
+            }
+        );
     }
 
     return result;
@@ -790,33 +781,43 @@ std::expected<LogicalType, BinderError> BinderWorkerHelper::validate_data_type(
 {
     switch (data_type.id) {
     case LogicalTypeId::Null:
-        return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, "NULL is not a valid column type"));
+        return std::unexpected(
+            make_binder_error(BinderErrorCode::InvalidType, "NULL is not a valid column type")
+        );
     case LogicalTypeId::Integer:
     case LogicalTypeId::BigInt:
     case LogicalTypeId::Float:
     case LogicalTypeId::Double:
     case LogicalTypeId::Boolean:
         if (data_type.parameter.has_value()) [[unlikely]] {
-            return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, "Scalar type cannot have a parameter"));
+            return std::unexpected(make_binder_error(
+                BinderErrorCode::InvalidType,
+                "Scalar type cannot have a parameter"
+            ));
         }
         return data_type;
     case LogicalTypeId::Varchar:
         if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) [[unlikely]] {
-            return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, "VARCHAR length must be positive"));
+            return std::unexpected(
+                make_binder_error(BinderErrorCode::InvalidType, "VARCHAR length must be positive")
+            );
         }
         return data_type;
     case LogicalTypeId::Vector:
         if (!data_type.parameter.has_value() || data_type.parameter.value() == 0) [[unlikely]] {
-            return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, "VECTOR dimension must be positive"));
+            return std::unexpected(
+                make_binder_error(BinderErrorCode::InvalidType, "VECTOR dimension must be positive")
+            );
         }
         return data_type;
     }
-    [[unlikely]] return std::unexpected(make_binder_error(BinderErrorCode::InvalidType, "Unsupported data type"));
+    [[unlikely]] return std::unexpected(
+        make_binder_error(BinderErrorCode::InvalidType, "Unsupported data type")
+    );
 }
 
-std::expected<schema::DefaultExpression, BinderError> BinderWorkerHelper::snapshot_default_expression(
-    const ExpressionNode & expression
-) const
+std::expected<schema::DefaultExpression, BinderError>
+BinderWorkerHelper::snapshot_default_expression(const ExpressionNode & expression) const
 {
     if (expression.kind() == AstNodeKind::Literal) {
         const auto & literal = static_cast<const LiteralExpression &>(expression);

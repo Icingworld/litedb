@@ -13,9 +13,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 SELECT 语句
- */
+// 绑定 SELECT 语句
 class BoundSelectStatement final : public BoundStatement
 {
 public:
@@ -29,76 +27,49 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
-    /**
-     * @brief 获取选择列表
-     * @return 选择列表
-     */
+    // 获取选择列表
     [[nodiscard]]
     const std::vector<BoundProjectionItem> & projections() const noexcept;
 
-    /**
-     * @brief 获取条件表达式
-     * @return 条件表达式
-     */
+    // 获取条件表达式
     [[nodiscard]]
-    const BoundExpression * where() const noexcept;
+    std::optional<const BoundExpression &> where() const noexcept;
 
-    /**
-     * @brief 获取排序列表
-     * @return 排序列表
-     */
+    // 获取排序列表
     [[nodiscard]]
     const std::vector<BoundOrderByItem> & order_by() const noexcept;
 
-    /**
-     * @brief 获取限制
-     * @return 限制
-     */
+    // 获取限制
     [[nodiscard]]
     std::optional<std::size_t> limit() const noexcept;
 
-    /**
-     * @brief 获取偏移
-     * @return 偏移
-     */
+    // 获取偏移
     [[nodiscard]]
     std::optional<std::size_t> offset() const noexcept;
 
-    /**
-     * @brief 获取选择列表
-     * @return 选择列表
-     */
+    // 获取选择列表所有权
     [[nodiscard]]
     std::vector<BoundProjectionItem> take_projections() noexcept;
 
-    /**
-     * @brief 获取条件表达式
-     * @return 条件表达式
-     */
+    // 获取条件表达式所有权
     [[nodiscard]]
     std::unique_ptr<BoundExpression> take_where() noexcept;
 
-    /**
-     * @brief 获取排序列表
-     * @return 排序列表
-     */
+    // 获取排序列表所有权
     [[nodiscard]]
     std::vector<BoundOrderByItem> take_order_by() noexcept;
 
 private:
-    common::CollectionId collection_id_;                            // 集合 ID
-    std::vector<BoundProjectionItem> projections_;                  // 选择列表
-    std::unique_ptr<BoundExpression> where_;                        // 条件表达式
-    std::vector<BoundOrderByItem> order_by_;                        // 排序列表
-    std::optional<std::size_t> limit_;                              // 限制
-    std::optional<std::size_t> offset_;                             // 偏移
+    common::CollectionId collection_id_;
+    std::vector<BoundProjectionItem> projections_;
+    std::unique_ptr<BoundExpression> where_;
+    std::vector<BoundOrderByItem> order_by_;
+    std::optional<std::size_t> limit_;
+    std::optional<std::size_t> offset_;
 };
 
 } // namespace litedb::core::binder::bound

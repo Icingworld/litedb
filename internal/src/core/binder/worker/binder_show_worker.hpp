@@ -27,57 +27,35 @@ namespace litedb::core::binder
 
 class BinderContext;
 
-/**
- * @brief SHOW 语句绑定工作器
- */
+// SHOW 语句绑定工作器
 class BinderShowWorker
 {
 public:
     explicit BinderShowWorker(const BinderContext & context) noexcept;
 
 public:
-    /**
-     * @brief 绑定 SHOW DATABASES 语句
-     * @param statement SHOW DATABASES 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_show_databases(
+    // 绑定 SHOW DATABASES 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_databases(
         const parser::ast::ShowDatabasesStatement & statement
     );
 
-    /**
-     * @brief 绑定 SHOW COLLECTIONS 语句
-     * @param statement SHOW COLLECTIONS 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_show_collections(
+    // 绑定 SHOW COLLECTIONS 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_collections(
         const parser::ast::ShowCollectionsStatement & statement
     );
 
-    /**
-     * @brief 绑定 SHOW INDEXES 语句
-     * @param statement SHOW INDEXES 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_show_indexes(
+    // 绑定 SHOW INDEXES 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_indexes(
         const parser::ast::ShowIndexesStatement & statement
     );
 
-    /**
-     * @brief 绑定 SHOW VECTOR INDEXES 语句
-     * @param statement SHOW VECTOR INDEXES 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_show_vector_indexes(
+    // 绑定 SHOW VECTOR INDEXES 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_show_vector_indexes(
         const parser::ast::ShowVectorIndexesStatement & statement
     );
 
 private:
-    const BinderContext & context_;        // 绑定上下文
+    const BinderContext & context_;
 };
 
 } // namespace litedb::core::binder

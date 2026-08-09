@@ -11,15 +11,9 @@ namespace litedb::core::binder
 using namespace litedb::core::binder::bound;
 using namespace litedb::core::common;
 
-BinderError make_binder_error(
-    BinderErrorCode code,
-    std::string_view message
-)
+BinderError make_binder_error(BinderErrorCode code, std::string_view message)
 {
-    return BinderError {
-        code,
-        message
-    };
+    return BinderError {code, message};
 }
 
 BinderError make_binder_error(
@@ -28,30 +22,15 @@ BinderError make_binder_error(
     std::string_view message
 )
 {
-    return BinderError {
-        code,
-        message,
-        BinderErrorContext {
-            location
-        }
-    };
+    return BinderError {code, message, BinderErrorContext {location}};
 }
 
-LogicalType type(
-    LogicalTypeId id,
-    std::optional<std::size_t> parameter
-) noexcept
+LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter) noexcept
 {
-    return LogicalType {
-        id,
-        parameter
-    };
+    return LogicalType {id, parameter};
 }
 
-bool same_type(
-    const LogicalType & left,
-    const LogicalType & right
-) noexcept
+bool same_type(const LogicalType & left, const LogicalType & right) noexcept
 {
     return common::same_type(left, right);
 }
@@ -81,43 +60,28 @@ int numeric_rank(const LogicalType & value) noexcept
     return common::numeric_rank(value);
 }
 
-LogicalType common_numeric_type(
-    const LogicalType & left,
-    const LogicalType & right
-) noexcept
+LogicalType common_numeric_type(const LogicalType & left, const LogicalType & right) noexcept
 {
     return common::common_numeric_type(left, right);
 }
 
-bool can_cast(
-    const LogicalType & source,
-    const LogicalType & target
-) noexcept
+bool can_cast(const LogicalType & source, const LogicalType & target) noexcept
 {
     return common::can_implicitly_cast(source, target);
 }
 
-bool can_compare(
-    const LogicalType & left,
-    const LogicalType & right,
-    BinaryOperator op
-) noexcept
+bool can_compare(const LogicalType & left, const LogicalType & right, BinaryOperator op) noexcept
 {
     return common::can_compare(left, right, op);
 }
 
-std::unique_ptr<BoundExpression> cast_if_needed(
-    std::unique_ptr<BoundExpression> expression,
-    LogicalType target_type
-)
+std::unique_ptr<BoundExpression>
+cast_if_needed(std::unique_ptr<BoundExpression> expression, LogicalType target_type)
 {
     if (common::same_type(expression->type(), target_type)) {
         return expression;
     }
-    return std::make_unique<BoundCastExpression>(
-        std::move(expression),
-        target_type
-    );
+    return std::make_unique<BoundCastExpression>(std::move(expression), target_type);
 }
 
 BoundColumn bound_column_from_entry(const meta::entry::ColumnEntry & column)

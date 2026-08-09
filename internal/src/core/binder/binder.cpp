@@ -7,8 +7,7 @@ namespace litedb::core::binder
 
 Binder::Binder(const BinderContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> Binder::bind(
     const parser::ast::StatementNode & statement

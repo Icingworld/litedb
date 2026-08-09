@@ -7,9 +7,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 CAST 表达式
- */
+// 绑定 CAST 表达式
 class BoundCastExpression final : public BoundExpression
 {
 public:
@@ -19,22 +17,16 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取表达式
-     * @return 表达式
-     */
+    // 获取表达式
     [[nodiscard]]
     const BoundExpression & expression() const noexcept;
 
-    /**
-     * @brief 移出 CAST 内部表达式
-     * @return 内部表达式所有权
-     */
+    // 获取内部表达式所有权
     [[nodiscard]]
     std::unique_ptr<BoundExpression> take_expression() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> expression_;    // 表达式
+    std::unique_ptr<BoundExpression> expression_;
 };
 
 } // namespace litedb::core::binder::bound

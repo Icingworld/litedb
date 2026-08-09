@@ -1,16 +1,16 @@
 #include "core/binder/worker/binder_drop_worker.hpp"
 
-#include "core/binder/binder_helper.hpp"
 #include "core/binder/binder_context.hpp"
-#include "core/binder/bound/statement/bound_drop_database_statement.hpp"
+#include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_drop_collection_statement.hpp"
+#include "core/binder/bound/statement/bound_drop_database_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_index_statement.hpp"
 #include "core/binder/bound/statement/bound_drop_vector_index_statement.hpp"
-#include "core/parser/ast/statement/drop_database_statement.hpp"
+#include "core/binder/worker/binder_worker_helper.hpp"
 #include "core/parser/ast/statement/drop_collection_statement.hpp"
+#include "core/parser/ast/statement/drop_database_statement.hpp"
 #include "core/parser/ast/statement/drop_index_statement.hpp"
 #include "core/parser/ast/statement/drop_vector_index_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
 
 namespace litedb::core::binder
 {
@@ -22,18 +22,14 @@ using namespace litedb::core::parser::ast;
 
 BinderDropWorker::BinderDropWorker(const BinderContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderDropWorker::bind_drop_database(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_database(
     const DropDatabaseStatement & statement
 )
 {
     // 查找数据库
-    const auto * database = context_.meta().find_database(
-        statement.database_name()
-    );
+    const auto * database = context_.meta().find_database(statement.database_name());
     if (database == nullptr && !statement.if_exists()) [[unlikely]] {
         // 数据库不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
@@ -43,13 +39,11 @@ BinderDropWorker::bind_drop_database(
     }
 
     return std::make_unique<BoundDropDatabaseStatement>(
-        database == nullptr ?
-            std::nullopt : std::optional<DatabaseId>(database->id())
+        database == nullptr ? std::nullopt : std::optional<DatabaseId>(database->id())
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderDropWorker::bind_drop_collection(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_collection(
     const DropCollectionStatement & statement
 )
 {
@@ -62,10 +56,8 @@ BinderDropWorker::bind_drop_collection(
     }
 
     // 查找集合
-    const auto * collection = context_.meta().find_collection(
-        *database_id,
-        statement.collection_name()
-    );
+    const auto * collection =
+        context_.meta().find_collection(*database_id, statement.collection_name());
     if (collection == nullptr && !statement.if_exists()) [[unlikely]] {
         // 集合不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
@@ -75,13 +67,11 @@ BinderDropWorker::bind_drop_collection(
     }
 
     return std::make_unique<BoundDropCollectionStatement>(
-        collection == nullptr ?
-            std::nullopt : std::optional<CollectionId>(collection->id())
+        collection == nullptr ? std::nullopt : std::optional<CollectionId>(collection->id())
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderDropWorker::bind_drop_index(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderDropWorker::bind_drop_index(
     const DropIndexStatement & statement
 )
 {
@@ -94,10 +84,8 @@ BinderDropWorker::bind_drop_index(
     }
 
     // 查找索引
-    const auto * index = context_.meta().find_index(
-        collection->collection->id(),
-        statement.index_name()
-    );
+    const auto * index =
+        context_.meta().find_index(collection->collection->id(), statement.index_name());
     if (index == nullptr && !statement.if_exists()) [[unlikely]] {
         // 索引不存在，且用户未指定 if_exists 选项
         return std::unexpected(make_binder_error(
@@ -107,16 +95,12 @@ BinderDropWorker::bind_drop_index(
     }
 
     return std::make_unique<BoundDropIndexStatement>(
-        index == nullptr ?
-            std::nullopt : std::optional<IndexId>(index->id())
+        index == nullptr ? std::nullopt : std::optional<IndexId>(index->id())
     );
 }
 
-
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderDropWorker::bind_drop_vector_index(
-    const DropVectorIndexStatement & statement
-)
+BinderDropWorker::bind_drop_vector_index(const DropVectorIndexStatement & statement)
 {
     BinderWorkerHelper helper(context_);
 
@@ -140,8 +124,7 @@ BinderDropWorker::bind_drop_vector_index(
     }
 
     return std::make_unique<BoundDropVectorIndexStatement>(
-        vector_index == nullptr ?
-            std::nullopt : std::optional<VIndexId>(vector_index->id())
+        vector_index == nullptr ? std::nullopt : std::optional<VIndexId>(vector_index->id())
     );
 }
 

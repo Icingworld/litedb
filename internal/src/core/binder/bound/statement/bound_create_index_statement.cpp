@@ -16,11 +16,9 @@ BoundCreateIndexStatement::BoundCreateIndexStatement(
     , index_name_(std::move(index_name))
     , index_kind_(index_kind)
     , unique_(unique)
-{
-}
+{}
 
-const std::optional<std::string> &
-BoundCreateIndexStatement::index_name() const noexcept
+const std::optional<std::string> & BoundCreateIndexStatement::index_name() const noexcept
 {
     return index_name_;
 }

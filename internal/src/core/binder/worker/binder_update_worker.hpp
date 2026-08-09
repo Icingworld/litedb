@@ -24,27 +24,20 @@ namespace litedb::core::binder
 
 class BinderContext;
 
-/**
- * @brief UPDATE 语句绑定工作器
- */
+// UPDATE 语句绑定工作器
 class BinderUpdateWorker
 {
 public:
     explicit BinderUpdateWorker(const BinderContext & context) noexcept;
 
 public:
-    /**
-     * @brief 绑定 UPDATE 语句
-     * @param statement UPDATE 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_update(
+    // 绑定 UPDATE 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_update(
         const parser::ast::UpdateStatement & statement
     );
 
 private:
-    const BinderContext & context_;        // 绑定上下文
+    const BinderContext & context_;
 };
 
 } // namespace litedb::core::binder

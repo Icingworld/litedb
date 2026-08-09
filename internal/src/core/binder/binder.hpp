@@ -3,9 +3,9 @@
 #include <expected>
 #include <memory>
 
+#include "core/binder/binder_context.hpp"
 #include "core/binder/binder_error.hpp"
 #include "core/binder/bound/statement/bound_statement.hpp"
-#include "core/binder/binder_context.hpp"
 
 namespace litedb::core::parser::ast
 {
@@ -17,27 +17,21 @@ class StatementNode;
 namespace litedb::core::binder
 {
 
-/**
- * @brief 绑定器
- */
+// 绑定器
 class Binder
 {
 public:
     explicit Binder(const BinderContext & context) noexcept;
 
 public:
-    /**
-     * @brief 绑定 SQL 语句
-     * @param statement SQL 语句
-     * @return 绑定后的语句节点
-     */
+    // 绑定 SQL 语句
     [[nodiscard]]
     std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind(
         const parser::ast::StatementNode & statement
     ) const;
 
 private:
-    const BinderContext & context_;            // 绑定上下文
+    const BinderContext & context_;
 };
 
 } // namespace litedb::core::binder

@@ -24,8 +24,7 @@ BoundCreateVectorIndexStatement::BoundCreateVectorIndexStatement(
     , ef_construction_(ef_construction)
     , ef_search_default_(ef_search_default)
     , random_seed_(random_seed)
-{
-}
+{}
 
 const std::optional<std::string> &
 BoundCreateVectorIndexStatement::vector_index_name() const noexcept
@@ -38,14 +37,12 @@ common::ColumnId BoundCreateVectorIndexStatement::column_id() const noexcept
     return column_id_;
 }
 
-meta::entry::VectorIndexKind
-BoundCreateVectorIndexStatement::vector_index_kind() const noexcept
+meta::entry::VectorIndexKind BoundCreateVectorIndexStatement::vector_index_kind() const noexcept
 {
     return vector_index_kind_;
 }
 
-meta::entry::VectorDistanceMetric
-BoundCreateVectorIndexStatement::metric() const noexcept
+meta::entry::VectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept
 {
     return metric_;
 }

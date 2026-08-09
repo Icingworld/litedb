@@ -16,28 +16,24 @@ BoundCreateCollectionStatement::BoundCreateCollectionStatement(
     , collection_name_(std::move(collection_name))
     , columns_(std::move(columns))
     , comment_(std::move(comment))
-{
-}
+{}
 
 common::DatabaseId BoundCreateCollectionStatement::database_id() const noexcept
 {
     return database_id_;
 }
 
-const std::optional<std::string> &
-BoundCreateCollectionStatement::collection_name() const noexcept
+const std::optional<std::string> & BoundCreateCollectionStatement::collection_name() const noexcept
 {
     return collection_name_;
 }
 
-const std::vector<meta::ColumnDefinition> &
-BoundCreateCollectionStatement::columns() const noexcept
+const std::vector<meta::ColumnDefinition> & BoundCreateCollectionStatement::columns() const noexcept
 {
     return columns_;
 }
 
-const std::optional<std::string> &
-BoundCreateCollectionStatement::comment() const noexcept
+const std::optional<std::string> & BoundCreateCollectionStatement::comment() const noexcept
 {
     return comment_;
 }

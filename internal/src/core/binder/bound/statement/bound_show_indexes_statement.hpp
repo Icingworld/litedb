@@ -6,26 +6,19 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 SHOW INDEXES 语句
- */
+// 绑定 SHOW INDEXES 语句
 class BoundShowIndexesStatement final : public BoundStatement
 {
 public:
-    BoundShowIndexesStatement(
-        common::CollectionId collection_id
-    ) noexcept;
+    BoundShowIndexesStatement(common::CollectionId collection_id) noexcept;
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
 private:
-    common::CollectionId collection_id_;    // 集合 ID
+    common::CollectionId collection_id_;
 };
 
 } // namespace litedb::core::binder::bound

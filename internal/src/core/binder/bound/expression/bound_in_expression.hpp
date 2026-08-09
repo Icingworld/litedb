@@ -8,9 +8,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 IN 表达式
- */
+// 绑定 IN 表达式
 class BoundInExpression final : public BoundExpression
 {
 public:
@@ -20,37 +18,25 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取表达式
-     * @return 表达式
-     */
+    // 获取表达式
     [[nodiscard]]
     const BoundExpression & expression() const noexcept;
 
-    /**
-     * @brief 移出 IN 目标表达式
-     * @return 目标表达式所有权
-     */
+    // 获取目标表达式所有权
     [[nodiscard]]
     std::unique_ptr<BoundExpression> take_expression() noexcept;
 
-    /**
-     * @brief 获取值列表
-     * @return 值列表
-     */
+    // 获取值列表
     [[nodiscard]]
     const std::vector<std::unique_ptr<BoundExpression>> & values() const noexcept;
 
-    /**
-     * @brief 移出 IN 值列表
-     * @return 值列表所有权
-     */
+    // 获取值列表所有权
     [[nodiscard]]
     std::vector<std::unique_ptr<BoundExpression>> take_values() noexcept;
 
 private:
-    std::unique_ptr<BoundExpression> expression_;               // 表达式
-    std::vector<std::unique_ptr<BoundExpression>> values_;      // 值列表
+    std::unique_ptr<BoundExpression> expression_;
+    std::vector<std::unique_ptr<BoundExpression>> values_;
 };
 
 } // namespace litedb::core::binder::bound

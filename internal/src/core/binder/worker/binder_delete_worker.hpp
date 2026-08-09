@@ -24,27 +24,20 @@ namespace litedb::core::binder
 
 class BinderContext;
 
-/**
- * @brief DELETE 语句绑定工作器
- */
+// DELETE 语句绑定工作器
 class BinderDeleteWorker
 {
 public:
     explicit BinderDeleteWorker(const BinderContext & context) noexcept;
 
 public:
-    /**
-     * @brief 绑定 DELETE 语句
-     * @param statement DELETE 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_delete(
+    // 绑定 DELETE 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_delete(
         const parser::ast::DeleteStatement & statement
     );
 
 private:
-    const BinderContext & context_;        // 绑定上下文
+    const BinderContext & context_;
 };
 
 } // namespace litedb::core::binder

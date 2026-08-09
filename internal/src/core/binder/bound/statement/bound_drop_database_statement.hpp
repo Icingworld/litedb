@@ -8,26 +8,20 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 DROP DATABASE 语句
- */
+// 绑定 DROP DATABASE 语句
 class BoundDropDatabaseStatement final : public BoundStatement
 {
 public:
-    BoundDropDatabaseStatement(
-        std::optional<common::DatabaseId> database_id
-    ) noexcept;
+    BoundDropDatabaseStatement(std::optional<common::DatabaseId> database_id) noexcept;
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
+    // 获取数据库 ID
     [[nodiscard]]
     std::optional<common::DatabaseId> database_id() const noexcept;
 
 private:
-    std::optional<common::DatabaseId> database_id_;        // 数据库 ID
+    // database_id_ 为 nullopt 时表示用户传入了重复数据库名但是用了 IF EXISTS
+    std::optional<common::DatabaseId> database_id_;
 };
 
 } // namespace litedb::core::binder::bound

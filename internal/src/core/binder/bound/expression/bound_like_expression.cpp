@@ -10,16 +10,12 @@ BoundLikeExpression::BoundLikeExpression(
     std::unique_ptr<BoundExpression> pattern
 )
     : BoundExpression(
-        BoundExpressionKind::Like,
-        common::LogicalType {
-            common::LogicalTypeId::Boolean,
-            std::nullopt
-        }
-    )
+          BoundExpressionKind::Like,
+          common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt}
+      )
     , expression_(std::move(expression))
     , pattern_(std::move(pattern))
-{
-}
+{}
 
 const BoundExpression & BoundLikeExpression::expression() const noexcept
 {

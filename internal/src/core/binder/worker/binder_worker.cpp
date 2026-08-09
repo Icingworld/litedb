@@ -19,11 +19,9 @@ using namespace litedb::core::parser::ast;
 
 BinderWorker::BinderWorker(const BinderContext & context)
     : context_(context)
-{
-}
+{}
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::bind_statement(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::bind_statement(
     const StatementNode & statement
 )
 {
@@ -31,39 +29,30 @@ BinderWorker::bind_statement(
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_create_database_statement(
-    const CreateDatabaseStatement & statement
-)
+BinderWorker::visit_create_database_statement(const CreateDatabaseStatement & statement)
 {
     return BinderCreateWorker(context_).bind_create_database(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_create_collection_statement(
-    const CreateCollectionStatement & statement
-)
+BinderWorker::visit_create_collection_statement(const CreateCollectionStatement & statement)
 {
     return BinderCreateWorker(context_).bind_create_collection(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_create_index_statement(
-    const CreateIndexStatement & statement
-)
+BinderWorker::visit_create_index_statement(const CreateIndexStatement & statement)
 {
     return BinderCreateWorker(context_).bind_create_index(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_create_vector_index_statement(
-    const CreateVectorIndexStatement & statement
-)
+BinderWorker::visit_create_vector_index_statement(const CreateVectorIndexStatement & statement)
 {
     return BinderCreateWorker(context_).bind_create_vector_index(statement);
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_delete_statement(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::visit_delete_statement(
     const DeleteStatement & statement
 )
 {
@@ -71,55 +60,43 @@ BinderWorker::visit_delete_statement(
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_describe_collection_statement(
-    const DescribeCollectionStatement & statement
-)
+BinderWorker::visit_describe_collection_statement(const DescribeCollectionStatement & statement)
 {
     return BinderDescribeWorker(context_).bind_describe_collection(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_drop_database_statement(
-    const DropDatabaseStatement & statement
-)
+BinderWorker::visit_drop_database_statement(const DropDatabaseStatement & statement)
 {
     return BinderDropWorker(context_).bind_drop_database(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_drop_collection_statement(
-    const DropCollectionStatement & statement
-)
+BinderWorker::visit_drop_collection_statement(const DropCollectionStatement & statement)
 {
     return BinderDropWorker(context_).bind_drop_collection(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_drop_index_statement(
-    const DropIndexStatement & statement
-)
+BinderWorker::visit_drop_index_statement(const DropIndexStatement & statement)
 {
     return BinderDropWorker(context_).bind_drop_index(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_drop_vector_index_statement(
-    const DropVectorIndexStatement & statement
-)
+BinderWorker::visit_drop_vector_index_statement(const DropVectorIndexStatement & statement)
 {
     return BinderDropWorker(context_).bind_drop_vector_index(statement);
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_insert_statement(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::visit_insert_statement(
     const InsertStatement & statement
 )
 {
     return BinderInsertWorker(context_).bind_insert(statement);
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_select_statement(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::visit_select_statement(
     const SelectStatement & statement
 )
 {
@@ -127,47 +104,37 @@ BinderWorker::visit_select_statement(
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_show_databases_statement(
-    const ShowDatabasesStatement & statement
-)
+BinderWorker::visit_show_databases_statement(const ShowDatabasesStatement & statement)
 {
     return BinderShowWorker(context_).bind_show_databases(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_show_collections_statement(
-    const ShowCollectionsStatement & statement
-)
+BinderWorker::visit_show_collections_statement(const ShowCollectionsStatement & statement)
 {
     return BinderShowWorker(context_).bind_show_collections(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_show_indexes_statement(
-    const ShowIndexesStatement & statement
-)
+BinderWorker::visit_show_indexes_statement(const ShowIndexesStatement & statement)
 {
     return BinderShowWorker(context_).bind_show_indexes(statement);
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_show_vector_indexes_statement(
-    const ShowVectorIndexesStatement & statement
-)
+BinderWorker::visit_show_vector_indexes_statement(const ShowVectorIndexesStatement & statement)
 {
     return BinderShowWorker(context_).bind_show_vector_indexes(statement);
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_update_statement(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::visit_update_statement(
     const UpdateStatement & statement
 )
 {
     return BinderUpdateWorker(context_).bind_update(statement);
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderWorker::visit_use_statement(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderWorker::visit_use_statement(
     const UseStatement & statement
 )
 {

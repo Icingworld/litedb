@@ -3,14 +3,10 @@
 namespace litedb::core::binder::bound
 {
 
-BoundExpression::BoundExpression(
-    BoundExpressionKind kind,
-    common::LogicalType type
-) noexcept
+BoundExpression::BoundExpression(BoundExpressionKind kind, common::LogicalType type) noexcept
     : kind_(kind)
     , type_(type)
-{
-}
+{}
 
 BoundExpressionKind BoundExpression::kind() const noexcept
 {

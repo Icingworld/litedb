@@ -5,9 +5,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 SHOW DATABASES 语句
- */
+// 绑定 SHOW DATABASES 语句
 class BoundShowDatabasesStatement final : public BoundStatement
 {
 public:

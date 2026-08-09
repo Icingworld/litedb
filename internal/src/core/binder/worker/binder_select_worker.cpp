@@ -3,15 +3,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include "core/binder/binder_helper.hpp"
 #include "core/binder/binder_context.hpp"
+#include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_select_statement.hpp"
 #include "core/binder/worker/binder_worker_helper.hpp"
+#include "core/common/identifier.hpp"
 #include "core/parser/ast/expression/alias_expression.hpp"
 #include "core/parser/ast/expression/column_reference_expression.hpp"
 #include "core/parser/ast/expression/wildcard_expression.hpp"
 #include "core/parser/ast/statement/select_statement.hpp"
-#include "core/common/identifier.hpp"
 
 namespace litedb::core::binder
 {
@@ -23,20 +23,14 @@ using namespace litedb::core::parser::ast;
 namespace
 {
 
-/**
- * @brief 投影别名绑定
- */
+// 投影别名绑定
 struct ProjectionAliasBinding
 {
     const ExpressionNode * expression {nullptr};
     std::size_t count {0};
 };
 
-/**
- * @brief 投影表达式
- * @param item 投影项
- * @return 投影表达式
- */
+// 投影表达式
 [[nodiscard]]
 const ExpressionNode & projection_expression(const ExpressionNode & item)
 {
@@ -46,11 +40,7 @@ const ExpressionNode & projection_expression(const ExpressionNode & item)
     return item;
 }
 
-/**
- * @brief 投影别名
- * @param item 投影项
- * @return 投影别名
- */
+// 投影别名
 [[nodiscard]]
 std::optional<std::string> projection_alias(const ExpressionNode & item)
 {
@@ -60,13 +50,7 @@ std::optional<std::string> projection_alias(const ExpressionNode & item)
     return std::nullopt;
 }
 
-/**
- * @brief 获取投影输出名称
- * @param expression 投影表达式
- * @param alias 显式别名
- * @param projection_index 投影项下标
- * @return 投影输出名称
- */
+// 获取投影输出名称
 [[nodiscard]]
 std::string projection_output_name(
     const ExpressionNode & expression,
@@ -79,19 +63,13 @@ std::string projection_output_name(
     }
 
     if (expression.kind() == AstNodeKind::ColumnReference) {
-        return static_cast<const ColumnReferenceExpression &>(expression)
-            .column_name();
+        return static_cast<const ColumnReferenceExpression &>(expression).column_name();
     }
 
     return "expr" + std::to_string(projection_index + 1);
 }
 
-/**
- * @brief 排序别名目标
- * @param expression 表达式
- * @param aliases 别名绑定
- * @return 排序别名目标
- */
+// 排序别名目标
 [[nodiscard]]
 const ExpressionNode * order_by_alias_target(
     const ExpressionNode & expression,
@@ -107,9 +85,7 @@ const ExpressionNode * order_by_alias_target(
         return nullptr;
     }
 
-    const auto it = aliases.find(
-        common::normalize_identifier(column.column_name())
-    );
+    const auto it = aliases.find(common::normalize_identifier(column.column_name()));
     if (it == aliases.end()) {
         return nullptr;
     }
@@ -117,24 +93,17 @@ const ExpressionNode * order_by_alias_target(
     return it->second.expression;
 }
 
-/**
- * @brief 绑定排序表达式
- * @param helper 绑定助手
- * @param expression 表达式
- * @param collection 集合
- * @param aliases 别名绑定
- * @return 绑定后的表达式
- */
+// 绑定排序表达式
 [[nodiscard]]
-std::expected<std::unique_ptr<BoundExpression>, BinderError>
-bind_order_by_expression(
+std::expected<std::unique_ptr<BoundExpression>, BinderError> bind_order_by_expression(
     const BinderWorkerHelper & helper,
     const ExpressionNode & expression,
     const BindingCollection & collection,
     const std::unordered_map<std::string, ProjectionAliasBinding> & aliases
 )
 {
-    if (const auto * alias_target = order_by_alias_target(expression, aliases); alias_target != nullptr) {
+    if (const auto * alias_target = order_by_alias_target(expression, aliases);
+        alias_target != nullptr) {
         const auto & column = static_cast<const ColumnReferenceExpression &>(expression);
         const auto alias_key = normalize_identifier(column.column_name());
         if (aliases.at(alias_key).count > 1) [[unlikely]] {
@@ -153,20 +122,16 @@ bind_order_by_expression(
 
 BinderSelectWorker::BinderSelectWorker(const BinderContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderSelectWorker::bind_select(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::bind_select(
     const SelectStatement & statement
 )
 {
     BinderWorkerHelper helper(context_);
 
     // 通过 Helper 绑定集合
-    auto collection = helper.bind_collection(
-        statement.collection_name()
-    );
+    auto collection = helper.bind_collection(statement.collection_name());
     if (!collection.has_value()) [[unlikely]] {
         return std::unexpected(std::move(collection.error()));
     }
@@ -177,17 +142,13 @@ BinderSelectWorker::bind_select(
     for (const auto & item : statement.select_list()) {
         if (item->kind() == AstNodeKind::Wildcard) {
             // 展开通配符表达式
-            auto expanded = helper.expand_wildcard(
-                static_cast<const WildcardExpression &>(*item),
-                *collection
-            );
+            auto expanded =
+                helper.expand_wildcard(static_cast<const WildcardExpression &>(*item), *collection);
             if (!expanded.has_value()) [[unlikely]] {
                 return std::unexpected(std::move(expanded.error()));
             }
             // 获取集合所有列
-            const auto columns = context_.meta().list_columns(
-                collection->collection->id()
-            );
+            const auto columns = context_.meta().list_columns(collection->collection->id());
             if (expanded->size() != columns.size()) [[unlikely]] {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::UnsupportedExpression,
@@ -195,10 +156,12 @@ BinderSelectWorker::bind_select(
                 ));
             }
             for (std::size_t index = 0; index < expanded->size(); ++index) {
-                projections.push_back(BoundProjectionItem {
-                    .expression = std::move((*expanded)[index]),
-                    .output_name = columns[index]->name(),
-                });
+                projections.push_back(
+                    BoundProjectionItem {
+                        .expression = std::move((*expanded)[index]),
+                        .output_name = columns[index]->name(),
+                    }
+                );
             }
             continue;
         }
@@ -216,15 +179,13 @@ BinderSelectWorker::bind_select(
             ++binding.count;
         }
 
-        auto output_name = projection_output_name(
-            expression_node,
-            alias,
-            projections.size()
+        auto output_name = projection_output_name(expression_node, alias, projections.size());
+        projections.push_back(
+            BoundProjectionItem {
+                .expression = std::move(*expression),
+                .output_name = std::move(output_name),
+            }
         );
-        projections.push_back(BoundProjectionItem {
-            .expression = std::move(*expression),
-            .output_name = std::move(output_name),
-        });
     }
 
     // 绑定条件表达式
@@ -235,10 +196,9 @@ BinderSelectWorker::bind_select(
             return std::unexpected(std::move(bound_where.error()));
         }
         if (!is_boolean((*bound_where)->type())) [[unlikely]] {
-            return std::unexpected(make_binder_error(
-                BinderErrorCode::InvalidType,
-                "WHERE expression must be BOOLEAN"
-            ));
+            return std::unexpected(
+                make_binder_error(BinderErrorCode::InvalidType, "WHERE expression must be BOOLEAN")
+            );
         }
         where = std::move(*bound_where);
     }
@@ -246,19 +206,16 @@ BinderSelectWorker::bind_select(
     // 绑定排序表达式
     std::vector<BoundOrderByItem> order_by;
     for (const auto & item : statement.order_by()) {
-        auto expression = bind_order_by_expression(
-            helper,
-            *item.expression,
-            *collection,
-            aliases
-        );
+        auto expression = bind_order_by_expression(helper, *item.expression, *collection, aliases);
         if (!expression.has_value()) [[unlikely]] {
             return std::unexpected(std::move(expression.error()));
         }
-        order_by.push_back(BoundOrderByItem {
-            .expression = std::move(*expression),
-            .ascending = item.ascending,
-        });
+        order_by.push_back(
+            BoundOrderByItem {
+                .expression = std::move(*expression),
+                .ascending = item.ascending,
+            }
+        );
     }
 
     return std::make_unique<BoundSelectStatement>(

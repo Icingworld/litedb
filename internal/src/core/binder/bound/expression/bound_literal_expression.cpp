@@ -5,14 +5,10 @@
 namespace litedb::core::binder::bound
 {
 
-BoundLiteralExpression::BoundLiteralExpression(
-    common::LogicalType type,
-    common::Value value
-)
+BoundLiteralExpression::BoundLiteralExpression(common::LogicalType type, common::Value value)
     : BoundExpression(BoundExpressionKind::Literal, type)
     , value_(std::move(value))
-{
-}
+{}
 
 const common::Value & BoundLiteralExpression::value() const noexcept
 {

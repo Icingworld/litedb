@@ -6,26 +6,19 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 DESCRIBE COLLECTION 语句
- */
+// 绑定 DESCRIBE COLLECTION 语句
 class BoundDescribeCollectionStatement final : public BoundStatement
 {
 public:
-    BoundDescribeCollectionStatement(
-        common::CollectionId collection_id
-    ) noexcept;
+    BoundDescribeCollectionStatement(common::CollectionId collection_id) noexcept;
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
 private:
-    common::CollectionId collection_id_;        // 集合 ID
+    common::CollectionId collection_id_;
 };
 
 } // namespace litedb::core::binder::bound

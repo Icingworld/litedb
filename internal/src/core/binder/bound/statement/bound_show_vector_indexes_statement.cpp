@@ -8,11 +8,9 @@ BoundShowVectorIndexesStatement::BoundShowVectorIndexesStatement(
 ) noexcept
     : BoundStatement(BoundStatementKind::ShowVectorIndexes)
     , collection_id_(collection_id)
-{
-}
+{}
 
-common::CollectionId
-BoundShowVectorIndexesStatement::collection_id() const noexcept
+common::CollectionId BoundShowVectorIndexesStatement::collection_id() const noexcept
 {
     return collection_id_;
 }

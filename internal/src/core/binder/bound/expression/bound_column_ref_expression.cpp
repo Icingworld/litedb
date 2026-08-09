@@ -11,8 +11,7 @@ BoundColumnRefExpression::BoundColumnRefExpression(
     : BoundExpression(BoundExpressionKind::ColumnRef, type)
     , column_id_(column_id)
     , column_ordinal_(column_ordinal)
-{
-}
+{}
 
 common::ColumnId BoundColumnRefExpression::column_id() const noexcept
 {

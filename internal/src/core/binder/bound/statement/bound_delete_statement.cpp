@@ -12,17 +12,20 @@ BoundDeleteStatement::BoundDeleteStatement(
     : BoundStatement(BoundStatementKind::Delete)
     , collection_id_(collection_id)
     , where_(std::move(where))
-{
-}
+{}
 
 common::CollectionId BoundDeleteStatement::collection_id() const noexcept
 {
     return collection_id_;
 }
 
-const BoundExpression * BoundDeleteStatement::where() const noexcept
+std::optional<const BoundExpression &> BoundDeleteStatement::where() const noexcept
 {
-    return where_.get();
+    if (!where_) {
+        return std::nullopt;
+    }
+
+    return *where_;
 }
 
 std::unique_ptr<BoundExpression> BoundDeleteStatement::take_where() noexcept

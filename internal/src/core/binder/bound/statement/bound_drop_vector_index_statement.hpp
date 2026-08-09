@@ -8,26 +8,20 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 DROP VINDEX 语句
- */
+// 绑定 DROP VINDEX 语句
 class BoundDropVectorIndexStatement final : public BoundStatement
 {
 public:
-    BoundDropVectorIndexStatement(
-        std::optional<common::VIndexId> vector_index_id
-    ) noexcept;
+    BoundDropVectorIndexStatement(std::optional<common::VIndexId> vector_index_id) noexcept;
 
 public:
-    /**
-     * @brief 获取向量索引 ID
-     * @return 向量索引 ID
-     */
+    // 获取向量索引 ID
     [[nodiscard]]
     std::optional<common::VIndexId> vector_index_id() const noexcept;
 
 private:
-    std::optional<common::VIndexId> vector_index_id_;  // 向量索引 ID
+    // vector_index_id_ 为 nullopt 时表示用户传入了重复向量索引名但是用了 IF EXISTS
+    std::optional<common::VIndexId> vector_index_id_;
 };
 
 } // namespace litedb::core::binder::bound

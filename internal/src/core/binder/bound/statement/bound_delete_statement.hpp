@@ -1,17 +1,16 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
-#include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
+#include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
 
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 DELETE 语句
- */
+// 绑定 DELETE 语句
 class BoundDeleteStatement final : public BoundStatement
 {
 public:
@@ -21,30 +20,21 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
-    /**
-     * @brief 获取条件表达式
-     * @return 条件表达式
-     */
+    // 获取条件表达式
     [[nodiscard]]
-    const BoundExpression * where() const noexcept;
+    std::optional<const BoundExpression &> where() const noexcept;
 
-    /**
-     * @brief 获取条件表达式
-     * @return 条件表达式
-     */
+    // 获取条件表达式所有权
     [[nodiscard]]
     std::unique_ptr<BoundExpression> take_where() noexcept;
 
 private:
-    common::CollectionId collection_id_;            // 集合 ID
-    std::unique_ptr<BoundExpression> where_;        // 条件表达式
+    common::CollectionId collection_id_;
+    std::unique_ptr<BoundExpression> where_;
 };
 
 } // namespace litedb::core::binder::bound

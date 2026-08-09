@@ -5,9 +5,7 @@
 namespace litedb::core::binder::bound
 {
 
-/**
- * @brief 绑定 NULL 表达式
- */
+// 绑定 NULL 表达式
 class BoundNullExpression final : public BoundExpression
 {
 public:

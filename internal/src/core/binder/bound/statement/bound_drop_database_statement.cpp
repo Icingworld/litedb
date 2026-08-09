@@ -8,11 +8,9 @@ BoundDropDatabaseStatement::BoundDropDatabaseStatement(
 ) noexcept
     : BoundStatement(BoundStatementKind::DropDatabase)
     , database_id_(database_id)
-{
-}
+{}
 
-std::optional<common::DatabaseId>
-BoundDropDatabaseStatement::database_id() const noexcept
+std::optional<common::DatabaseId> BoundDropDatabaseStatement::database_id() const noexcept
 {
     return database_id_;
 }

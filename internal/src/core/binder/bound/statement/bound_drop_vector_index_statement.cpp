@@ -8,11 +8,9 @@ BoundDropVectorIndexStatement::BoundDropVectorIndexStatement(
 ) noexcept
     : BoundStatement(BoundStatementKind::DropVectorIndex)
     , vector_index_id_(vector_index_id)
-{
-}
+{}
 
-std::optional<common::VIndexId>
-BoundDropVectorIndexStatement::vector_index_id() const noexcept
+std::optional<common::VIndexId> BoundDropVectorIndexStatement::vector_index_id() const noexcept
 {
     return vector_index_id_;
 }

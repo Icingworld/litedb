@@ -11,17 +11,13 @@ BoundBetweenExpression::BoundBetweenExpression(
     std::unique_ptr<BoundExpression> upper
 )
     : BoundExpression(
-        BoundExpressionKind::Between,
-        common::LogicalType {
-            common::LogicalTypeId::Boolean,
-            std::nullopt
-        }
-    )
+          BoundExpressionKind::Between,
+          common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt}
+      )
     , expression_(std::move(expression))
     , lower_(std::move(lower))
     , upper_(std::move(upper))
-{
-}
+{}
 
 const BoundExpression & BoundBetweenExpression::expression() const noexcept
 {

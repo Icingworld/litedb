@@ -11,8 +11,7 @@ BinderContext::BinderContext(
     : meta_(meta)
     , session_(session)
     , functions_(functions)
-{
-}
+{}
 
 const meta::CatalogView & BinderContext::meta() const noexcept
 {

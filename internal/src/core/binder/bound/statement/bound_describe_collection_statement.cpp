@@ -8,11 +8,9 @@ BoundDescribeCollectionStatement::BoundDescribeCollectionStatement(
 ) noexcept
     : BoundStatement(BoundStatementKind::DescribeCollection)
     , collection_id_(collection_id)
-{
-}
+{}
 
-common::CollectionId
-BoundDescribeCollectionStatement::collection_id() const noexcept
+common::CollectionId BoundDescribeCollectionStatement::collection_id() const noexcept
 {
     return collection_id_;
 }

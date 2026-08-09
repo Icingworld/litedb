@@ -1,16 +1,16 @@
 #include "core/binder/worker/binder_create_worker.hpp"
 
-#include "core/binder/binder_helper.hpp"
 #include "core/binder/binder_context.hpp"
-#include "core/binder/bound/statement/bound_create_database_statement.hpp"
+#include "core/binder/binder_helper.hpp"
 #include "core/binder/bound/statement/bound_create_collection_statement.hpp"
+#include "core/binder/bound/statement/bound_create_database_statement.hpp"
 #include "core/binder/bound/statement/bound_create_index_statement.hpp"
 #include "core/binder/bound/statement/bound_create_vector_index_statement.hpp"
-#include "core/parser/ast/statement/create_database_statement.hpp"
+#include "core/binder/worker/binder_worker_helper.hpp"
 #include "core/parser/ast/statement/create_collection_statement.hpp"
+#include "core/parser/ast/statement/create_database_statement.hpp"
 #include "core/parser/ast/statement/create_index_statement.hpp"
 #include "core/parser/ast/statement/create_vector_index_statement.hpp"
-#include "core/binder/worker/binder_worker_helper.hpp"
 
 namespace litedb::core::binder
 {
@@ -22,18 +22,13 @@ using namespace litedb::core::parser::ast;
 
 BinderCreateWorker::BinderCreateWorker(const BinderContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderCreateWorker::bind_create_database(
-    const CreateDatabaseStatement & statement
-)
+BinderCreateWorker::bind_create_database(const CreateDatabaseStatement & statement)
 {
     // 查找数据库
-    const auto * database = context_.meta().find_database(
-        statement.database_name()
-    );
+    const auto * database = context_.meta().find_database(statement.database_name());
     if (database != nullptr && !statement.if_not_exists()) [[unlikely]] {
         // 数据库已存在，且用户未指定 if_not_exists 选项
         return std::unexpected(make_binder_error(
@@ -43,15 +38,12 @@ BinderCreateWorker::bind_create_database(
     }
 
     return std::make_unique<BoundCreateDatabaseStatement>(
-        database == nullptr ?
-            std::optional<std::string>(statement.database_name()) : std::nullopt
+        database == nullptr ? std::optional<std::string>(statement.database_name()) : std::nullopt
     );
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderCreateWorker::bind_create_collection(
-    const CreateCollectionStatement & statement
-)
+BinderCreateWorker::bind_create_collection(const CreateCollectionStatement & statement)
 {
     BinderWorkerHelper helper(context_);
 
@@ -62,10 +54,8 @@ BinderCreateWorker::bind_create_collection(
     }
 
     // 查找集合
-    const auto * collection = context_.meta().find_collection(
-        *database_id,
-        statement.collection_name()
-    );
+    const auto * collection =
+        context_.meta().find_collection(*database_id, statement.collection_name());
     if (collection != nullptr && !statement.if_not_exists()) [[unlikely]] {
         // 集合已存在，且用户未指定 if_not_exists 选项
         return std::unexpected(make_binder_error(
@@ -81,15 +71,14 @@ BinderCreateWorker::bind_create_collection(
 
     return std::make_unique<BoundCreateCollectionStatement>(
         *database_id,
-        collection == nullptr ?
-            std::optional<std::string>(statement.collection_name()) : std::nullopt,
+        collection == nullptr ? std::optional<std::string>(statement.collection_name())
+                              : std::nullopt,
         std::move(*columns),
         statement.comment()
     );
 }
 
-std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderCreateWorker::bind_create_index(
+std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderCreateWorker::bind_create_index(
     const CreateIndexStatement & statement
 )
 {
@@ -102,10 +91,8 @@ BinderCreateWorker::bind_create_index(
     }
 
     // 查找索引
-    const auto * index = context_.meta().find_index(
-        collection->collection->id(),
-        statement.index_name()
-    );
+    const auto * index =
+        context_.meta().find_index(collection->collection->id(), statement.index_name());
     if (index != nullptr && !statement.if_not_exists()) [[unlikely]] {
         // 索引已存在，且用户未指定 if_not_exists 选项
         return std::unexpected(make_binder_error(
@@ -115,10 +102,8 @@ BinderCreateWorker::bind_create_index(
     }
 
     // 查找列
-    const auto * column = context_.meta().find_column(
-        collection->collection->id(),
-        statement.column_name()
-    );
+    const auto * column =
+        context_.meta().find_column(collection->collection->id(), statement.column_name());
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
@@ -146,17 +131,14 @@ BinderCreateWorker::bind_create_index(
 
     return std::make_unique<BoundCreateIndexStatement>(
         column->id(),
-        index == nullptr ?
-            std::optional<std::string>(statement.index_name()) : std::nullopt,
+        index == nullptr ? std::optional<std::string>(statement.index_name()) : std::nullopt,
         index_kind,
         statement.unique()
     );
 }
 
 std::expected<std::unique_ptr<BoundStatement>, BinderError>
-BinderCreateWorker::bind_create_vector_index(
-    const CreateVectorIndexStatement & statement
-)
+BinderCreateWorker::bind_create_vector_index(const CreateVectorIndexStatement & statement)
 {
     BinderWorkerHelper helper(context_);
 
@@ -167,10 +149,8 @@ BinderCreateWorker::bind_create_vector_index(
     }
 
     // 查找向量索引
-    const auto * index = context_.meta().find_vector_index(
-        collection->collection->id(),
-        statement.index_name()
-    );
+    const auto * index =
+        context_.meta().find_vector_index(collection->collection->id(), statement.index_name());
     if (index != nullptr && !statement.if_not_exists()) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::VectorIndexAlreadyExists,
@@ -179,10 +159,8 @@ BinderCreateWorker::bind_create_vector_index(
     }
 
     // 查找列
-    const auto * column = context_.meta().find_column(
-        collection->collection->id(),
-        statement.column_name()
-    );
+    const auto * column =
+        context_.meta().find_column(collection->collection->id(), statement.column_name());
     if (column == nullptr) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
@@ -192,9 +170,8 @@ BinderCreateWorker::bind_create_vector_index(
 
     // 检查列类型是否为向量，并且维度大于 0
     // 理论上不会出现 dimension <= 0 的情况
-    if (column->type().id != LogicalTypeId::Vector
-        || !column->type().parameter.has_value()
-        || column->type().parameter.value() == 0) [[unlikely]] {
+    if (column->type().id != LogicalTypeId::Vector || !column->type().parameter.has_value() ||
+        column->type().parameter.value() == 0) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidType,
             "Vector index can only be created on VECTOR(n) column: " + column->name()
@@ -205,9 +182,7 @@ BinderCreateWorker::bind_create_vector_index(
     const auto max_neighbors = statement.options().max_neighbors.value_or(16);
     const auto ef_construction = statement.options().ef_construction.value_or(200);
     const auto ef_search = statement.options().ef_search.value_or(64);
-    if (max_neighbors == 0
-        || ef_construction < max_neighbors
-        || ef_search == 0) [[unlikely]] {
+    if (max_neighbors == 0 || ef_construction < max_neighbors || ef_search == 0) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::InvalidIndexOptions,
             "HNSW options require max_neighbors > 0, "
@@ -234,8 +209,7 @@ BinderCreateWorker::bind_create_vector_index(
 
     return std::make_unique<BoundCreateVectorIndexStatement>(
         column->id(),
-        index == nullptr ?
-            std::optional<std::string>(statement.index_name()) : std::nullopt,
+        index == nullptr ? std::optional<std::string>(statement.index_name()) : std::nullopt,
         meta::entry::VectorIndexKind::Hnsw,
         metric,
         max_neighbors,

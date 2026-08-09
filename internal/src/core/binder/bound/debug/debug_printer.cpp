@@ -27,16 +27,12 @@ private:
     BoundDebugPrinter & printer_;
 };
 
-BoundDebugPrinter::BoundDebugPrinter(
-    std::ostream & ostream,
-    BoundDebugPrinterOptions options
-)
+BoundDebugPrinter::BoundDebugPrinter(std::ostream & ostream, BoundDebugPrinterOptions options)
     : ostream_(ostream)
     , options_(options)
     , indent_(0)
     , pending_str_()
-{
-}
+{}
 
 void BoundDebugPrinter::print(const BoundStatement & statement)
 {
@@ -93,9 +89,7 @@ void BoundDebugPrinter::visit_create_collection_statement(
     }
 }
 
-void BoundDebugPrinter::visit_create_index_statement(
-    const BoundCreateIndexStatement & statement
-)
+void BoundDebugPrinter::visit_create_index_statement(const BoundCreateIndexStatement & statement)
 {
     write_node_header("BoundCreateIndexStatement");
     IndentScope scope(*this);
@@ -113,10 +107,7 @@ void BoundDebugPrinter::visit_create_vector_index_statement(
     IndentScope scope(*this);
     write_field("column_id", statement.column_id());
     write_optional_field("vector_index_name", statement.vector_index_name());
-    write_field(
-        "vector_index_kind",
-        vector_index_kind_name(statement.vector_index_kind())
-    );
+    write_field("vector_index_kind", vector_index_kind_name(statement.vector_index_kind()));
     write_field("metric", vector_distance_metric_name(statement.metric()));
     write_field("max_neighbors", statement.max_neighbors());
     write_field("ef_construction", statement.ef_construction());
@@ -124,9 +115,7 @@ void BoundDebugPrinter::visit_create_vector_index_statement(
     write_field("random_seed", statement.random_seed());
 }
 
-void BoundDebugPrinter::visit_delete_statement(
-    const BoundDeleteStatement & statement
-)
+void BoundDebugPrinter::visit_delete_statement(const BoundDeleteStatement & statement)
 {
     write_node_header("BoundDeleteStatement");
     IndentScope scope(*this);
@@ -143,9 +132,7 @@ void BoundDebugPrinter::visit_describe_collection_statement(
     write_field("collection_id", statement.collection_id());
 }
 
-void BoundDebugPrinter::visit_drop_database_statement(
-    const BoundDropDatabaseStatement & statement
-)
+void BoundDebugPrinter::visit_drop_database_statement(const BoundDropDatabaseStatement & statement)
 {
     write_node_header("BoundDropDatabaseStatement");
     IndentScope scope(*this);
@@ -161,9 +148,7 @@ void BoundDebugPrinter::visit_drop_collection_statement(
     write_optional_field("collection_id", statement.collection_id());
 }
 
-void BoundDebugPrinter::visit_drop_index_statement(
-    const BoundDropIndexStatement & statement
-)
+void BoundDebugPrinter::visit_drop_index_statement(const BoundDropIndexStatement & statement)
 {
     write_node_header("BoundDropIndexStatement");
     IndentScope scope(*this);
@@ -179,9 +164,7 @@ void BoundDebugPrinter::visit_drop_vector_index_statement(
     write_optional_field("vector_index_id", statement.vector_index_id());
 }
 
-void BoundDebugPrinter::visit_insert_statement(
-    const BoundInsertStatement & statement
-)
+void BoundDebugPrinter::visit_insert_statement(const BoundInsertStatement & statement)
 {
     write_node_header("BoundInsertStatement");
     IndentScope scope(*this);
@@ -202,9 +185,7 @@ void BoundDebugPrinter::visit_insert_statement(
     }
 }
 
-void BoundDebugPrinter::visit_select_statement(
-    const BoundSelectStatement & statement
-)
+void BoundDebugPrinter::visit_select_statement(const BoundSelectStatement & statement)
 {
     write_node_header("BoundSelectStatement");
     IndentScope scope(*this);
@@ -266,9 +247,7 @@ void BoundDebugPrinter::visit_show_collections_statement(
     write_field("database_id", statement.database_id());
 }
 
-void BoundDebugPrinter::visit_show_indexes_statement(
-    const BoundShowIndexesStatement & statement
-)
+void BoundDebugPrinter::visit_show_indexes_statement(const BoundShowIndexesStatement & statement)
 {
     write_node_header("BoundShowIndexesStatement");
     IndentScope scope(*this);
@@ -284,9 +263,7 @@ void BoundDebugPrinter::visit_show_vector_indexes_statement(
     write_field("collection_id", statement.collection_id());
 }
 
-void BoundDebugPrinter::visit_update_statement(
-    const BoundUpdateStatement & statement
-)
+void BoundDebugPrinter::visit_update_statement(const BoundUpdateStatement & statement)
 {
     write_node_header("BoundUpdateStatement");
     IndentScope scope(*this);
@@ -312,18 +289,14 @@ void BoundDebugPrinter::visit_update_statement(
     write_child_field("where", statement.where());
 }
 
-void BoundDebugPrinter::visit_use_statement(
-    const BoundUseStatement & statement
-)
+void BoundDebugPrinter::visit_use_statement(const BoundUseStatement & statement)
 {
     write_node_header("BoundUseStatement");
     IndentScope scope(*this);
     write_field("database_id", statement.database_id());
 }
 
-void BoundDebugPrinter::visit_literal_expression(
-    const BoundLiteralExpression & expression
-)
+void BoundDebugPrinter::visit_literal_expression(const BoundLiteralExpression & expression)
 {
     write_node_header("BoundLiteralExpression");
     IndentScope scope(*this);
@@ -331,18 +304,14 @@ void BoundDebugPrinter::visit_literal_expression(
     write_field("value", common::value_to_string(expression.value()));
 }
 
-void BoundDebugPrinter::visit_null_expression(
-    const BoundNullExpression & expression
-)
+void BoundDebugPrinter::visit_null_expression(const BoundNullExpression & expression)
 {
     write_node_header("BoundNullExpression");
     IndentScope scope(*this);
     write_type_field("type", expression.type());
 }
 
-void BoundDebugPrinter::visit_column_ref_expression(
-    const BoundColumnRefExpression & expression
-)
+void BoundDebugPrinter::visit_column_ref_expression(const BoundColumnRefExpression & expression)
 {
     write_node_header("BoundColumnRefExpression");
     IndentScope scope(*this);
@@ -351,9 +320,7 @@ void BoundDebugPrinter::visit_column_ref_expression(
     write_field("column_ordinal", expression.column_ordinal());
 }
 
-void BoundDebugPrinter::visit_unary_expression(
-    const BoundUnaryExpression & expression
-)
+void BoundDebugPrinter::visit_unary_expression(const BoundUnaryExpression & expression)
 {
     write_node_header("BoundUnaryExpression");
     IndentScope scope(*this);
@@ -362,9 +329,7 @@ void BoundDebugPrinter::visit_unary_expression(
     write_child_field("operand", &expression.operand());
 }
 
-void BoundDebugPrinter::visit_binary_expression(
-    const BoundBinaryExpression & expression
-)
+void BoundDebugPrinter::visit_binary_expression(const BoundBinaryExpression & expression)
 {
     write_node_header("BoundBinaryExpression");
     IndentScope scope(*this);
@@ -374,9 +339,7 @@ void BoundDebugPrinter::visit_binary_expression(
     write_child_field("right", &expression.right());
 }
 
-void BoundDebugPrinter::visit_vector_expression(
-    const BoundVectorExpression & expression
-)
+void BoundDebugPrinter::visit_vector_expression(const BoundVectorExpression & expression)
 {
     write_node_header("BoundVectorExpression");
     IndentScope scope(*this);
@@ -396,9 +359,7 @@ void BoundDebugPrinter::visit_vector_expression(
     }
 }
 
-void BoundDebugPrinter::visit_function_expression(
-    const BoundFunctionExpression & expression
-)
+void BoundDebugPrinter::visit_function_expression(const BoundFunctionExpression & expression)
 {
     write_node_header("BoundFunctionExpression");
     IndentScope scope(*this);
@@ -420,9 +381,7 @@ void BoundDebugPrinter::visit_function_expression(
     }
 }
 
-void BoundDebugPrinter::visit_in_expression(
-    const BoundInExpression & expression
-)
+void BoundDebugPrinter::visit_in_expression(const BoundInExpression & expression)
 {
     write_node_header("BoundInExpression");
     IndentScope scope(*this);
@@ -444,9 +403,7 @@ void BoundDebugPrinter::visit_in_expression(
     }
 }
 
-void BoundDebugPrinter::visit_between_expression(
-    const BoundBetweenExpression & expression
-)
+void BoundDebugPrinter::visit_between_expression(const BoundBetweenExpression & expression)
 {
     write_node_header("BoundBetweenExpression");
     IndentScope scope(*this);
@@ -456,9 +413,7 @@ void BoundDebugPrinter::visit_between_expression(
     write_child_field("upper", &expression.upper());
 }
 
-void BoundDebugPrinter::visit_like_expression(
-    const BoundLikeExpression & expression
-)
+void BoundDebugPrinter::visit_like_expression(const BoundLikeExpression & expression)
 {
     write_node_header("BoundLikeExpression");
     IndentScope scope(*this);
@@ -467,9 +422,7 @@ void BoundDebugPrinter::visit_like_expression(
     write_child_field("pattern", &expression.pattern());
 }
 
-void BoundDebugPrinter::visit_cast_expression(
-    const BoundCastExpression & expression
-)
+void BoundDebugPrinter::visit_cast_expression(const BoundCastExpression & expression)
 {
     write_node_header("BoundCastExpression");
     IndentScope scope(*this);
@@ -495,10 +448,7 @@ void BoundDebugPrinter::write_node_header(std::string_view name)
     ostream_ << name << '\n';
 }
 
-void BoundDebugPrinter::write_field(
-    std::string_view name,
-    std::string_view value
-)
+void BoundDebugPrinter::write_field(std::string_view name, std::string_view value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -520,10 +470,7 @@ void BoundDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(
-        name,
-        value ? std::string_view(*value) : std::string_view("<none>")
-    );
+    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
 }
 
 void BoundDebugPrinter::write_optional_field(
@@ -541,10 +488,7 @@ void BoundDebugPrinter::write_optional_field(
     ostream_ << '\n';
 }
 
-void BoundDebugPrinter::write_type_field(
-    std::string_view name,
-    const common::LogicalType & type
-)
+void BoundDebugPrinter::write_type_field(std::string_view name, const common::LogicalType & type)
 {
     if (!options_.include_type) {
         return;
@@ -562,10 +506,7 @@ void BoundDebugPrinter::write_bound_column(const BoundColumn & column)
     write_field("nullable", column.nullable);
 }
 
-void BoundDebugPrinter::write_child_field(
-    std::string_view name,
-    const BoundExpression * expression
-)
+void BoundDebugPrinter::write_child_field(std::string_view name, const BoundExpression * expression)
 {
     write_indent();
     ostream_ << name << ':';
@@ -579,20 +520,14 @@ void BoundDebugPrinter::write_child_field(
     print(*expression);
 }
 
-std::string debug_print(
-    const BoundStatement & statement,
-    BoundDebugPrinterOptions options
-)
+std::string debug_print(const BoundStatement & statement, BoundDebugPrinterOptions options)
 {
     std::ostringstream stream;
     debug_print(stream, statement, options);
     return stream.str();
 }
 
-std::string debug_print(
-    const BoundExpression & expression,
-    BoundDebugPrinterOptions options
-)
+std::string debug_print(const BoundExpression & expression, BoundDebugPrinterOptions options)
 {
     std::ostringstream stream;
     debug_print(stream, expression, options);

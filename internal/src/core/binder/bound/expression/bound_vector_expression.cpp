@@ -5,19 +5,13 @@
 namespace litedb::core::binder::bound
 {
 
-BoundVectorExpression::BoundVectorExpression(
-    std::vector<std::unique_ptr<BoundExpression>> elements
-)
+BoundVectorExpression::BoundVectorExpression(std::vector<std::unique_ptr<BoundExpression>> elements)
     : BoundExpression(
-        BoundExpressionKind::Vector,
-        common::LogicalType {
-            common::LogicalTypeId::Vector,
-            elements.size()
-        }
-    )
+          BoundExpressionKind::Vector,
+          common::LogicalType {common::LogicalTypeId::Vector, elements.size()}
+      )
     , elements_(std::move(elements))
-{
-}
+{}
 
 const std::vector<std::unique_ptr<BoundExpression>> &
 BoundVectorExpression::elements() const noexcept
@@ -25,8 +19,7 @@ BoundVectorExpression::elements() const noexcept
     return elements_;
 }
 
-std::vector<std::unique_ptr<BoundExpression>>
-BoundVectorExpression::take_elements() noexcept
+std::vector<std::unique_ptr<BoundExpression>> BoundVectorExpression::take_elements() noexcept
 {
     return std::move(elements_);
 }

@@ -27,57 +27,35 @@ namespace litedb::core::binder
 
 class BinderContext;
 
-/**
- * @brief DROP 语句绑定工作器
- */
+// DROP 语句绑定工作器
 class BinderDropWorker
 {
 public:
     explicit BinderDropWorker(const BinderContext & context) noexcept;
 
 public:
-    /**
-     * @brief 绑定 DROP DATABASE 语句
-     * @param statement DROP DATABASE 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_drop_database(
+    // 绑定 DROP DATABASE 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_database(
         const parser::ast::DropDatabaseStatement & statement
     );
-    
-    /**
-     * @brief 绑定 DROP COLLECTION 语句
-     * @param statement DROP COLLECTION 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_drop_collection(
+
+    // 绑定 DROP COLLECTION 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_collection(
         const parser::ast::DropCollectionStatement & statement
     );
-    
-    /**
-     * @brief 绑定 DROP INDEX 语句
-     * @param statement DROP INDEX 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_drop_index(
+
+    // 绑定 DROP INDEX 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_index(
         const parser::ast::DropIndexStatement & statement
     );
-    
-    /**
-     * @brief 绑定 DROP VINDEX 语句
-     * @param statement DROP VINDEX 语句
-     * @return 绑定后的语句
-     */
-    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError>
-    bind_drop_vector_index(
+
+    // 绑定 DROP VINDEX 语句
+    std::expected<std::unique_ptr<bound::BoundStatement>, BinderError> bind_drop_vector_index(
         const parser::ast::DropVectorIndexStatement & statement
     );
 
 private:
-    const BinderContext & context_;        // 绑定上下文
+    const BinderContext & context_;
 };
 
 } // namespace litedb::core::binder
