@@ -24,14 +24,8 @@ ProtocolError make_error(ProtocolErrorCode code, std::string_view message)
     return ProtocolError {code, message};
 }
 
-/**
- * @brief 确保 payload 大小不超过最大限制
- * @param payload 要检查的 payload
- * @return 如果 payload 大小不超过最大限制，则返回空结果；否则返回错误
- */
-std::expected<void, ProtocolError> ensure_payload_size(
-    std::span<const std::byte> payload
-)
+// 确保 payload 大小不超过最大限制
+std::expected<void, ProtocolError> ensure_payload_size(std::span<const std::byte> payload)
 {
     if (payload.size() > MaxPayloadSize) {
         return std::unexpected(make_error(
@@ -42,13 +36,7 @@ std::expected<void, ProtocolError> ensure_payload_size(
     return {};
 }
 
-/**
- * @brief 创建读取器
- * @param source 源
- * @param payload 字节序列
- * @param max_string 最大字符串字节数
- * @return 创建的读取器
- */
+// 创建读取器
 Reader make_reader(
     core::io::BufferByteReader & source,
     std::span<const std::byte> payload,
@@ -64,58 +52,31 @@ Reader make_reader(
     };
 }
 
-/**
- * @brief 确保读取器已经读取完所有数据
- * @param reader 要检查的读取器
- * @param name 要检查的名称
- * @return 如果读取器已经读取完所有数据，则返回空结果；否则返回错误
- */
-std::expected<void, ProtocolError> ensure_done(
-    const Reader & reader,
-    std::string_view name
-)
+// 确保读取器已经读取完所有数据
+std::expected<void, ProtocolError> ensure_done(const Reader & reader, std::string_view name)
 {
     if (reader.remaining_bytes() != 0) {
         std::string message {name};
         message += " has trailing bytes";
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidPayload,
-            message
-        ));
+        return std::unexpected(make_error(ProtocolErrorCode::InvalidPayload, message));
     }
     return {};
 }
 
-/**
- * @brief 写入计数
- * @param writer 写入器
- * @param count 计数
- * @param name 名称
- * @return 如果写入成功，则返回空结果；否则返回错误
- */
-std::expected<void, ProtocolError> write_count(
-    Writer & writer,
-    std::size_t count,
-    std::string_view name
-)
+// 写入计数
+std::expected<void, ProtocolError>
+write_count(Writer & writer, std::size_t count, std::string_view name)
 {
     // 确保计数不超过最大限制
     if (count > std::numeric_limits<std::uint32_t>::max()) {
         std::string message {name};
         message += " exceeds the wire count limit";
-        return std::unexpected(make_error(
-            ProtocolErrorCode::ResourceLimitExceeded,
-            message
-        ));
+        return std::unexpected(make_error(ProtocolErrorCode::ResourceLimitExceeded, message));
     }
     return writer.write_u32(static_cast<std::uint32_t>(count));
 }
 
-/**
- * @brief 读取逻辑类型
- * @param reader 读取器
- * @return 读取的逻辑类型
- */
+// 读取逻辑类型
 std::expected<LogicalType, ProtocolError> read_logical_type(Reader & reader)
 {
     auto id = reader.read_u8();
@@ -123,10 +84,9 @@ std::expected<LogicalType, ProtocolError> read_logical_type(Reader & reader)
         return std::unexpected(std::move(id.error()));
     }
     if (*id > static_cast<std::uint8_t>(LogicalTypeId::Vector)) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidPayload,
-            "invalid logical type id"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidPayload, "invalid logical type id")
+        );
     }
 
     auto has_parameter = reader.read_u8();
@@ -155,22 +115,13 @@ std::expected<LogicalType, ProtocolError> read_logical_type(Reader & reader)
     };
 }
 
-/**
- * @brief 写入逻辑类型
- * @param writer 写入器
- * @param type 逻辑类型
- * @return 如果写入成功，则返回空结果；否则返回错误
- */
-std::expected<void, ProtocolError> write_logical_type(
-    Writer & writer,
-    const LogicalType & type
-)
+// 写入逻辑类型
+std::expected<void, ProtocolError> write_logical_type(Writer & writer, const LogicalType & type)
 {
     if (static_cast<std::uint8_t>(type.id) > static_cast<std::uint8_t>(LogicalTypeId::Vector)) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidPayload,
-            "invalid logical type id"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidPayload, "invalid logical type id")
+        );
     }
     if (auto result = writer.write_u8(static_cast<std::uint8_t>(type.id)); !result) {
         return std::unexpected(std::move(result.error()));
@@ -184,16 +135,8 @@ std::expected<void, ProtocolError> write_logical_type(
     return {};
 }
 
-/**
- * @brief 读取值
- * @param reader 读取器
- * @param limits 解码限制
- * @return 读取的值
- */
-std::expected<Value, ProtocolError> read_value(
-    Reader & reader,
-    const ProtocolDecodeLimits & limits
-)
+// 读取值
+std::expected<Value, ProtocolError> read_value(Reader & reader, const ProtocolDecodeLimits & limits)
 {
     auto tag = reader.read_u8();
     if (!tag) {
@@ -209,10 +152,9 @@ std::expected<Value, ProtocolError> read_value(
             return std::unexpected(std::move(value.error()));
         }
         if (*value > 1) {
-            return std::unexpected(make_error(
-                ProtocolErrorCode::InvalidPayload,
-                "boolean value must be zero or one"
-            ));
+            return std::unexpected(
+                make_error(ProtocolErrorCode::InvalidPayload, "boolean value must be zero or one")
+            );
         }
         return Value {.data = (*value != 0)};
     }
@@ -281,22 +223,11 @@ std::expected<Value, ProtocolError> read_value(
     }
     }
 
-    return std::unexpected(make_error(
-        ProtocolErrorCode::InvalidPayload,
-        "invalid value tag"
-    ));
+    return std::unexpected(make_error(ProtocolErrorCode::InvalidPayload, "invalid value tag"));
 }
 
-/**
- * @brief 写入值
- * @param writer 写入器
- * @param value 值
- * @return 如果写入成功，则返回空结果；否则返回错误
- */
-std::expected<void, ProtocolError> write_value(
-    Writer & writer,
-    const Value & value
-)
+// 写入值
+std::expected<void, ProtocolError> write_value(Writer & writer, const Value & value)
 {
     return std::visit(
         [&writer](const auto & data) -> std::expected<void, ProtocolError> {
@@ -325,8 +256,8 @@ std::expected<void, ProtocolError> write_value(
             } else {
                 static_assert(std::is_same_v<T, VectorValue>);
                 kind = LogicalTypeId::Vector;
-                if (data.size() > std::numeric_limits<std::uint32_t>::max()
-                    || data.size() > MaxPayloadSize / sizeof(double)) {
+                if (data.size() > std::numeric_limits<std::uint32_t>::max() ||
+                    data.size() > MaxPayloadSize / sizeof(double)) {
                     return std::unexpected(make_error(
                         ProtocolErrorCode::ResourceLimitExceeded,
                         "vector is too large to encode"
@@ -352,7 +283,8 @@ std::expected<void, ProtocolError> write_value(
             } else if constexpr (std::is_same_v<T, std::string>) {
                 return writer.write_string(data);
             } else {
-                if (auto result = writer.write_u32(static_cast<std::uint32_t>(data.size())); !result) {
+                if (auto result = writer.write_u32(static_cast<std::uint32_t>(data.size()));
+                    !result) {
                     return std::unexpected(std::move(result.error()));
                 }
                 for (const auto element : data) {
@@ -375,10 +307,9 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_hello_request(
 {
     // 验证版本范围
     if (request.min_version > request.max_version) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidPayload,
-            "hello version range is invalid"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidPayload, "hello version range is invalid")
+        );
     }
 
     core::io::BufferByteWriter buffer {MaxPayloadSize};
@@ -418,10 +349,9 @@ std::expected<HelloRequest, ProtocolError> decode_hello_request(
         return std::unexpected(std::move(max_version.error()));
     }
     if (*min_version > *max_version) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidPayload,
-            "hello version range is invalid"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidPayload, "hello version range is invalid")
+        );
     }
 
     // 确保读取器已经读取完所有数据
@@ -477,7 +407,10 @@ std::expected<HelloResponse, ProtocolError> decode_hello_response(
         return std::unexpected(std::move(version.error()));
     }
     if (*version != ProtocolVersion) {
-        return std::unexpected(make_error(ProtocolErrorCode::UnsupportedVersion, "unsupported selected protocol version"));
+        return std::unexpected(make_error(
+            ProtocolErrorCode::UnsupportedVersion,
+            "unsupported selected protocol version"
+        ));
     }
 
     // 确保读取器已经读取完所有数据
@@ -485,9 +418,7 @@ std::expected<HelloResponse, ProtocolError> decode_hello_response(
         return std::unexpected(std::move(done.error()));
     }
 
-    return HelloResponse {
-        .selected_version = *version
-    };
+    return HelloResponse {.selected_version = *version};
 }
 
 std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_request(
@@ -496,10 +427,9 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_request(
 {
     // 确保 SQL 语句不超过最大长度限制
     if (sql.size() > DefaultMaxSqlBytes) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::ResourceLimitExceeded,
-            "SQL exceeds the configured limit"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::ResourceLimitExceeded, "SQL exceeds the configured limit")
+        );
     }
 
     core::io::BufferByteWriter buffer {MaxPayloadSize};
@@ -513,10 +443,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_request(
     return buffer.take_bytes();
 }
 
-std::expected<ExecuteSqlRequest, ProtocolError> decode_execute_sql_request(
-    std::span<const std::byte> payload,
-    ProtocolDecodeLimits limits
-)
+std::expected<ExecuteSqlRequest, ProtocolError>
+decode_execute_sql_request(std::span<const std::byte> payload, ProtocolDecodeLimits limits)
 {
     // 确保 payload 大小不超过最大限制
     if (auto size = ensure_payload_size(payload); !size) {
@@ -547,9 +475,9 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
 )
 {
     // 确保结果类型有效、列数和行数不超过最大限制
-    if (static_cast<std::uint8_t>(result.kind) > static_cast<std::uint8_t>(ResultKind::UseDatabase)
-        || result.columns.size() > DefaultMaxColumns
-        || result.rows.size() > DefaultMaxRows) {
+    if (static_cast<std::uint8_t>(result.kind) >
+            static_cast<std::uint8_t>(ResultKind::UseDatabase) ||
+        result.columns.size() > DefaultMaxColumns || result.rows.size() > DefaultMaxRows) {
         return std::unexpected(make_error(
             ProtocolErrorCode::ResourceLimitExceeded,
             "execution result exceeds the configured limit"
@@ -560,9 +488,7 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
     Writer writer {buffer};
 
     // 在 payload 中写入结果类型
-    if (auto value = writer.write_u8(
-        static_cast<std::uint8_t>(result.kind)
-    ); !value) {
+    if (auto value = writer.write_u8(static_cast<std::uint8_t>(result.kind)); !value) {
         return std::unexpected(std::move(value.error()));
     }
     // 在 payload 中写入受影响的行数
@@ -571,9 +497,7 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
     }
     // 在 payload 中写入选中的数据库名称
     // 如果选中的数据库名称不为空，则写入 1，否则写入 0
-    if (auto value = writer.write_u8(
-        result.selected_database_name.has_value() ? 1U : 0U
-    ); !value) {
+    if (auto value = writer.write_u8(result.selected_database_name.has_value() ? 1U : 0U); !value) {
         return std::unexpected(std::move(value.error()));
     }
     if (result.selected_database_name.has_value()) {
@@ -583,9 +507,7 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
                 "database name exceeds the configured limit"
             ));
         }
-        if (auto value = writer.write_string(
-            *result.selected_database_name
-        ); !value) {
+        if (auto value = writer.write_string(*result.selected_database_name); !value) {
             return std::unexpected(std::move(value.error()));
         }
     }
@@ -616,7 +538,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
     }
     // 在 payload 中写入行
     for (const auto & row : result.rows) {
-        if (row.values.size() != result.columns.size() || row.values.size() > DefaultMaxValuesPerRow) {
+        if (row.values.size() != result.columns.size() ||
+            row.values.size() > DefaultMaxValuesPerRow) {
             return std::unexpected(make_error(
                 ProtocolErrorCode::InvalidPayload,
                 "row value count does not match columns"
@@ -637,10 +560,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_execute_sql_response
     return buffer.take_bytes();
 }
 
-std::expected<ExecuteSqlResponse, ProtocolError> decode_execute_sql_response(
-    std::span<const std::byte> payload,
-    ProtocolDecodeLimits limits
-)
+std::expected<ExecuteSqlResponse, ProtocolError>
+decode_execute_sql_response(std::span<const std::byte> payload, ProtocolDecodeLimits limits)
 {
     // 确保 payload 大小不超过最大限制
     if (auto size = ensure_payload_size(payload); !size) {
@@ -649,17 +570,16 @@ std::expected<ExecuteSqlResponse, ProtocolError> decode_execute_sql_response(
 
     core::io::BufferByteReader source {payload};
     auto reader = make_reader(source, payload, limits.max_string_bytes);
-    
+
     // 读取结果类型
     auto kind = reader.read_u8();
     if (!kind) {
         return std::unexpected(std::move(kind.error()));
     }
     if (*kind > static_cast<std::uint8_t>(ResultKind::UseDatabase)) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidPayload,
-            "invalid result kind"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidPayload, "invalid result kind")
+        );
     }
 
     // 读取受影响的行数
@@ -734,10 +654,9 @@ std::expected<ExecuteSqlResponse, ProtocolError> decode_execute_sql_response(
         ));
     }
     if (*row_count > reader.remaining_bytes() / 4U) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::UnexpectedEnd,
-            "row count exceeds the remaining payload"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::UnexpectedEnd, "row count exceeds the remaining payload")
+        );
     }
     // 读取行
     result.rows.reserve(*row_count);
@@ -802,10 +721,8 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_error_response(
     return buffer.take_bytes();
 }
 
-std::expected<ErrorResponse, ProtocolError> decode_error_response(
-    std::span<const std::byte> payload,
-    ProtocolDecodeLimits limits
-)
+std::expected<ErrorResponse, ProtocolError>
+decode_error_response(std::span<const std::byte> payload, ProtocolDecodeLimits limits)
 {
     // 确保 payload 大小不超过最大限制
     if (auto size = ensure_payload_size(payload); !size) {

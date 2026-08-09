@@ -19,21 +19,14 @@ ProtocolError make_error(ProtocolErrorCode code, std::string_view message)
     return ProtocolError {code, message};
 }
 
-/**
- * @brief 读取帧头
- * @param bytes 字节序列
- * @return 读取到的帧头
- */
-std::expected<WireHeader, ProtocolError> read_wire_header(
-    std::span<const std::byte> bytes
-)
+// 读取帧头
+std::expected<WireHeader, ProtocolError> read_wire_header(std::span<const std::byte> bytes)
 {
     // 验证字节序列大小
     if (bytes.size() < FrameHeaderSize) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::UnexpectedEnd,
-            "frame header is shorter than 32 bytes"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::UnexpectedEnd, "frame header is shorter than 32 bytes")
+        );
     }
 
     // 从字节序列中截取前 32 个字节作为源字节序列
@@ -52,10 +45,7 @@ std::expected<WireHeader, ProtocolError> read_wire_header(
         return std::unexpected(std::move(magic.error()));
     }
     if (*magic != FrameHeaderMagic) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidMagic,
-            "invalid frame magic"
-        ));
+        return std::unexpected(make_error(ProtocolErrorCode::InvalidMagic, "invalid frame magic"));
     }
 
     // 读取帧大小
@@ -82,10 +72,9 @@ std::expected<WireHeader, ProtocolError> read_wire_header(
         return std::unexpected(std::move(version.error()));
     }
     if (*version != ProtocolVersion) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::UnsupportedVersion,
-            "unsupported protocol version"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::UnsupportedVersion, "unsupported protocol version")
+        );
     }
 
     // 读取帧头大小
@@ -94,10 +83,9 @@ std::expected<WireHeader, ProtocolError> read_wire_header(
         return std::unexpected(std::move(header_size.error()));
     }
     if (*header_size != FrameHeaderSize) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidHeaderSize,
-            "unsupported frame header size"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidHeaderSize, "unsupported frame header size")
+        );
     }
 
     // 读取消息类型
@@ -107,10 +95,9 @@ std::expected<WireHeader, ProtocolError> read_wire_header(
     }
     const auto message_kind = static_cast<MessageKind>(*kind);
     if (!is_known_message_kind(message_kind)) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidMessageKind,
-            "invalid message kind"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidMessageKind, "invalid message kind")
+        );
     }
 
     // 读取标志
@@ -139,19 +126,19 @@ std::expected<WireHeader, ProtocolError> read_wire_header(
     }
     if (*reserved != 0) {
         // 保留字段必须为 0
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidReservedField,
-            "reserved frame field must be zero"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidReservedField, "reserved frame field must be zero")
+        );
     }
 
     return WireHeader {
-        .header = FrameHeader {
-            .version = *version,
-            .kind = message_kind,
-            .flags = *flags,
-            .request_id = *request_id,
-        },
+        .header =
+            FrameHeader {
+                .version = *version,
+                .kind = message_kind,
+                .flags = *flags,
+                .request_id = *request_id,
+            },
         .frame_size = *frame_size,
     };
 }
@@ -162,28 +149,25 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_frame(const Frame & 
 {
     // 验证协议版本号
     if (frame.header.version != ProtocolVersion) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::UnsupportedVersion,
-            "unsupported protocol version"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::UnsupportedVersion, "unsupported protocol version")
+        );
     }
     // 验证消息类型
     if (!is_known_message_kind(frame.header.kind)) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidMessageKind,
-            "invalid message kind"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidMessageKind, "invalid message kind")
+        );
     }
     // 验证标志
     if (frame.header.flags != 0) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidFlags,
-            "frame flags are not supported"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidFlags, "frame flags are not supported")
+        );
     }
     // 验证负载大小
-    if (frame.payload.size() > MaxPayloadSize
-        || frame.payload.size() > std::numeric_limits<std::uint32_t>::max() - FrameHeaderSize) {
+    if (frame.payload.size() > MaxPayloadSize ||
+        frame.payload.size() > std::numeric_limits<std::uint32_t>::max() - FrameHeaderSize) {
         return std::unexpected(make_error(
             ProtocolErrorCode::FrameTooLarge,
             "frame payload exceeds the configured maximum"
@@ -207,15 +191,11 @@ std::expected<std::vector<std::byte>, ProtocolError> encode_frame(const Frame & 
         return std::unexpected(std::move(result.error()));
     }
     // 写入帧头大小
-    if (auto result = writer.write_u16(
-        static_cast<std::uint16_t>(FrameHeaderSize)
-    ); !result) {
+    if (auto result = writer.write_u16(static_cast<std::uint16_t>(FrameHeaderSize)); !result) {
         return std::unexpected(std::move(result.error()));
     }
     // 写入消息类型
-    if (auto result = writer.write_u16(
-        static_cast<std::uint16_t>(frame.header.kind)
-    ); !result) {
+    if (auto result = writer.write_u16(static_cast<std::uint16_t>(frame.header.kind)); !result) {
         return std::unexpected(std::move(result.error()));
     }
     // 写入标志
@@ -251,26 +231,21 @@ std::expected<Frame, ProtocolError> decode_frame(std::span<const std::byte> byte
         return std::unexpected(std::move(header.error()));
     }
     if (bytes.size() < header->frame_size) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::UnexpectedEnd,
-            "frame payload is truncated"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::UnexpectedEnd, "frame payload is truncated")
+        );
     }
     if (bytes.size() > header->frame_size) {
-        return std::unexpected(make_error(
-            ProtocolErrorCode::InvalidFrameSize,
-            "frame has trailing bytes"
-        ));
+        return std::unexpected(
+            make_error(ProtocolErrorCode::InvalidFrameSize, "frame has trailing bytes")
+        );
     }
 
     std::vector<std::byte> payload {
         bytes.begin() + static_cast<std::ptrdiff_t>(FrameHeaderSize),
         bytes.end(),
     };
-    return Frame {
-        .header = header->header,
-        .payload = std::move(payload)
-    };
+    return Frame {.header = header->header, .payload = std::move(payload)};
 }
 
 bool is_known_message_kind(MessageKind kind) noexcept
