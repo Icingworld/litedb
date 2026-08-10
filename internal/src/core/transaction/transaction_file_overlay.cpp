@@ -319,7 +319,7 @@ private:
     {
         if (closed_) {
             return std::unexpected(overlay_error(
-                filesystem::FileSystemErrorCode::ResourceBusy,
+                filesystem::FileSystemErrorCode::ClosedHandle,
                 "Overlay handle is closed",
                 "handle",
                 node_->logical_path
@@ -418,7 +418,7 @@ public:
             }
         }
         std::vector<std::filesystem::path> result;
-        for (const auto & [entry, exists] : entries) if (exists) result.push_back(entry);
+        for (const auto & [entry, exists] : entries) if (exists) result.push_back(entry.filename());
         return result;
     }
 
@@ -478,7 +478,7 @@ public:
     {
         auto found = state_->node(path);
         if (!found) return std::unexpected(std::move(found.error()));
-        if (!(*found)->exists) return std::unexpected(missing_error(path, "remove"));
+        if (!(*found)->exists) return {};
         (*found)->exists = false;
         (*found)->size = 0;
         (*found)->blocks.clear();

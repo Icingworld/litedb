@@ -141,7 +141,7 @@ public:
     {
         if (state_->closed) {
             return std::unexpected(make_error(
-                filesystem::FileSystemErrorCode::InvalidArgument,
+                filesystem::FileSystemErrorCode::ClosedHandle,
                 "read_at"
             ));
         }
@@ -446,7 +446,7 @@ void test_file_adapters_preserve_offsets_and_errors()
     require_ok(file.close(), "file close failed");
     std::array<std::byte, 1> byte {};
     auto closed = reader.read_some(byte);
-    require(!closed && closed.error().is(filesystem::FileSystemErrorCode::InvalidArgument),
+    require(!closed && closed.error().is(filesystem::FileSystemErrorCode::ClosedHandle),
             "closed handle error was not preserved");
 }
 

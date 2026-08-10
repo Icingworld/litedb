@@ -10,6 +10,10 @@
 #include <utility>
 
 #include <fcntl.h>
+#if defined(__linux__)
+#include <linux/fs.h>
+#include <sys/syscall.h>
+#endif
 #include <unistd.h>
 
 #include "core/filesystem/backend/posix/posix_file_handle_backend.hpp"
@@ -55,6 +59,9 @@ FileSystemErrorCode map_error_code(const std::error_code & error)
     if (error == std::errc::device_or_resource_busy) {
         return FileSystemErrorCode::ResourceBusy;
     }
+    if (error == std::errc::function_not_supported || error == std::errc::operation_not_supported) {
+        return FileSystemErrorCode::Unsupported;
+    }
     return FileSystemErrorCode::IoError;
 }
 
@@ -89,6 +96,24 @@ error::Error make_errno_error(
         related_path
     );
 }
+
+#if !defined(__linux__) || !defined(SYS_renameat2)
+error::Error unsupported_error(
+    std::string operation,
+    const std::filesystem::path & path,
+    const std::filesystem::path & related_path
+)
+{
+    const auto message = operation + " failed: atomic no-replace rename is not supported";
+    FileSystemErrorContext context {
+        std::move(operation),
+        path,
+        related_path,
+        {},
+    };
+    return error::Error {FileSystemErrorCode::Unsupported, message, std::move(context)};
+}
+#endif
 
 int to_access_flags(FileAccess access)
 {
@@ -205,31 +230,15 @@ std::expected<void, error::Error> PosixFileSystemBackend::create_dir_all(
 std::expected<void, error::Error>
 PosixFileSystemBackend::rename(const std::filesystem::path & from, const std::filesystem::path & to)
 {
-    std::error_code error;
-    const auto destination_status = std::filesystem::symlink_status(to, error);
-    if (error) {
-        return std::unexpected(make_error(error, "symlink_status", to));
-    }
-    if (std::filesystem::exists(destination_status)) {
-        FileSystemErrorContext context {
-            "rename",
-            from,
-            to,
-            {},
-        };
-        return std::unexpected(
-            error::Error {
-                FileSystemErrorCode::AlreadyExists,
-                "rename destination already exists",
-                std::move(context),
-            }
-        );
-    }
-    std::filesystem::rename(from, to, error);
-    if (error) {
-        return std::unexpected(make_error(error, "rename", from, to));
+#if defined(__linux__) && defined(SYS_renameat2)
+    if (::syscall(SYS_renameat2, AT_FDCWD, from.c_str(), AT_FDCWD, to.c_str(), RENAME_NOREPLACE) !=
+        0) {
+        return std::unexpected(make_errno_error(errno, "renameat2", from, to));
     }
     return {};
+#else
+    return std::unexpected(unsupported_error("rename", from, to));
+#endif
 }
 
 std::expected<void, error::Error> PosixFileSystemBackend::replace_file_atomic(

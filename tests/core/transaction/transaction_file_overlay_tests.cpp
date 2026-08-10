@@ -107,11 +107,16 @@ void test_unchanged_create_delete_and_atomic_replace()
         filesystem::FileCreateMode::OpenExisting,
     });
     require(unchanged.has_value(), "unchanged overlay file open failed");
+    auto entries = overlay.filesystem().list_dir(logical / "collections");
+    require(entries && entries->size() == 1 && entries->front() == "8.store",
+            "overlay list_dir must return entry names");
     const std::array same {std::byte {0x22}, std::byte {0x22}};
     require(unchanged->write_at(100, same).has_value(), "unchanged overlay write failed");
 
     require(overlay.filesystem().remove(logical / "collections" / "8.store").has_value(),
             "overlay delete failed");
+    require(overlay.filesystem().remove(logical / "collections" / "8.store").has_value(),
+            "overlay delete must be idempotent");
     auto temporary = overlay.filesystem().open(logical / "meta.lmeta.tmp", {
         filesystem::FileAccess::ReadWrite,
         filesystem::FileCreateMode::CreateOrTruncate,
@@ -120,6 +125,9 @@ void test_unchanged_create_delete_and_atomic_replace()
     const std::array replacement {std::byte {0x09}, std::byte {0x08}, std::byte {0x07}};
     require(temporary->write_at(0, replacement).has_value(), "overlay temporary write failed");
     require(temporary->close().has_value(), "overlay temporary close failed");
+    auto closed_size = temporary->size();
+    require(!closed_size && closed_size.error().is(filesystem::FileSystemErrorCode::ClosedHandle),
+            "closed overlay handle must return ClosedHandle");
     require(overlay.filesystem().replace_file_atomic(
         logical / "meta.lmeta.tmp",
         logical / "meta.lmeta"

@@ -468,9 +468,18 @@ void test_vector_index_engine_restores_and_rebuilds_all()
         }
         const auto index_path = index_directory / ("vindex_" + std::to_string(*index_id) + ".lhnsw");
         require(std::filesystem::exists(index_path), "engine hnsw file is missing");
+        const auto stale_building_path = index_directory / "orphan.building";
+        auto stale_building = filesystem.open(stale_building_path, {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::CreateNew,
+        });
+        require(stale_building.has_value(), "create stale vector build file failed");
+        require(stale_building->close().has_value(), "close stale vector build file failed");
         {
             VectorIndexEngine restored {index_directory, filesystem};
             require(restored.restore_all(catalog.view(), storage).has_value(), "engine restore_all failed");
+            require(!std::filesystem::exists(stale_building_path),
+                    "engine restore_all did not remove stale build file");
             require_records(
                 results(restored.search(*index_id, vector_key({0.2, 0.0}), VectorSearchRequest {.top_k = 2})),
                 {1, 2},

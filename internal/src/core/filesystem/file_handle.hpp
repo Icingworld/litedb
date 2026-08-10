@@ -19,6 +19,8 @@ class FileHandleBackend;
 } // namespace backend
 
 // 文件句柄
+// 重复关闭是幂等操作；关闭后的其他操作返回 ClosedHandle
+// 传入空后端或移动后的对象处于无后端状态，其操作返回 InvalidState
 class FileHandle
 {
 public:
@@ -35,7 +37,7 @@ public:
     ~FileHandle();
 
 public:
-    // 关闭文件
+    // 关闭文件；重复关闭成功
     [[nodiscard]]
     std::expected<void, FileSystemError> close();
 

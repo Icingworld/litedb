@@ -93,7 +93,7 @@ error::Error closed_error(std::string operation, const std::filesystem::path & p
         {},
     };
     return error::Error {
-        FileSystemErrorCode::InvalidArgument,
+        FileSystemErrorCode::ClosedHandle,
         message,
         std::move(context),
     };

@@ -140,7 +140,7 @@ error::Error range_error(std::string operation, const std::filesystem::path & pa
 error::Error closed_error(std::string operation, const std::filesystem::path & path)
 {
     return make_error(
-        FileSystemErrorCode::InvalidArgument,
+        FileSystemErrorCode::ClosedHandle,
         "file handle is closed",
         std::move(operation),
         path

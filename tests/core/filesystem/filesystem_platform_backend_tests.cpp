@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <barrier>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -29,7 +30,7 @@ std::filesystem::path make_temp_dir()
 {
     const auto suffix = std::to_string(std::random_device {}());
     auto path = std::filesystem::temp_directory_path() /
-        ("litedb_filesystem_platform_backend_tests_" + suffix);
+                ("litedb_filesystem_platform_backend_tests_" + suffix);
     std::filesystem::remove_all(path);
     std::filesystem::create_directories(path);
     return path;
@@ -76,19 +77,15 @@ int main()
     require(handle.write_at(0, initial).has_value(), "write_at failed");
 
     const std::byte overflow_byte {0};
-    const auto overflow_write = handle.write_at(
-        std::numeric_limits<std::uint64_t>::max(),
-        std::span {&overflow_byte, 1}
-    );
+    const auto overflow_write =
+        handle.write_at(std::numeric_limits<std::uint64_t>::max(), std::span {&overflow_byte, 1});
     require(
         !overflow_write && overflow_write.error().is(FileSystemErrorCode::InvalidArgument),
         "write_at must reject offset plus length overflow"
     );
     std::array<std::byte, 1> overflow_buffer {};
-    const auto overflow_read = handle.read_at(
-        std::numeric_limits<std::uint64_t>::max(),
-        overflow_buffer
-    );
+    const auto overflow_read =
+        handle.read_at(std::numeric_limits<std::uint64_t>::max(), overflow_buffer);
     require(
         !overflow_read && overflow_read.error().is(FileSystemErrorCode::InvalidArgument),
         "read_at must reject offset plus length overflow"
@@ -101,9 +98,7 @@ int main()
     const auto read = handle.read_at(0, buffer);
     require(read.has_value() && *read == 4, "read_at returned wrong byte count");
     require(
-        buffer[0] == std::byte {1} &&
-            buffer[1] == std::byte {9} &&
-            buffer[2] == std::byte {8} &&
+        buffer[0] == std::byte {1} && buffer[1] == std::byte {9} && buffer[2] == std::byte {8} &&
             buffer[3] == std::byte {4},
         "read_at returned wrong data"
     );
@@ -115,6 +110,19 @@ int main()
     require(*handle.size() == 3, "truncate produced wrong file size");
     require(handle.sync_all().has_value(), "sync_all failed");
     require(handle.close().has_value(), "close failed");
+    require(handle.close().has_value(), "repeated close must succeed");
+
+    const auto require_closed = [](const auto & result, const char * message) {
+        require(!result && result.error().is(FileSystemErrorCode::ClosedHandle), message);
+    };
+    std::array<std::byte, 1> closed_buffer {};
+    require_closed(handle.read_at(0, closed_buffer), "read after close must return ClosedHandle");
+    require_closed(handle.write_at(0, initial), "write after close must return ClosedHandle");
+    require_closed(handle.append(initial), "append after close must return ClosedHandle");
+    require_closed(handle.size(), "size after close must return ClosedHandle");
+    require_closed(handle.truncate(0), "truncate after close must return ClosedHandle");
+    require_closed(handle.sync_data(), "sync_data after close must return ClosedHandle");
+    require_closed(handle.sync_all(), "sync_all after close must return ClosedHandle");
 
     auto create_new_again = filesystem.open(
         path,
@@ -127,6 +135,58 @@ int main()
         !create_new_again && create_new_again.error().is(FileSystemErrorCode::AlreadyExists),
         "CreateNew must fail for an existing file"
     );
+
+    const auto mode_path = nested_dir / "open-modes.ldb";
+    auto open_or_create = filesystem.open(
+        mode_path,
+        FileOpenOptions {
+            .access = FileAccess::ReadWrite,
+            .create_mode = FileCreateMode::OpenOrCreate,
+        }
+    );
+    require(open_or_create.has_value(), "OpenOrCreate failed for a missing file");
+    require(open_or_create->write_at(0, initial).has_value(), "OpenOrCreate write failed");
+    require(open_or_create->close().has_value(), "OpenOrCreate close failed");
+
+    auto reopened_without_truncate = filesystem.open(
+        mode_path,
+        FileOpenOptions {
+            .access = FileAccess::ReadWrite,
+            .create_mode = FileCreateMode::OpenOrCreate,
+        }
+    );
+    require(
+        reopened_without_truncate && *reopened_without_truncate->size() == initial.size(),
+        "OpenOrCreate must preserve an existing file"
+    );
+    require(reopened_without_truncate->close().has_value(), "OpenOrCreate reopen close failed");
+
+    auto truncate_existing = filesystem.open(
+        mode_path,
+        FileOpenOptions {
+            .access = FileAccess::ReadWrite,
+            .create_mode = FileCreateMode::TruncateExisting,
+        }
+    );
+    require(
+        truncate_existing && *truncate_existing->size() == 0,
+        "TruncateExisting must clear an existing file"
+    );
+    require(truncate_existing->close().has_value(), "TruncateExisting close failed");
+
+    const auto missing_truncate_path = nested_dir / "missing-truncate.ldb";
+    auto missing_truncate = filesystem.open(
+        missing_truncate_path,
+        FileOpenOptions {
+            .access = FileAccess::ReadWrite,
+            .create_mode = FileCreateMode::TruncateExisting,
+        }
+    );
+    require(
+        !missing_truncate && missing_truncate.error().is(FileSystemErrorCode::NotFound),
+        "TruncateExisting must reject a missing file"
+    );
+    require(filesystem.remove(mode_path).has_value(), "open mode fixture cleanup failed");
 
     auto existing = filesystem.open(
         path,
@@ -146,10 +206,7 @@ int main()
         }
     );
     require(readonly.has_value(), "failed to open read-only handle");
-    const auto readonly_write = readonly->write_at(
-        0,
-        std::span {&overflow_byte, 1}
-    );
+    const auto readonly_write = readonly->write_at(0, std::span {&overflow_byte, 1});
     require(
         !readonly_write && readonly_write.error().is(FileSystemErrorCode::PermissionDenied),
         "write through a read-only handle must return PermissionDenied"
@@ -183,11 +240,9 @@ int main()
         !invalid_truncate && invalid_truncate.error().is(FileSystemErrorCode::InvalidArgument),
         "read-only truncate must be rejected consistently"
     );
-    const auto * invalid_context =
-        invalid_truncate.error().context<FileSystemErrorContext>();
+    const auto * invalid_context = invalid_truncate.error().context<FileSystemErrorContext>();
     require(
-        invalid_context != nullptr &&
-            invalid_context->operation == "open" &&
+        invalid_context != nullptr && invalid_context->operation == "open" &&
             invalid_context->path == path,
         "invalid open error must preserve operation and path context"
     );
@@ -197,10 +252,8 @@ int main()
     require(!missing, "opening a missing file must fail");
     const auto * missing_context = missing.error().context<FileSystemErrorContext>();
     require(
-        missing.error().is(FileSystemErrorCode::NotFound) &&
-            missing_context != nullptr &&
-            !missing_context->operation.empty() &&
-            missing_context->path == missing_path &&
+        missing.error().is(FileSystemErrorCode::NotFound) && missing_context != nullptr &&
+            !missing_context->operation.empty() && missing_context->path == missing_path &&
             static_cast<bool>(missing_context->native_code),
         "native open error must preserve operation, path, and native cause"
     );
@@ -208,6 +261,15 @@ int main()
     const auto entries = filesystem.list_dir(nested_dir);
     require(entries.has_value(), "list_dir failed");
     require(contains_filename(*entries, "data.ldb"), "list_dir did not include created file");
+    require(
+        std::ranges::all_of(
+            *entries,
+            [](const std::filesystem::path & entry) {
+                return entry.parent_path().empty();
+            }
+        ),
+        "list_dir must return entry names rather than full paths"
+    );
 
     const auto renamed = nested_dir / "renamed.ldb";
     require(filesystem.rename(path, renamed).has_value(), "rename failed");
@@ -224,7 +286,10 @@ int main()
     );
     require(occupied_handle.has_value(), "failed to create occupied rename target");
     const auto occupied_bytes = bytes({7});
-    require(occupied_handle->write_at(0, occupied_bytes).has_value(), "failed to write occupied target");
+    require(
+        occupied_handle->write_at(0, occupied_bytes).has_value(),
+        "failed to write occupied target"
+    );
     require(occupied_handle->close().has_value(), "failed to close occupied target");
 
     const auto rename_over_existing = filesystem.rename(renamed, occupied);
@@ -234,6 +299,93 @@ int main()
         "rename must not replace an existing destination"
     );
     require(*filesystem.exists(renamed), "failed rename removed the source");
+
+    auto rename_filesystem = create_platform_filesystem();
+    auto create_filesystem = create_platform_filesystem();
+    constexpr std::size_t rename_race_count = 64;
+    const std::array renamed_marker {std::byte {0xa1}};
+    const std::array created_marker {std::byte {0xb2}};
+    for (std::size_t iteration = 0; iteration < rename_race_count; ++iteration) {
+        const auto race_source = nested_dir / ("rename-race-" + std::to_string(iteration) + ".src");
+        const auto race_target = nested_dir / ("rename-race-" + std::to_string(iteration) + ".dst");
+        auto source = filesystem.open(
+            race_source,
+            FileOpenOptions {
+                .access = FileAccess::ReadWrite,
+                .create_mode = FileCreateMode::CreateNew,
+            }
+        );
+        require(source.has_value(), "failed to create rename race source");
+        require(
+            source->write_at(0, renamed_marker).has_value(),
+            "failed to write rename race source"
+        );
+        require(source->close().has_value(), "failed to close rename race source");
+
+        std::barrier start {3};
+        bool rename_succeeded = false;
+        bool rename_already_exists = false;
+        bool rename_failed_unexpectedly = false;
+        bool create_succeeded = false;
+        bool create_already_exists = false;
+        bool create_failed_unexpectedly = false;
+        std::jthread renamer([&] {
+            start.arrive_and_wait();
+            auto result = rename_filesystem.rename(race_source, race_target);
+            rename_succeeded = result.has_value();
+            rename_already_exists =
+                !result && result.error().is(FileSystemErrorCode::AlreadyExists);
+            rename_failed_unexpectedly = !result && !rename_already_exists;
+        });
+        std::jthread creator([&] {
+            start.arrive_and_wait();
+            auto result = create_filesystem.open(
+                race_target,
+                FileOpenOptions {
+                    .access = FileAccess::ReadWrite,
+                    .create_mode = FileCreateMode::CreateNew,
+                }
+            );
+            if (!result) {
+                create_already_exists = result.error().is(FileSystemErrorCode::AlreadyExists);
+                create_failed_unexpectedly = !create_already_exists;
+                return;
+            }
+            create_succeeded =
+                result->write_at(0, created_marker).has_value() && result->close().has_value();
+            create_failed_unexpectedly = !create_succeeded;
+        });
+        start.arrive_and_wait();
+        renamer.join();
+        creator.join();
+
+        require(
+            !rename_failed_unexpectedly && !create_failed_unexpectedly,
+            "rename race returned an unexpected error"
+        );
+        require(
+            rename_succeeded != create_succeeded,
+            "atomic no-replace rename and CreateNew must have exactly one winner"
+        );
+        require(
+            (rename_succeeded && create_already_exists) ||
+                (create_succeeded && rename_already_exists),
+            "rename race loser must observe AlreadyExists"
+        );
+
+        auto target = filesystem.open(race_target);
+        require(target.has_value(), "rename race target is missing");
+        std::array<std::byte, 1> marker {};
+        const auto marker_read = target->read_at(0, marker);
+        require(marker_read && *marker_read == 1, "rename race target could not be read");
+        require(
+            marker == (rename_succeeded ? renamed_marker : created_marker),
+            "rename race overwrote the winning target"
+        );
+        require(target->close().has_value(), "failed to close rename race target");
+        require(filesystem.remove(race_source).has_value(), "rename race source cleanup failed");
+        require(filesystem.remove(race_target).has_value(), "rename race target cleanup failed");
+    }
 
     const auto replacement = nested_dir / "replacement.tmp";
     auto replacement_handle = filesystem.open(
@@ -262,8 +414,7 @@ int main()
     std::array<std::byte, 4> replaced_buffer {};
     const auto replaced_read = replaced->read_at(0, replaced_buffer);
     require(
-        replaced_read && *replaced_read == 2 &&
-            replaced_buffer[0] == std::byte {4} &&
+        replaced_read && *replaced_read == 2 && replaced_buffer[0] == std::byte {4} &&
             replaced_buffer[1] == std::byte {2},
         "atomic replacement published the wrong bytes"
     );
@@ -280,12 +431,24 @@ int main()
     require(concurrent.has_value(), "failed to create concurrent append file");
     constexpr std::size_t append_count = 200;
     const std::array first_record {
-        std::byte {0x11}, std::byte {0x11}, std::byte {0x11}, std::byte {0x11},
-        std::byte {0x11}, std::byte {0x11}, std::byte {0x11}, std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
+        std::byte {0x11},
     };
     const std::array second_record {
-        std::byte {0x22}, std::byte {0x22}, std::byte {0x22}, std::byte {0x22},
-        std::byte {0x22}, std::byte {0x22}, std::byte {0x22}, std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
+        std::byte {0x22},
     };
     bool first_ok = true;
     bool second_ok = true;
@@ -309,13 +472,10 @@ int main()
     second_thread.join();
     require(first_ok && second_ok, "same-handle concurrent append failed");
     require(
-        *concurrent->size() ==
-            2 * append_count * first_record.size(),
+        *concurrent->size() == 2 * append_count * first_record.size(),
         "same-handle concurrent append lost bytes"
     );
-    std::vector<std::byte> concurrent_bytes(
-        2 * append_count * first_record.size()
-    );
+    std::vector<std::byte> concurrent_bytes(2 * append_count * first_record.size());
     const auto concurrent_read = concurrent->read_at(0, concurrent_bytes);
     require(
         concurrent_read && *concurrent_read == concurrent_bytes.size(),
@@ -360,4 +520,5 @@ int main()
     require(filesystem.remove(root / "nested").has_value(), "remove parent directory failed");
     require(filesystem.remove(root).has_value(), "remove root directory failed");
     require(!*filesystem.exists(root), "removed root still exists");
+    require(filesystem.remove(root).has_value(), "remove must succeed for a missing path");
 }

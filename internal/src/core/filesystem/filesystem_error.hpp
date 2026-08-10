@@ -26,6 +26,8 @@ enum class FileSystemErrorCode : std::uint8_t
     ResourceBusy = 10, // 资源正被占用
     Unsupported = 11, // 当前文件系统不支持该操作
     IoError = 12, // 其他输入输出错误
+    ClosedHandle = 13, // 文件句柄已关闭
+    InvalidState = 14, // 对象当前没有可用的后端
 };
 
 /**

@@ -22,6 +22,7 @@ enum class FileCreateMode
 };
 
 // 文件系统打开文件选项
+// ReadOnly 不能与 TruncateExisting 或 CreateOrTruncate 组合
 struct FileOpenOptions
 {
     FileAccess access {FileAccess::ReadOnly}; // 访问方式

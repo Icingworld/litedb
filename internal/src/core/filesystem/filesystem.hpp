@@ -20,6 +20,7 @@ class FileSystemBackend;
 } // namespace backend
 
 // 文件系统
+// 传入空后端或移动后的对象处于无后端状态，其操作返回 InvalidState
 class FileSystem
 {
 public:
@@ -36,12 +37,12 @@ public:
     ~FileSystem();
 
 public:
-    // 打开文件
+    // 打开文件；只读访问与截断创建模式组合时返回 InvalidArgument
     [[nodiscard]]
     std::expected<FileHandle, FileSystemError>
     open(const std::filesystem::path & path, const FileOpenOptions & options = {});
 
-    // 列出目录
+    // 列出目录，返回直接目录项的名称，不返回带输入目录前缀的完整路径
     [[nodiscard]]
     std::expected<std::vector<std::filesystem::path>, FileSystemError> list_dir(
         const std::filesystem::path & path
@@ -55,7 +56,8 @@ public:
     [[nodiscard]]
     std::expected<void, FileSystemError> create_dir_all(const std::filesystem::path & path);
 
-    // 在目标不存在时重命名文件或目录
+    // 原子地重命名文件或目录且不覆盖已有目标
+    // 无法提供原子不覆盖语义的平台返回 Unsupported
     [[nodiscard]]
     std::expected<void, FileSystemError>
     rename(const std::filesystem::path & from, const std::filesystem::path & to);
@@ -67,11 +69,11 @@ public:
     std::expected<void, FileSystemError>
     replace_file_atomic(const std::filesystem::path & from, const std::filesystem::path & to);
 
-    // 删除文件或目录
+    // 删除文件或空目录；路径不存在时也成功
     [[nodiscard]]
     std::expected<void, FileSystemError> remove(const std::filesystem::path & path);
 
-    // 将目录项变更同步到持久化存储
+    // 将目录项变更同步到持久化存储；平台不支持时返回 Unsupported
     [[nodiscard]]
     std::expected<void, FileSystemError> sync_directory(const std::filesystem::path & path);
 

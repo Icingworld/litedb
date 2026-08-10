@@ -1095,7 +1095,8 @@ std::expected<void, VectorIndexError> VectorIndexEngine::cleanup_stale_temporary
         if (!name.ends_with(".building") && !name.ends_with(".compact")) {
             continue;
         }
-        auto removed = filesystem_->remove(entry);
+        const auto path = data_directory_ / entry;
+        auto removed = filesystem_->remove(path);
         if (!removed) {
             return std::unexpected(source_error(
                 VectorIndexErrorCode::FileSystemFailure,
@@ -1103,7 +1104,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::cleanup_stale_temporary
                 VectorIndexOperation::Drop,
                 0,
                 0,
-                entry
+                path
             ));
         }
     }

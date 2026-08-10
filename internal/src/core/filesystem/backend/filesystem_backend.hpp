@@ -23,7 +23,7 @@ public:
     virtual std::expected<std::unique_ptr<FileHandleBackend>, FileSystemError>
     open(const std::filesystem::path & path, const FileOpenOptions & options) = 0;
 
-    // 列出目录
+    // 列出目录，返回直接目录项的名称，不返回带输入目录前缀的完整路径
     virtual std::expected<std::vector<std::filesystem::path>, FileSystemError> list_dir(
         const std::filesystem::path & path
     ) = 0;
@@ -36,8 +36,8 @@ public:
         const std::filesystem::path & path
     ) = 0;
 
-    // 在目标不存在时重命名文件或目录
-    // 目标已存在时返回 AlreadyExists
+    // 原子地重命名文件或目录且不覆盖已有目标
+    // 目标已存在时返回 AlreadyExists；无法提供该语义时返回 Unsupported
     virtual std::expected<void, FileSystemError>
     rename(const std::filesystem::path & from, const std::filesystem::path & to) = 0;
 
@@ -47,10 +47,10 @@ public:
     virtual std::expected<void, FileSystemError>
     replace_file_atomic(const std::filesystem::path & from, const std::filesystem::path & to) = 0;
 
-    // 删除文件或目录
+    // 删除文件或空目录；路径不存在时也成功
     virtual std::expected<void, FileSystemError> remove(const std::filesystem::path & path) = 0;
 
-    // 将目录项变更同步到持久化存储
+    // 将目录项变更同步到持久化存储；平台不支持时返回 Unsupported
     virtual std::expected<void, FileSystemError> sync_directory(
         const std::filesystem::path & path
     ) = 0;
