@@ -6,11 +6,9 @@
 #include <utility>
 #include <variant>
 
-#include "core/binder/bound/dispatcher/expression_dispatcher.hpp"
 #include "core/binder/bound/expression/bound_between_expression.hpp"
 #include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
-#include "core/binder/bound/expression/bound_column_ref_expression.hpp"
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/binder/bound/expression/bound_function_expression.hpp"
 #include "core/binder/bound/expression/bound_in_expression.hpp"
@@ -22,18 +20,18 @@
 #include "core/common/types.hpp"
 #include "core/common/value.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
-#include "core/optimizer/optimizer.hpp"
 
 namespace litedb::core::optimizer::detail
 {
+
 namespace
 {
 
 using binder::bound::BoundBetweenExpression;
 using binder::bound::BoundBinaryExpression;
 using binder::bound::BoundCastExpression;
-using binder::bound::BoundColumnRefExpression;
 using binder::bound::BoundExpression;
+using binder::bound::BoundExpressionKind;
 using binder::bound::BoundFunctionExpression;
 using binder::bound::BoundInExpression;
 using binder::bound::BoundLikeExpression;
@@ -42,395 +40,326 @@ using binder::bound::BoundNullExpression;
 using binder::bound::BoundUnaryExpression;
 using binder::bound::BoundVectorExpression;
 
-// 直接转发传入的表达式
 template <typename ExpressionType>
 [[nodiscard]]
-std::unique_ptr<BoundExpression> reclaim_expression(
-    ExpressionType & expression
+std::unique_ptr<ExpressionType> owning_downcast(
+    std::unique_ptr<BoundExpression> expression,
+    BoundExpressionKind expected_kind
 ) noexcept
 {
-    return std::unique_ptr<BoundExpression>(
-        std::unique_ptr<ExpressionType>(&expression)
-    );
+    assert(expression != nullptr);
+    assert(expression->kind() == expected_kind);
+    return std::unique_ptr<ExpressionType>(static_cast<ExpressionType *>(expression.release()));
 }
 
-// 常量可折叠性检查器
-class ConstantFoldability final
-    : private binder::bound::ConstBoundExpressionDispatcher<
-          ConstantFoldability,
-          bool
-      >
+struct RewriteResult
 {
-    friend binder::bound::ConstBoundExpressionDispatcher<
-        ConstantFoldability,
-        bool
-    >;
-
-public:
-    // 检查表达式是否可常量折叠
-    [[nodiscard]]
-    bool check(const BoundExpression & expression)
-    {
-        return dispatch_expression(expression);
-    }
-
-private:
-    [[nodiscard]]
-    bool visit_literal_expression(const BoundLiteralExpression &)
-    {
-        return true;
-    }
-
-    [[nodiscard]]
-    bool visit_null_expression(const BoundNullExpression &)
-    {
-        return true;
-    }
-
-    [[nodiscard]]
-    bool visit_column_ref_expression(const BoundColumnRefExpression &)
-    {
-        return false;
-    }
-
-    [[nodiscard]]
-    bool visit_unary_expression(const BoundUnaryExpression & expression)
-    {
-        return check(expression.operand());
-    }
-
-    [[nodiscard]]
-    bool visit_binary_expression(const BoundBinaryExpression & expression)
-    {
-        return check(expression.left()) && check(expression.right());
-    }
-
-    [[nodiscard]]
-    bool visit_vector_expression(const BoundVectorExpression &)
-    {
-        return false;
-    }
-
-    [[nodiscard]]
-    bool visit_function_expression(const BoundFunctionExpression &)
-    {
-        return false;
-    }
-
-    [[nodiscard]]
-    bool visit_in_expression(const BoundInExpression &)
-    {
-        return false;
-    }
-
-    [[nodiscard]]
-    bool visit_between_expression(const BoundBetweenExpression &)
-    {
-        return false;
-    }
-
-    [[nodiscard]]
-    bool visit_like_expression(const BoundLikeExpression &)
-    {
-        return false;
-    }
-
-    [[nodiscard]]
-    bool visit_cast_expression(const BoundCastExpression & expression)
-    {
-        return check(expression.expression());
-    }
+    std::unique_ptr<BoundExpression> expression;
+    bool constant_foldable {false};
 };
 
-// 判断表达式是否可常量折叠
-[[nodiscard]]
-bool is_constant_foldable(const BoundExpression & expression)
-{
-    ConstantFoldability checker;
-    return checker.check(expression);
-}
-
-// 构造布尔字面量表达式
 [[nodiscard]]
 std::unique_ptr<BoundExpression> make_boolean_literal(bool value)
 {
     return std::make_unique<BoundLiteralExpression>(
-        common::LogicalType {
-            common::LogicalTypeId::Boolean,
-            std::nullopt
-        },
+        common::LogicalType {common::LogicalTypeId::Boolean, std::nullopt},
         common::Value {common::ValueData {value}}
     );
 }
 
-// 尝试常量折叠
 [[nodiscard]]
-std::unique_ptr<BoundExpression> try_fold_constant(
-    std::unique_ptr<BoundExpression> expression,
-    const OptimizerOptions & options
-)
+RewriteResult try_fold_constant(RewriteResult result)
 {
-    assert(expression != nullptr);
-    if (!options.enable_constant_folding || !is_constant_foldable(*expression)) {
-        return expression;
+    assert(result.expression != nullptr);
+    if (!result.constant_foldable) {
+        return result;
     }
 
-    auto value = evaluator::ExpressionEvaluator::evaluate_constant(*expression);
+    auto value = evaluator::ExpressionEvaluator::evaluate_constant(*result.expression);
     if (!value.has_value()) {
-        return expression;
+        return result;
     }
 
-    const auto type = expression->type();
+    const auto type = result.expression->type();
     if (value->is_null()) {
-        return std::make_unique<BoundNullExpression>(type);
+        result.expression = std::make_unique<BoundNullExpression>(type);
+    } else {
+        result.expression = std::make_unique<BoundLiteralExpression>(type, std::move(*value));
     }
-
-    return std::make_unique<BoundLiteralExpression>(type, std::move(*value));
+    result.constant_foldable = true;
+    return result;
 }
 
-// 表达式重写器
 class ExpressionRewriter final
-    : private binder::bound::MutableBoundExpressionDispatcher<
-          ExpressionRewriter,
-          std::unique_ptr<BoundExpression>
-      >
 {
-    friend binder::bound::MutableBoundExpressionDispatcher<
-        ExpressionRewriter,
-        std::unique_ptr<BoundExpression>
-    >;
-
 public:
-    explicit ExpressionRewriter(const OptimizerOptions & options) noexcept
-        : options_(options)
-    {
-    }
-
-    // 重写表达式
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> rewrite(
-        std::unique_ptr<BoundExpression> expression
-    )
+    RewriteResult rewrite(std::unique_ptr<BoundExpression> expression)
     {
         assert(expression != nullptr);
-        return dispatch_expression(*expression.release());
+        switch (expression->kind()) {
+        case BoundExpressionKind::Literal:
+        case BoundExpressionKind::Null:
+            return RewriteResult {
+                .expression = std::move(expression),
+                .constant_foldable = true,
+            };
+        case BoundExpressionKind::ColumnRef:
+            return RewriteResult {
+                .expression = std::move(expression),
+                .constant_foldable = false,
+            };
+        case BoundExpressionKind::Unary:
+            return rewrite_unary(
+                owning_downcast<BoundUnaryExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Unary
+                )
+            );
+        case BoundExpressionKind::Binary:
+            return rewrite_binary(
+                owning_downcast<BoundBinaryExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Binary
+                )
+            );
+        case BoundExpressionKind::Vector:
+            return rewrite_vector(
+                owning_downcast<BoundVectorExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Vector
+                )
+            );
+        case BoundExpressionKind::Function:
+            return rewrite_function(
+                owning_downcast<BoundFunctionExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Function
+                )
+            );
+        case BoundExpressionKind::In:
+            return rewrite_in(
+                owning_downcast<BoundInExpression>(std::move(expression), BoundExpressionKind::In)
+            );
+        case BoundExpressionKind::Between:
+            return rewrite_between(
+                owning_downcast<BoundBetweenExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Between
+                )
+            );
+        case BoundExpressionKind::Like:
+            return rewrite_like(
+                owning_downcast<BoundLikeExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Like
+                )
+            );
+        case BoundExpressionKind::Cast:
+            return rewrite_cast(
+                owning_downcast<BoundCastExpression>(
+                    std::move(expression),
+                    BoundExpressionKind::Cast
+                )
+            );
+        default:
+            std::unreachable();
+        }
     }
 
 private:
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_literal_expression(
-        BoundLiteralExpression & expression
-    )
+    RewriteResult rewrite_unary(std::unique_ptr<BoundUnaryExpression> expression)
     {
-        return reclaim_expression(expression);
-    }
+        const auto op = expression->op();
+        const auto type = expression->type();
+        auto operand = rewrite(expression->take_operand());
 
-    [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_null_expression(
-        BoundNullExpression & expression
-    )
-    {
-        return reclaim_expression(expression);
-    }
-
-    [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_column_ref_expression(
-        BoundColumnRefExpression & expression
-    )
-    {
-        return reclaim_expression(expression);
-    }
-
-    [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_unary_expression(
-        BoundUnaryExpression & expression
-    )
-    {
-        const auto op = expression.op();
-        const auto type = expression.type();
-        auto operand = rewrite(expression.take_operand());
-
-        if (options_.enable_boolean_simplification
-            && op == common::UnaryOperator::Not
-            && is_boolean_literal(*operand, true)) {
-            return make_boolean_literal(false);
+        if (op == common::UnaryOperator::Not && is_boolean_literal(*operand.expression, true)) {
+            return RewriteResult {
+                .expression = make_boolean_literal(false),
+                .constant_foldable = true,
+            };
         }
-        if (options_.enable_boolean_simplification
-            && op == common::UnaryOperator::Not
-            && is_boolean_literal(*operand, false)) {
-            return make_boolean_literal(true);
+        if (op == common::UnaryOperator::Not && is_boolean_literal(*operand.expression, false)) {
+            return RewriteResult {
+                .expression = make_boolean_literal(true),
+                .constant_foldable = true,
+            };
         }
 
+        const auto constant_foldable = operand.constant_foldable;
         return try_fold_constant(
-            std::make_unique<BoundUnaryExpression>(
-                op,
-                std::move(operand),
-                type
-            ),
-            options_
+            RewriteResult {
+                .expression =
+                    std::make_unique<BoundUnaryExpression>(op, std::move(operand.expression), type),
+                .constant_foldable = constant_foldable,
+            }
         );
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_binary_expression(
-        BoundBinaryExpression & expression
-    )
+    RewriteResult rewrite_binary(std::unique_ptr<BoundBinaryExpression> expression)
     {
-        const auto op = expression.op();
-        const auto type = expression.type();
-        auto left = rewrite(expression.take_left());
-        auto right = rewrite(expression.take_right());
+        const auto op = expression->op();
+        const auto type = expression->type();
+        auto left = rewrite(expression->take_left());
+        auto right = rewrite(expression->take_right());
 
-        if (options_.enable_boolean_simplification) {
-            if (op == common::BinaryOperator::And) {
-                if (is_boolean_literal(*left, true)) {
-                    return right;
-                }
-                if (is_boolean_literal(*left, false)) {
-                    return left;
-                }
-                if (is_boolean_literal(*right, true)) {
-                    return left;
-                }
-            } else if (op == common::BinaryOperator::Or) {
-                if (is_boolean_literal(*left, true)) {
-                    return left;
-                }
-                if (is_boolean_literal(*left, false)) {
-                    return right;
-                }
-                if (is_boolean_literal(*right, false)) {
-                    return left;
-                }
+        if (op == common::BinaryOperator::And) {
+            if (is_boolean_literal(*left.expression, true)) {
+                return right;
+            }
+            if (is_boolean_literal(*left.expression, false)) {
+                return left;
+            }
+            if (is_boolean_literal(*right.expression, true)) {
+                return left;
+            }
+        } else if (op == common::BinaryOperator::Or) {
+            if (is_boolean_literal(*left.expression, true)) {
+                return left;
+            }
+            if (is_boolean_literal(*left.expression, false)) {
+                return right;
+            }
+            if (is_boolean_literal(*right.expression, false)) {
+                return left;
             }
         }
 
+        const auto constant_foldable = left.constant_foldable && right.constant_foldable;
         return try_fold_constant(
-            std::make_unique<BoundBinaryExpression>(
-                std::move(left),
-                op,
-                std::move(right),
-                type
-            ),
-            options_
+            RewriteResult {
+                .expression = std::make_unique<BoundBinaryExpression>(
+                    std::move(left.expression),
+                    op,
+                    std::move(right.expression),
+                    type
+                ),
+                .constant_foldable = constant_foldable,
+            }
         );
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_vector_expression(
-        BoundVectorExpression & expression
-    )
+    RewriteResult rewrite_vector(std::unique_ptr<BoundVectorExpression> expression)
     {
-        auto elements = expression.take_elements();
+        auto elements = expression->take_elements();
         for (auto & element : elements) {
-            element = rewrite(std::move(element));
+            auto rewritten = rewrite(std::move(element));
+            element = std::move(rewritten.expression);
         }
-        return std::make_unique<BoundVectorExpression>(std::move(elements));
+        return RewriteResult {
+            .expression = std::make_unique<BoundVectorExpression>(std::move(elements)),
+            .constant_foldable = false,
+        };
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_function_expression(
-        BoundFunctionExpression & expression
-    )
+    RewriteResult rewrite_function(std::unique_ptr<BoundFunctionExpression> expression)
     {
-        auto function = expression.function();
-        auto arguments = expression.take_arguments();
+        auto function = expression->function();
+        auto arguments = expression->take_arguments();
         for (auto & argument : arguments) {
-            argument = rewrite(std::move(argument));
+            auto rewritten = rewrite(std::move(argument));
+            argument = std::move(rewritten.expression);
         }
-        return std::make_unique<BoundFunctionExpression>(
-            std::move(function),
-            std::move(arguments)
-        );
+        return RewriteResult {
+            .expression = std::make_unique<BoundFunctionExpression>(
+                std::move(function),
+                std::move(arguments)
+            ),
+            .constant_foldable = false,
+        };
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_in_expression(
-        BoundInExpression & expression
-    )
+    RewriteResult rewrite_in(std::unique_ptr<BoundInExpression> expression)
     {
-        auto value_expression = rewrite(expression.take_expression());
-        auto values = expression.take_values();
+        auto value_expression = rewrite(expression->take_expression());
+        auto values = expression->take_values();
         for (auto & value : values) {
-            value = rewrite(std::move(value));
+            auto rewritten = rewrite(std::move(value));
+            value = std::move(rewritten.expression);
         }
-        return std::make_unique<BoundInExpression>(
-            std::move(value_expression),
-            std::move(values)
-        );
+        return RewriteResult {
+            .expression = std::make_unique<BoundInExpression>(
+                std::move(value_expression.expression),
+                std::move(values)
+            ),
+            .constant_foldable = false,
+        };
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_between_expression(
-        BoundBetweenExpression & expression
-    )
+    RewriteResult rewrite_between(std::unique_ptr<BoundBetweenExpression> expression)
     {
-        auto value_expression = rewrite(expression.take_expression());
-        auto lower = rewrite(expression.take_lower());
-        auto upper = rewrite(expression.take_upper());
-        return std::make_unique<BoundBetweenExpression>(
-            std::move(value_expression),
-            std::move(lower),
-            std::move(upper)
-        );
+        auto value_expression = rewrite(expression->take_expression());
+        auto lower = rewrite(expression->take_lower());
+        auto upper = rewrite(expression->take_upper());
+        return RewriteResult {
+            .expression = std::make_unique<BoundBetweenExpression>(
+                std::move(value_expression.expression),
+                std::move(lower.expression),
+                std::move(upper.expression)
+            ),
+            .constant_foldable = false,
+        };
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_like_expression(
-        BoundLikeExpression & expression
-    )
+    RewriteResult rewrite_like(std::unique_ptr<BoundLikeExpression> expression)
     {
-        auto value_expression = rewrite(expression.take_expression());
-        auto pattern = rewrite(expression.take_pattern());
-        return std::make_unique<BoundLikeExpression>(
-            std::move(value_expression),
-            std::move(pattern)
-        );
+        auto value_expression = rewrite(expression->take_expression());
+        auto pattern = rewrite(expression->take_pattern());
+        return RewriteResult {
+            .expression = std::make_unique<BoundLikeExpression>(
+                std::move(value_expression.expression),
+                std::move(pattern.expression)
+            ),
+            .constant_foldable = false,
+        };
     }
 
     [[nodiscard]]
-    std::unique_ptr<BoundExpression> visit_cast_expression(
-        BoundCastExpression & expression
-    )
+    RewriteResult rewrite_cast(std::unique_ptr<BoundCastExpression> expression)
     {
-        const auto type = expression.type();
-        auto child = rewrite(expression.take_expression());
+        const auto type = expression->type();
+        auto child = rewrite(expression->take_expression());
+        const auto constant_foldable = child.constant_foldable;
         return try_fold_constant(
-            std::make_unique<BoundCastExpression>(std::move(child), type),
-            options_
+            RewriteResult {
+                .expression =
+                    std::make_unique<BoundCastExpression>(std::move(child.expression), type),
+                .constant_foldable = constant_foldable,
+            }
         );
     }
-
-private:
-    const OptimizerOptions & options_;
 };
 
 } // namespace
 
-bool is_boolean_literal(
-    const BoundExpression & expression,
-    bool value
-) noexcept
+bool is_boolean_literal(const binder::bound::BoundExpression & expression, bool value) noexcept
 {
-    if (expression.kind() != binder::bound::BoundExpressionKind::Literal
-        || expression.type().id != common::LogicalTypeId::Boolean) {
+    if (expression.kind() != binder::bound::BoundExpressionKind::Literal ||
+        expression.type().id != common::LogicalTypeId::Boolean) {
         return false;
     }
 
-    const auto & literal =
-        static_cast<const BoundLiteralExpression &>(expression);
+    const auto & literal = static_cast<const binder::bound::BoundLiteralExpression &>(expression);
     const auto * literal_value = std::get_if<bool>(&literal.value().data());
     return literal_value != nullptr && *literal_value == value;
 }
 
-std::unique_ptr<BoundExpression> rewrite_expression(
-    std::unique_ptr<BoundExpression> expression,
-    const OptimizerOptions & options
+std::unique_ptr<binder::bound::BoundExpression> rewrite_expression(
+    std::unique_ptr<binder::bound::BoundExpression> expression
 )
 {
     assert(expression != nullptr);
-    ExpressionRewriter rewriter {options};
-    return rewriter.rewrite(std::move(expression));
+    ExpressionRewriter rewriter;
+    auto result = rewriter.rewrite(std::move(expression));
+    return std::move(result.expression);
 }
 
 } // namespace litedb::core::optimizer::detail

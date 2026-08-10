@@ -1,4 +1,5 @@
 #include "core/binder/binder.hpp"
+#include "core/binder/bound/expression/bound_between_expression.hpp"
 #include "core/binder/bound/expression/bound_binary_expression.hpp"
 #include "core/binder/bound/expression/bound_cast_expression.hpp"
 #include "core/binder/bound/expression/bound_function_expression.hpp"
@@ -10,6 +11,7 @@
 #include "core/binder/bound/expression/bound_vector_expression.hpp"
 #include "core/common/types.hpp"
 #include "core/function/builtin/builtin_functions.hpp"
+#include "core/function/scalar_function.hpp"
 #include "core/logical_planner/logical_planner.hpp"
 #include "core/logical_planner/operator/logical_filter_operator.hpp"
 #include "core/logical_planner/operator/logical_limit_operator.hpp"
@@ -186,6 +188,41 @@ std::unique_ptr<BoundExpression> integer_literal(std::int32_t value)
     );
 }
 
+std::unique_ptr<BoundExpression> boolean_literal(bool value)
+{
+    return std::make_unique<BoundLiteralExpression>(
+        type(LogicalTypeId::Boolean),
+        Value {ValueData {value}}
+    );
+}
+
+void require_boolean_literal_value(const BoundExpression & expression, bool expected)
+{
+    require(
+        expression.kind() == BoundExpressionKind::Literal,
+        "expression should be boolean literal"
+    );
+    const auto & literal = static_cast<const BoundLiteralExpression &>(expression);
+    const auto * value = std::get_if<bool>(&literal.value().data());
+    require(value != nullptr && *value == expected, "boolean literal value mismatch");
+}
+
+std::unique_ptr<BoundExpression> failing_boolean_expression()
+{
+    auto division = std::make_unique<BoundBinaryExpression>(
+        integer_literal(1),
+        BinaryOperator::Divide,
+        integer_literal(0),
+        type(LogicalTypeId::Integer)
+    );
+    return std::make_unique<BoundBinaryExpression>(
+        std::move(division),
+        BinaryOperator::Equal,
+        integer_literal(0),
+        type(LogicalTypeId::Boolean)
+    );
+}
+
 std::unique_ptr<LogicalPlan> make_projection_plan(
     CollectionId collection_id,
     std::unique_ptr<BoundExpression> expression
@@ -202,6 +239,24 @@ std::unique_ptr<LogicalPlan> make_projection_plan(
             std::move(projections)
         )
     );
+}
+
+std::unique_ptr<LogicalPlan> optimize_boolean_expression(
+    Fixture & fixture,
+    std::unique_ptr<BoundExpression> left,
+    BinaryOperator op,
+    std::unique_ptr<BoundExpression> right
+)
+{
+    return optimize_ok(make_projection_plan(
+        fixture.users_id,
+        std::make_unique<BoundBinaryExpression>(
+            std::move(left),
+            op,
+            std::move(right),
+            type(LogicalTypeId::Boolean)
+        )
+    ));
 }
 
 void test_disabled_optimizer_preserves_identity()
@@ -308,48 +363,251 @@ void test_boolean_simplification_is_short_circuit_safe()
 {
     Fixture fixture;
 
-    const auto expression = [&](std::string_view sql) -> const BoundExpression & {
+    const auto check_expression = [&](std::string_view sql, auto check) {
         auto plan = optimize_ok(plan_ok(fixture, sql));
-        return *query_projection(*plan).projections()[0].expression;
+        check(*query_projection(*plan).projections()[0].expression);
     };
 
-    require(
-        static_cast<const BoundBinaryExpression &>(expression("SELECT true AND age > 18 FROM users;"))
-            .op() == BinaryOperator::GreaterThan,
-        "true AND x should return x"
+    check_expression(
+        "SELECT true AND age > 18 FROM users;",
+        [](const BoundExpression & expression) {
+            require(
+                static_cast<const BoundBinaryExpression &>(expression).op() ==
+                    BinaryOperator::GreaterThan,
+                "true AND x should return x"
+            );
+        }
+    );
+    check_expression(
+        "SELECT false AND age > 18 FROM users;",
+        [](const BoundExpression & expression) {
+            require_boolean_literal_value(expression, false);
+        }
+    );
+    check_expression(
+        "SELECT age > 18 AND true FROM users;",
+        [](const BoundExpression & expression) {
+            require(
+                static_cast<const BoundBinaryExpression &>(expression).op() ==
+                    BinaryOperator::GreaterThan,
+                "x AND true should return x"
+            );
+        }
+    );
+    check_expression(
+        "SELECT age > 18 AND false FROM users;",
+        [](const BoundExpression & expression) {
+            require(
+                static_cast<const BoundBinaryExpression &>(expression).op() == BinaryOperator::And,
+                "x AND false must be preserved"
+            );
+        }
+    );
+    check_expression("SELECT true OR age > 18 FROM users;", [](const BoundExpression & expression) {
+        require_boolean_literal_value(expression, true);
+    });
+    check_expression(
+        "SELECT false OR age > 18 FROM users;",
+        [](const BoundExpression & expression) {
+            require(
+                static_cast<const BoundBinaryExpression &>(expression).op() ==
+                    BinaryOperator::GreaterThan,
+                "false OR x should return x"
+            );
+        }
+    );
+    check_expression(
+        "SELECT age > 18 OR false FROM users;",
+        [](const BoundExpression & expression) {
+            require(
+                static_cast<const BoundBinaryExpression &>(expression).op() ==
+                    BinaryOperator::GreaterThan,
+                "x OR false should return x"
+            );
+        }
+    );
+    check_expression("SELECT age > 18 OR true FROM users;", [](const BoundExpression & expression) {
+        require(
+            static_cast<const BoundBinaryExpression &>(expression).op() == BinaryOperator::Or,
+            "x OR true must be preserved"
+        );
+    });
+}
+
+void test_boolean_short_circuit_preserves_error_order()
+{
+    Fixture fixture;
+
+    auto false_and_error = optimize_boolean_expression(
+        fixture,
+        boolean_literal(false),
+        BinaryOperator::And,
+        failing_boolean_expression()
+    );
+    require_boolean_literal_value(
+        *query_projection(*false_and_error).projections()[0].expression,
+        false
+    );
+
+    auto true_or_error = optimize_boolean_expression(
+        fixture,
+        boolean_literal(true),
+        BinaryOperator::Or,
+        failing_boolean_expression()
+    );
+    require_boolean_literal_value(
+        *query_projection(*true_or_error).projections()[0].expression,
+        true
+    );
+
+    auto error_and_false = optimize_boolean_expression(
+        fixture,
+        failing_boolean_expression(),
+        BinaryOperator::And,
+        boolean_literal(false)
     );
     require(
-        expression("SELECT false AND age > 18 FROM users;").kind() == BoundExpressionKind::Literal,
-        "false AND x should return false"
+        query_projection(*error_and_false).projections()[0].expression->kind() ==
+            BoundExpressionKind::Binary,
+        "error AND false should remain binary"
+    );
+    const auto & preserved_and = static_cast<const BoundBinaryExpression &>(
+        *query_projection(*error_and_false).projections()[0].expression
     );
     require(
-        static_cast<const BoundBinaryExpression &>(expression("SELECT age > 18 AND true FROM users;"))
-            .op() == BinaryOperator::GreaterThan,
-        "x AND true should return x"
+        preserved_and.op() == BinaryOperator::And,
+        "error AND false must preserve left-to-right evaluation"
+    );
+
+    auto error_or_true = optimize_boolean_expression(
+        fixture,
+        failing_boolean_expression(),
+        BinaryOperator::Or,
+        boolean_literal(true)
     );
     require(
-        static_cast<const BoundBinaryExpression &>(expression("SELECT age > 18 AND false FROM users;"))
-            .op() == BinaryOperator::And,
-        "x AND false must be preserved"
+        query_projection(*error_or_true).projections()[0].expression->kind() ==
+            BoundExpressionKind::Binary,
+        "error OR true should remain binary"
+    );
+    const auto & preserved_or = static_cast<const BoundBinaryExpression &>(
+        *query_projection(*error_or_true).projections()[0].expression
     );
     require(
-        expression("SELECT true OR age > 18 FROM users;").kind() == BoundExpressionKind::Literal,
-        "true OR x should return true"
+        preserved_or.op() == BinaryOperator::Or,
+        "error OR true must preserve left-to-right evaluation"
+    );
+}
+
+void test_boolean_null_semantics()
+{
+    Fixture fixture;
+
+    const auto null_boolean = [] {
+        return std::make_unique<BoundNullExpression>(type(LogicalTypeId::Boolean));
+    };
+    auto null_and_false = optimize_boolean_expression(
+        fixture,
+        null_boolean(),
+        BinaryOperator::And,
+        boolean_literal(false)
+    );
+    require_boolean_literal_value(
+        *query_projection(*null_and_false).projections()[0].expression,
+        false
+    );
+
+    auto null_and_true = optimize_boolean_expression(
+        fixture,
+        null_boolean(),
+        BinaryOperator::And,
+        boolean_literal(true)
     );
     require(
-        static_cast<const BoundBinaryExpression &>(expression("SELECT false OR age > 18 FROM users;"))
-            .op() == BinaryOperator::GreaterThan,
-        "false OR x should return x"
+        query_projection(*null_and_true).projections()[0].expression->kind() ==
+            BoundExpressionKind::Null,
+        "NULL AND true should remain NULL"
+    );
+
+    auto null_or_true = optimize_boolean_expression(
+        fixture,
+        null_boolean(),
+        BinaryOperator::Or,
+        boolean_literal(true)
+    );
+    require_boolean_literal_value(
+        *query_projection(*null_or_true).projections()[0].expression,
+        true
+    );
+
+    auto null_or_false = optimize_boolean_expression(
+        fixture,
+        null_boolean(),
+        BinaryOperator::Or,
+        boolean_literal(false)
     );
     require(
-        static_cast<const BoundBinaryExpression &>(expression("SELECT age > 18 OR false FROM users;"))
-            .op() == BinaryOperator::GreaterThan,
-        "x OR false should return x"
+        query_projection(*null_or_false).projections()[0].expression->kind() ==
+            BoundExpressionKind::Null,
+        "NULL OR false should remain NULL"
     );
+}
+
+void test_optimizer_is_idempotent()
+{
+    Fixture fixture;
+    auto optimized = optimize_ok(plan_ok(fixture, "SELECT 10 + 8 FROM users WHERE true;"));
+
+    const auto require_optimized_shape = [](const LogicalPlan & plan) {
+        const auto & projection = query_projection(plan);
+        require(
+            projection.child().kind() == LogicalPlanOperatorKind::Scan,
+            "Filter(true) should remain eliminated"
+        );
+        require_literal_value(*projection.projections()[0].expression, 18);
+    };
+
+    require_optimized_shape(*optimized);
+    optimized = optimize_ok(std::move(optimized));
+    require_optimized_shape(*optimized);
+}
+
+void test_expression_rewriter_releases_consumed_nodes()
+{
+    Fixture fixture;
+    std::weak_ptr<const litedb::core::function::ScalarFunctionOverload> overload_lifetime;
+
+    {
+        auto overload = std::make_shared<litedb::core::function::ScalarFunctionOverload>();
+        overload->return_type = type(LogicalTypeId::Integer);
+        overload_lifetime = overload;
+
+        litedb::core::function::BoundScalarFunction function {
+            "optimizer_lifetime_probe",
+            overload,
+            {},
+            type(LogicalTypeId::Integer),
+            nullptr,
+            0,
+        };
+        auto plan = make_projection_plan(
+            fixture.users_id,
+            std::make_unique<BoundFunctionExpression>(
+                std::move(function),
+                std::vector<std::unique_ptr<BoundExpression>> {}
+            )
+        );
+        auto optimized = optimize_ok(std::move(plan));
+        overload.reset();
+        require(
+            !overload_lifetime.expired(),
+            "optimized function should retain its overload while alive"
+        );
+    }
+
     require(
-        static_cast<const BoundBinaryExpression &>(expression("SELECT age > 18 OR true FROM users;"))
-            .op() == BinaryOperator::Or,
-        "x OR true must be preserved"
+        overload_lifetime.expired(),
+        "consumed function expression should release its overload"
     );
 }
 
@@ -386,57 +644,50 @@ void test_filter_elimination_and_operator_order()
     );
 }
 
-void test_each_option_is_independent()
-{
-    Fixture fixture;
-
-    OptimizerOptions no_folding;
-    no_folding.enable_constant_folding = false;
-    auto no_fold_plan = optimize_ok(plan_ok(fixture, "SELECT 10 + 8 FROM users;"), no_folding);
-    require(
-        query_projection(*no_fold_plan).projections()[0].expression->kind()
-            == BoundExpressionKind::Binary,
-        "constant folding option should be independent"
-    );
-
-    OptimizerOptions no_boolean;
-    no_boolean.enable_boolean_simplification = false;
-    auto no_boolean_plan = optimize_ok(
-        plan_ok(fixture, "SELECT true AND age > 18 FROM users;"),
-        no_boolean
-    );
-    require(
-        query_projection(*no_boolean_plan).projections()[0].expression->kind()
-            == BoundExpressionKind::Binary,
-        "boolean simplification option should be independent"
-    );
-
-    OptimizerOptions no_filter;
-    no_filter.enable_filter_elimination = false;
-    auto no_filter_plan = optimize_ok(plan_ok(fixture, "SELECT id FROM users WHERE true;"), no_filter);
-    require(
-        query_projection(*no_filter_plan).child().kind() == LogicalPlanOperatorKind::Filter,
-        "filter elimination option should be independent"
-    );
-}
-
 void test_all_composite_expression_kinds_are_rewritten()
 {
     Fixture fixture;
     auto plan = optimize_ok(plan_ok(
         fixture,
-        "SELECT age IN (1, 2), age BETWEEN 1 AND 2, name LIKE 'a%', "
-        "l2_distance(embedding, [0.1, 0.2, 0.3]), [1 + 2, 3] FROM users;"
+        "SELECT 1 IN (1 + 2, 4), 1 BETWEEN 0 + 1 AND 2 + 2, "
+        "'abc' LIKE 'a%', "
+        "l2_distance([0.1, 0.2, 0.3], [0.3, 0.2, 0.1]), "
+        "[1 + 2, 3] FROM users;"
     ));
 
     const auto & projections = query_projection(*plan).projections();
     require(projections[0].expression->kind() == BoundExpressionKind::In, "IN should be retained");
-    require(projections[1].expression->kind() == BoundExpressionKind::Between, "BETWEEN should be retained");
-    require(projections[2].expression->kind() == BoundExpressionKind::Like, "LIKE should be retained");
-    require(projections[3].expression->kind() == BoundExpressionKind::Function, "function should be retained");
-    const auto & function = static_cast<const BoundFunctionExpression &>(*projections[3].expression);
-    require(function.arguments()[1]->kind() == BoundExpressionKind::Vector, "function vector should be retained");
-    require(projections[4].expression->kind() == BoundExpressionKind::Vector, "vector should be retained");
+    require(
+        projections[1].expression->kind() == BoundExpressionKind::Between,
+        "BETWEEN should be retained"
+    );
+    require(
+        projections[2].expression->kind() == BoundExpressionKind::Like,
+        "LIKE should be retained"
+    );
+    require(
+        projections[3].expression->kind() == BoundExpressionKind::Function,
+        "function should be retained"
+    );
+    const auto & in = static_cast<const BoundInExpression &>(*projections[0].expression);
+    require_literal_value(*in.values()[0], 3);
+    const auto & between = static_cast<const BoundBetweenExpression &>(*projections[1].expression);
+    require_literal_value(between.lower(), 1);
+    require_literal_value(between.upper(), 4);
+    const auto & function =
+        static_cast<const BoundFunctionExpression &>(*projections[3].expression);
+    require(
+        function.arguments()[0]->kind() == BoundExpressionKind::Vector,
+        "function vector should be retained"
+    );
+    require(
+        function.arguments()[1]->kind() == BoundExpressionKind::Vector,
+        "function vector should be retained"
+    );
+    require(
+        projections[4].expression->kind() == BoundExpressionKind::Vector,
+        "vector should be retained"
+    );
     const auto & vector = static_cast<const BoundVectorExpression &>(*projections[4].expression);
     require_literal_value(*vector.elements()[0], 3);
 }
@@ -480,8 +731,11 @@ int main()
         test_query_insert_update_delete_expression_rewrite();
         test_constant_folding_scope_and_errors();
         test_boolean_simplification_is_short_circuit_safe();
+        test_boolean_short_circuit_preserves_error_order();
+        test_boolean_null_semantics();
+        test_optimizer_is_idempotent();
+        test_expression_rewriter_releases_consumed_nodes();
         test_filter_elimination_and_operator_order();
-        test_each_option_is_independent();
         test_all_composite_expression_kinds_are_rewritten();
         test_command_plans_pass_through();
     } catch (const std::exception & exception) {

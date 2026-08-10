@@ -9,13 +9,6 @@ class BoundExpression;
 
 }
 
-namespace litedb::core::optimizer
-{
-
-struct OptimizerOptions;
-
-}
-
 namespace litedb::core::optimizer::detail
 {
 
@@ -29,8 +22,7 @@ bool is_boolean_literal(
 // 重写表达式
 [[nodiscard]]
 std::unique_ptr<binder::bound::BoundExpression> rewrite_expression(
-    std::unique_ptr<binder::bound::BoundExpression> expression,
-    const OptimizerOptions & options
+    std::unique_ptr<binder::bound::BoundExpression> expression
 );
 
 } // namespace litedb::core::optimizer::detail
