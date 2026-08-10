@@ -10,9 +10,7 @@
 namespace litedb::core::filesystem
 {
 
-/**
- * @brief 文件系统错误
- */
+// 文件系统错误
 enum class FileSystemErrorCode : std::uint8_t
 {
     NotFound = 0,               // 文件或目录不存在

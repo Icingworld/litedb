@@ -7,9 +7,7 @@
 namespace litedb::core::filesystem::backend
 {
 
-/**
- * @brief 创建当前平台的文件系统后端
- */
+// 创建当前平台的文件系统后端
 [[nodiscard]]
 std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend();
 

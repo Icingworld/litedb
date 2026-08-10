@@ -30,7 +30,7 @@ std::expected<FileHandle, error::Error> FileSystem::open(
 
     if (options.access == FileAccess::ReadOnly &&
         (options.create_mode == FileCreateMode::TruncateExisting ||
-         options.create_mode == FileCreateMode::CreateOrTruncate)) {
+         options.create_mode == FileCreateMode::CreateOrTruncate)) [[unlikely]] {
 
         FileSystemErrorContext context {
             "open",
@@ -46,7 +46,7 @@ std::expected<FileHandle, error::Error> FileSystem::open(
     }
 
     auto result = backend_->open(path, options);
-    if (!result) {
+    if (!result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     return FileHandle {std::move(*result)};
