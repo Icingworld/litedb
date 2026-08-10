@@ -123,8 +123,7 @@ std::expected<void, IoError> BasicBinaryWriter<E>::write_string(std::string_view
             make_io_error(IoErrorCode::ValueTooLarge, "string is too large to encode")
         );
     }
-    if (auto result = write_u32(static_cast<std::uint32_t>(value.size())); !result) [[unlikely]]
-    {
+    if (auto result = write_u32(static_cast<std::uint32_t>(value.size())); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     if (value.empty()) {
@@ -155,8 +154,7 @@ template <std::endian E>
 std::expected<std::uint8_t, IoError> BasicBinaryReader<E>::read_u8()
 {
     std::uint8_t value = 0;
-    if (auto read = read_exact_bytes(&value, sizeof(value)); !read) [[unlikely]]
-    {
+    if (auto read = read_exact_bytes(&value, sizeof(value)); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     return value;
@@ -166,8 +164,7 @@ template <std::endian E>
 std::expected<std::uint16_t, IoError> BasicBinaryReader<E>::read_u16()
 {
     std::array<std::byte, sizeof(std::uint16_t)> bytes {};
-    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]]
-    {
+    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     return decode_integer<E, std::uint16_t>(bytes);
@@ -177,8 +174,7 @@ template <std::endian E>
 std::expected<std::uint32_t, IoError> BasicBinaryReader<E>::read_u32()
 {
     std::array<std::byte, sizeof(std::uint32_t)> bytes {};
-    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]]
-    {
+    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     return decode_integer<E, std::uint32_t>(bytes);
@@ -188,8 +184,7 @@ template <std::endian E>
 std::expected<std::uint64_t, IoError> BasicBinaryReader<E>::read_u64()
 {
     std::array<std::byte, sizeof(std::uint64_t)> bytes {};
-    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]]
-    {
+    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     return decode_integer<E, std::uint64_t>(bytes);
@@ -199,8 +194,7 @@ template <std::endian E>
 std::expected<std::int32_t, IoError> BasicBinaryReader<E>::read_i32()
 {
     std::array<std::byte, sizeof(std::int32_t)> bytes {};
-    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]]
-    {
+    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     return decode_integer<E, std::int32_t>(bytes);
@@ -210,8 +204,7 @@ template <std::endian E>
 std::expected<std::int64_t, IoError> BasicBinaryReader<E>::read_i64()
 {
     std::array<std::byte, sizeof(std::int64_t)> bytes {};
-    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]]
-    {
+    if (auto read = read_exact_bytes(bytes.data(), bytes.size()); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     return decode_integer<E, std::int64_t>(bytes);
@@ -260,8 +253,7 @@ std::expected<std::string, IoError> BasicBinaryReader<E>::read_string()
 
     std::string value(*size, '\0');
     if (!value.empty()) {
-        if (auto read = read_exact_bytes(value.data(), value.size()); !read) [[unlikely]]
-        {
+        if (auto read = read_exact_bytes(value.data(), value.size()); !read) [[unlikely]] {
             return std::unexpected(std::move(read.error()));
         }
     }

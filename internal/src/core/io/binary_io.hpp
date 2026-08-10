@@ -33,28 +33,38 @@ public:
     // 写入一个 8 位无符号整数
     [[nodiscard]]
     std::expected<void, IoError> write_u8(std::uint8_t value);
+
     // 写入一个 16 位无符号整数
     [[nodiscard]]
     std::expected<void, IoError> write_u16(std::uint16_t value);
+
     // 写入一个 32 位无符号整数
     [[nodiscard]]
     std::expected<void, IoError> write_u32(std::uint32_t value);
+
     // 写入一个 64 位无符号整数
     [[nodiscard]]
     std::expected<void, IoError> write_u64(std::uint64_t value);
+
     // 写入一个 32 位有符号整数
     [[nodiscard]]
     std::expected<void, IoError> write_i32(std::int32_t value);
+
     // 写入一个 64 位有符号整数
     [[nodiscard]]
     std::expected<void, IoError> write_i64(std::int64_t value);
+
     // 写入一个 32 位浮点数
     [[nodiscard]]
     std::expected<void, IoError> write_f32(float value);
+
     // 写入一个 64 位浮点数
     [[nodiscard]]
     std::expected<void, IoError> write_f64(double value);
+
     // 写入一个字符串
+    // 如果在写入长度后，写入字符串时因为空间不足或其他原因而失败
+    // 调用方应终止当前编码流程并丢弃本次编码结果
     [[nodiscard]]
     std::expected<void, IoError> write_string(std::string_view value);
 
@@ -79,27 +89,35 @@ public:
     // 读取一个 8 位无符号整数
     [[nodiscard]]
     std::expected<std::uint8_t, IoError> read_u8();
+
     // 读取一个 16 位无符号整数
     [[nodiscard]]
     std::expected<std::uint16_t, IoError> read_u16();
+
     // 读取一个 32 位无符号整数
     [[nodiscard]]
     std::expected<std::uint32_t, IoError> read_u32();
+
     // 读取一个 64 位无符号整数
     [[nodiscard]]
     std::expected<std::uint64_t, IoError> read_u64();
+
     // 读取一个 32 位有符号整数
     [[nodiscard]]
     std::expected<std::int32_t, IoError> read_i32();
+
     // 读取一个 64 位有符号整数
     [[nodiscard]]
     std::expected<std::int64_t, IoError> read_i64();
+
     // 读取一个 32 位浮点数
     [[nodiscard]]
     std::expected<float, IoError> read_f32();
+
     // 读取一个 64 位浮点数
     [[nodiscard]]
     std::expected<double, IoError> read_f64();
+
     // 读取一个字符串
     [[nodiscard]]
     std::expected<std::string, IoError> read_string();

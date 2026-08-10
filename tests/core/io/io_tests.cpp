@@ -1,6 +1,7 @@
 #include "core/io/binary_io.hpp"
 #include "core/io/buffer_byte_reader.hpp"
 #include "core/io/buffer_byte_writer.hpp"
+#include "core/io/checksum.hpp"
 #include "core/io/file_byte_reader.hpp"
 #include "core/io/file_byte_writer.hpp"
 #include "core/filesystem/backend/file_handle_backend.hpp"
@@ -14,6 +15,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -50,6 +52,27 @@ void require_ok(std::expected<void, io::IoError> result, const char * message)
     if (!result) {
         throw std::runtime_error(message);
     }
+}
+
+std::span<const std::byte> as_bytes(std::string_view value) noexcept
+{
+    const std::span<const char> characters {value.data(), value.size()};
+    return std::as_bytes(characters);
+}
+
+std::uint32_t reference_crc32(std::span<const std::byte> bytes) noexcept
+{
+    std::uint32_t checksum = 0xffffffffU;
+    for (const auto byte : bytes) {
+        checksum ^= std::to_integer<std::uint8_t>(byte);
+        for (int bit = 0; bit < 8; ++bit) {
+            const auto mask = static_cast<std::uint32_t>(
+                -static_cast<std::int32_t>(checksum & 1U)
+            );
+            checksum = (checksum >> 1U) ^ (0xedb88320U & mask);
+        }
+    }
+    return ~checksum;
 }
 
 class CountingWriter final : public io::ByteWriter
@@ -193,6 +216,56 @@ private:
 
     std::shared_ptr<FileState> state_;
 };
+
+void test_crc32_known_vectors()
+{
+    require(io::crc32({}) == 0x00000000U, "empty CRC32 mismatch");
+    require(
+        io::crc32(as_bytes("123456789")) == 0xcbf43926U,
+        "standard CRC32 check vector mismatch"
+    );
+    require(
+        io::crc32(as_bytes("The quick brown fox jumps over the lazy dog")) == 0x414fa339U,
+        "CRC32 text vector mismatch"
+    );
+}
+
+void test_crc32_matches_reference()
+{
+    std::array<std::byte, 4096> data {};
+    std::uint32_t state = 0x12345678U;
+    for (auto & byte : data) {
+        state = state * 1664525U + 1013904223U;
+        byte = static_cast<std::byte>(state >> 24U);
+    }
+
+    constexpr std::array<std::size_t, 13> lengths {
+        0, 1, 2, 3, 7, 8, 15, 31, 32, 255, 256, 1024, 4096,
+    };
+    for (const auto length : lengths) {
+        const auto input = std::span<const std::byte> {data}.first(length);
+        require(io::crc32(input) == reference_crc32(input), "CRC32 reference mismatch");
+    }
+}
+
+void test_crc32_incremental_updates()
+{
+    const auto input = as_bytes("The quick brown fox jumps over the lazy dog");
+    const auto expected = io::crc32(input);
+
+    for (std::size_t split = 0; split <= input.size(); ++split) {
+        io::Crc32Calculator calculator;
+        calculator.update(input.first(split));
+        require(
+            calculator.value() == io::crc32(input.first(split)),
+            "partial CRC32 value mismatch"
+        );
+        calculator.update({});
+        calculator.update(input.subspan(split));
+        require(calculator.value() == expected, "incremental CRC32 mismatch");
+        require(calculator.value() == expected, "repeated CRC32 value changed the state");
+    }
+}
 
 void test_exact_primitive_encoding()
 {
@@ -382,6 +455,9 @@ void test_file_adapters_preserve_offsets_and_errors()
 int main()
 {
     try {
+        test_crc32_known_vectors();
+        test_crc32_matches_reference();
+        test_crc32_incremental_updates();
         test_exact_primitive_encoding();
         test_big_endian_primitive_encoding();
         test_big_endian_string_round_trip();
