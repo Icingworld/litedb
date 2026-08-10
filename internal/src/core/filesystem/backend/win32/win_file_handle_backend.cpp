@@ -118,11 +118,8 @@ error::Error make_error(
     return error::Error {code, message, std::move(context)};
 }
 
-error::Error make_win32_error(
-    DWORD error,
-    std::string operation,
-    const std::filesystem::path & path
-)
+error::Error
+make_win32_error(DWORD error, std::string operation, const std::filesystem::path & path)
 {
     const std::error_code native_code(static_cast<int>(error), std::system_category());
     return make_error(
@@ -134,24 +131,13 @@ error::Error make_win32_error(
     );
 }
 
-error::Error range_error(
-    std::string operation,
-    const std::filesystem::path & path
-)
+error::Error range_error(std::string operation, const std::filesystem::path & path)
 {
     const auto message = operation + " range exceeds the native file offset limit";
-    return make_error(
-        FileSystemErrorCode::InvalidArgument,
-        message,
-        std::move(operation),
-        path
-    );
+    return make_error(FileSystemErrorCode::InvalidArgument, message, std::move(operation), path);
 }
 
-error::Error closed_error(
-    std::string operation,
-    const std::filesystem::path & path
-)
+error::Error closed_error(std::string operation, const std::filesystem::path & path)
 {
     return make_error(
         FileSystemErrorCode::InvalidArgument,
@@ -227,11 +213,8 @@ std::expected<void, error::Error> Win32FileHandleBackend::close()
     return {};
 }
 
-std::expected<void, error::Error> Win32FileHandleBackend::seek_locked(
-    std::uint64_t offset,
-    std::size_t size,
-    const char * operation
-)
+std::expected<void, error::Error>
+Win32FileHandleBackend::seek_locked(std::uint64_t offset, std::size_t size, const char * operation)
 {
     LARGE_INTEGER distance {};
     constexpr auto max_offset = static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max());
@@ -245,10 +228,8 @@ std::expected<void, error::Error> Win32FileHandleBackend::seek_locked(
     return {};
 }
 
-std::expected<std::size_t, error::Error> Win32FileHandleBackend::read_at(
-    std::uint64_t offset,
-    std::span<std::byte> buffer
-)
+std::expected<std::size_t, error::Error>
+Win32FileHandleBackend::read_at(std::uint64_t offset, std::span<std::byte> buffer)
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
@@ -284,10 +265,8 @@ std::expected<std::size_t, error::Error> Win32FileHandleBackend::read_at(
     return read_total;
 }
 
-std::expected<void, error::Error> Win32FileHandleBackend::write_at(
-    std::uint64_t offset,
-    std::span<const std::byte> data
-)
+std::expected<void, error::Error>
+Win32FileHandleBackend::write_at(std::uint64_t offset, std::span<const std::byte> data)
 {
     std::scoped_lock lock {mutex_};
     if (handle_ == INVALID_HANDLE_VALUE) {
@@ -313,8 +292,7 @@ std::expected<void, error::Error> Win32FileHandleBackend::append(std::span<const
         return std::unexpected(make_win32_error(GetLastError(), "SetFilePointerEx", path_));
     }
     constexpr auto max_offset = static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max());
-    if (end.QuadPart < 0 ||
-        data.size() > max_offset - static_cast<std::uint64_t>(end.QuadPart)) {
+    if (end.QuadPart < 0 || data.size() > max_offset - static_cast<std::uint64_t>(end.QuadPart)) {
         return std::unexpected(range_error("append", path_));
     }
     return write_all_locked(handle_, data.data(), data.size(), path_);

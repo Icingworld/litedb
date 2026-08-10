@@ -34,15 +34,11 @@ public:
 public:
     std::expected<void, error::Error> close() override;
 
-    std::expected<std::size_t, error::Error> read_at(
-        std::uint64_t offset,
-        std::span<std::byte> buffer
-    ) override;
+    std::expected<std::size_t, error::Error>
+    read_at(std::uint64_t offset, std::span<std::byte> buffer) override;
 
-    std::expected<void, error::Error> write_at(
-        std::uint64_t offset,
-        std::span<const std::byte> data
-    ) override;
+    std::expected<void, error::Error>
+    write_at(std::uint64_t offset, std::span<const std::byte> data) override;
 
     std::expected<void, error::Error> append(std::span<const std::byte> data) override;
 
@@ -55,11 +51,8 @@ public:
     std::expected<void, error::Error> sync_all() override;
 
 private:
-    std::expected<void, error::Error> seek_locked(
-        std::uint64_t offset,
-        std::size_t size,
-        const char * operation
-    );
+    std::expected<void, error::Error>
+    seek_locked(std::uint64_t offset, std::size_t size, const char * operation);
 
     HANDLE handle_ {INVALID_HANDLE_VALUE};
     std::filesystem::path path_;

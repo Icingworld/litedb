@@ -51,11 +51,7 @@ FileSystemErrorCode map_errno(int error)
     }
 }
 
-error::Error make_errno_error(
-    int error,
-    std::string operation,
-    const std::filesystem::path & path
-)
+error::Error make_errno_error(int error, std::string operation, const std::filesystem::path & path)
 {
     const std::error_code native_code(error, std::generic_category());
     FileSystemErrorContext context {
@@ -71,10 +67,7 @@ error::Error make_errno_error(
     };
 }
 
-error::Error range_error(
-    std::string operation,
-    const std::filesystem::path & path
-)
+error::Error range_error(std::string operation, const std::filesystem::path & path)
 {
     const auto message = operation + " range exceeds the native file offset limit";
     FileSystemErrorContext context {
@@ -90,10 +83,7 @@ error::Error range_error(
     };
 }
 
-error::Error closed_error(
-    std::string operation,
-    const std::filesystem::path & path
-)
+error::Error closed_error(std::string operation, const std::filesystem::path & path)
 {
     const auto message = operation + " failed because the file handle is closed";
     FileSystemErrorContext context {
@@ -137,7 +127,8 @@ std::expected<void, error::Error> write_all_at(
             size - written_total,
             static_cast<std::size_t>(std::numeric_limits<ssize_t>::max())
         );
-        const ssize_t written = ::pwrite(fd, data + written_total, chunk_size, offset + written_total);
+        const ssize_t written =
+            ::pwrite(fd, data + written_total, chunk_size, offset + written_total);
         if (written < 0) {
             if (errno == EINTR) {
                 continue;
@@ -151,11 +142,13 @@ std::expected<void, error::Error> write_all_at(
                 {},
                 {},
             };
-            return std::unexpected(error::Error {
-                FileSystemErrorCode::IoError,
-                "pwrite wrote zero bytes",
-                std::move(context),
-            });
+            return std::unexpected(
+                error::Error {
+                    FileSystemErrorCode::IoError,
+                    "pwrite wrote zero bytes",
+                    std::move(context),
+                }
+            );
         }
         written_total += static_cast<std::size_t>(written);
     }
@@ -167,8 +160,7 @@ std::expected<void, error::Error> write_all_at(
 PosixFileHandleBackend::PosixFileHandleBackend(int fd, std::filesystem::path path)
     : fd_(fd)
     , path_(std::move(path))
-{
-}
+{}
 
 PosixFileHandleBackend::~PosixFileHandleBackend()
 {
@@ -189,10 +181,8 @@ std::expected<void, error::Error> PosixFileHandleBackend::close()
     return {};
 }
 
-std::expected<std::size_t, error::Error> PosixFileHandleBackend::read_at(
-    std::uint64_t offset,
-    std::span<std::byte> buffer
-)
+std::expected<std::size_t, error::Error>
+PosixFileHandleBackend::read_at(std::uint64_t offset, std::span<std::byte> buffer)
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
@@ -210,7 +200,8 @@ std::expected<std::size_t, error::Error> PosixFileHandleBackend::read_at(
             buffer.size() - read_total,
             static_cast<std::size_t>(std::numeric_limits<ssize_t>::max())
         );
-        const ssize_t read = ::pread(fd_, buffer.data() + read_total, chunk_size, *native_offset + read_total);
+        const ssize_t read =
+            ::pread(fd_, buffer.data() + read_total, chunk_size, *native_offset + read_total);
         if (read < 0) {
             if (errno == EINTR) {
                 continue;
@@ -225,10 +216,8 @@ std::expected<std::size_t, error::Error> PosixFileHandleBackend::read_at(
     return read_total;
 }
 
-std::expected<void, error::Error> PosixFileHandleBackend::write_at(
-    std::uint64_t offset,
-    std::span<const std::byte> data
-)
+std::expected<void, error::Error>
+PosixFileHandleBackend::write_at(std::uint64_t offset, std::span<const std::byte> data)
 {
     std::scoped_lock lock {mutex_};
     if (fd_ < 0) {
@@ -253,12 +242,8 @@ std::expected<void, error::Error> PosixFileHandleBackend::append(std::span<const
     if (offset < 0) {
         return std::unexpected(make_errno_error(errno, "lseek", path_));
     }
-    auto native_offset = checked_range(
-        static_cast<std::uint64_t>(offset),
-        data.size(),
-        "append",
-        path_
-    );
+    auto native_offset =
+        checked_range(static_cast<std::uint64_t>(offset), data.size(), "append", path_);
     if (!native_offset) {
         return std::unexpected(std::move(native_offset.error()));
     }

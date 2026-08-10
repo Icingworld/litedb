@@ -10,10 +10,8 @@ namespace litedb::core::filesystem::backend
 class PosixFileSystemBackend final : public FileSystemBackend
 {
 public:
-    std::expected<std::unique_ptr<FileHandleBackend>, error::Error> open(
-        const std::filesystem::path & path,
-        const FileOpenOptions & options
-    ) override;
+    std::expected<std::unique_ptr<FileHandleBackend>, error::Error>
+    open(const std::filesystem::path & path, const FileOpenOptions & options) override;
 
     std::expected<std::vector<std::filesystem::path>, error::Error> list_dir(
         const std::filesystem::path & path
@@ -23,10 +21,8 @@ public:
 
     std::expected<void, error::Error> create_dir_all(const std::filesystem::path & path) override;
 
-    std::expected<void, error::Error> rename(
-        const std::filesystem::path & from,
-        const std::filesystem::path & to
-    ) override;
+    std::expected<void, error::Error>
+    rename(const std::filesystem::path & from, const std::filesystem::path & to) override;
 
     std::expected<void, error::Error> replace_file_atomic(
         const std::filesystem::path & from,

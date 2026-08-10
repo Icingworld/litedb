@@ -28,15 +28,11 @@ public:
 public:
     std::expected<void, error::Error> close() override;
 
-    std::expected<std::size_t, error::Error> read_at(
-        std::uint64_t offset,
-        std::span<std::byte> buffer
-    ) override;
+    std::expected<std::size_t, error::Error>
+    read_at(std::uint64_t offset, std::span<std::byte> buffer) override;
 
-    std::expected<void, error::Error> write_at(
-        std::uint64_t offset,
-        std::span<const std::byte> data
-    ) override;
+    std::expected<void, error::Error>
+    write_at(std::uint64_t offset, std::span<const std::byte> data) override;
 
     std::expected<void, error::Error> append(std::span<const std::byte> data) override;
 

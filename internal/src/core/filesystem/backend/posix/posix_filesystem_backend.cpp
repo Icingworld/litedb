@@ -72,11 +72,7 @@ error::Error make_error(
         related_path,
         error,
     };
-    return error::Error (
-        map_error_code(error),
-        std::move(message),
-        std::move(context)
-    );
+    return error::Error(map_error_code(error), std::move(message), std::move(context));
 }
 
 error::Error make_errno_error(
@@ -131,12 +127,11 @@ std::unique_ptr<FileSystemBackend> create_platform_filesystem_backend()
     return std::make_unique<PosixFileSystemBackend>();
 }
 
-std::expected<std::unique_ptr<FileHandleBackend>, error::Error> PosixFileSystemBackend::open(
-    const std::filesystem::path & path,
-    const FileOpenOptions & options
-)
+std::expected<std::unique_ptr<FileHandleBackend>, error::Error>
+PosixFileSystemBackend::open(const std::filesystem::path & path, const FileOpenOptions & options)
 {
-    const int flags = to_access_flags(options.access) | to_create_flags(options.create_mode) | O_CLOEXEC;
+    const int flags =
+        to_access_flags(options.access) | to_create_flags(options.create_mode) | O_CLOEXEC;
     int fd = -1;
     do {
         fd = ::open(path.c_str(), flags, 0666);
@@ -165,15 +160,18 @@ std::expected<std::vector<std::filesystem::path>, error::Error> PosixFileSystemB
             {},
             {},
         };
-        return std::unexpected(error::Error {
-            FileSystemErrorCode::NotADirectory,
-            "path is not a directory",
-            std::move(context),
-        });
+        return std::unexpected(
+            error::Error {
+                FileSystemErrorCode::NotADirectory,
+                "path is not a directory",
+                std::move(context),
+            }
+        );
     }
 
     std::vector<std::filesystem::path> entries;
-    for (std::filesystem::directory_iterator it {path, error}, end; it != end; it.increment(error)) {
+    for (std::filesystem::directory_iterator it {path, error}, end; it != end;
+         it.increment(error)) {
         if (error) {
             return std::unexpected(make_error(error, "directory_iterator", path));
         }
@@ -204,10 +202,8 @@ std::expected<void, error::Error> PosixFileSystemBackend::create_dir_all(
     return {};
 }
 
-std::expected<void, error::Error> PosixFileSystemBackend::rename(
-    const std::filesystem::path & from,
-    const std::filesystem::path & to
-)
+std::expected<void, error::Error>
+PosixFileSystemBackend::rename(const std::filesystem::path & from, const std::filesystem::path & to)
 {
     std::error_code error;
     const auto destination_status = std::filesystem::symlink_status(to, error);
@@ -221,11 +217,13 @@ std::expected<void, error::Error> PosixFileSystemBackend::rename(
             to,
             {},
         };
-        return std::unexpected(error::Error {
-            FileSystemErrorCode::AlreadyExists,
-            "rename destination already exists",
-            std::move(context),
-        });
+        return std::unexpected(
+            error::Error {
+                FileSystemErrorCode::AlreadyExists,
+                "rename destination already exists",
+                std::move(context),
+            }
+        );
     }
     std::filesystem::rename(from, to, error);
     if (error) {

@@ -25,18 +25,14 @@ std::expected<void, error::Error> FileHandle::close()
     return backend_->close();
 }
 
-std::expected<std::size_t, error::Error> FileHandle::read_at(
-    std::uint64_t offset,
-    std::span<std::byte> buffer
-)
+std::expected<std::size_t, error::Error>
+FileHandle::read_at(std::uint64_t offset, std::span<std::byte> buffer)
 {
     return backend_->read_at(offset, buffer);
 }
 
-std::expected<void, error::Error> FileHandle::write_at(
-    std::uint64_t offset,
-    std::span<const std::byte> data
-)
+std::expected<void, error::Error>
+FileHandle::write_at(std::uint64_t offset, std::span<const std::byte> data)
 {
     return backend_->write_at(offset, data);
 }

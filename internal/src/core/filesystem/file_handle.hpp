@@ -25,14 +25,14 @@ public:
     explicit FileHandle(std::unique_ptr<backend::FileHandleBackend> backend);
 
     FileHandle(const FileHandle &) = delete;
-    
+
     FileHandle & operator=(const FileHandle &) = delete;
 
     FileHandle(FileHandle &&) noexcept;
-    
+
     FileHandle & operator=(FileHandle &&) noexcept;
 
-    ~FileHandle();    
+    ~FileHandle();
 
 public:
     // 关闭文件
@@ -42,18 +42,14 @@ public:
     // 从指定偏移读取数据
     // 返回实际读取的字节数；到达文件末尾时允许小于缓冲区大小
     [[nodiscard]]
-    std::expected<std::size_t, FileSystemError> read_at(
-        std::uint64_t offset,
-        std::span<std::byte> buffer
-    );
+    std::expected<std::size_t, FileSystemError>
+    read_at(std::uint64_t offset, std::span<std::byte> buffer);
 
     // 从指定偏移写入全部数据
     // 成功时保证整个缓冲区均已写入，否则返回错误
     [[nodiscard]]
-    std::expected<void, FileSystemError> write_at(
-        std::uint64_t offset,
-        std::span<const std::byte> data
-    );
+    std::expected<void, FileSystemError>
+    write_at(std::uint64_t offset, std::span<const std::byte> data);
 
     // 将数据追加到文件末尾
     // 同一 FileHandle 实例上的操作会被串行化，不会因查询文件大小与写入之间的竞态而互相覆盖

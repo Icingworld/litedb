@@ -21,28 +21,27 @@ FileSystem & FileSystem::operator=(FileSystem &&) noexcept = default;
 
 FileSystem::~FileSystem() = default;
 
-std::expected<FileHandle, error::Error> FileSystem::open(
-    const std::filesystem::path & path,
-    const FileOpenOptions & options
-)
+std::expected<FileHandle, error::Error>
+FileSystem::open(const std::filesystem::path & path, const FileOpenOptions & options)
 {
     assert(backend_);
 
     if (options.access == FileAccess::ReadOnly &&
         (options.create_mode == FileCreateMode::TruncateExisting ||
          options.create_mode == FileCreateMode::CreateOrTruncate)) [[unlikely]] {
-
         FileSystemErrorContext context {
             "open",
             path,
             std::filesystem::path(),
             std::error_code(),
         };
-        return std::unexpected(error::Error (
-            FileSystemErrorCode::InvalidArgument,
-            "open failed: truncate create mode requires write access",
-            std::move(context)
-        ));
+        return std::unexpected(
+            error::Error(
+                FileSystemErrorCode::InvalidArgument,
+                "open failed: truncate create mode requires write access",
+                std::move(context)
+            )
+        );
     }
 
     auto result = backend_->open(path, options);
@@ -72,10 +71,8 @@ std::expected<void, error::Error> FileSystem::create_dir_all(const std::filesyst
     return backend_->create_dir_all(path);
 }
 
-std::expected<void, error::Error> FileSystem::rename(
-    const std::filesystem::path & from,
-    const std::filesystem::path & to
-)
+std::expected<void, error::Error>
+FileSystem::rename(const std::filesystem::path & from, const std::filesystem::path & to)
 {
     assert(backend_);
     return backend_->rename(from, to);
