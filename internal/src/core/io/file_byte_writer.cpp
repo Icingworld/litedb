@@ -14,7 +14,7 @@ FileByteWriter::FileByteWriter(filesystem::FileHandle & file, std::uint64_t offs
 std::expected<void, IoError> FileByteWriter::write_bytes(std::span<const std::byte> data)
 {
     auto written = file_->write_at(offset_, data);
-    if (!written) {
+    if (!written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
     offset_ += data.size();
@@ -34,7 +34,7 @@ FileByteAppender::FileByteAppender(filesystem::FileHandle & file) noexcept
 std::expected<void, IoError> FileByteAppender::write_bytes(std::span<const std::byte> data)
 {
     auto written = file_->append(data);
-    if (!written) {
+    if (!written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
     return {};

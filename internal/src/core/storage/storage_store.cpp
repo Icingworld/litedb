@@ -131,7 +131,7 @@ std::expected<std::vector<std::byte>, StorageError> encode_record(
 )
 {
     io::BufferByteWriter bytes {MaxEncodedRecordSize};
-    io::BinaryWriter writer {bytes};
+    io::LittleEndianBinaryWriter writer {bytes};
     if (auto result = writer.write_u64(id); !result) {
         return std::unexpected(from_io_error(std::move(result.error()), StorageOperation::Encode, id));
     }
@@ -166,7 +166,7 @@ std::expected<common::Record, StorageError> decode_record(std::span<const std::b
         ));
     }
     io::BufferByteReader source {bytes};
-    io::BinaryReader reader {
+    io::LittleEndianBinaryReader reader {
         source,
         {
             .max_total_bytes = bytes.size(),

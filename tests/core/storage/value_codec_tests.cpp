@@ -37,7 +37,7 @@ const T & get(const common::Value & value)
 void test_value_format_and_roundtrip()
 {
     io::BufferByteWriter bytes {256};
-    io::BinaryWriter writer {bytes};
+    io::LittleEndianBinaryWriter writer {bytes};
     require_ok(storage::write_value(writer, common::Value::null()), "write null failed");
     require_ok(storage::write_value(writer, common::Value {true}), "write bool failed");
     require_ok(storage::write_value(writer, common::Value {std::int32_t {-2}}), "write int failed");
@@ -70,7 +70,7 @@ void test_value_format_and_roundtrip()
     require(bytes.bytes() == expected, "value wire format changed");
 
     io::BufferByteReader source {bytes.bytes()};
-    io::BinaryReader reader {
+    io::LittleEndianBinaryReader reader {
         source,
         {.max_total_bytes = bytes.bytes().size(), .max_string_bytes = 64},
     };
@@ -98,7 +98,7 @@ void test_invalid_values_are_rejected()
 {
     const std::array invalid_bool {std::byte {0x01}, std::byte {0x02}};
     io::BufferByteReader bool_source {invalid_bool};
-    io::BinaryReader bool_reader {
+    io::LittleEndianBinaryReader bool_reader {
         bool_source,
         {.max_total_bytes = invalid_bool.size(), .max_string_bytes = 16},
     };
@@ -111,7 +111,7 @@ void test_invalid_values_are_rejected()
         std::byte {0xff}, std::byte {0xff}, std::byte {0xff}, std::byte {0xff},
     };
     io::BufferByteReader vector_source {huge_vector};
-    io::BinaryReader vector_reader {
+    io::LittleEndianBinaryReader vector_reader {
         vector_source,
         {.max_total_bytes = huge_vector.size(), .max_string_bytes = 16},
     };

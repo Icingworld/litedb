@@ -9,20 +9,14 @@
 namespace litedb::core::io
 {
 
-/**
- * @brief 字节写入器
- */
+// 字节写入器
 class ByteWriter
 {
 public:
     virtual ~ByteWriter() = default;
 
 public:
-    /**
-     * @brief 写入字节数据
-     * @param data 字节数据
-     * @return 结果
-     */
+    // 写入字节数据
     [[nodiscard]]
     virtual std::expected<void, IoError> write_bytes(std::span<const std::byte> data) = 0;
 };

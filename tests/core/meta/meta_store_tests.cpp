@@ -159,7 +159,7 @@ void write_test_header(
     });
     require(file.has_value(), "open test meta file failed");
     io::FileByteWriter byte_writer {*file};
-    io::BinaryWriter writer {byte_writer};
+    io::LittleEndianBinaryWriter writer {byte_writer};
     require(writer.write_u32(magic).has_value(), "write test magic failed");
     if (version) {
         require(writer.write_u16(*version).has_value(), "write test version failed");
@@ -201,7 +201,7 @@ void test_load_error_codes(const std::filesystem::path & path)
     });
     require(file.has_value(), "open malicious meta file failed");
     io::BufferByteWriter payload_bytes {128};
-    io::BinaryWriter payload_writer {payload_bytes};
+    io::LittleEndianBinaryWriter payload_writer {payload_bytes};
     for (int index = 0; index < 5; ++index) {
         require(payload_writer.write_u64(1).has_value(), "write malicious id failed");
     }
@@ -209,7 +209,7 @@ void test_load_error_codes(const std::filesystem::path & path)
             "write malicious count failed");
 
     io::FileByteWriter byte_writer {*file};
-    io::BinaryWriter writer {byte_writer};
+    io::LittleEndianBinaryWriter writer {byte_writer};
     require(writer.write_u32(meta_magic).has_value(), "write malicious magic failed");
     require(writer.write_u16(2).has_value(), "write malicious version failed");
     require(writer.write_u16(24).has_value(), "write malicious header failed");

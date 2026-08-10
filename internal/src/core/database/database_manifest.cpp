@@ -19,7 +19,7 @@ constexpr std::uint32_t MaxManifestStringBytes = 4 * 1024;
 
 /**
  * @brief 创建 manifest 错误
- * @param code 错误码
+ * @param code 错误�?
  * @param message 错误消息
  * @return 错误
  */
@@ -29,7 +29,7 @@ ManifestError make_error(ManifestErrorCode code, std::string message)
 }
 
 /**
- * @brief 从文件系统错误创建 manifest 错误
+ * @brief 从文件系统错误创�?manifest 错误
  * @param error 文件系统错误
  * @return 错误
  */
@@ -40,7 +40,7 @@ ManifestError from_filesystem_error(error::Error error)
 }
 
 /**
- * @brief 从 IO 错误创建 manifest 错误
+ * @brief �?IO 错误创建 manifest 错误
  * @param error  IO 错误
  * @return 错误
  */
@@ -53,12 +53,12 @@ ManifestError from_io_error(io::IoError error)
 }
 
 /**
- * @brief 写入文件头
- * @param writer 写入器
+ * @brief 写入文件�?
+ * @param writer 写入�?
  * @param magic 魔数
  * @return 结果
  */
-std::expected<void, ManifestError> write_file_header(io::BinaryWriter & writer, std::uint32_t magic)
+std::expected<void, ManifestError> write_file_header(io::LittleEndianBinaryWriter & writer, std::uint32_t magic)
 {
     auto magic_written = writer.write_u32(magic);
     if (!magic_written.has_value()) {
@@ -79,12 +79,12 @@ std::expected<void, ManifestError> write_file_header(io::BinaryWriter & writer, 
 }
 
 /**
- * @brief 读取文件头
- * @param reader 读取器
- * @param expected_magic 期望的魔数
+ * @brief 读取文件�?
+ * @param reader 读取�?
+ * @param expected_magic 期望的魔�?
  * @return 结果
  */
-std::expected<void, ManifestError> read_file_header(io::BinaryReader & reader, std::uint32_t expected_magic)
+std::expected<void, ManifestError> read_file_header(io::LittleEndianBinaryReader & reader, std::uint32_t expected_magic)
 {
     auto magic = reader.read_u32();
     if (!magic.has_value()) {
@@ -146,7 +146,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
         }
 
         io::BufferByteWriter encoded {MaxManifestBytes};
-        io::BinaryWriter writer {encoded};
+        io::LittleEndianBinaryWriter writer {encoded};
         auto header_written = write_file_header(writer, ManifestMagic);
         if (!header_written.has_value()) {
             return std::unexpected(std::move(header_written.error()));
@@ -202,7 +202,7 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
     }
 
     io::FileByteReader byte_reader {*file};
-    io::BinaryReader reader {
+    io::LittleEndianBinaryReader reader {
         byte_reader,
         io::BinaryDecodeLimits {
             .max_total_bytes = *file_size,

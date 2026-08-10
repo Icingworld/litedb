@@ -16,13 +16,13 @@ struct ValueDecodeLimits
 
 [[nodiscard]]
 std::expected<void, io::IoError> write_value(
-    io::BinaryWriter & writer,
+    io::LittleEndianBinaryWriter & writer,
     const common::Value & value
 );
 
 [[nodiscard]]
 std::expected<common::Value, io::IoError> read_value(
-    io::BinaryReader & reader,
+    io::LittleEndianBinaryReader & reader,
     ValueDecodeLimits limits
 );
 

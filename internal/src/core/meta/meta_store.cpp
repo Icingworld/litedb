@@ -58,7 +58,7 @@ private:
 /**
  * @brief 从文件系统错误创建元数据存储错误
  * @param error 文件系统错误
- * @return 元数据存储错误
+ * @return 元数据存储错�?
  */
 [[nodiscard]]
 MetaError from_filesystem_error(
@@ -77,9 +77,9 @@ MetaError from_filesystem_error(
 }
 
 /**
- * @brief 从 IO 错误创建元数据存储错误
+ * @brief �?IO 错误创建元数据存储错�?
  * @param error  IO 错误
- * @return 元数据存储错误
+ * @return 元数据存储错�?
  */
 [[nodiscard]]
 MetaError from_io_error(
@@ -114,9 +114,9 @@ io::IoError invalid_data(std::string message)
 }
 
 /**
- * @brief 检查数量是否超出范围
+ * @brief 检查数量是否超出范�?
  * @param count 数量
- * @return 检查后的数量
+ * @return 检查后的数�?
  */
 [[nodiscard]]
 std::expected<std::uint32_t, io::IoError> checked_count(std::size_t count)
@@ -134,7 +134,7 @@ std::expected<std::uint32_t, io::IoError> checked_count(std::size_t count)
 class CodecWriter
 {
 public:
-    explicit CodecWriter(io::BinaryWriter & writer) noexcept
+    explicit CodecWriter(io::LittleEndianBinaryWriter & writer) noexcept
         : writer_(&writer)
     {
     }
@@ -142,7 +142,7 @@ public:
 public:
     /**
      * @brief 写入 8 位无符号整数
-     * @param value 值
+     * @param value �?
      */
     void write_u8(std::uint8_t value)
     {
@@ -151,7 +151,7 @@ public:
 
     /**
      * @brief 写入 16 位无符号整数
-     * @param value 值
+     * @param value �?
      */
     void write_u16(std::uint16_t value)
     {
@@ -160,7 +160,7 @@ public:
 
     /**
      * @brief 写入 32 位无符号整数
-     * @param value 值
+     * @param value �?
      */
     void write_u32(std::uint32_t value)
     {
@@ -169,7 +169,7 @@ public:
 
     /**
      * @brief 写入 64 位无符号整数
-     * @param value 值
+     * @param value �?
      */
     void write_u64(std::uint64_t value)
     {
@@ -177,8 +177,8 @@ public:
     }
 
     /**
-     * @brief 写入字符串
-     * @param value 值
+     * @brief 写入字符�?
+     * @param value �?
      */
     void write_string(const std::string & value)
     {
@@ -234,7 +234,7 @@ private:
     }
 
 private:
-    io::BinaryWriter * writer_;           // 二进制写入器
+    io::LittleEndianBinaryWriter * writer_;           // 二进制写入器
     std::optional<io::IoError> error_;    // 错误
 };
 
@@ -245,7 +245,7 @@ private:
 class CodecReader
 {
 public:
-    explicit CodecReader(io::BinaryReader & reader) noexcept
+    explicit CodecReader(io::LittleEndianBinaryReader & reader) noexcept
         : reader_(&reader)
     {
     }
@@ -253,7 +253,7 @@ public:
 public:
     /**
      * @brief 读取 8 位无符号整数
-     * @return 值
+     * @return �?
      */
     std::uint8_t read_u8()
     {
@@ -262,7 +262,7 @@ public:
 
     /**
      * @brief 读取 16 位无符号整数
-     * @return 值
+     * @return �?
      */
     std::uint16_t read_u16()
     {
@@ -271,7 +271,7 @@ public:
 
     /**
      * @brief 读取 32 位无符号整数
-     * @return 值
+     * @return �?
      */
     std::uint32_t read_u32()
     {
@@ -280,7 +280,7 @@ public:
 
     /**
      * @brief 读取 64 位无符号整数
-     * @return 值
+     * @return �?
      */
     std::uint64_t read_u64()
     {
@@ -298,8 +298,8 @@ public:
     }
 
     /**
-     * @brief 读取字符串
-     * @return 值
+     * @brief 读取字符�?
+     * @return �?
      */
     std::string read_string()
     {
@@ -356,10 +356,10 @@ public:
 
 private:
     /**
-     * @brief 读取值
-     * @tparam T 值类型
+     * @brief 读取�?
+     * @tparam T 值类�?
      * @param result 读取结果
-     * @return 值
+     * @return �?
      */
     template <typename T>
     T read(std::expected<T, io::IoError> result)
@@ -375,14 +375,14 @@ private:
     }
 
 private:
-    io::BinaryReader * reader_;           // 二进制读取器
+    io::LittleEndianBinaryReader * reader_;           // 二进制读取器
     std::optional<io::IoError> error_;    // 错误
 };
 
 /**
- * @brief 写入可选大小
+ * @brief 写入可选大�?
  * @param writer 编码器写入器
- * @param value 值
+ * @param value �?
  */
 void write_optional_size(CodecWriter & writer, const std::optional<std::size_t> & value)
 {
@@ -393,9 +393,9 @@ void write_optional_size(CodecWriter & writer, const std::optional<std::size_t> 
 }
 
 /**
- * @brief 读取可选大小
+ * @brief 读取可选大�?
  * @param reader 编码器读取器
- * @return 值
+ * @return �?
  */
 std::optional<std::size_t> read_optional_size(CodecReader & reader)
 {
@@ -414,7 +414,7 @@ std::optional<std::size_t> read_optional_size(CodecReader & reader)
 /**
  * @brief 写入可选字符串
  * @param writer 编码器写入器
- * @param value 值
+ * @param value �?
  */
 void write_optional_string(CodecWriter & writer, const std::optional<std::string> & value)
 {
@@ -427,7 +427,7 @@ void write_optional_string(CodecWriter & writer, const std::optional<std::string
 /**
  * @brief 读取可选字符串
  * @param reader 编码器读取器
- * @return 值
+ * @return �?
  */
 std::optional<std::string> read_optional_string(CodecReader & reader)
 {
@@ -443,9 +443,9 @@ std::optional<std::string> read_optional_string(CodecReader & reader)
 }
 
 /**
- * @brief 写入默认表达式
+ * @brief 写入默认表达�?
  * @param writer 编码器写入器
- * @param expression 表达式
+ * @param expression 表达�?
  */
 void write_default_expression(CodecWriter & writer, const schema::DefaultExpression & expression)
 {
@@ -459,9 +459,9 @@ void write_default_expression(CodecWriter & writer, const schema::DefaultExpress
 }
 
 /**
- * @brief 读取默认表达式
+ * @brief 读取默认表达�?
  * @param reader 编码器读取器
- * @return 表达式
+ * @return 表达�?
  */
 schema::DefaultExpression read_default_expression(CodecReader & reader, std::size_t depth = 0)
 {
@@ -495,7 +495,7 @@ schema::DefaultExpression read_default_expression(CodecReader & reader, std::siz
 /**
  * @brief 写入可选表达式
  * @param writer 编码器写入器
- * @param value 值
+ * @param value �?
  */
 void write_optional_expression(CodecWriter & writer, const std::optional<schema::DefaultExpression> & value)
 {
@@ -508,7 +508,7 @@ void write_optional_expression(CodecWriter & writer, const std::optional<schema:
 /**
  * @brief 读取可选表达式
  * @param reader 编码器读取器
- * @return 表达式
+ * @return 表达�?
  */
 std::optional<schema::DefaultExpression> read_optional_expression(CodecReader & reader)
 {
@@ -524,9 +524,9 @@ std::optional<schema::DefaultExpression> read_optional_expression(CodecReader & 
 }
 
 /**
- * @brief 读取布尔值
+ * @brief 读取布尔�?
  * @param reader 编码器读取器
- * @return 值
+ * @return �?
  */
 bool read_bool(CodecReader & reader)
 {
@@ -538,12 +538,12 @@ bool read_bool(CodecReader & reader)
 }
 
 /**
- * @brief 写入元数据快照
+ * @brief 写入元数据快�?
  * @param writer 二进制写入器
- * @param snapshot 元数据快照
+ * @param snapshot 元数据快�?
  * @return 结果
  */
-std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer, const MetaSnapshot & snapshot)
+std::expected<void, io::IoError> write_snapshot(io::LittleEndianBinaryWriter & binary_writer, const MetaSnapshot & snapshot)
 {
     CodecWriter writer {binary_writer};
     writer.write_u64(snapshot.next_database_id);
@@ -602,12 +602,12 @@ std::expected<void, io::IoError> write_snapshot(io::BinaryWriter & binary_writer
 }
 
 /**
- * @brief 读取元数据快照
+ * @brief 读取元数据快�?
  * @param reader 二进制读取器
- * @return 元数据快照
+ * @return 元数据快�?
  */
 std::expected<MetaSnapshot, MetaError> read_snapshot(
-    io::BinaryReader & binary_reader,
+    io::LittleEndianBinaryReader & binary_reader,
     const std::filesystem::path & path
 )
 {
@@ -754,7 +754,7 @@ std::expected<std::optional<MetaSnapshot>, MetaError> MetaStore::load() const
     }
 
     io::BufferByteReader header_source {std::span<const std::byte> {bytes}.first(MetaHeaderSize)};
-    io::BinaryReader header {
+    io::LittleEndianBinaryReader header {
         header_source,
         {.max_total_bytes = MetaHeaderSize, .max_string_bytes = 0},
     };
@@ -802,7 +802,7 @@ std::expected<std::optional<MetaSnapshot>, MetaError> MetaStore::load() const
         }));
     }
     io::BufferByteReader payload_source {payload};
-    io::BinaryReader reader {
+    io::LittleEndianBinaryReader reader {
         payload_source,
         {.max_total_bytes = *payload_size, .max_string_bytes = MaxStringSize},
     };
@@ -816,7 +816,7 @@ std::expected<std::optional<MetaSnapshot>, MetaError> MetaStore::load() const
 std::expected<void, MetaError> MetaStore::save(const MetaSnapshot & snapshot) const
 {
     io::BufferByteWriter payload_bytes {MaxPayloadSize};
-    io::BinaryWriter payload_writer {payload_bytes};
+    io::LittleEndianBinaryWriter payload_writer {payload_bytes};
     if (auto encoded = write_snapshot(payload_writer, snapshot); !encoded) {
         return std::unexpected(from_io_error(std::move(encoded.error()), MetaOperation::Encode, path_));
     }
@@ -827,7 +827,7 @@ std::expected<void, MetaError> MetaStore::save(const MetaSnapshot & snapshot) co
     }
 
     io::BufferByteWriter encoded_bytes {MaxPayloadSize + MetaHeaderSize};
-    io::BinaryWriter encoded_writer {encoded_bytes};
+    io::LittleEndianBinaryWriter encoded_writer {encoded_bytes};
     const auto checksum = io::crc32(payload_bytes.bytes());
     auto write_header = [&]() -> std::expected<void, io::IoError> {
         if (auto result = encoded_writer.write_u32(MetaMagic); !result) return result;

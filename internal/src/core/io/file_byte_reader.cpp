@@ -12,7 +12,7 @@ FileByteReader::FileByteReader(filesystem::FileHandle & file) noexcept
 std::expected<std::size_t, IoError> FileByteReader::read_some(std::span<std::byte> data)
 {
     auto result = file_->read_at(offset_, data);
-    if (!result) {
+    if (!result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     const auto read = *result;

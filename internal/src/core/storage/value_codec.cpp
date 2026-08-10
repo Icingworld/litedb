@@ -26,7 +26,7 @@ enum class EncodedValueKind : std::uint8_t
 };
 
 std::expected<void, io::IoError> write_kind(
-    io::BinaryWriter & writer,
+    io::LittleEndianBinaryWriter & writer,
     EncodedValueKind kind
 )
 {
@@ -36,7 +36,7 @@ std::expected<void, io::IoError> write_kind(
 } // namespace
 
 std::expected<void, io::IoError> write_value(
-    io::BinaryWriter & writer,
+    io::LittleEndianBinaryWriter & writer,
     const common::Value & value
 )
 {
@@ -103,7 +103,7 @@ std::expected<void, io::IoError> write_value(
 }
 
 std::expected<common::Value, io::IoError> read_value(
-    io::BinaryReader & reader,
+    io::LittleEndianBinaryReader & reader,
     ValueDecodeLimits limits
 )
 {

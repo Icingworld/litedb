@@ -197,7 +197,7 @@ private:
 void test_exact_primitive_encoding()
 {
     io::BufferByteWriter bytes {128};
-    io::BinaryWriter writer {bytes};
+    io::LittleEndianBinaryWriter writer {bytes};
     require_ok(writer.write_u16(0x1234), "write u16 failed");
     require_ok(writer.write_u32(0x89abcdef), "write u32 failed");
     require_ok(writer.write_u64(0x0123456789abcdefULL), "write u64 failed");
@@ -221,7 +221,7 @@ void test_exact_primitive_encoding()
     require(bytes.bytes() == expected, "primitive little-endian bytes mismatch");
 
     io::BufferByteReader input {bytes.bytes()};
-    io::BinaryReader reader {input, limits(bytes.bytes().size())};
+    io::LittleEndianBinaryReader reader {input, limits(bytes.bytes().size())};
     require(require_value(reader.read_u16(), "read u16 failed") == 0x1234, "u16 mismatch");
     require(require_value(reader.read_u32(), "read u32 failed") == 0x89abcdef, "u32 mismatch");
     require(require_value(reader.read_u64(), "read u64 failed") == 0x0123456789abcdefULL, "u64 mismatch");
@@ -291,7 +291,7 @@ void test_big_endian_string_round_trip()
 void test_single_call_per_primitive()
 {
     CountingWriter bytes;
-    io::BinaryWriter writer {bytes};
+    io::LittleEndianBinaryWriter writer {bytes};
     require_ok(writer.write_u16(1), "write u16 failed");
     require_ok(writer.write_u32(2), "write u32 failed");
     require_ok(writer.write_u64(3), "write u64 failed");
@@ -300,7 +300,7 @@ void test_single_call_per_primitive()
     require(bytes.calls == 5, "each primitive must use one byte-writer call");
 
     ChunkedReader input {bytes.bytes};
-    io::BinaryReader reader {input, limits(bytes.bytes.size())};
+    io::LittleEndianBinaryReader reader {input, limits(bytes.bytes.size())};
     require_value(reader.read_u16(), "chunked u16 read failed");
     require_value(reader.read_u32(), "chunked u32 read failed");
     require_value(reader.read_u64(), "chunked u64 read failed");
@@ -311,21 +311,21 @@ void test_single_call_per_primitive()
 void test_string_and_resource_limits()
 {
     io::BufferByteWriter bytes {16};
-    io::BinaryWriter writer {bytes};
+    io::LittleEndianBinaryWriter writer {bytes};
     require_ok(writer.write_string("hello"), "write string failed");
     const auto overflow = writer.write_string("0123456789");
     require(!overflow && overflow.error().is(io::IoErrorCode::ValueTooLarge),
             "bounded writer must reject overflow");
 
     io::BufferByteReader input {bytes.bytes()};
-    io::BinaryReader reader {input, limits(bytes.bytes().size(), 5)};
+    io::LittleEndianBinaryReader reader {input, limits(bytes.bytes().size(), 5)};
     require(require_value(reader.read_string(), "read string failed") == "hello", "string mismatch");
 
     const std::array huge_length {
         std::byte {0xff}, std::byte {0xff}, std::byte {0xff}, std::byte {0xff},
     };
     io::BufferByteReader huge_input {huge_length};
-    io::BinaryReader huge_reader {huge_input, limits(huge_length.size(), 1024)};
+    io::LittleEndianBinaryReader huge_reader {huge_input, limits(huge_length.size(), 1024)};
     auto huge = huge_reader.read_string();
     require(!huge && huge.error().is(io::IoErrorCode::ValueTooLarge),
             "huge declared string must be rejected before allocation");
@@ -337,7 +337,7 @@ void test_truncated_data()
         std::byte {0x01}, std::byte {0x02}, std::byte {0x03}, std::byte {0x04},
     };
     io::BufferByteReader input {truncated};
-    io::BinaryReader reader {input, limits(8)};
+    io::LittleEndianBinaryReader reader {input, limits(8)};
     auto value = reader.read_u64();
     require(!value && value.error().is(io::IoErrorCode::UnexpectedEof),
             "truncated primitive must report unexpected eof");

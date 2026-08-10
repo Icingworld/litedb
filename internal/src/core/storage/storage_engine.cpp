@@ -253,7 +253,7 @@ std::expected<void, StorageError> StorageEngine::validate(
 
     constexpr auto MaxEncodedRecordSize = StorageStore::PageSize - StoragePageHeaderSize - StorageSlotSize;
     io::BufferByteWriter bytes {MaxEncodedRecordSize};
-    io::BinaryWriter writer {bytes};
+    io::LittleEndianBinaryWriter writer {bytes};
     if (!writer.write_u64(1) ||
         !writer.write_u32(static_cast<std::uint32_t>(data.values.size()))) {
         return std::unexpected(make_error(
