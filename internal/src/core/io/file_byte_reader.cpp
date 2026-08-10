@@ -6,8 +6,7 @@ namespace litedb::core::io
 FileByteReader::FileByteReader(filesystem::FileHandle & file) noexcept
     : file_(&file)
     , offset_(0)
-{
-}
+{}
 
 std::expected<std::size_t, IoError> FileByteReader::read_some(std::span<std::byte> data)
 {

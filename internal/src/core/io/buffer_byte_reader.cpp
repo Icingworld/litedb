@@ -9,8 +9,7 @@ namespace litedb::core::io
 BufferByteReader::BufferByteReader(std::span<const std::byte> data) noexcept
     : data_(data)
     , offset_(0)
-{
-}
+{}
 
 std::expected<std::size_t, IoError> BufferByteReader::read_some(std::span<std::byte> data)
 {

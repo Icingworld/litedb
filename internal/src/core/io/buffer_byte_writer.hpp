@@ -28,7 +28,7 @@ public:
     // 获取字节数据所有权
     // 调用后缓冲区将不再拥有字节数据
     [[nodiscard]]
-    std::vector<std::byte> take_bytes() noexcept;    
+    std::vector<std::byte> take_bytes() noexcept;
 
 private:
     std::vector<std::byte> bytes_;

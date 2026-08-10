@@ -16,10 +16,9 @@ std::expected<void, IoError> ByteReader::read_exact(std::span<std::byte> data)
             return std::unexpected(std::move(read.error()));
         }
         if (*read == 0) {
-            return std::unexpected(make_io_error(
-                IoErrorCode::UnexpectedEof,
-                "unexpected end of binary data"
-            ));
+            return std::unexpected(
+                make_io_error(IoErrorCode::UnexpectedEof, "unexpected end of binary data")
+            );
         }
         assert(*read <= data.size());
         if (*read > data.size()) {
@@ -34,4 +33,3 @@ std::expected<void, IoError> ByteReader::read_exact(std::span<std::byte> data)
 }
 
 } // namespace litedb::core::io
-

@@ -18,8 +18,7 @@ consteval std::array<std::uint32_t, 256> make_crc32_table() noexcept
     for (std::uint32_t index = 0; index < table.size(); ++index) {
         auto entry = index;
         for (int bit = 0; bit < 8; ++bit) {
-            const auto mask =
-                static_cast<std::uint32_t>(-static_cast<std::int32_t>(entry & 1U));
+            const auto mask = static_cast<std::uint32_t>(-static_cast<std::int32_t>(entry & 1U));
             entry = (entry >> 1U) ^ (Crc32Polynomial & mask);
         }
         table[index] = entry;
@@ -34,8 +33,7 @@ inline constexpr auto Crc32Table = make_crc32_table();
 
 Crc32Calculator::Crc32Calculator() noexcept
     : checksum_(0xffffffffU)
-{
-}
+{}
 
 void Crc32Calculator::update(std::span<const std::byte> data) noexcept
 {

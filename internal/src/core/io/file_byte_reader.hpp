@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/io/byte_reader.hpp"
 #include "core/filesystem/file_handle.hpp"
+#include "core/io/byte_reader.hpp"
 
 namespace litedb::core::io
 {

@@ -8,8 +8,7 @@ namespace litedb::core::io
 FileByteWriter::FileByteWriter(filesystem::FileHandle & file, std::uint64_t offset) noexcept
     : file_(&file)
     , offset_(offset)
-{
-}
+{}
 
 std::expected<void, IoError> FileByteWriter::write_bytes(std::span<const std::byte> data)
 {
@@ -28,8 +27,7 @@ std::uint64_t FileByteWriter::offset() const noexcept
 
 FileByteAppender::FileByteAppender(filesystem::FileHandle & file) noexcept
     : file_(&file)
-{
-}
+{}
 
 std::expected<void, IoError> FileByteAppender::write_bytes(std::span<const std::byte> data)
 {
