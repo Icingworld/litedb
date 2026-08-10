@@ -14,10 +14,7 @@ namespace litedb::core::optimizer::detail
 
 // 判断布尔常量表达式
 [[nodiscard]]
-bool is_boolean_literal(
-    const binder::bound::BoundExpression & expression,
-    bool value
-) noexcept;
+bool is_boolean_literal(const binder::bound::BoundExpression & expression, bool value) noexcept;
 
 // 重写表达式
 [[nodiscard]]

@@ -102,9 +102,8 @@ private:
         auto root = rewrite_operator(plan->take_root_operator());
         auto assignments = plan->take_assignments();
         for (auto & assignment : assignments) {
-            assignment.value = litedb::core::optimizer::detail::rewrite_expression(
-                std::move(assignment.value)
-            );
+            assignment.value =
+                litedb::core::optimizer::detail::rewrite_expression(std::move(assignment.value));
         }
         return std::make_unique<UpdatePlan>(collection_id, std::move(assignments), std::move(root));
     }
@@ -198,9 +197,8 @@ private:
         auto child = rewrite_operator(op->take_child());
         auto projections = op->take_projections();
         for (auto & item : projections) {
-            item.expression = litedb::core::optimizer::detail::rewrite_expression(
-                std::move(item.expression)
-            );
+            item.expression =
+                litedb::core::optimizer::detail::rewrite_expression(std::move(item.expression));
         }
         return std::make_unique<LogicalProjectionOperator>(
             std::move(child),
@@ -218,9 +216,8 @@ private:
         auto child = rewrite_operator(op->take_child());
         auto order_items = op->take_order_by();
         for (auto & item : order_items) {
-            item.expression = litedb::core::optimizer::detail::rewrite_expression(
-                std::move(item.expression)
-            );
+            item.expression =
+                litedb::core::optimizer::detail::rewrite_expression(std::move(item.expression));
         }
         return std::make_unique<LogicalOrderByOperator>(std::move(child), std::move(order_items));
     }
