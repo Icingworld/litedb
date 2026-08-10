@@ -30,17 +30,15 @@ std::expected<ScalarBindResult, FunctionError> bind_vector_distance(
     std::span<const LogicalType> argument_types
 )
 {
-    if (argument_types.size() != 2
-        || argument_types[0].id != LogicalTypeId::Vector
-        || argument_types[1].id != LogicalTypeId::Vector) {
+    if (argument_types.size() != 2 || argument_types[0].id != LogicalTypeId::Vector ||
+        argument_types[1].id != LogicalTypeId::Vector) {
         return std::unexpected(make_error(
             FunctionErrorCode::ConstraintViolation,
             "Vector distance expects two VECTOR arguments"
         ));
     }
-    if (argument_types[0].parameter.has_value()
-        && argument_types[1].parameter.has_value()
-        && argument_types[0].parameter != argument_types[1].parameter) {
+    if (argument_types[0].parameter.has_value() && argument_types[1].parameter.has_value() &&
+        argument_types[0].parameter != argument_types[1].parameter) {
         return std::unexpected(make_error(
             FunctionErrorCode::ConstraintViolation,
             "Vector function arguments must have the same dimension"
@@ -55,30 +53,25 @@ std::expected<ScalarBindResult, FunctionError> bind_vector_distance(
 
 using DistanceFn = double (*)(const common::VectorValue &, const common::VectorValue &);
 
-std::expected<common::Value, FunctionError> evaluate_vector_distance(
-    std::span<const common::Value> arguments,
-    DistanceFn distance
-)
+std::expected<common::Value, FunctionError>
+evaluate_vector_distance(std::span<const common::Value> arguments, DistanceFn distance)
 {
     if (arguments.size() != 2) {
-        return std::unexpected(make_error(
-            FunctionErrorCode::InvalidArgument,
-            "Vector distance expects two arguments"
-        ));
+        return std::unexpected(
+            make_error(FunctionErrorCode::InvalidArgument, "Vector distance expects two arguments")
+        );
     }
     const auto * left = std::get_if<common::VectorValue>(&arguments[0].data());
     const auto * right = std::get_if<common::VectorValue>(&arguments[1].data());
     if (left == nullptr || right == nullptr) {
-        return std::unexpected(make_error(
-            FunctionErrorCode::InvalidType,
-            "Vector distance expects VECTOR values"
-        ));
+        return std::unexpected(
+            make_error(FunctionErrorCode::InvalidType, "Vector distance expects VECTOR values")
+        );
     }
     if (left->size() != right->size()) {
-        return std::unexpected(make_error(
-            FunctionErrorCode::InvalidArgument,
-            "Vector dimensions must match"
-        ));
+        return std::unexpected(
+            make_error(FunctionErrorCode::InvalidArgument, "Vector dimensions must match")
+        );
     }
     return common::Value {distance(*left, *right)};
 }
@@ -145,16 +138,15 @@ std::expected<common::Value, FunctionError> evaluate_cosine(
     return evaluate_vector_distance(arguments, cosine_distance_impl);
 }
 
-ScalarFunctionOverload overload(
-    ScalarFunctionOverload::EvalFn evaluate,
-    FunctionSemanticTag semantic_tag
-)
+ScalarFunctionOverload
+overload(ScalarFunctionOverload::EvalFn evaluate, FunctionSemanticTag semantic_tag)
 {
     return ScalarFunctionOverload {
-        .parameters = FunctionParameters {
-            .fixed = {type(LogicalTypeId::Vector), type(LogicalTypeId::Vector)},
-            .variadic = std::nullopt,
-        },
+        .parameters =
+            FunctionParameters {
+                .fixed = {type(LogicalTypeId::Vector), type(LogicalTypeId::Vector)},
+                .variadic = std::nullopt,
+            },
         .return_type = type(LogicalTypeId::Double),
         .bind = bind_vector_distance,
         .evaluate = evaluate,
@@ -173,19 +165,22 @@ std::expected<void, FunctionError> register_vector_functions(FunctionCatalogBuil
 {
     if (auto result = builder.register_scalar(
             "l2_distance",
-            overload(evaluate_l2, FunctionSemanticTag::VectorL2Distance));
+            overload(evaluate_l2, FunctionSemanticTag::VectorL2Distance)
+        );
         !result.has_value()) {
         return std::unexpected(std::move(result.error()));
     }
     if (auto result = builder.register_scalar(
             "inner_product",
-            overload(evaluate_inner_product, FunctionSemanticTag::VectorInnerProduct));
+            overload(evaluate_inner_product, FunctionSemanticTag::VectorInnerProduct)
+        );
         !result.has_value()) {
         return std::unexpected(std::move(result.error()));
     }
     return builder.register_scalar(
         "cosine_distance",
-        overload(evaluate_cosine, FunctionSemanticTag::VectorCosineDistance));
+        overload(evaluate_cosine, FunctionSemanticTag::VectorCosineDistance)
+    );
 }
 
 } // namespace litedb::core::function::builtin

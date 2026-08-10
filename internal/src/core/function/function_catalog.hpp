@@ -25,10 +25,8 @@ public:
 public:
     // 注册标量函数
     [[nodiscard]]
-    std::expected<void, FunctionError> register_scalar(
-        std::string_view name,
-        ScalarFunctionOverload overload
-    );
+    std::expected<void, FunctionError>
+    register_scalar(std::string_view name, ScalarFunctionOverload overload);
 
     // 构建函数目录
     // 只允许对右值调用方法，因为会转移映射表的所有权
@@ -38,8 +36,8 @@ public:
 private:
     std::unordered_map<
         std::string,
-        std::vector<std::shared_ptr<const ScalarFunctionOverload>>
-    > functions_;                  // 函数名称到函数重载列表的映射
+        std::vector<std::shared_ptr<const ScalarFunctionOverload>>>
+        functions_; // 函数名称到函数重载列表的映射
 };
 
 // 函数目录
@@ -57,10 +55,8 @@ public:
 public:
     // 绑定标量函数
     [[nodiscard]]
-    std::expected<BoundScalarFunction, FunctionError> bind_scalar(
-        std::string_view name,
-        std::span<const common::LogicalType> argument_types
-    ) const;
+    std::expected<BoundScalarFunction, FunctionError>
+    bind_scalar(std::string_view name, std::span<const common::LogicalType> argument_types) const;
 
     // 函数是否存在
     [[nodiscard]]
@@ -68,18 +64,16 @@ public:
 
 private:
     explicit FunctionCatalog(
-        std::unordered_map<
-            std::string,
-            std::vector<std::shared_ptr<const ScalarFunctionOverload>>
-        > functions
+        std::unordered_map<std::string, std::vector<std::shared_ptr<const ScalarFunctionOverload>>>
+            functions
     );
 
     friend class FunctionCatalogBuilder;
 
     std::unordered_map<
         std::string,
-        std::vector<std::shared_ptr<const ScalarFunctionOverload>>
-    > functions_;                  // 函数名称到函数重载列表的映射
+        std::vector<std::shared_ptr<const ScalarFunctionOverload>>>
+        functions_; // 函数名称到函数重载列表的映射
 };
 
 } // namespace litedb::core::function

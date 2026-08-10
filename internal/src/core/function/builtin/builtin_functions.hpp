@@ -8,9 +8,7 @@ namespace litedb::core::function::builtin
 {
 
 [[nodiscard]]
-std::expected<void, FunctionError> register_builtin_functions(
-    FunctionCatalogBuilder & builder
-);
+std::expected<void, FunctionError> register_builtin_functions(FunctionCatalogBuilder & builder);
 
 [[nodiscard]]
 std::expected<FunctionCatalog, FunctionError> make_builtin_function_catalog();

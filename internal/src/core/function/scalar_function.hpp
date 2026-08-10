@@ -9,8 +9,8 @@
 #include "core/common/logical_type.hpp"
 #include "core/common/value.hpp"
 #include "core/function/function_error.hpp"
-#include "core/function/function_properties.hpp"
 #include "core/function/function_parameters.hpp"
+#include "core/function/function_properties.hpp"
 
 namespace litedb::core::function
 {
@@ -19,8 +19,7 @@ namespace litedb::core::function
 // 用于存储标量函数执行时所需的环境和状态
 // 未来可以放入事务、时间、时区等等，目前不需要，所以是空的
 struct ScalarFunctionContext
-{
-};
+{};
 
 // 函数绑定数据
 // 用于存储函数绑定时所提前准备的数据
@@ -108,10 +107,8 @@ public:
 
     // 执行函数
     [[nodiscard]]
-    std::expected<common::Value, FunctionError> evaluate(
-        std::span<const common::Value> arguments,
-        const ScalarFunctionContext & context
-    ) const;
+    std::expected<common::Value, FunctionError>
+    evaluate(std::span<const common::Value> arguments, const ScalarFunctionContext & context) const;
 
 private:
     std::string name_;

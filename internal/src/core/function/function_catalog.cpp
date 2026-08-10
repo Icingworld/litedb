@@ -24,8 +24,8 @@ namespace
 [[nodiscard]]
 bool same_parameters(const FunctionParameters & left, const FunctionParameters & right)
 {
-    if (left.fixed.size() != right.fixed.size()
-        || left.variadic.has_value() != right.variadic.has_value()) {
+    if (left.fixed.size() != right.fixed.size() ||
+        left.variadic.has_value() != right.variadic.has_value()) {
         return false;
     }
     for (std::size_t index = 0; index < left.fixed.size(); ++index) {
@@ -33,8 +33,7 @@ bool same_parameters(const FunctionParameters & left, const FunctionParameters &
             return false;
         }
     }
-    return !left.variadic.has_value()
-        || common::same_type(*left.variadic, *right.variadic);
+    return !left.variadic.has_value() || common::same_type(*left.variadic, *right.variadic);
 }
 
 /**
@@ -44,10 +43,7 @@ bool same_parameters(const FunctionParameters & left, const FunctionParameters &
  * @return 参数
  */
 [[nodiscard]]
-const common::LogicalType & parameter_at(
-    const FunctionParameters & parameters,
-    std::size_t index
-)
+const common::LogicalType & parameter_at(const FunctionParameters & parameters, std::size_t index)
 {
     if (index < parameters.fixed.size()) {
         return parameters.fixed[index];
@@ -66,8 +62,7 @@ bool valid_parameter_type(const common::LogicalType & type)
     if (type.id == common::LogicalTypeId::Null) {
         return false;
     }
-    return type.id == common::LogicalTypeId::Vector
-        || !type.parameter.has_value();
+    return type.id == common::LogicalTypeId::Vector || !type.parameter.has_value();
 }
 
 /**
@@ -77,20 +72,15 @@ bool valid_parameter_type(const common::LogicalType & type)
  * @return 是否有效
  */
 [[nodiscard]]
-bool valid_binding_type(
-    const common::LogicalType & source,
-    const common::LogicalType & target
-)
+bool valid_binding_type(const common::LogicalType & source, const common::LogicalType & target)
 {
     return common::implicit_cast_cost(source, target).has_value();
 }
 
 } // namespace
 
-std::expected<void, FunctionError> FunctionCatalogBuilder::register_scalar(
-    std::string_view name,
-    ScalarFunctionOverload overload
-)
+std::expected<void, FunctionError>
+FunctionCatalogBuilder::register_scalar(std::string_view name, ScalarFunctionOverload overload)
 {
     // 函数名称不能为空，执行函数不能为空
     const auto key = common::normalize_identifier(name);
@@ -103,17 +93,18 @@ std::expected<void, FunctionError> FunctionCatalogBuilder::register_scalar(
 
     // 对于固定参数部分，逐个验证是否合法
     // 对于可变参数部分，验证第一个参数类型，因为可变参数要求可变部分类型一致
-    if (std::ranges::any_of(overload.parameters.fixed, [](const auto & type) {
-            return !valid_parameter_type(type);
-        })
-        || (overload.parameters.variadic.has_value()
-            && !valid_parameter_type(*overload.parameters.variadic))) {
-        return std::unexpected(
-            make_error(
-                FunctionErrorCode::InvalidDefinition,
-                "Variadic scalar function parameter cannot be NULL"
-            )
-        );
+    if (std::ranges::any_of(
+            overload.parameters.fixed,
+            [](const auto & type) {
+                return !valid_parameter_type(type);
+            }
+        ) ||
+        (overload.parameters.variadic.has_value() &&
+         !valid_parameter_type(*overload.parameters.variadic))) {
+        return std::unexpected(make_error(
+            FunctionErrorCode::InvalidDefinition,
+            "Variadic scalar function parameter cannot be NULL"
+        ));
     }
 
     // 检查是否存在重复的重载
@@ -128,11 +119,7 @@ std::expected<void, FunctionError> FunctionCatalogBuilder::register_scalar(
     }
 
     // 添加新的重载
-    overloads.push_back(
-        std::make_shared<const ScalarFunctionOverload>(
-            std::move(overload)
-        )
-    );
+    overloads.push_back(std::make_shared<const ScalarFunctionOverload>(std::move(overload)));
 
     return {};
 }
@@ -143,14 +130,11 @@ std::expected<FunctionCatalog, FunctionError> FunctionCatalogBuilder::build() &&
 }
 
 FunctionCatalog::FunctionCatalog(
-    std::unordered_map<
-        std::string,
-        std::vector<std::shared_ptr<const ScalarFunctionOverload>>
-    > functions
+    std::unordered_map<std::string, std::vector<std::shared_ptr<const ScalarFunctionOverload>>>
+        functions
 )
     : functions_(std::move(functions))
-{
-}
+{}
 
 bool FunctionCatalog::contains(std::string_view name) const
 {
@@ -181,9 +165,9 @@ std::expected<BoundScalarFunction, FunctionError> FunctionCatalog::bind_scalar(
     for (const auto & overload : found->second) {
         const auto & parameters = overload->parameters;
 
-        if (argument_types.size() < parameters.fixed.size()
-            || (!parameters.variadic.has_value()
-            && argument_types.size() != parameters.fixed.size())) {
+        if (argument_types.size() < parameters.fixed.size() ||
+            (!parameters.variadic.has_value() &&
+             argument_types.size() != parameters.fixed.size())) {
             // 参数数量不匹配，跳过
             continue;
         }
@@ -201,9 +185,8 @@ std::expected<BoundScalarFunction, FunctionError> FunctionCatalog::bind_scalar(
                 break;
             }
             cost += *conversion;
-            if (target.id == common::LogicalTypeId::Vector
-                && !target.parameter.has_value()
-                && argument_types[index].id == common::LogicalTypeId::Vector) {
+            if (target.id == common::LogicalTypeId::Vector && !target.parameter.has_value() &&
+                argument_types[index].id == common::LogicalTypeId::Vector) {
                 resolved_types.push_back(argument_types[index]);
             } else {
                 resolved_types.push_back(target);

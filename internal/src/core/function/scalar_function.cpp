@@ -19,8 +19,7 @@ BoundScalarFunction::BoundScalarFunction(
     , return_type_(return_type)
     , bind_data_(std::move(bind_data))
     , match_cost_(match_cost)
-{
-}
+{}
 
 const ScalarFunctionOverload & BoundScalarFunction::overload() const noexcept
 {
@@ -32,8 +31,7 @@ const std::string & BoundScalarFunction::name() const noexcept
     return name_;
 }
 
-const std::vector<common::LogicalType> &
-BoundScalarFunction::argument_types() const noexcept
+const std::vector<common::LogicalType> & BoundScalarFunction::argument_types() const noexcept
 {
     return argument_types_;
 }
