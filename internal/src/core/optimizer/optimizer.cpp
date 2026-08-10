@@ -14,13 +14,7 @@
 namespace
 {
 
-/**
- * @brief 直接转发传入的计划
- * @tparam PlanType 计划类型
- * @param plan 计划
- * @return 计划
- * @details 不含有需要优化的算子，直接转发
- */
+// 直接转发传入的计划
 template <typename PlanType>
 std::unique_ptr<litedb::core::logical_planner::plan::LogicalPlan>
 reclaim_plan(PlanType & plan) noexcept

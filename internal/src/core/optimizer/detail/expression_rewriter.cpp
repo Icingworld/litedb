@@ -42,12 +42,7 @@ using binder::bound::BoundNullExpression;
 using binder::bound::BoundUnaryExpression;
 using binder::bound::BoundVectorExpression;
 
-/**
- * @brief 直接转发传入的表达式
- * @tparam ExpressionType 表达式类型
- * @param expression 表达式
- * @return 表达式
- */
+// 直接转发传入的表达式
 template <typename ExpressionType>
 [[nodiscard]]
 std::unique_ptr<BoundExpression> reclaim_expression(
@@ -59,9 +54,7 @@ std::unique_ptr<BoundExpression> reclaim_expression(
     );
 }
 
-/**
- * @brief 常量可折叠性检查器
- */
+// 常量可折叠性检查器
 class ConstantFoldability final
     : private binder::bound::ConstBoundExpressionDispatcher<
           ConstantFoldability,
@@ -74,11 +67,7 @@ class ConstantFoldability final
     >;
 
 public:
-    /**
-     * @brief 检查表达式是否可常量折叠
-     * @param expression 表达式
-     * @return 是否可常量折叠
-     */
+    // 检查表达式是否可常量折叠
     [[nodiscard]]
     bool check(const BoundExpression & expression)
     {
@@ -153,11 +142,7 @@ private:
     }
 };
 
-/**
- * @brief 判断表达式是否可常量折叠
- * @param expression 表达式
- * @return 是否可常量折叠
- */
+// 判断表达式是否可常量折叠
 [[nodiscard]]
 bool is_constant_foldable(const BoundExpression & expression)
 {
@@ -165,11 +150,7 @@ bool is_constant_foldable(const BoundExpression & expression)
     return checker.check(expression);
 }
 
-/**
- * @brief 构造布尔字面量表达式
- * @param value 布尔值
- * @return 布尔字面量表达式
- */
+// 构造布尔字面量表达式
 [[nodiscard]]
 std::unique_ptr<BoundExpression> make_boolean_literal(bool value)
 {
@@ -182,12 +163,7 @@ std::unique_ptr<BoundExpression> make_boolean_literal(bool value)
     );
 }
 
-/**
- * @brief 尝试常量折叠
- * @param expression 表达式
- * @param options 优化器选项
- * @return 折叠后的表达式；不可折叠时返回原表达式
- */
+// 尝试常量折叠
 [[nodiscard]]
 std::unique_ptr<BoundExpression> try_fold_constant(
     std::unique_ptr<BoundExpression> expression,
@@ -212,9 +188,7 @@ std::unique_ptr<BoundExpression> try_fold_constant(
     return std::make_unique<BoundLiteralExpression>(type, std::move(*value));
 }
 
-/**
- * @brief 表达式重写器
- */
+// 表达式重写器
 class ExpressionRewriter final
     : private binder::bound::MutableBoundExpressionDispatcher<
           ExpressionRewriter,
@@ -232,11 +206,7 @@ public:
     {
     }
 
-    /**
-     * @brief 重写表达式
-     * @param expression 表达式
-     * @return 重写后的表达式
-     */
+    // 重写表达式
     [[nodiscard]]
     std::unique_ptr<BoundExpression> rewrite(
         std::unique_ptr<BoundExpression> expression
