@@ -31,13 +31,13 @@ public:
     [[nodiscard]]
     const std::vector<BoundAssignment> & assignments() const noexcept;
 
-    // 获取条件表达式
-    [[nodiscard]]
-    std::optional<const BoundExpression &> where() const noexcept;
-
     // 获取赋值列表所有权
     [[nodiscard]]
     std::vector<BoundAssignment> take_assignments() noexcept;
+
+    // 获取条件表达式
+    [[nodiscard]]
+    std::optional<const BoundExpression &> where() const noexcept;
 
     // 获取条件表达式所有权
     [[nodiscard]]

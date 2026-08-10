@@ -24,7 +24,7 @@ const BoundExpression & BoundBinaryExpression::left() const noexcept
 
 std::unique_ptr<BoundExpression> BoundBinaryExpression::take_left() noexcept
 {
-    return std::move(left_);
+    return std::exchange(left_, nullptr);
 }
 
 common::BinaryOperator BoundBinaryExpression::op() const noexcept
@@ -39,7 +39,7 @@ const BoundExpression & BoundBinaryExpression::right() const noexcept
 
 std::unique_ptr<BoundExpression> BoundBinaryExpression::take_right() noexcept
 {
-    return std::move(right_);
+    return std::exchange(right_, nullptr);
 }
 
 } // namespace litedb::core::binder::bound

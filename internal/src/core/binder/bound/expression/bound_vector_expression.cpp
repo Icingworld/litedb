@@ -21,7 +21,7 @@ BoundVectorExpression::elements() const noexcept
 
 std::vector<std::unique_ptr<BoundExpression>> BoundVectorExpression::take_elements() noexcept
 {
-    return std::move(elements_);
+    return std::exchange(elements_, {});
 }
 
 } // namespace litedb::core::binder::bound

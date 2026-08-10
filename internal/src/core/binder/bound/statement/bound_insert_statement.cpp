@@ -26,7 +26,7 @@ const std::vector<std::unique_ptr<BoundExpression>> & BoundInsertStatement::valu
 
 std::vector<std::unique_ptr<BoundExpression>> BoundInsertStatement::take_values() noexcept
 {
-    return std::move(values_);
+    return std::exchange(values_, {});
 }
 
 } // namespace litedb::core::binder::bound

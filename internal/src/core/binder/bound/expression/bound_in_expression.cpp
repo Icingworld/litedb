@@ -24,7 +24,7 @@ const BoundExpression & BoundInExpression::expression() const noexcept
 
 std::unique_ptr<BoundExpression> BoundInExpression::take_expression() noexcept
 {
-    return std::move(expression_);
+    return std::exchange(expression_, nullptr);
 }
 
 const std::vector<std::unique_ptr<BoundExpression>> & BoundInExpression::values() const noexcept
@@ -34,7 +34,7 @@ const std::vector<std::unique_ptr<BoundExpression>> & BoundInExpression::values(
 
 std::vector<std::unique_ptr<BoundExpression>> BoundInExpression::take_values() noexcept
 {
-    return std::move(values_);
+    return std::exchange(values_, {});
 }
 
 } // namespace litedb::core::binder::bound

@@ -35,13 +35,25 @@ public:
     [[nodiscard]]
     const std::vector<BoundProjectionItem> & projections() const noexcept;
 
+    // 获取选择列表所有权
+    [[nodiscard]]
+    std::vector<BoundProjectionItem> take_projections() noexcept;
+
     // 获取条件表达式
     [[nodiscard]]
     std::optional<const BoundExpression &> where() const noexcept;
 
+    // 获取条件表达式所有权
+    [[nodiscard]]
+    std::unique_ptr<BoundExpression> take_where() noexcept;
+
     // 获取排序列表
     [[nodiscard]]
     const std::vector<BoundOrderByItem> & order_by() const noexcept;
+
+    // 获取排序列表所有权
+    [[nodiscard]]
+    std::vector<BoundOrderByItem> take_order_by() noexcept;
 
     // 获取限制
     [[nodiscard]]
@@ -50,18 +62,6 @@ public:
     // 获取偏移
     [[nodiscard]]
     std::optional<std::size_t> offset() const noexcept;
-
-    // 获取选择列表所有权
-    [[nodiscard]]
-    std::vector<BoundProjectionItem> take_projections() noexcept;
-
-    // 获取条件表达式所有权
-    [[nodiscard]]
-    std::unique_ptr<BoundExpression> take_where() noexcept;
-
-    // 获取排序列表所有权
-    [[nodiscard]]
-    std::vector<BoundOrderByItem> take_order_by() noexcept;
 
 private:
     common::CollectionId collection_id_;

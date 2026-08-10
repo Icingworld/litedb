@@ -26,6 +26,11 @@ const std::vector<BoundAssignment> & BoundUpdateStatement::assignments() const n
     return assignments_;
 }
 
+std::vector<BoundAssignment> BoundUpdateStatement::take_assignments() noexcept
+{
+    return std::exchange(assignments_, {});
+}
+
 std::optional<const BoundExpression &> BoundUpdateStatement::where() const noexcept
 {
     if (!where_) {
@@ -33,11 +38,6 @@ std::optional<const BoundExpression &> BoundUpdateStatement::where() const noexc
     }
 
     return *where_;
-}
-
-std::vector<BoundAssignment> BoundUpdateStatement::take_assignments() noexcept
-{
-    return std::move(assignments_);
 }
 
 std::unique_ptr<BoundExpression> BoundUpdateStatement::take_where() noexcept

@@ -26,7 +26,7 @@ const BoundExpression & BoundBetweenExpression::expression() const noexcept
 
 std::unique_ptr<BoundExpression> BoundBetweenExpression::take_expression() noexcept
 {
-    return std::move(expression_);
+    return std::exchange(expression_, nullptr);
 }
 
 const BoundExpression & BoundBetweenExpression::lower() const noexcept
@@ -36,7 +36,7 @@ const BoundExpression & BoundBetweenExpression::lower() const noexcept
 
 std::unique_ptr<BoundExpression> BoundBetweenExpression::take_lower() noexcept
 {
-    return std::move(lower_);
+    return std::exchange(lower_, nullptr);
 }
 
 const BoundExpression & BoundBetweenExpression::upper() const noexcept
@@ -46,7 +46,7 @@ const BoundExpression & BoundBetweenExpression::upper() const noexcept
 
 std::unique_ptr<BoundExpression> BoundBetweenExpression::take_upper() noexcept
 {
-    return std::move(upper_);
+    return std::exchange(upper_, nullptr);
 }
 
 } // namespace litedb::core::binder::bound

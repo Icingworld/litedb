@@ -30,7 +30,7 @@ std::optional<const BoundExpression &> BoundDeleteStatement::where() const noexc
 
 std::unique_ptr<BoundExpression> BoundDeleteStatement::take_where() noexcept
 {
-    return std::move(where_);
+    return std::exchange(where_, nullptr);
 }
 
 } // namespace litedb::core::binder::bound
