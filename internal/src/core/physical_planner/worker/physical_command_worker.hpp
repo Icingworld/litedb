@@ -38,9 +38,7 @@ class PhysicalCommandWorker final
 public:
     // 计划 USE 语句
     [[nodiscard]]
-    std::unique_ptr<plan::PhysicalPlan> plan_use(
-        logical_planner::plan::UsePlan & logical_plan
-    );
+    std::unique_ptr<plan::PhysicalPlan> plan_use(logical_planner::plan::UsePlan & logical_plan);
 
     // 计划 CREATE DATABASE 语句
     [[nodiscard]]

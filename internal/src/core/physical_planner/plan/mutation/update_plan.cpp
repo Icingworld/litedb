@@ -14,16 +14,14 @@ UpdatePlan::UpdatePlan(
     , collection_id_(collection_id)
     , assignments_(std::move(assignments))
     , root_operator_(std::move(root_operator))
-{
-}
+{}
 
 common::CollectionId UpdatePlan::collection_id() const noexcept
 {
     return collection_id_;
 }
 
-const std::vector<binder::bound::BoundAssignment> &
-UpdatePlan::assignments() const noexcept
+const std::vector<binder::bound::BoundAssignment> & UpdatePlan::assignments() const noexcept
 {
     return assignments_;
 }

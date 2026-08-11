@@ -36,10 +36,8 @@ std::optional<common::Value> evaluate_constant(const BoundExpression & expressio
 
 // 转换向量距离度量
 [[nodiscard]]
-std::optional<meta::entry::VectorDistanceMetric> vector_metric(
-    const BoundFunctionExpression & distance,
-    bool ascending
-)
+std::optional<meta::entry::VectorDistanceMetric>
+vector_metric(const BoundFunctionExpression & distance, bool ascending)
 {
     const auto name = common::normalize_identifier(distance.function().name());
     if (name == "l2_distance" && ascending) {
@@ -65,10 +63,9 @@ std::optional<common::VIndexId> choose_vector_index(
 {
     std::optional<common::VIndexId> selected;
     for (const auto * entry : catalog.list_vector_indexes(collection_id)) {
-        if (entry == nullptr
-            || entry->column_id() != column_id
-            || entry->index_kind() != meta::entry::VectorIndexKind::Hnsw
-            || entry->metric() != metric) {
+        if (entry == nullptr || entry->column_id() != column_id ||
+            entry->index_kind() != meta::entry::VectorIndexKind::Hnsw ||
+            entry->metric() != metric) {
             continue;
         }
         if (!selected.has_value() || entry->id() < *selected) {
@@ -82,16 +79,14 @@ std::optional<common::VIndexId> choose_vector_index(
 
 VectorTopKSelector::VectorTopKSelector(const PhysicalPlannerContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::optional<VectorTopKDecision> VectorTopKSelector::select(
     const logical_planner::op::LogicalLimitOperator & limit
 ) const
 {
-    if (!limit.limit().has_value()
-        || limit.limit().value() == 0
-        || limit.child().kind() != logical_planner::op::LogicalPlanOperatorKind::OrderBy) {
+    if (!limit.limit().has_value() || limit.limit().value() == 0 ||
+        limit.child().kind() != logical_planner::op::LogicalPlanOperatorKind::OrderBy) {
         return std::nullopt;
     }
 
@@ -100,41 +95,34 @@ std::optional<VectorTopKDecision> VectorTopKSelector::select(
         return std::nullopt;
     }
 
-    const auto & order_by = static_cast<const logical_planner::op::LogicalOrderByOperator &>(
-        limit.child()
-    );
-    if (order_by.order_by().size() != 1
-        || order_by.child().kind() != logical_planner::op::LogicalPlanOperatorKind::Projection) {
+    const auto & order_by =
+        static_cast<const logical_planner::op::LogicalOrderByOperator &>(limit.child());
+    if (order_by.order_by().size() != 1 ||
+        order_by.child().kind() != logical_planner::op::LogicalPlanOperatorKind::Projection) {
         return std::nullopt;
     }
 
-    const auto & projection = static_cast<const logical_planner::op::LogicalProjectionOperator &>(
-        order_by.child()
-    );
+    const auto & projection =
+        static_cast<const logical_planner::op::LogicalProjectionOperator &>(order_by.child());
 
     const logical_planner::op::LogicalFilterOperator * filter = nullptr;
     const logical_planner::op::LogicalScanOperator * scan = nullptr;
     if (projection.child().kind() == logical_planner::op::LogicalPlanOperatorKind::Scan) {
-        scan = &static_cast<const logical_planner::op::LogicalScanOperator &>(
-            projection.child()
-        );
+        scan = &static_cast<const logical_planner::op::LogicalScanOperator &>(projection.child());
     } else if (projection.child().kind() == logical_planner::op::LogicalPlanOperatorKind::Filter) {
-        filter = &static_cast<const logical_planner::op::LogicalFilterOperator &>(
-            projection.child()
-        );
+        filter =
+            &static_cast<const logical_planner::op::LogicalFilterOperator &>(projection.child());
         if (filter->child().kind() != logical_planner::op::LogicalPlanOperatorKind::Scan) {
             return std::nullopt;
         }
-        scan = &static_cast<const logical_planner::op::LogicalScanOperator &>(
-            filter->child()
-        );
+        scan = &static_cast<const logical_planner::op::LogicalScanOperator &>(filter->child());
     } else {
         return std::nullopt;
     }
 
     const auto & item = order_by.order_by().front();
-    if (item.expression == nullptr
-        || item.expression->kind() != binder::bound::BoundExpressionKind::Function) {
+    if (item.expression == nullptr ||
+        item.expression->kind() != binder::bound::BoundExpressionKind::Function) {
         return std::nullopt;
     }
 
@@ -151,15 +139,14 @@ std::optional<VectorTopKDecision> VectorTopKSelector::select(
     bool matched = false;
     for (std::size_t index = 0; index < distance.arguments().size(); ++index) {
         const auto other = index == 0 ? 1U : 0U;
-        if (distance.arguments()[index] == nullptr
-            || distance.arguments()[other] == nullptr
-            || distance.arguments()[index]->kind() != binder::bound::BoundExpressionKind::ColumnRef) {
+        if (distance.arguments()[index] == nullptr || distance.arguments()[other] == nullptr ||
+            distance.arguments()[index]->kind() != binder::bound::BoundExpressionKind::ColumnRef) {
             continue;
         }
 
         auto candidate_value = evaluate_constant(*distance.arguments()[other]);
-        if (!candidate_value.has_value()
-            || !std::holds_alternative<common::VectorValue>(candidate_value->data())) {
+        if (!candidate_value.has_value() ||
+            !std::holds_alternative<common::VectorValue>(candidate_value->data())) {
             continue;
         }
 
@@ -167,9 +154,8 @@ std::optional<VectorTopKDecision> VectorTopKSelector::select(
             *distance.arguments()[index]
         );
         const auto * entry = context_.catalog().find_column(column.column_id());
-        if (entry == nullptr
-            || entry->collection_id() != scan->collection_id()
-            || entry->type().id != common::LogicalTypeId::Vector) {
+        if (entry == nullptr || entry->collection_id() != scan->collection_id() ||
+            entry->type().id != common::LogicalTypeId::Vector) {
             continue;
         }
 
@@ -184,12 +170,8 @@ std::optional<VectorTopKDecision> VectorTopKSelector::select(
         return std::nullopt;
     }
 
-    const auto index_id = choose_vector_index(
-        context_.catalog(),
-        scan->collection_id(),
-        column_id,
-        *metric
-    );
+    const auto index_id =
+        choose_vector_index(context_.catalog(), scan->collection_id(), column_id, *metric);
     if (!index_id.has_value()) {
         return std::nullopt;
     }

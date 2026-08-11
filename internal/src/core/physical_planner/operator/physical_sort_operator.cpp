@@ -11,11 +11,9 @@ SortOperator::SortOperator(
 ) noexcept
     : PhysicalUnaryOperator(PhysicalOperatorKind::Sort, std::move(child))
     , order_by_(std::move(order_by))
-{
-}
+{}
 
-const std::vector<binder::bound::BoundOrderByItem> &
-SortOperator::order_by() const noexcept
+const std::vector<binder::bound::BoundOrderByItem> & SortOperator::order_by() const noexcept
 {
     return order_by_;
 }

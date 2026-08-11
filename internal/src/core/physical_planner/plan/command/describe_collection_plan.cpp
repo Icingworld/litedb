@@ -3,16 +3,12 @@
 namespace litedb::core::physical_planner::plan
 {
 
-DescribeCollectionPlan::DescribeCollectionPlan(
-    common::CollectionId collection_id
-) noexcept
+DescribeCollectionPlan::DescribeCollectionPlan(common::CollectionId collection_id) noexcept
     : PhysicalPlan(PhysicalPlanKind::DescribeCollection)
     , collection_id_(collection_id)
-{
-}
+{}
 
-common::CollectionId
-DescribeCollectionPlan::collection_id() const noexcept
+common::CollectionId DescribeCollectionPlan::collection_id() const noexcept
 {
     return collection_id_;
 }

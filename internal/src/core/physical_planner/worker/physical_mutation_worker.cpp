@@ -13,8 +13,7 @@ namespace litedb::core::physical_planner
 
 PhysicalMutationWorker::PhysicalMutationWorker(const PhysicalPlannerContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::unique_ptr<plan::PhysicalPlan> PhysicalMutationWorker::plan_insert(
     logical_planner::plan::InsertPlan & logical_plan
@@ -32,9 +31,8 @@ std::unique_ptr<plan::PhysicalPlan> PhysicalMutationWorker::plan_update(
 {
     auto collection_id = logical_plan.collection_id();
     auto assignments = logical_plan.take_assignments();
-    auto root_operator = PhysicalOperatorWorker(context_).lower_operator(
-        logical_plan.take_root_operator()
-    );
+    auto root_operator =
+        PhysicalOperatorWorker(context_).lower_operator(logical_plan.take_root_operator());
     return std::make_unique<plan::UpdatePlan>(
         collection_id,
         std::move(assignments),
@@ -47,13 +45,9 @@ std::unique_ptr<plan::PhysicalPlan> PhysicalMutationWorker::plan_delete(
 )
 {
     auto collection_id = logical_plan.collection_id();
-    auto root_operator = PhysicalOperatorWorker(context_).lower_operator(
-        logical_plan.take_root_operator()
-    );
-    return std::make_unique<plan::DeletePlan>(
-        collection_id,
-        std::move(root_operator)
-    );
+    auto root_operator =
+        PhysicalOperatorWorker(context_).lower_operator(logical_plan.take_root_operator());
+    return std::make_unique<plan::DeletePlan>(collection_id, std::move(root_operator));
 }
 
 } // namespace litedb::core::physical_planner

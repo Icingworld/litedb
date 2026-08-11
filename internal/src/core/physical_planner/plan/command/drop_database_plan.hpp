@@ -12,9 +12,7 @@ namespace litedb::core::physical_planner::plan
 class DropDatabasePlan final : public PhysicalPlan
 {
 public:
-    explicit DropDatabasePlan(
-        std::optional<common::DatabaseId> database_id
-    ) noexcept;
+    explicit DropDatabasePlan(std::optional<common::DatabaseId> database_id) noexcept;
 
 public:
     // 获取数据库 ID

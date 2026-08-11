@@ -8,11 +8,9 @@ namespace litedb::core::physical_planner::plan
 CreateDatabasePlan::CreateDatabasePlan(std::optional<std::string> database_name)
     : PhysicalPlan(PhysicalPlanKind::CreateDatabase)
     , database_name_(std::move(database_name))
-{
-}
+{}
 
-std::optional<const std::string &>
-CreateDatabasePlan::database_name() const noexcept
+std::optional<const std::string &> CreateDatabasePlan::database_name() const noexcept
 {
     return database_name_;
 }

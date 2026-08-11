@@ -50,9 +50,8 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_filter_opera
     const auto & logical_child = owned->child();
 
     if (logical_child.kind() == logical_planner::op::LogicalPlanOperatorKind::Scan) {
-        const auto & scan = static_cast<const logical_planner::op::LogicalScanOperator &>(
-            logical_child
-        );
+        const auto & scan =
+            static_cast<const logical_planner::op::LogicalScanOperator &>(logical_child);
         const auto path = scalar_selector_.select(scan.collection_id(), owned->predicate());
         if (path.has_value()) {
             auto predicate = owned->take_predicate();
@@ -70,10 +69,7 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_filter_opera
 
     auto child = lower_operator(owned->take_child());
     auto predicate = owned->take_predicate();
-    return std::make_unique<op::FilterOperator>(
-        std::move(child),
-        std::move(predicate)
-    );
+    return std::make_unique<op::FilterOperator>(std::move(child), std::move(predicate));
 }
 
 std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_projection_operator(
@@ -82,10 +78,7 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_projection_o
 {
     std::unique_ptr<logical_planner::op::LogicalProjectionOperator> owned(&logical_operator);
     auto child = lower_operator(owned->take_child());
-    return std::make_unique<op::ProjectionOperator>(
-        std::move(child),
-        owned->take_projections()
-    );
+    return std::make_unique<op::ProjectionOperator>(std::move(child), owned->take_projections());
 }
 
 std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_order_by_operator(
@@ -94,10 +87,7 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_order_by_ope
 {
     std::unique_ptr<logical_planner::op::LogicalOrderByOperator> owned(&logical_operator);
     auto child = lower_operator(owned->take_child());
-    return std::make_unique<op::SortOperator>(
-        std::move(child),
-        owned->take_order_by()
-    );
+    return std::make_unique<op::SortOperator>(std::move(child), owned->take_order_by());
 }
 
 std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_limit_operator(
@@ -123,9 +113,7 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_limit_operat
         std::unique_ptr<binder::bound::BoundExpression> predicate;
         if (decision->has_filter) {
             auto filter = std::unique_ptr<logical_planner::op::LogicalFilterOperator>(
-                static_cast<logical_planner::op::LogicalFilterOperator *>(
-                    base.release()
-                )
+                static_cast<logical_planner::op::LogicalFilterOperator *>(base.release())
             );
             predicate = filter->take_predicate();
             base = filter->take_child();
@@ -154,10 +142,8 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_limit_operat
             std::move(search),
             std::move(projection_items)
         );
-        auto sorted = std::make_unique<op::SortOperator>(
-            std::move(projected),
-            std::move(order_items)
-        );
+        auto sorted =
+            std::make_unique<op::SortOperator>(std::move(projected), std::move(order_items));
         return std::make_unique<op::LimitOperator>(
             std::move(sorted),
             owned->limit(),
@@ -166,11 +152,7 @@ std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::visit_limit_operat
     }
 
     auto child = lower_operator(owned->take_child());
-    return std::make_unique<op::LimitOperator>(
-        std::move(child),
-        owned->limit(),
-        owned->offset()
-    );
+    return std::make_unique<op::LimitOperator>(std::move(child), owned->limit(), owned->offset());
 }
 
 } // namespace litedb::core::physical_planner

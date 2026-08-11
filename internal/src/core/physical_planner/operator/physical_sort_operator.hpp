@@ -21,8 +21,7 @@ public:
 public:
     // 获取排序项
     [[nodiscard]]
-    const std::vector<binder::bound::BoundOrderByItem> &
-    order_by() const noexcept;
+    const std::vector<binder::bound::BoundOrderByItem> & order_by() const noexcept;
 
 private:
     std::vector<binder::bound::BoundOrderByItem> order_by_;

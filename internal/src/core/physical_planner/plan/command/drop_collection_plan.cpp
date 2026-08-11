@@ -3,16 +3,12 @@
 namespace litedb::core::physical_planner::plan
 {
 
-DropCollectionPlan::DropCollectionPlan(
-    std::optional<common::CollectionId> collection_id
-) noexcept
+DropCollectionPlan::DropCollectionPlan(std::optional<common::CollectionId> collection_id) noexcept
     : PhysicalPlan(PhysicalPlanKind::DropCollection)
     , collection_id_(collection_id)
-{
-}
+{}
 
-std::optional<common::CollectionId>
-DropCollectionPlan::collection_id() const noexcept
+std::optional<common::CollectionId> DropCollectionPlan::collection_id() const noexcept
 {
     return collection_id_;
 }

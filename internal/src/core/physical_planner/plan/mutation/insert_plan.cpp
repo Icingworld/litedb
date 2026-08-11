@@ -12,8 +12,7 @@ InsertPlan::InsertPlan(
     : PhysicalPlan(PhysicalPlanKind::Insert)
     , collection_id_(collection_id)
     , values_(std::move(values))
-{
-}
+{}
 
 common::CollectionId InsertPlan::collection_id() const noexcept
 {

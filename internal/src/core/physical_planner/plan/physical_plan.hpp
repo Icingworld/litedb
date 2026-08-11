@@ -47,7 +47,8 @@ protected:
 
 public:
     // 获取物理计划类型
-    [[nodiscard]] PhysicalPlanKind kind() const noexcept;
+    [[nodiscard]]
+    PhysicalPlanKind kind() const noexcept;
 
 private:
     PhysicalPlanKind kind_;

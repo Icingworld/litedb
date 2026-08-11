@@ -20,13 +20,11 @@ namespace litedb::core::physical_planner
 class PhysicalOperatorWorker final
     : private logical_planner::op::MutableLogicalOperatorDispatcher<
           PhysicalOperatorWorker,
-          std::unique_ptr<op::PhysicalOperator>
-      >
+          std::unique_ptr<op::PhysicalOperator>>
 {
     friend logical_planner::op::MutableLogicalOperatorDispatcher<
         PhysicalOperatorWorker,
-        std::unique_ptr<op::PhysicalOperator>
-    >;
+        std::unique_ptr<op::PhysicalOperator>>;
 
 public:
     explicit PhysicalOperatorWorker(const PhysicalPlannerContext & context) noexcept;

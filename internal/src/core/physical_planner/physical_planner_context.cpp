@@ -5,8 +5,7 @@ namespace litedb::core::physical_planner
 
 PhysicalPlannerContext::PhysicalPlannerContext(meta::CatalogView catalog) noexcept
     : catalog_(catalog)
-{
-}
+{}
 
 const meta::CatalogView & PhysicalPlannerContext::catalog() const noexcept
 {

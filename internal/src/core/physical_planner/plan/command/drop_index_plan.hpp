@@ -12,9 +12,7 @@ namespace litedb::core::physical_planner::plan
 class DropIndexPlan final : public PhysicalPlan
 {
 public:
-    explicit DropIndexPlan(
-        std::optional<common::IndexId> index_id
-    ) noexcept;
+    explicit DropIndexPlan(std::optional<common::IndexId> index_id) noexcept;
 
 public:
     // 获取索引 ID

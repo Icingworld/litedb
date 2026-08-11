@@ -41,10 +41,8 @@ std::optional<common::Value> evaluate_constant(const BoundExpression & expressio
 
 // 创建索引查找条件
 [[nodiscard]]
-std::optional<op::IndexLookup> make_lookup(
-    BinaryOperator operation,
-    const BoundExpression & value_expression
-)
+std::optional<op::IndexLookup>
+make_lookup(BinaryOperator operation, const BoundExpression & value_expression)
 {
     auto value = evaluate_constant(value_expression);
     if (!value.has_value()) {
@@ -160,9 +158,7 @@ std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & p
             return std::nullopt;
         }
 
-        const auto & column = static_cast<const BoundColumnRefExpression &>(
-            between.expression()
-        );
+        const auto & column = static_cast<const BoundColumnRefExpression &>(between.expression());
         auto lower_value = evaluate_constant(between.lower());
         auto upper_value = evaluate_constant(between.upper());
         if (!lower_value.has_value() || !upper_value.has_value()) {
@@ -179,10 +175,11 @@ std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & p
             .column_id = column.column_id(),
             .lookup = op::IndexLookup {
                 .kind = op::IndexLookupKind::Range,
-                .lower = op::IndexBound {
-                    .key = std::move(*lower),
-                    .inclusive = true,
-                },
+                .lower =
+                    op::IndexBound {
+                        .key = std::move(*lower),
+                        .inclusive = true,
+                    },
                 .upper = op::IndexBound {
                     .key = std::move(*upper),
                     .inclusive = true,
@@ -204,14 +201,13 @@ std::optional<common::IndexId> choose_index(
 {
     std::optional<common::IndexId> selected;
     for (const auto * entry : catalog.list_indexes(collection_id)) {
-        if (entry == nullptr
-            || entry->collection_id() != collection_id
-            || entry->column_id() != candidate.column_id
-            || entry->kind() != meta::entry::IndexKind::BTree) {
+        if (entry == nullptr || entry->collection_id() != collection_id ||
+            entry->column_id() != candidate.column_id ||
+            entry->kind() != meta::entry::IndexKind::BTree) {
             continue;
         }
-        if (candidate.lookup.kind == op::IndexLookupKind::Range
-            && entry->kind() != meta::entry::IndexKind::BTree) {
+        if (candidate.lookup.kind == op::IndexLookupKind::Range &&
+            entry->kind() != meta::entry::IndexKind::BTree) {
             continue;
         }
         if (!selected.has_value() || entry->id() < *selected) {
@@ -225,8 +221,7 @@ std::optional<common::IndexId> choose_index(
 
 ScalarAccessPathSelector::ScalarAccessPathSelector(const PhysicalPlannerContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::optional<ScalarAccessPath> ScalarAccessPathSelector::select(
     common::CollectionId collection_id,

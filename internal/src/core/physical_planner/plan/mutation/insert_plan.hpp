@@ -26,8 +26,7 @@ public:
 
     // 获取插入值
     [[nodiscard]]
-    const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
-    values() const noexcept;
+    const std::vector<std::unique_ptr<binder::bound::BoundExpression>> & values() const noexcept;
 
 private:
     // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销

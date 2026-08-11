@@ -1,7 +1,7 @@
 #include "core/physical_planner/operator/physical_unary_operator.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::physical_planner::op
 {

@@ -9,8 +9,7 @@ namespace litedb::core::physical_planner
 
 PhysicalQueryWorker::PhysicalQueryWorker(const PhysicalPlannerContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::unique_ptr<plan::PhysicalPlan> PhysicalQueryWorker::plan_query(
     logical_planner::plan::QueryPlan & logical_plan

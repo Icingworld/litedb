@@ -12,15 +12,15 @@ namespace litedb::core::physical_planner::op
 // 索引查找类型
 enum class IndexLookupKind
 {
-    Equal,              // 等值查找
-    Range,              // 范围查找
+    Equal, // 等值查找
+    Range, // 范围查找
 };
 
 // 索引边界
 struct IndexBound
 {
-    index::ScalarIndexKey key;                      // 边界键
-    bool inclusive {true};                          // 是否包含边界
+    index::ScalarIndexKey key; // 边界键
+    bool inclusive {true}; // 是否包含边界
 };
 
 // 索引查找条件

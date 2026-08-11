@@ -1,7 +1,7 @@
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::physical_planner::op
 {
@@ -16,8 +16,7 @@ FilterOperator::FilterOperator(
     assert(predicate_ != nullptr);
 }
 
-const binder::bound::BoundExpression &
-FilterOperator::predicate() const noexcept
+const binder::bound::BoundExpression & FilterOperator::predicate() const noexcept
 {
     return *predicate_;
 }

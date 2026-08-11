@@ -21,8 +21,7 @@ public:
 public:
     // 获取投影项
     [[nodiscard]]
-    const std::vector<binder::bound::BoundProjectionItem> &
-    projections() const noexcept;
+    const std::vector<binder::bound::BoundProjectionItem> & projections() const noexcept;
 
 private:
     std::vector<binder::bound::BoundProjectionItem> projections_;

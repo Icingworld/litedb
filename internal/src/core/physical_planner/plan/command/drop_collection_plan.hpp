@@ -12,9 +12,7 @@ namespace litedb::core::physical_planner::plan
 class DropCollectionPlan final : public PhysicalPlan
 {
 public:
-    explicit DropCollectionPlan(
-        std::optional<common::CollectionId> collection_id
-    ) noexcept;
+    explicit DropCollectionPlan(std::optional<common::CollectionId> collection_id) noexcept;
 
 public:
     // 获取集合 ID

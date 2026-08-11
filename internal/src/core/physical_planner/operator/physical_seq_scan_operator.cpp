@@ -6,8 +6,7 @@ namespace litedb::core::physical_planner::op
 SeqScanOperator::SeqScanOperator(common::CollectionId collection_id) noexcept
     : PhysicalOperator(PhysicalOperatorKind::SeqScan)
     , collection_id_(collection_id)
-{
-}
+{}
 
 common::CollectionId SeqScanOperator::collection_id() const noexcept
 {

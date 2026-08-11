@@ -1,7 +1,7 @@
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #include "core/physical_planner/plan/command/create_collection_plan.hpp"
 #include "core/physical_planner/plan/command/create_database_plan.hpp"
@@ -27,21 +27,13 @@ namespace litedb::core::physical_planner::plan
 {
 
 // 物理计划调度器
-template <
-    typename Derived,
-    typename ReturnType,
-    bool IsConst
->
+template <typename Derived, typename ReturnType, bool IsConst>
 class PhysicalPlanDispatcher
 {
 protected:
     // 引用类型
     template <typename T>
-    using ReferenceType = std::conditional_t<
-        IsConst,
-        const T &,
-        T &
-    >;
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
     // 调度物理计划
@@ -50,9 +42,7 @@ protected:
     {
         switch (plan.kind()) {
         case PhysicalPlanKind::Use:
-            return derived().visit_use_plan(
-                static_cast<ReferenceType<UsePlan>>(plan)
-            );
+            return derived().visit_use_plan(static_cast<ReferenceType<UsePlan>>(plan));
         case PhysicalPlanKind::CreateDatabase:
             return derived().visit_create_database_plan(
                 static_cast<ReferenceType<CreateDatabasePlan>>(plan)
@@ -78,9 +68,7 @@ protected:
                 static_cast<ReferenceType<DropCollectionPlan>>(plan)
             );
         case PhysicalPlanKind::DropIndex:
-            return derived().visit_drop_index_plan(
-                static_cast<ReferenceType<DropIndexPlan>>(plan)
-            );
+            return derived().visit_drop_index_plan(static_cast<ReferenceType<DropIndexPlan>>(plan));
         case PhysicalPlanKind::DropVectorIndex:
             return derived().visit_drop_vector_index_plan(
                 static_cast<ReferenceType<DropVectorIndexPlan>>(plan)
@@ -106,21 +94,13 @@ protected:
                 static_cast<ReferenceType<DescribeCollectionPlan>>(plan)
             );
         case PhysicalPlanKind::Insert:
-            return derived().visit_insert_plan(
-                static_cast<ReferenceType<InsertPlan>>(plan)
-            );
+            return derived().visit_insert_plan(static_cast<ReferenceType<InsertPlan>>(plan));
         case PhysicalPlanKind::Update:
-            return derived().visit_update_plan(
-                static_cast<ReferenceType<UpdatePlan>>(plan)
-            );
+            return derived().visit_update_plan(static_cast<ReferenceType<UpdatePlan>>(plan));
         case PhysicalPlanKind::Delete:
-            return derived().visit_delete_plan(
-                static_cast<ReferenceType<DeletePlan>>(plan)
-            );
+            return derived().visit_delete_plan(static_cast<ReferenceType<DeletePlan>>(plan));
         case PhysicalPlanKind::Query:
-            return derived().visit_query_plan(
-                static_cast<ReferenceType<QueryPlan>>(plan)
-            );
+            return derived().visit_query_plan(static_cast<ReferenceType<QueryPlan>>(plan));
         default:
             std::unreachable();
         }
@@ -137,18 +117,10 @@ private:
 
 // 常量物理计划调度器
 template <typename Derived, typename ReturnType>
-using ConstPhysicalPlanDispatcher = PhysicalPlanDispatcher<
-    Derived,
-    ReturnType,
-    true
->;
+using ConstPhysicalPlanDispatcher = PhysicalPlanDispatcher<Derived, ReturnType, true>;
 
 // 可变物理计划调度器
 template <typename Derived, typename ReturnType>
-using MutablePhysicalPlanDispatcher = PhysicalPlanDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
+using MutablePhysicalPlanDispatcher = PhysicalPlanDispatcher<Derived, ReturnType, false>;
 
 } // namespace litedb::core::physical_planner::plan

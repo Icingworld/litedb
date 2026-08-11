@@ -5,7 +5,6 @@ namespace litedb::core::physical_planner::plan
 
 ShowDatabasesPlan::ShowDatabasesPlan() noexcept
     : PhysicalPlan(PhysicalPlanKind::ShowDatabases)
-{
-}
+{}
 
 } // namespace litedb::core::physical_planner::plan

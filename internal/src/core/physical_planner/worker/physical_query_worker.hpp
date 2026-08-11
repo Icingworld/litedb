@@ -29,9 +29,8 @@ public:
 
 public:
     // 计划 QUERY 语句
-    [[nodiscard]] std::unique_ptr<plan::PhysicalPlan> plan_query(
-        logical_planner::plan::QueryPlan & logical_plan
-    );
+    [[nodiscard]]
+    std::unique_ptr<plan::PhysicalPlan> plan_query(logical_planner::plan::QueryPlan & logical_plan);
 
 private:
     const PhysicalPlannerContext & context_;

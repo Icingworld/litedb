@@ -14,9 +14,7 @@ namespace litedb::core::physical_planner::op
 class PhysicalOperatorDebugPrinter::IndentScope
 {
 public:
-    explicit IndentScope(
-        PhysicalOperatorDebugPrinter & printer
-    ) noexcept
+    explicit IndentScope(PhysicalOperatorDebugPrinter & printer) noexcept
         : printer_(printer)
     {
         ++printer_.indent_;
@@ -31,32 +29,25 @@ private:
     PhysicalOperatorDebugPrinter & printer_;
 };
 
-PhysicalOperatorDebugPrinter::PhysicalOperatorDebugPrinter(
-    std::ostream & ostream
-)
+PhysicalOperatorDebugPrinter::PhysicalOperatorDebugPrinter(std::ostream & ostream)
     : ostream_(ostream)
     , indent_(0)
     , pending_str_()
-{
-}
+{}
 
 void PhysicalOperatorDebugPrinter::print(const PhysicalOperator & op)
 {
     dispatch_operator(op);
 }
 
-void PhysicalOperatorDebugPrinter::visit_seq_scan_operator(
-    const SeqScanOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_seq_scan_operator(const SeqScanOperator & op)
 {
     write_node_header("SeqScanOperator");
     IndentScope scope(*this);
     write_field("collection_id", op.collection_id());
 }
 
-void PhysicalOperatorDebugPrinter::visit_index_scan_operator(
-    const IndexScanOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_index_scan_operator(const IndexScanOperator & op)
 {
     write_node_header("IndexScanOperator");
     IndentScope scope(*this);
@@ -64,31 +55,28 @@ void PhysicalOperatorDebugPrinter::visit_index_scan_operator(
     write_field("index_id", op.index_id());
     write_field(
         "lookup",
-        op.lookup().kind == IndexLookupKind::Equal
-            ? std::string_view("equal")
-            : std::string_view("range")
+        op.lookup().kind == IndexLookupKind::Equal ? std::string_view("equal")
+                                                   : std::string_view("range")
     );
 
     if (op.lookup().lower.has_value()) {
-        const auto value = common::value_to_string(op.lookup().lower->key.value())
-            + (op.lookup().lower->inclusive ? " (inclusive)" : " (exclusive)");
+        const auto value = common::value_to_string(op.lookup().lower->key.value()) +
+                           (op.lookup().lower->inclusive ? " (inclusive)" : " (exclusive)");
         write_field("lower", value);
     } else {
         write_field("lower", "<none>");
     }
 
     if (op.lookup().upper.has_value()) {
-        const auto value = common::value_to_string(op.lookup().upper->key.value())
-            + (op.lookup().upper->inclusive ? " (inclusive)" : " (exclusive)");
+        const auto value = common::value_to_string(op.lookup().upper->key.value()) +
+                           (op.lookup().upper->inclusive ? " (inclusive)" : " (exclusive)");
         write_field("upper", value);
     } else {
         write_field("upper", "<none>");
     }
 }
 
-void PhysicalOperatorDebugPrinter::visit_vector_search_operator(
-    const VectorSearchOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_vector_search_operator(const VectorSearchOperator & op)
 {
     write_node_header("VectorSearchOperator");
     IndentScope scope(*this);
@@ -101,9 +89,7 @@ void PhysicalOperatorDebugPrinter::visit_vector_search_operator(
     write_expression_field("predicate", op.predicate());
 }
 
-void PhysicalOperatorDebugPrinter::visit_filter_operator(
-    const FilterOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_filter_operator(const FilterOperator & op)
 {
     write_node_header("FilterOperator");
     IndentScope scope(*this);
@@ -111,9 +97,7 @@ void PhysicalOperatorDebugPrinter::visit_filter_operator(
     write_child_field("child", &op.child());
 }
 
-void PhysicalOperatorDebugPrinter::visit_projection_operator(
-    const ProjectionOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_projection_operator(const ProjectionOperator & op)
 {
     write_node_header("ProjectionOperator");
     IndentScope scope(*this);
@@ -131,9 +115,7 @@ void PhysicalOperatorDebugPrinter::visit_projection_operator(
     write_child_field("child", &op.child());
 }
 
-void PhysicalOperatorDebugPrinter::visit_sort_operator(
-    const SortOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_sort_operator(const SortOperator & op)
 {
     write_node_header("SortOperator");
     IndentScope scope(*this);
@@ -151,9 +133,7 @@ void PhysicalOperatorDebugPrinter::visit_sort_operator(
     write_child_field("child", &op.child());
 }
 
-void PhysicalOperatorDebugPrinter::visit_limit_operator(
-    const LimitOperator & op
-)
+void PhysicalOperatorDebugPrinter::visit_limit_operator(const LimitOperator & op)
 {
     write_node_header("LimitOperator");
     IndentScope scope(*this);
@@ -179,30 +159,18 @@ void PhysicalOperatorDebugPrinter::write_node_header(std::string_view name)
     ostream_ << name << '\n';
 }
 
-void PhysicalOperatorDebugPrinter::write_field(
-    std::string_view name,
-    std::string_view value
-)
+void PhysicalOperatorDebugPrinter::write_field(std::string_view name, std::string_view value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
 }
 
-void PhysicalOperatorDebugPrinter::write_field(
-    std::string_view name,
-    bool value
-)
+void PhysicalOperatorDebugPrinter::write_field(std::string_view name, bool value)
 {
-    write_field(
-        name,
-        value ? std::string_view("true") : std::string_view("false")
-    );
+    write_field(name, value ? std::string_view("true") : std::string_view("false"));
 }
 
-void PhysicalOperatorDebugPrinter::write_field(
-    std::string_view name,
-    std::size_t value
-)
+void PhysicalOperatorDebugPrinter::write_field(std::string_view name, std::size_t value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -213,10 +181,7 @@ void PhysicalOperatorDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(
-        name,
-        value ? std::string_view(*value) : std::string_view("<none>")
-    );
+    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
 }
 
 void PhysicalOperatorDebugPrinter::write_optional_field(
@@ -295,10 +260,7 @@ std::string debug_print(const PhysicalOperator & op)
     return stream.str();
 }
 
-void debug_print(
-    std::ostream & ostream,
-    const PhysicalOperator & op
-)
+void debug_print(std::ostream & ostream, const PhysicalOperator & op)
 {
     PhysicalOperatorDebugPrinter printer(ostream);
     printer.print(op);

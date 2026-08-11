@@ -14,8 +14,7 @@ IndexScanOperator::IndexScanOperator(
     , collection_id_(collection_id)
     , index_id_(index_id)
     , lookup_(std::move(lookup))
-{
-}
+{}
 
 common::CollectionId IndexScanOperator::collection_id() const noexcept
 {

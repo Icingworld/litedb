@@ -12,8 +12,7 @@ DeletePlan::DeletePlan(
     : PhysicalPlan(PhysicalPlanKind::Delete)
     , collection_id_(collection_id)
     , root_operator_(std::move(root_operator))
-{
-}
+{}
 
 common::CollectionId DeletePlan::collection_id() const noexcept
 {

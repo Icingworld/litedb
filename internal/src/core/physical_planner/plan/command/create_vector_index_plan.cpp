@@ -24,16 +24,14 @@ CreateVectorIndexPlan::CreateVectorIndexPlan(
     , ef_construction_(ef_construction)
     , ef_search_default_(ef_search_default)
     , random_seed_(random_seed)
-{
-}
+{}
 
 common::ColumnId CreateVectorIndexPlan::column_id() const noexcept
 {
     return column_id_;
 }
 
-std::optional<const std::string &>
-CreateVectorIndexPlan::index_name() const noexcept
+std::optional<const std::string &> CreateVectorIndexPlan::index_name() const noexcept
 {
     return index_name_;
 }

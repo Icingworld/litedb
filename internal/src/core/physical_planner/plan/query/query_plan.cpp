@@ -1,7 +1,7 @@
 #include "core/physical_planner/plan/query/query_plan.hpp"
 
-#include <utility>
 #include <cassert>
+#include <utility>
 
 namespace litedb::core::physical_planner::plan
 {

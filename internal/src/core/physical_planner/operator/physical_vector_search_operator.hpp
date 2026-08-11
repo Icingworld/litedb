@@ -49,8 +49,7 @@ public:
 
     // 获取残差谓词
     [[nodiscard]]
-    std::optional<const binder::bound::BoundExpression &>
-    predicate() const noexcept;
+    std::optional<const binder::bound::BoundExpression &> predicate() const noexcept;
 
     // 获取所需结果数量
     [[nodiscard]]

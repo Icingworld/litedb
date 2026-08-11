@@ -13,8 +13,7 @@ LimitOperator::LimitOperator(
     : PhysicalUnaryOperator(PhysicalOperatorKind::Limit, std::move(child))
     , limit_(limit)
     , offset_(offset)
-{
-}
+{}
 
 std::optional<std::size_t> LimitOperator::limit() const noexcept
 {

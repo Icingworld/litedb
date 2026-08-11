@@ -51,8 +51,7 @@ PhysicalPlanDebugPrinter::PhysicalPlanDebugPrinter(std::ostream & ostream)
     : ostream_(ostream)
     , indent_(0)
     , pending_str_()
-{
-}
+{}
 
 void PhysicalPlanDebugPrinter::print(const PhysicalPlan & plan)
 {
@@ -66,18 +65,14 @@ void PhysicalPlanDebugPrinter::visit_use_plan(const UsePlan & plan)
     write_field("database_id", plan.database_id());
 }
 
-void PhysicalPlanDebugPrinter::visit_create_database_plan(
-    const CreateDatabasePlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_create_database_plan(const CreateDatabasePlan & plan)
 {
     write_node_header("CreateDatabasePlan");
     IndentScope scope(*this);
     write_optional_field("database_name", plan.database_name());
 }
 
-void PhysicalPlanDebugPrinter::visit_create_collection_plan(
-    const CreateCollectionPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_create_collection_plan(const CreateCollectionPlan & plan)
 {
     write_node_header("CreateCollectionPlan");
     IndentScope scope(*this);
@@ -87,9 +82,7 @@ void PhysicalPlanDebugPrinter::visit_create_collection_plan(
     write_field("column_count", plan.columns().size());
 }
 
-void PhysicalPlanDebugPrinter::visit_create_index_plan(
-    const CreateIndexPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_create_index_plan(const CreateIndexPlan & plan)
 {
     write_node_header("CreateIndexPlan");
     IndentScope scope(*this);
@@ -99,53 +92,39 @@ void PhysicalPlanDebugPrinter::visit_create_index_plan(
     write_field("unique", plan.unique());
 }
 
-void PhysicalPlanDebugPrinter::visit_create_vector_index_plan(
-    const CreateVectorIndexPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_create_vector_index_plan(const CreateVectorIndexPlan & plan)
 {
     write_node_header("CreateVectorIndexPlan");
     IndentScope scope(*this);
     write_field("column_id", plan.column_id());
     write_optional_field("index_name", plan.index_name());
-    write_field(
-        "index_kind",
-        binder::bound::vector_index_kind_name(plan.index_kind())
-    );
-    write_field(
-        "metric",
-        binder::bound::vector_distance_metric_name(plan.metric())
-    );
+    write_field("index_kind", binder::bound::vector_index_kind_name(plan.index_kind()));
+    write_field("metric", binder::bound::vector_distance_metric_name(plan.metric()));
     write_field("max_neighbors", plan.max_neighbors());
     write_field("ef_construction", plan.ef_construction());
     write_field("ef_search_default", plan.ef_search_default());
     write_field("random_seed", plan.random_seed());
 }
 
-void PhysicalPlanDebugPrinter::visit_drop_database_plan(
-    const DropDatabasePlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_drop_database_plan(const DropDatabasePlan & plan)
 {
     write_node_header("DropDatabasePlan");
     IndentScope scope(*this);
     write_optional_field(
         "database_id",
-        plan.database_id().has_value()
-            ? std::optional<std::size_t>(*plan.database_id())
-            : std::nullopt
+        plan.database_id().has_value() ? std::optional<std::size_t>(*plan.database_id())
+                                       : std::nullopt
     );
 }
 
-void PhysicalPlanDebugPrinter::visit_drop_collection_plan(
-    const DropCollectionPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_drop_collection_plan(const DropCollectionPlan & plan)
 {
     write_node_header("DropCollectionPlan");
     IndentScope scope(*this);
     write_optional_field(
         "collection_id",
-        plan.collection_id().has_value()
-            ? std::optional<std::size_t>(*plan.collection_id())
-            : std::nullopt
+        plan.collection_id().has_value() ? std::optional<std::size_t>(*plan.collection_id())
+                                         : std::nullopt
     );
 }
 
@@ -155,23 +134,17 @@ void PhysicalPlanDebugPrinter::visit_drop_index_plan(const DropIndexPlan & plan)
     IndentScope scope(*this);
     write_optional_field(
         "index_id",
-        plan.index_id().has_value()
-            ? std::optional<std::size_t>(*plan.index_id())
-            : std::nullopt
+        plan.index_id().has_value() ? std::optional<std::size_t>(*plan.index_id()) : std::nullopt
     );
 }
 
-void PhysicalPlanDebugPrinter::visit_drop_vector_index_plan(
-    const DropVectorIndexPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_drop_vector_index_plan(const DropVectorIndexPlan & plan)
 {
     write_node_header("DropVectorIndexPlan");
     IndentScope scope(*this);
     write_optional_field(
         "index_id",
-        plan.index_id().has_value()
-            ? std::optional<std::size_t>(*plan.index_id())
-            : std::nullopt
+        plan.index_id().has_value() ? std::optional<std::size_t>(*plan.index_id()) : std::nullopt
     );
 }
 
@@ -182,36 +155,28 @@ void PhysicalPlanDebugPrinter::visit_show_databases_plan(
     write_node_header("ShowDatabasesPlan");
 }
 
-void PhysicalPlanDebugPrinter::visit_show_collections_plan(
-    const ShowCollectionsPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_show_collections_plan(const ShowCollectionsPlan & plan)
 {
     write_node_header("ShowCollectionsPlan");
     IndentScope scope(*this);
     write_field("database_id", plan.database_id());
 }
 
-void PhysicalPlanDebugPrinter::visit_show_indexes_plan(
-    const ShowIndexesPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_show_indexes_plan(const ShowIndexesPlan & plan)
 {
     write_node_header("ShowIndexesPlan");
     IndentScope scope(*this);
     write_field("collection_id", plan.collection_id());
 }
 
-void PhysicalPlanDebugPrinter::visit_show_vector_indexes_plan(
-    const ShowVectorIndexesPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_show_vector_indexes_plan(const ShowVectorIndexesPlan & plan)
 {
     write_node_header("ShowVectorIndexesPlan");
     IndentScope scope(*this);
     write_field("collection_id", plan.collection_id());
 }
 
-void PhysicalPlanDebugPrinter::visit_describe_collection_plan(
-    const DescribeCollectionPlan & plan
-)
+void PhysicalPlanDebugPrinter::visit_describe_collection_plan(const DescribeCollectionPlan & plan)
 {
     write_node_header("DescribeCollectionPlan");
     IndentScope scope(*this);
@@ -299,10 +264,7 @@ void PhysicalPlanDebugPrinter::write_node_header(std::string_view name)
     ostream_ << name << '\n';
 }
 
-void PhysicalPlanDebugPrinter::write_field(
-    std::string_view name,
-    std::string_view value
-)
+void PhysicalPlanDebugPrinter::write_field(std::string_view name, std::string_view value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -310,16 +272,10 @@ void PhysicalPlanDebugPrinter::write_field(
 
 void PhysicalPlanDebugPrinter::write_field(std::string_view name, bool value)
 {
-    write_field(
-        name,
-        value ? std::string_view("true") : std::string_view("false")
-    );
+    write_field(name, value ? std::string_view("true") : std::string_view("false"));
 }
 
-void PhysicalPlanDebugPrinter::write_field(
-    std::string_view name,
-    std::size_t value
-)
+void PhysicalPlanDebugPrinter::write_field(std::string_view name, std::size_t value)
 {
     write_indent();
     ostream_ << name << ": " << value << '\n';
@@ -330,10 +286,7 @@ void PhysicalPlanDebugPrinter::write_optional_field(
     const std::optional<std::string> & value
 )
 {
-    write_field(
-        name,
-        value ? std::string_view(*value) : std::string_view("<none>")
-    );
+    write_field(name, value ? std::string_view(*value) : std::string_view("<none>"));
 }
 
 void PhysicalPlanDebugPrinter::write_optional_field(

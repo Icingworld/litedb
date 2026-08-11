@@ -13,15 +13,9 @@ namespace litedb::core::physical_planner::plan
 
 // 物理计划调试打印器
 class PhysicalPlanDebugPrinter final
-    : private ConstPhysicalPlanDispatcher<
-          PhysicalPlanDebugPrinter,
-          void
-      >
+    : private ConstPhysicalPlanDispatcher<PhysicalPlanDebugPrinter, void>
 {
-    friend ConstPhysicalPlanDispatcher<
-        PhysicalPlanDebugPrinter,
-        void
-    >;
+    friend ConstPhysicalPlanDispatcher<PhysicalPlanDebugPrinter, void>;
 
 public:
     explicit PhysicalPlanDebugPrinter(std::ostream & ostream);
@@ -102,16 +96,10 @@ private:
     void write_field(std::string_view name, std::size_t value);
 
     // 写入可选字段
-    void write_optional_field(
-        std::string_view name,
-        const std::optional<std::string> & value
-    );
+    void write_optional_field(std::string_view name, const std::optional<std::string> & value);
 
     // 写入可选字段
-    void write_optional_field(
-        std::string_view name,
-        const std::optional<std::size_t> & value
-    );
+    void write_optional_field(std::string_view name, const std::optional<std::size_t> & value);
 
     // 写入绑定表达式字段
     void write_expression_field(
@@ -120,10 +108,7 @@ private:
     );
 
     // 写入物理算子字段
-    void write_operator_field(
-        std::string_view name,
-        const op::PhysicalOperator * child
-    );
+    void write_operator_field(std::string_view name, const op::PhysicalOperator * child);
 
     // 缩进作用域
     class IndentScope;
@@ -139,9 +124,6 @@ private:
 std::string debug_print(const PhysicalPlan & plan);
 
 // 调试打印物理计划
-void debug_print(
-    std::ostream & ostream,
-    const PhysicalPlan & plan
-);
+void debug_print(std::ostream & ostream, const PhysicalPlan & plan);
 
 } // namespace litedb::core::physical_planner::plan

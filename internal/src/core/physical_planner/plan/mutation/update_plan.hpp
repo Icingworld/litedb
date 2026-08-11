@@ -28,8 +28,7 @@ public:
 
     // 获取赋值列表
     [[nodiscard]]
-    const std::vector<binder::bound::BoundAssignment> &
-    assignments() const noexcept;
+    const std::vector<binder::bound::BoundAssignment> & assignments() const noexcept;
 
     // 获取根算子
     [[nodiscard]]

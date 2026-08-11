@@ -11,8 +11,7 @@ ProjectionOperator::ProjectionOperator(
 ) noexcept
     : PhysicalUnaryOperator(PhysicalOperatorKind::Projection, std::move(child))
     , projections_(std::move(projections))
-{
-}
+{}
 
 const std::vector<binder::bound::BoundProjectionItem> &
 ProjectionOperator::projections() const noexcept

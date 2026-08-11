@@ -22,8 +22,7 @@ VectorSearchOperator::VectorSearchOperator(
     , query_vector_(std::move(query_vector))
     , predicate_(std::move(predicate))
     , required_count_(required_count)
-{
-}
+{}
 
 common::CollectionId VectorSearchOperator::collection_id() const noexcept
 {
@@ -45,8 +44,7 @@ meta::entry::VectorDistanceMetric VectorSearchOperator::metric() const noexcept
     return metric_;
 }
 
-const binder::bound::BoundExpression &
-VectorSearchOperator::query_vector() const noexcept
+const binder::bound::BoundExpression & VectorSearchOperator::query_vector() const noexcept
 {
     return *query_vector_;
 }

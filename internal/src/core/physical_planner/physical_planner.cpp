@@ -11,8 +11,7 @@ namespace litedb::core::physical_planner
 
 PhysicalPlanner::PhysicalPlanner(meta::CatalogView catalog) noexcept
     : catalog_(catalog)
-{
-}
+{}
 
 std::unique_ptr<plan::PhysicalPlan> PhysicalPlanner::plan(
     std::unique_ptr<logical_planner::plan::LogicalPlan> logical_plan

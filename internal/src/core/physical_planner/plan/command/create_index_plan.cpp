@@ -16,16 +16,14 @@ CreateIndexPlan::CreateIndexPlan(
     , index_name_(std::move(index_name))
     , index_kind_(index_kind)
     , unique_(unique)
-{
-}
+{}
 
 common::ColumnId CreateIndexPlan::column_id() const noexcept
 {
     return column_id_;
 }
 
-std::optional<const std::string &>
-CreateIndexPlan::index_name() const noexcept
+std::optional<const std::string &> CreateIndexPlan::index_name() const noexcept
 {
     return index_name_;
 }

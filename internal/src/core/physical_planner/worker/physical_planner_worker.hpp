@@ -17,15 +17,11 @@ namespace litedb::core::physical_planner
 
 // 物理计划主工作器
 class PhysicalPlannerWorker final
-    : private logical_planner::plan::MutableLogicalPlanDispatcher<
-          PhysicalPlannerWorker,
-          std::unique_ptr<plan::PhysicalPlan>
-      >
+    : private logical_planner::plan::
+          MutableLogicalPlanDispatcher<PhysicalPlannerWorker, std::unique_ptr<plan::PhysicalPlan>>
 {
-    friend logical_planner::plan::MutableLogicalPlanDispatcher<
-        PhysicalPlannerWorker,
-        std::unique_ptr<plan::PhysicalPlan>
-    >;
+    friend logical_planner::plan::
+        MutableLogicalPlanDispatcher<PhysicalPlannerWorker, std::unique_ptr<plan::PhysicalPlan>>;
 
 public:
     explicit PhysicalPlannerWorker(const PhysicalPlannerContext & context) noexcept;

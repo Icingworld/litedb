@@ -1,7 +1,7 @@
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_index_scan_operator.hpp"
@@ -16,21 +16,13 @@ namespace litedb::core::physical_planner::op
 {
 
 // 物理算子调度器
-template <
-    typename Derived,
-    typename ReturnType,
-    bool IsConst
->
+template <typename Derived, typename ReturnType, bool IsConst>
 class PhysicalOperatorDispatcher
 {
 protected:
     // 引用类型
     template <typename T>
-    using ReferenceType = std::conditional_t<
-        IsConst,
-        const T &,
-        T &
-    >;
+    using ReferenceType = std::conditional_t<IsConst, const T &, T &>;
 
 protected:
     // 调度物理算子
@@ -51,21 +43,15 @@ protected:
                 static_cast<ReferenceType<VectorSearchOperator>>(op)
             );
         case PhysicalOperatorKind::Filter:
-            return derived().visit_filter_operator(
-                static_cast<ReferenceType<FilterOperator>>(op)
-            );
+            return derived().visit_filter_operator(static_cast<ReferenceType<FilterOperator>>(op));
         case PhysicalOperatorKind::Projection:
             return derived().visit_projection_operator(
                 static_cast<ReferenceType<ProjectionOperator>>(op)
             );
         case PhysicalOperatorKind::Sort:
-            return derived().visit_sort_operator(
-                static_cast<ReferenceType<SortOperator>>(op)
-            );
+            return derived().visit_sort_operator(static_cast<ReferenceType<SortOperator>>(op));
         case PhysicalOperatorKind::Limit:
-            return derived().visit_limit_operator(
-                static_cast<ReferenceType<LimitOperator>>(op)
-            );
+            return derived().visit_limit_operator(static_cast<ReferenceType<LimitOperator>>(op));
         default:
             std::unreachable();
         }
@@ -82,18 +68,10 @@ private:
 
 // 常量物理算子调度器
 template <typename Derived, typename ReturnType>
-using ConstPhysicalOperatorDispatcher = PhysicalOperatorDispatcher<
-    Derived,
-    ReturnType,
-    true
->;
+using ConstPhysicalOperatorDispatcher = PhysicalOperatorDispatcher<Derived, ReturnType, true>;
 
 // 可变物理算子调度器
 template <typename Derived, typename ReturnType>
-using MutablePhysicalOperatorDispatcher = PhysicalOperatorDispatcher<
-    Derived,
-    ReturnType,
-    false
->;
+using MutablePhysicalOperatorDispatcher = PhysicalOperatorDispatcher<Derived, ReturnType, false>;
 
 } // namespace litedb::core::physical_planner::op

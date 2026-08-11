@@ -13,8 +13,7 @@ namespace litedb::core::physical_planner
 
 PhysicalPlannerWorker::PhysicalPlannerWorker(const PhysicalPlannerContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::unique_ptr<plan::PhysicalPlan> PhysicalPlannerWorker::plan_statement(
     std::unique_ptr<logical_planner::plan::LogicalPlan> logical_plan
