@@ -13,19 +13,16 @@ namespace litedb::core::evaluator
 
 ExpressionEvaluator::ExpressionEvaluator(EvaluationContext context)
     : context_(std::move(context))
-{
-}
+{}
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::evaluate(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::evaluate(
     const binder::bound::BoundExpression & expression
 )
 {
     return dispatch_expression(expression);
 }
 
-std::expected<bool, EvaluationError>
-ExpressionEvaluator::evaluate_filter(
+std::expected<bool, EvaluationError> ExpressionEvaluator::evaluate_filter(
     const binder::bound::BoundExpression & expression
 )
 {
@@ -36,8 +33,7 @@ ExpressionEvaluator::evaluate_filter(
     return filter_matches(*value);
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::evaluate_constant(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::evaluate_constant(
     const binder::bound::BoundExpression & expression,
     function::ScalarFunctionContext function_context
 )
@@ -49,8 +45,7 @@ ExpressionEvaluator::evaluate_constant(
     return evaluator.evaluate(expression);
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_literal_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_literal_expression(
     const binder::bound::BoundLiteralExpression & expression
 )
 {
@@ -63,16 +58,14 @@ ExpressionEvaluator::visit_literal_expression(
     return expression.value();
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_null_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_null_expression(
     const binder::bound::BoundNullExpression &
 )
 {
     return common::Value::null();
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_column_ref_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_column_ref_expression(
     const binder::bound::BoundColumnRefExpression & expression
 )
 {
@@ -93,8 +86,7 @@ ExpressionEvaluator::visit_column_ref_expression(
     return value;
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_unary_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_unary_expression(
     const binder::bound::BoundUnaryExpression & expression
 )
 {
@@ -103,15 +95,10 @@ ExpressionEvaluator::visit_unary_expression(
     if (!operand.has_value()) {
         return std::unexpected(std::move(operand.error()));
     }
-    return evaluate_unary_value(
-        expression.op(),
-        *operand,
-        expression.type()
-    );
+    return evaluate_unary_value(expression.op(), *operand, expression.type());
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_binary_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_binary_expression(
     const binder::bound::BoundBinaryExpression & expression
 )
 {
@@ -141,16 +128,10 @@ ExpressionEvaluator::visit_binary_expression(
     if (!right.has_value()) {
         return std::unexpected(std::move(right.error()));
     }
-    return evaluate_binary_values(
-        expression.op(),
-        *left,
-        *right,
-        expression.type()
-    );
+    return evaluate_binary_values(expression.op(), *left, *right, expression.type());
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_vector_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_vector_expression(
     const binder::bound::BoundVectorExpression & expression
 )
 {
@@ -178,8 +159,7 @@ ExpressionEvaluator::visit_vector_expression(
     return common::Value {common::ValueData {std::move(elements)}};
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_function_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_function_expression(
     const binder::bound::BoundFunctionExpression & expression
 )
 {
@@ -195,10 +175,7 @@ ExpressionEvaluator::visit_function_expression(
     }
 
     // 调用函数的 evaluate 接口计算结果
-    auto value = expression.function().evaluate(
-        arguments,
-        context_.function_context
-    );
+    auto value = expression.function().evaluate(arguments, context_.function_context);
     if (!value.has_value()) {
         return std::unexpected(std::move(value.error()));
     }
@@ -211,8 +188,7 @@ ExpressionEvaluator::visit_function_expression(
     return std::move(*value);
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_in_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_in_expression(
     const binder::bound::BoundInExpression & expression
 )
 {
@@ -240,11 +216,7 @@ ExpressionEvaluator::visit_in_expression(
             continue;
         }
 
-        auto equal = compare_values(
-            *target,
-            common::BinaryOperator::Equal,
-            *candidate
-        );
+        auto equal = compare_values(*target, common::BinaryOperator::Equal, *candidate);
         if (!equal.has_value()) {
             return std::unexpected(std::move(equal.error()));
         }
@@ -261,8 +233,7 @@ ExpressionEvaluator::visit_in_expression(
     return common::Value {common::ValueData {false}};
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_between_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_between_expression(
     const binder::bound::BoundBetweenExpression & expression
 )
 {
@@ -284,28 +255,19 @@ ExpressionEvaluator::visit_between_expression(
         return std::unexpected(std::move(upper.error()));
     }
 
-    auto lower_result = compare_values(
-        *target,
-        common::BinaryOperator::GreaterThanOrEqual,
-        *lower
-    );
+    auto lower_result = compare_values(*target, common::BinaryOperator::GreaterThanOrEqual, *lower);
     if (!lower_result.has_value()) {
         return std::unexpected(std::move(lower_result.error()));
     }
 
-    auto upper_result = compare_values(
-        *target,
-        common::BinaryOperator::LessThanOrEqual,
-        *upper
-    );
+    auto upper_result = compare_values(*target, common::BinaryOperator::LessThanOrEqual, *upper);
     if (!upper_result.has_value()) {
         return std::unexpected(std::move(upper_result.error()));
     }
     return logical_and(*lower_result, *upper_result);
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_like_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_like_expression(
     const binder::bound::BoundLikeExpression & expression
 )
 {
@@ -323,8 +285,7 @@ ExpressionEvaluator::visit_like_expression(
     return evaluate_like_values(*value, *pattern);
 }
 
-std::expected<common::Value, EvaluationError>
-ExpressionEvaluator::visit_cast_expression(
+std::expected<common::Value, EvaluationError> ExpressionEvaluator::visit_cast_expression(
     const binder::bound::BoundCastExpression & expression
 )
 {

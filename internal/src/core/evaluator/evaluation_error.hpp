@@ -7,18 +7,16 @@
 namespace litedb::core::evaluator
 {
 
-/**
- * @brief 评估错误代码
- */
+// 评估错误代码
 enum class EvaluationErrorCode : std::uint8_t
 {
-    UnsupportedExpression,                      // 不支持的表达式
-    InvalidType,                                // 无效的类型
-    InvalidColumnReference,                     // 无效的列引用
-    DivisionByZero,                             // 除以零
-    CastFailed,                                 // 转换失败
-    NumericOverflow,                            // 数值溢出
-    FunctionError,                              // 标量函数求值失败
+    UnsupportedExpression, // 不支持的表达式
+    InvalidType, // 无效的类型
+    InvalidColumnReference, // 无效的列引用
+    DivisionByZero, // 除以零
+    CastFailed, // 转换失败
+    NumericOverflow, // 数值溢出
+    FunctionError, // 标量函数求值失败
 };
 
 using EvaluationError = error::Error;

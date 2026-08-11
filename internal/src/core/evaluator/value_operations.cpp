@@ -17,15 +17,9 @@ namespace litedb::core::evaluator
 namespace
 {
 
-/**
- * @brief 将运行时值解释为 SQL 三值布尔值
- * @param value 待解释的运行时值
- * @return TRUE/FALSE 对应具体布尔值，NULL 对应空 optional，类型不匹配时返回错误
- */
+// 将运行时值解释为 SQL 三值布尔值
 [[nodiscard]]
-std::expected<std::optional<bool>, EvaluationError> boolean_value(
-    const common::Value & value
-)
+std::expected<std::optional<bool>, EvaluationError> boolean_value(const common::Value & value)
 {
     if (value.is_null()) {
         return std::optional<bool> {};
@@ -33,65 +27,40 @@ std::expected<std::optional<bool>, EvaluationError> boolean_value(
     if (const auto * boolean = std::get_if<bool>(&value.data())) {
         return std::optional<bool> {*boolean};
     }
-    return std::unexpected(make_error(
-        EvaluationErrorCode::InvalidType,
-        "Expected BOOLEAN value"
-    ));
+    return std::unexpected(make_error(EvaluationErrorCode::InvalidType, "Expected BOOLEAN value"));
 }
 
-/**
- * @brief 执行带溢出检查的有符号整数加法
- * @tparam T 有符号整数类型
- * @param left 左操作数
- * @param right 右操作数
- * @return 加法结果，溢出时返回 NumericOverflow
- */
+// 执行带溢出检查的有符号整数加法
 template <typename T>
 [[nodiscard]]
 std::expected<T, EvaluationError> checked_add(T left, T right)
 {
     constexpr auto minimum = std::numeric_limits<T>::min();
     constexpr auto maximum = std::numeric_limits<T>::max();
-    if ((right > 0 && left > maximum - right)
-        || (right < 0 && left < minimum - right)) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::NumericOverflow,
-            "Integer addition overflow"
-        ));
+    if ((right > 0 && left > maximum - right) || (right < 0 && left < minimum - right)) {
+        return std::unexpected(
+            make_error(EvaluationErrorCode::NumericOverflow, "Integer addition overflow")
+        );
     }
     return static_cast<T>(left + right);
 }
 
-/**
- * @brief 执行带溢出检查的有符号整数减法
- * @tparam T 有符号整数类型
- * @param left 左操作数
- * @param right 右操作数
- * @return 减法结果，溢出时返回 NumericOverflow
- */
+// 执行带溢出检查的有符号整数减法
 template <typename T>
 [[nodiscard]]
 std::expected<T, EvaluationError> checked_subtract(T left, T right)
 {
     constexpr auto minimum = std::numeric_limits<T>::min();
     constexpr auto maximum = std::numeric_limits<T>::max();
-    if ((right > 0 && left < minimum + right)
-        || (right < 0 && left > maximum + right)) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::NumericOverflow,
-            "Integer subtraction overflow"
-        ));
+    if ((right > 0 && left < minimum + right) || (right < 0 && left > maximum + right)) {
+        return std::unexpected(
+            make_error(EvaluationErrorCode::NumericOverflow, "Integer subtraction overflow")
+        );
     }
     return static_cast<T>(left - right);
 }
 
-/**
- * @brief 执行带溢出检查的有符号整数乘法
- * @tparam T 有符号整数类型
- * @param left 左操作数
- * @param right 右操作数
- * @return 乘法结果，溢出时返回 NumericOverflow
- */
+// 执行带溢出检查的有符号整数乘法
 template <typename T>
 [[nodiscard]]
 std::expected<T, EvaluationError> checked_multiply(T left, T right)
@@ -101,61 +70,41 @@ std::expected<T, EvaluationError> checked_multiply(T left, T right)
     if (left == 0 || right == 0) {
         return T {0};
     }
-    if ((left > 0 && right > 0 && left > maximum / right)
-        || (left > 0 && right < 0 && right < minimum / left)
-        || (left < 0 && right > 0 && left < minimum / right)
-        || (left < 0 && right < 0 && left < maximum / right)) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::NumericOverflow,
-            "Integer multiplication overflow"
-        ));
+    if ((left > 0 && right > 0 && left > maximum / right) ||
+        (left > 0 && right < 0 && right < minimum / left) ||
+        (left < 0 && right > 0 && left < minimum / right) ||
+        (left < 0 && right < 0 && left < maximum / right)) {
+        return std::unexpected(
+            make_error(EvaluationErrorCode::NumericOverflow, "Integer multiplication overflow")
+        );
     }
     return static_cast<T>(left * right);
 }
 
-/**
- * @brief 执行带除零与溢出检查的有符号整数除法
- * @tparam T 有符号整数类型
- * @param left 被除数
- * @param right 除数
- * @return 除法结果，除数为零或最小值除以 -1 时返回错误
- */
+// 执行带除零与溢出检查的有符号整数除法
 template <typename T>
 [[nodiscard]]
 std::expected<T, EvaluationError> checked_divide(T left, T right)
 {
     if (right == 0) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::DivisionByZero,
-            "Division by zero"
-        ));
+        return std::unexpected(make_error(EvaluationErrorCode::DivisionByZero, "Division by zero"));
     }
     if (left == std::numeric_limits<T>::min() && right == T {-1}) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::NumericOverflow,
-            "Integer division overflow"
-        ));
+        return std::unexpected(
+            make_error(EvaluationErrorCode::NumericOverflow, "Integer division overflow")
+        );
     }
     return static_cast<T>(left / right);
 }
 
-/**
- * @brief 执行带除零检查的有符号整数取模
- * @tparam T 有符号整数类型
- * @param left 被除数
- * @param right 除数
- * @return 余数，除数为零时返回 DivisionByZero
- * @details 最小值对 -1 取模在数学上恒为零，单独处理以避免原生运算的未定义行为。
- */
+// 执行带除零检查的有符号整数取模
+// 最小值对 -1 取模在数学上恒为零，单独处理以避免原生运算的未定义行为
 template <typename T>
 [[nodiscard]]
 std::expected<T, EvaluationError> checked_modulus(T left, T right)
 {
     if (right == 0) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::DivisionByZero,
-            "Division by zero"
-        ));
+        return std::unexpected(make_error(EvaluationErrorCode::DivisionByZero, "Division by zero"));
     }
     if (left == std::numeric_limits<T>::min() && right == T {-1}) {
         return T {0};
@@ -163,26 +112,15 @@ std::expected<T, EvaluationError> checked_modulus(T left, T right)
     return static_cast<T>(left % right);
 }
 
-/**
- * @brief 求值整数二元算术表达式
- * @tparam T 有符号整数类型
- * @param op 二元运算符
- * @param left 左操作数
- * @param right 右操作数
- * @return 封装为 Value 的运算结果，或具体的算术错误
- */
+// 求值整数二元算术表达式
 template <typename T>
 [[nodiscard]]
-std::expected<common::Value, EvaluationError> evaluate_integer_binary(
-    common::BinaryOperator op,
-    T left,
-    T right
-)
+std::expected<common::Value, EvaluationError>
+evaluate_integer_binary(common::BinaryOperator op, T left, T right)
 {
-    std::expected<T, EvaluationError> result = std::unexpected(make_error(
-        EvaluationErrorCode::UnsupportedExpression,
-        "Unsupported integer operator"
-    ));
+    std::expected<T, EvaluationError> result = std::unexpected(
+        make_error(EvaluationErrorCode::UnsupportedExpression, "Unsupported integer operator")
+    );
     switch (op) {
     case common::BinaryOperator::Add:
         result = checked_add(left, right);
@@ -208,29 +146,15 @@ std::expected<common::Value, EvaluationError> evaluate_integer_binary(
     return common::Value {common::ValueData {*result}};
 }
 
-/**
- * @brief 求值浮点二元算术表达式
- * @tparam T 浮点类型
- * @param op 二元运算符
- * @param left 左操作数
- * @param right 右操作数
- * @return 封装为 Value 的运算结果，或除零/不支持运算符错误
- */
+// 求值浮点二元算术表达式
 template <typename T>
 [[nodiscard]]
-std::expected<common::Value, EvaluationError> evaluate_floating_binary(
-    common::BinaryOperator op,
-    T left,
-    T right
-)
+std::expected<common::Value, EvaluationError>
+evaluate_floating_binary(common::BinaryOperator op, T left, T right)
 {
-    if ((op == common::BinaryOperator::Divide
-            || op == common::BinaryOperator::Modulus)
-        && right == T {0}) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::DivisionByZero,
-            "Division by zero"
-        ));
+    if ((op == common::BinaryOperator::Divide || op == common::BinaryOperator::Modulus) &&
+        right == T {0}) {
+        return std::unexpected(make_error(EvaluationErrorCode::DivisionByZero, "Division by zero"));
     }
 
     T result {};
@@ -259,14 +183,7 @@ std::expected<common::Value, EvaluationError> evaluate_floating_binary(
     return common::Value {common::ValueData {result}};
 }
 
-/**
- * @brief 执行同类型值的有序比较
- * @tparam T 支持关系运算的值类型
- * @param left 左操作数
- * @param op 有序比较运算符
- * @param right 右操作数
- * @return 比较结果；传入非有序比较运算符时返回 false
- */
+// 执行同类型值的有序比较
 template <typename T>
 [[nodiscard]]
 bool ordered_compare(T left, common::BinaryOperator op, T right)
@@ -285,21 +202,15 @@ bool ordered_compare(T left, common::BinaryOperator op, T right)
     }
 }
 
-/**
- * @brief 按 SQL LIKE 通配规则匹配字符串
- * @param value 待匹配字符串
- * @param pattern LIKE 模式字符串
- * @return 字符串是否匹配模式
- * @details 百分号匹配任意长度字节序列，下划线匹配单个字节；使用滚动动态规划限制额外空间。
- */
+// 按 SQL LIKE 通配规则匹配字符串
+// 百分号匹配任意长度字节序列，下划线匹配单个字节；使用滚动动态规划限制额外空间
 [[nodiscard]]
 bool like_matches(const std::string & value, const std::string & pattern)
 {
     std::vector<bool> previous(pattern.size() + 1, false);
     std::vector<bool> current(pattern.size() + 1, false);
     previous[0] = true;
-    for (std::size_t pattern_index = 1;
-        pattern_index <= pattern.size(); ++pattern_index) {
+    for (std::size_t pattern_index = 1; pattern_index <= pattern.size(); ++pattern_index) {
         if (pattern[pattern_index - 1] == '%') {
             previous[pattern_index] = previous[pattern_index - 1];
         }
@@ -307,17 +218,14 @@ bool like_matches(const std::string & value, const std::string & pattern)
 
     for (const auto character : value) {
         current[0] = false;
-        for (std::size_t pattern_index = 1;
-             pattern_index <= pattern.size();
-             ++pattern_index) {
+        for (std::size_t pattern_index = 1; pattern_index <= pattern.size(); ++pattern_index) {
             const auto pattern_character = pattern[pattern_index - 1];
             if (pattern_character == '%') {
-                current[pattern_index] = current[pattern_index - 1]
-                    || previous[pattern_index];
+                current[pattern_index] = current[pattern_index - 1] || previous[pattern_index];
             } else {
-                current[pattern_index] = previous[pattern_index - 1]
-                    && (pattern_character == '_'
-                        || pattern_character == character);
+                current[pattern_index] =
+                    previous[pattern_index - 1] &&
+                    (pattern_character == '_' || pattern_character == character);
             }
         }
         std::swap(previous, current);
@@ -340,10 +248,9 @@ std::expected<common::Value, EvaluationError> evaluate_unary_value(
     if (op == common::UnaryOperator::Not) {
         const auto * value = std::get_if<bool>(&operand.data());
         if (value == nullptr) {
-            return std::unexpected(make_error(
-                EvaluationErrorCode::InvalidType,
-                "NOT expects BOOLEAN"
-            ));
+            return std::unexpected(
+                make_error(EvaluationErrorCode::InvalidType, "NOT expects BOOLEAN")
+            );
         }
         return common::Value {common::ValueData {!*value}};
     }
@@ -355,14 +262,11 @@ std::expected<common::Value, EvaluationError> evaluate_unary_value(
             break;
         }
         if (*value == std::numeric_limits<std::int32_t>::min()) {
-            return std::unexpected(make_error(
-                EvaluationErrorCode::NumericOverflow,
-                "Integer negation overflow"
-            ));
+            return std::unexpected(
+                make_error(EvaluationErrorCode::NumericOverflow, "Integer negation overflow")
+            );
         }
-        return common::Value {
-            common::ValueData {static_cast<std::int32_t>(-*value)}
-        };
+        return common::Value {common::ValueData {static_cast<std::int32_t>(-*value)}};
     }
     case common::LogicalTypeId::BigInt: {
         const auto * value = std::get_if<std::int64_t>(&operand.data());
@@ -370,14 +274,11 @@ std::expected<common::Value, EvaluationError> evaluate_unary_value(
             break;
         }
         if (*value == std::numeric_limits<std::int64_t>::min()) {
-            return std::unexpected(make_error(
-                EvaluationErrorCode::NumericOverflow,
-                "BigInt negation overflow"
-            ));
+            return std::unexpected(
+                make_error(EvaluationErrorCode::NumericOverflow, "BigInt negation overflow")
+            );
         }
-        return common::Value {
-            common::ValueData {static_cast<std::int64_t>(-*value)}
-        };
+        return common::Value {common::ValueData {static_cast<std::int64_t>(-*value)}};
     }
     case common::LogicalTypeId::Float: {
         const auto * value = std::get_if<float>(&operand.data());
@@ -416,12 +317,10 @@ std::expected<common::Value, EvaluationError> evaluate_binary_values(
     if (op == common::BinaryOperator::Or) {
         return logical_or(left, right);
     }
-    if (op == common::BinaryOperator::Equal
-        || op == common::BinaryOperator::NotEqual
-        || op == common::BinaryOperator::LessThan
-        || op == common::BinaryOperator::LessThanOrEqual
-        || op == common::BinaryOperator::GreaterThan
-        || op == common::BinaryOperator::GreaterThanOrEqual) {
+    if (op == common::BinaryOperator::Equal || op == common::BinaryOperator::NotEqual ||
+        op == common::BinaryOperator::LessThan || op == common::BinaryOperator::LessThanOrEqual ||
+        op == common::BinaryOperator::GreaterThan ||
+        op == common::BinaryOperator::GreaterThanOrEqual) {
         return compare_values(left, op, right);
     }
     if (left.is_null() || right.is_null()) {
@@ -471,11 +370,8 @@ std::expected<common::Value, EvaluationError> evaluate_binary_values(
     ));
 }
 
-std::expected<common::Value, EvaluationError> compare_values(
-    const common::Value & left,
-    common::BinaryOperator op,
-    const common::Value & right
-)
+std::expected<common::Value, EvaluationError>
+compare_values(const common::Value & left, common::BinaryOperator op, const common::Value & right)
 {
     if (left.is_null() || right.is_null()) {
         return common::Value::null();
@@ -488,31 +384,25 @@ std::expected<common::Value, EvaluationError> compare_values(
     }
 
     return std::visit(
-        [op](
-            const auto & left_value,
-            const auto & right_value
-        ) -> std::expected<common::Value, EvaluationError> {
+        [op](const auto & left_value, const auto & right_value)
+            -> std::expected<common::Value, EvaluationError> {
             using Left = std::decay_t<decltype(left_value)>;
             using Right = std::decay_t<decltype(right_value)>;
-            if constexpr (!std::is_same_v<Left, Right>
-                || std::is_same_v<Left, common::NullValue>) {
-                return std::unexpected(make_error(
-                    EvaluationErrorCode::InvalidType,
-                    "Invalid comparison values"
-                ));
+            if constexpr (!std::is_same_v<Left, Right> || std::is_same_v<Left, common::NullValue>) {
+                return std::unexpected(
+                    make_error(EvaluationErrorCode::InvalidType, "Invalid comparison values")
+                );
             } else {
-                if (op == common::BinaryOperator::Equal
-                    || op == common::BinaryOperator::NotEqual) {
+                if (op == common::BinaryOperator::Equal || op == common::BinaryOperator::NotEqual) {
                     const auto equal = left_value == right_value;
-                    return common::Value {common::ValueData {
-                        op == common::BinaryOperator::Equal ? equal : !equal
-                    }};
+                    return common::Value {
+                        common::ValueData {op == common::BinaryOperator::Equal ? equal : !equal}
+                    };
                 }
-                if constexpr (std::is_arithmetic_v<Left>
-                    || std::is_same_v<Left, std::string>) {
-                    return common::Value {common::ValueData {
-                        ordered_compare(left_value, op, right_value)
-                    }};
+                if constexpr (std::is_arithmetic_v<Left> || std::is_same_v<Left, std::string>) {
+                    return common::Value {
+                        common::ValueData {ordered_compare(left_value, op, right_value)}
+                    };
                 }
                 return std::unexpected(make_error(
                     EvaluationErrorCode::InvalidType,
@@ -525,10 +415,8 @@ std::expected<common::Value, EvaluationError> compare_values(
     );
 }
 
-std::expected<common::Value, EvaluationError> logical_and(
-    const common::Value & left,
-    const common::Value & right
-)
+std::expected<common::Value, EvaluationError>
+logical_and(const common::Value & left, const common::Value & right)
 {
     auto left_value = boolean_value(left);
     if (!left_value.has_value()) {
@@ -540,8 +428,8 @@ std::expected<common::Value, EvaluationError> logical_and(
         return std::unexpected(std::move(right_value.error()));
     }
 
-    if ((left_value->has_value() && !left_value->value())
-        || (right_value->has_value() && !right_value->value())) {
+    if ((left_value->has_value() && !left_value->value()) ||
+        (right_value->has_value() && !right_value->value())) {
         return common::Value {common::ValueData {false}};
     }
     if (!left_value->has_value() || !right_value->has_value()) {
@@ -550,10 +438,8 @@ std::expected<common::Value, EvaluationError> logical_and(
     return common::Value {common::ValueData {true}};
 }
 
-std::expected<common::Value, EvaluationError> logical_or(
-    const common::Value & left,
-    const common::Value & right
-)
+std::expected<common::Value, EvaluationError>
+logical_or(const common::Value & left, const common::Value & right)
 {
     auto left_value = boolean_value(left);
     if (!left_value.has_value()) {
@@ -565,8 +451,8 @@ std::expected<common::Value, EvaluationError> logical_or(
         return std::unexpected(std::move(right_value.error()));
     }
 
-    if ((left_value->has_value() && left_value->value())
-        || (right_value->has_value() && right_value->value())) {
+    if ((left_value->has_value() && left_value->value()) ||
+        (right_value->has_value() && right_value->value())) {
         return common::Value {common::ValueData {true}};
     }
     if (!left_value->has_value() || !right_value->has_value()) {
@@ -575,19 +461,15 @@ std::expected<common::Value, EvaluationError> logical_or(
     return common::Value {common::ValueData {false}};
 }
 
-std::expected<common::Value, EvaluationError> cast_value(
-    const common::Value & value,
-    const common::LogicalType & target_type
-)
+std::expected<common::Value, EvaluationError>
+cast_value(const common::Value & value, const common::LogicalType & target_type)
 {
     if (value.is_null()) {
         return common::Value::null();
     }
     if (value.matches_type(target_type)) {
-        if (target_type.id == common::LogicalTypeId::Vector
-            && target_type.parameter.has_value()
-            && std::get<common::VectorValue>(value.data()).size()
-                != target_type.parameter.value()) {
+        if (target_type.id == common::LogicalTypeId::Vector && target_type.parameter.has_value() &&
+            std::get<common::VectorValue>(value.data()).size() != target_type.parameter.value()) {
             return std::unexpected(make_error(
                 EvaluationErrorCode::CastFailed,
                 "Vector dimension does not match target type"
@@ -597,57 +479,40 @@ std::expected<common::Value, EvaluationError> cast_value(
     }
 
     return std::visit(
-        [&target_type](
-            const auto & data
-        ) -> std::expected<common::Value, EvaluationError> {
+        [&target_type](const auto & data) -> std::expected<common::Value, EvaluationError> {
             using T = std::decay_t<decltype(data)>;
             if constexpr (std::is_same_v<T, std::int32_t>) {
                 if (target_type.id == common::LogicalTypeId::BigInt) {
-                    return common::Value {
-                        common::ValueData {static_cast<std::int64_t>(data)}
-                    };
+                    return common::Value {common::ValueData {static_cast<std::int64_t>(data)}};
                 }
                 if (target_type.id == common::LogicalTypeId::Float) {
-                    return common::Value {
-                        common::ValueData {static_cast<float>(data)}
-                    };
+                    return common::Value {common::ValueData {static_cast<float>(data)}};
                 }
                 if (target_type.id == common::LogicalTypeId::Double) {
-                    return common::Value {
-                        common::ValueData {static_cast<double>(data)}
-                    };
+                    return common::Value {common::ValueData {static_cast<double>(data)}};
                 }
             } else if constexpr (std::is_same_v<T, std::int64_t>) {
                 if (target_type.id == common::LogicalTypeId::Float) {
-                    return common::Value {
-                        common::ValueData {static_cast<float>(data)}
-                    };
+                    return common::Value {common::ValueData {static_cast<float>(data)}};
                 }
                 if (target_type.id == common::LogicalTypeId::Double) {
-                    return common::Value {
-                        common::ValueData {static_cast<double>(data)}
-                    };
+                    return common::Value {common::ValueData {static_cast<double>(data)}};
                 }
             } else if constexpr (std::is_same_v<T, float>) {
                 if (target_type.id == common::LogicalTypeId::Double) {
-                    return common::Value {
-                        common::ValueData {static_cast<double>(data)}
-                    };
+                    return common::Value {common::ValueData {static_cast<double>(data)}};
                 }
             }
-            return std::unexpected(make_error(
-                EvaluationErrorCode::CastFailed,
-                "Unsupported implicit cast"
-            ));
+            return std::unexpected(
+                make_error(EvaluationErrorCode::CastFailed, "Unsupported implicit cast")
+            );
         },
         value.data()
     );
 }
 
-std::expected<common::Value, EvaluationError> evaluate_like_values(
-    const common::Value & value,
-    const common::Value & pattern
-)
+std::expected<common::Value, EvaluationError>
+evaluate_like_values(const common::Value & value, const common::Value & pattern)
 {
     if (value.is_null() || pattern.is_null()) {
         return common::Value::null();
@@ -656,19 +521,14 @@ std::expected<common::Value, EvaluationError> evaluate_like_values(
     const auto * string_value = std::get_if<std::string>(&value.data());
     const auto * string_pattern = std::get_if<std::string>(&pattern.data());
     if (string_value == nullptr || string_pattern == nullptr) {
-        return std::unexpected(make_error(
-            EvaluationErrorCode::InvalidType,
-            "LIKE expects VARCHAR operands"
-        ));
+        return std::unexpected(
+            make_error(EvaluationErrorCode::InvalidType, "LIKE expects VARCHAR operands")
+        );
     }
-    return common::Value {
-        common::ValueData {like_matches(*string_value, *string_pattern)}
-    };
+    return common::Value {common::ValueData {like_matches(*string_value, *string_pattern)}};
 }
 
-std::expected<bool, EvaluationError> filter_matches(
-    const common::Value & value
-)
+std::expected<bool, EvaluationError> filter_matches(const common::Value & value)
 {
     if (value.is_null()) {
         return false;
