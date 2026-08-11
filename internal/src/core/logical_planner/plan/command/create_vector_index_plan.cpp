@@ -31,7 +31,7 @@ common::ColumnId CreateVectorIndexPlan::column_id() const noexcept
     return column_id_;
 }
 
-const std::optional<std::string> & CreateVectorIndexPlan::vector_index_name() const noexcept
+std::optional<const std::string &> CreateVectorIndexPlan::vector_index_name() const noexcept
 {
     return vector_index_name_;
 }

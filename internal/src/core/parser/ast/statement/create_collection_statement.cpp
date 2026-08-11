@@ -51,7 +51,7 @@ CreateCollectionStatement::columns() const noexcept
     return columns_;
 }
 
-const std::optional<std::string> & CreateCollectionStatement::comment() const noexcept
+std::optional<const std::string &> CreateCollectionStatement::comment() const noexcept
 {
     return comment_;
 }

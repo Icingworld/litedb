@@ -26,7 +26,7 @@ BoundCreateVectorIndexStatement::BoundCreateVectorIndexStatement(
     , random_seed_(random_seed)
 {}
 
-const std::optional<std::string> &
+std::optional<const std::string &>
 BoundCreateVectorIndexStatement::vector_index_name() const noexcept
 {
     return vector_index_name_;

@@ -3,9 +3,9 @@
 #include <optional>
 #include <string>
 
-#include "core/schema/default_expression.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
+#include "core/schema/default_expression.hpp"
 
 namespace litedb::core::schema
 {
@@ -61,7 +61,7 @@ public:
 
     // 获取注释
     [[nodiscard]]
-    const std::optional<std::string> & comment() const noexcept;
+    std::optional<const std::string &> comment() const noexcept;
 
 private:
     common::ColumnId column_id_;

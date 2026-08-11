@@ -41,7 +41,7 @@ public:
 
     // 获取集合注释
     [[nodiscard]]
-    const std::optional<std::string> & comment() const noexcept;
+    std::optional<const std::string &> comment() const noexcept;
 
 private:
     std::string collection_name_;

@@ -23,7 +23,7 @@ AstNodeKind ShowCollectionsStatement::kind() const noexcept
     return AstNodeKind::ShowCollections;
 }
 
-const std::optional<std::string> & ShowCollectionsStatement::database_name() const noexcept
+std::optional<const std::string &> ShowCollectionsStatement::database_name() const noexcept
 {
     return database_name_;
 }

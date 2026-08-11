@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "core/meta/meta_engine.hpp"
 #include "core/index/btree_index/btree_index.hpp"
+#include "core/meta/meta_engine.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
@@ -17,11 +17,7 @@ namespace
 /**
  * @brief 创建索引错误
  */
-IndexError make_error(
-    IndexErrorCode code,
-    std::string message,
-    IndexErrorContext context = {}
-)
+IndexError make_error(IndexErrorCode code, std::string message, IndexErrorContext context = {})
 {
     return IndexError {code, message, std::move(context)};
 }
@@ -34,8 +30,7 @@ IndexEngine::IndexEngine(
 ) noexcept
     : data_directory_(std::move(data_directory))
     , filesystem_(&filesystem)
-{
-}
+{}
 
 std::filesystem::path IndexEngine::index_path(common::IndexId index_id) const
 {
@@ -48,9 +43,12 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_back
 )
 {
     if (index_entry.kind() != meta::entry::IndexKind::BTree) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
+        return std::unexpected(
+            make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind")
+        );
     }
-    auto created = BTreeIndex::create(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
+    auto created =
+        BTreeIndex::create(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
     if (!created.has_value()) {
         return std::unexpected(make_error(
             IndexErrorCode::StorageError,
@@ -72,9 +70,12 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_bac
 )
 {
     if (index_entry.kind() != meta::entry::IndexKind::BTree) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind"));
+        return std::unexpected(
+            make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind")
+        );
     }
-    auto opened = BTreeIndex::open(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
+    auto opened =
+        BTreeIndex::open(index_path(index_entry.id()), index_entry.id(), key_type, *filesystem_);
     if (!opened.has_value()) {
         return std::unexpected(make_error(
             IndexErrorCode::StorageError,
@@ -97,7 +98,9 @@ std::expected<std::optional<ScalarIndexKey>, IndexError> IndexEngine::make_key_f
 )
 {
     if (column_ordinal >= record_data.values.size()) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column ordinal is out of range"));
+        return std::unexpected(
+            make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column ordinal is out of range")
+        );
     }
 
     const auto & value = record_data.values[column_ordinal];
@@ -151,9 +154,7 @@ IndexStore * IndexEngine::find_store(common::IndexId index_id) noexcept
     return &it->second;
 }
 
-std::vector<const IndexStore *> IndexEngine::list_stores(
-    common::CollectionId collection_id
-) const
+std::vector<const IndexStore *> IndexEngine::list_stores(common::CollectionId collection_id) const
 {
     std::vector<const IndexStore *> indexes;
     const auto it = indexes_by_collection_.find(collection_id);
@@ -178,21 +179,25 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
     const auto & descriptor = store.descriptor();
     std::vector<ScalarIndexEntry> entries;
     auto cursor = storage.scan(descriptor.collection_id);
-    if (!cursor) return std::unexpected(make_error(
-        IndexErrorCode::StorageError,
-        cursor.error().message(),
-        {.operation = IndexOperation::Build, .index_id = descriptor.index_id}
-    ));
-    while (true) {
-        auto next = cursor->next();
-        if (!next) return std::unexpected(make_error(
+    if (!cursor)
+        return std::unexpected(make_error(
             IndexErrorCode::StorageError,
-            next.error().message(),
+            cursor.error().message(),
             {.operation = IndexOperation::Build, .index_id = descriptor.index_id}
         ));
-        if (!*next) break;
+    while (true) {
+        auto next = cursor->next();
+        if (!next)
+            return std::unexpected(make_error(
+                IndexErrorCode::StorageError,
+                next.error().message(),
+                {.operation = IndexOperation::Build, .index_id = descriptor.index_id}
+            ));
+        if (!*next)
+            break;
         const auto & record = **next;
-        auto key = make_key_from_record(record.data, descriptor.column_ordinal, descriptor.key_type);
+        auto key =
+            make_key_from_record(record.data, descriptor.column_ordinal, descriptor.key_type);
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -200,10 +205,12 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
             continue;
         }
 
-        entries.push_back(ScalarIndexEntry {
-            .key = std::move(key->value()),
-            .record_id = record.record_id,
-        });
+        entries.push_back(
+            ScalarIndexEntry {
+                .key = std::move(key->value()),
+                .record_id = record.record_id,
+            }
+        );
     }
     return store.bulk_load(std::move(entries));
 }
@@ -215,19 +222,28 @@ std::expected<void, IndexError> IndexEngine::create_index(
 )
 {
     if (find_store(index_entry.id()) != nullptr) {
-        return std::unexpected(make_error(IndexErrorCode::IndexAlreadyExists, "Index already exists"));
+        return std::unexpected(
+            make_error(IndexErrorCode::IndexAlreadyExists, "Index already exists")
+        );
     }
 
     const auto column_id = index_entry.column_id();
     if (!column_id.has_value()) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
+        return std::unexpected(
+            make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns")
+        );
     }
-    const auto * column = collection_schema.find_column(*column_id);
-    if (column == nullptr) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is not in collection schema"));
+    const auto column = collection_schema.find_column(*column_id);
+    if (!column.has_value()) {
+        return std::unexpected(make_error(
+            IndexErrorCode::InvalidIndexColumn,
+            "Indexed column is not in collection schema"
+        ));
     }
     if (column->type().id == common::LogicalTypeId::Vector) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "VECTOR column cannot use scalar index"));
+        return std::unexpected(
+            make_error(IndexErrorCode::InvalidIndexColumn, "VECTOR column cannot use scalar index")
+        );
     }
 
     auto index = create_backend(index_entry, column->type());
@@ -235,15 +251,18 @@ std::expected<void, IndexError> IndexEngine::create_index(
         return std::unexpected(std::move(index.error()));
     }
 
-    auto store = std::make_unique<IndexStore>(IndexDescriptor {
-        .index_id = index_entry.id(),
-        .collection_id = index_entry.collection_id(),
-        .column_id = *column_id,
-        .column_ordinal = column->ordinal(),
-        .key_type = column->type(),
-        .kind = (*index)->kind(),
-        .unique = index_entry.unique(),
-    }, std::move(*index));
+    auto store = std::make_unique<IndexStore>(
+        IndexDescriptor {
+            .index_id = index_entry.id(),
+            .collection_id = index_entry.collection_id(),
+            .column_id = *column_id,
+            .column_ordinal = column->ordinal(),
+            .key_type = column->type(),
+            .kind = (*index)->kind(),
+            .unique = index_entry.unique(),
+        },
+        std::move(*index)
+    );
 
     auto built = build_index_from_storage(*store, storage);
     if (!built.has_value()) {
@@ -253,8 +272,8 @@ std::expected<void, IndexError> IndexEngine::create_index(
             if (!removed.has_value()) {
                 return std::unexpected(make_error(
                     IndexErrorCode::StorageError,
-                    built.error().message() + "; failed to remove partial index: "
-                        + removed.error().message(),
+                    built.error().message() +
+                        "; failed to remove partial index: " + removed.error().message(),
                     {
                         .operation = IndexOperation::Drop,
                         .index_id = index_entry.id(),
@@ -297,12 +316,8 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
         auto removed = filesystem_->remove(index_path(index_id));
         if (!removed.has_value()) {
             auto message = removed.error().message();
-            auto reopened = BTreeIndex::open(
-                index_path(index_id),
-                index_id,
-                descriptor.key_type,
-                *filesystem_
-            );
+            auto reopened =
+                BTreeIndex::open(index_path(index_id), index_id, descriptor.key_type, *filesystem_);
             if (reopened.has_value()) {
                 stores_by_id_.emplace(
                     index_id,
@@ -331,7 +346,9 @@ std::expected<void, IndexError> IndexEngine::drop_index(common::IndexId index_id
     return {};
 }
 
-std::expected<void, IndexError> IndexEngine::drop_collection_indexes(common::CollectionId collection_id)
+std::expected<void, IndexError> IndexEngine::drop_collection_indexes(
+    common::CollectionId collection_id
+)
 {
     const auto it = indexes_by_collection_.find(collection_id);
     if (it == indexes_by_collection_.end()) {
@@ -348,10 +365,8 @@ std::expected<void, IndexError> IndexEngine::drop_collection_indexes(common::Col
     return {};
 }
 
-std::expected<void, IndexError> IndexEngine::restore_all(
-    const meta::CatalogView & catalog,
-    const storage::StorageEngine & storage
-)
+std::expected<void, IndexError>
+IndexEngine::restore_all(const meta::CatalogView & catalog, const storage::StorageEngine & storage)
 {
     IndexEngine restored {data_directory_, *filesystem_};
 
@@ -384,11 +399,15 @@ std::expected<void, IndexError> IndexEngine::restore_all(
 
                 const auto column_id = index_entry->column_id();
                 if (!column_id.has_value()) {
-                    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
+                    return std::unexpected(
+                        make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns")
+                    );
                 }
-                const auto * column = collection_schema->find_column(*column_id);
-                if (column == nullptr || column->type().id == common::LogicalTypeId::Vector) {
-                    return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid"));
+                const auto column = collection_schema->find_column(*column_id);
+                if (!column.has_value() || column->type().id == common::LogicalTypeId::Vector) {
+                    return std::unexpected(
+                        make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid")
+                    );
                 }
 
                 auto backend = restored.restore_backend(*index_entry, column->type());
@@ -396,18 +415,23 @@ std::expected<void, IndexError> IndexEngine::restore_all(
                     return std::unexpected(std::move(backend.error()));
                 }
 
-                IndexStore store {IndexDescriptor {
-                    .index_id = index_entry->id(),
-                    .collection_id = index_entry->collection_id(),
-                    .column_id = *column_id,
-                    .column_ordinal = column->ordinal(),
-                    .key_type = column->type(),
-                    .kind = (*backend)->kind(),
-                    .unique = index_entry->unique(),
-                }, std::move(*backend)};
+                IndexStore store {
+                    IndexDescriptor {
+                        .index_id = index_entry->id(),
+                        .collection_id = index_entry->collection_id(),
+                        .column_id = *column_id,
+                        .column_ordinal = column->ordinal(),
+                        .key_type = column->type(),
+                        .kind = (*backend)->kind(),
+                        .unique = index_entry->unique(),
+                    },
+                    std::move(*backend)
+                };
 
                 restored.stores_by_id_.emplace(index_entry->id(), std::move(store));
-                restored.indexes_by_collection_[index_entry->collection_id()].push_back(index_entry->id());
+                restored.indexes_by_collection_[index_entry->collection_id()].push_back(
+                    index_entry->id()
+                );
             }
         }
     }
@@ -423,42 +447,60 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
 )
 {
     if (!storage.contains_collection(collection_id)) {
-        return std::unexpected(make_error(IndexErrorCode::StorageError, "Index collection is absent from storage"));
+        return std::unexpected(
+            make_error(IndexErrorCode::StorageError, "Index collection is absent from storage")
+        );
     }
 
     auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema) {
-        return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message()));
+        return std::unexpected(
+            make_error(IndexErrorCode::InvalidIndexColumn, collection_schema.error().message())
+        );
     }
 
     IndexEngine restored {data_directory_, *filesystem_};
     for (const auto * index_entry : catalog.list_indexes(collection_id)) {
-        if (index_entry == nullptr) continue;
+        if (index_entry == nullptr)
+            continue;
         const auto column_id = index_entry->column_id();
         if (!column_id) {
-            return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns"));
+            return std::unexpected(
+                make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns")
+            );
         }
-        const auto * column = collection_schema->find_column(*column_id);
-        if (column == nullptr || column->type().id == common::LogicalTypeId::Vector) {
-            return std::unexpected(make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid"));
+        const auto column = collection_schema->find_column(*column_id);
+        if (!column.has_value() || column->type().id == common::LogicalTypeId::Vector) {
+            return std::unexpected(
+                make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid")
+            );
         }
         auto backend = restored.restore_backend(*index_entry, column->type());
-        if (!backend) return std::unexpected(std::move(backend.error()));
+        if (!backend)
+            return std::unexpected(std::move(backend.error()));
 
-        restored.stores_by_id_.emplace(index_entry->id(), IndexStore {IndexDescriptor {
-            .index_id = index_entry->id(),
-            .collection_id = index_entry->collection_id(),
-            .column_id = *column_id,
-            .column_ordinal = column->ordinal(),
-            .key_type = column->type(),
-            .kind = (*backend)->kind(),
-            .unique = index_entry->unique(),
-        }, std::move(*backend)});
+        restored.stores_by_id_.emplace(
+            index_entry->id(),
+            IndexStore {
+                IndexDescriptor {
+                    .index_id = index_entry->id(),
+                    .collection_id = index_entry->collection_id(),
+                    .column_id = *column_id,
+                    .column_ordinal = column->ordinal(),
+                    .key_type = column->type(),
+                    .kind = (*backend)->kind(),
+                    .unique = index_entry->unique(),
+                },
+                std::move(*backend)
+            }
+        );
         restored.indexes_by_collection_[collection_id].push_back(index_entry->id());
     }
 
-    if (const auto current = indexes_by_collection_.find(collection_id); current != indexes_by_collection_.end()) {
-        for (const auto index_id : current->second) stores_by_id_.erase(index_id);
+    if (const auto current = indexes_by_collection_.find(collection_id);
+        current != indexes_by_collection_.end()) {
+        for (const auto index_id : current->second)
+            stores_by_id_.erase(index_id);
         indexes_by_collection_.erase(current);
     }
     for (auto & [index_id, store] : restored.stores_by_id_) {
@@ -478,7 +520,11 @@ std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_insert(
 {
     IndexKeyBindings bindings;
     for (const auto * store : list_stores(collection_id)) {
-        auto key = make_key_from_record(record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
+        auto key = make_key_from_record(
+            record_data,
+            store->descriptor().column_ordinal,
+            store->descriptor().key_type
+        );
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -491,18 +537,18 @@ std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_insert(
             return std::unexpected(std::move(unique.error()));
         }
 
-        bindings.push_back(IndexKeyBinding {
-            .index_id = store->descriptor().index_id,
-            .key = std::move(key->value()),
-        });
+        bindings.push_back(
+            IndexKeyBinding {
+                .index_id = store->descriptor().index_id,
+                .key = std::move(key->value()),
+            }
+        );
     }
     return bindings;
 }
 
-std::expected<void, IndexError> IndexEngine::on_insert(
-    common::RecordId record_id,
-    const IndexKeyBindings & bindings
-)
+std::expected<void, IndexError>
+IndexEngine::on_insert(common::RecordId record_id, const IndexKeyBindings & bindings)
 {
     IndexKeyBindings inserted_bindings;
     inserted_bindings.reserve(bindings.size());
@@ -558,12 +604,20 @@ std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
 {
     IndexUpdateBindings bindings;
     for (const auto * store : list_stores(collection_id)) {
-        auto old_key = make_key_from_record(old_record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
+        auto old_key = make_key_from_record(
+            old_record_data,
+            store->descriptor().column_ordinal,
+            store->descriptor().key_type
+        );
         if (!old_key.has_value()) {
             return std::unexpected(std::move(old_key.error()));
         }
 
-        auto new_key = make_key_from_record(new_record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
+        auto new_key = make_key_from_record(
+            new_record_data,
+            store->descriptor().column_ordinal,
+            store->descriptor().key_type
+        );
         if (!new_key.has_value()) {
             return std::unexpected(std::move(new_key.error()));
         }
@@ -579,7 +633,8 @@ std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
         } else if (!binding.old_key.has_value() || !binding.new_key.has_value()) {
             binding.key_changed = true;
         } else {
-            binding.key_changed = !ScalarIndexEqual {}(binding.old_key.value(), binding.new_key.value());
+            binding.key_changed =
+                !ScalarIndexEqual {}(binding.old_key.value(), binding.new_key.value());
         }
 
         if (binding.key_changed && binding.new_key.has_value()) {
@@ -594,10 +649,8 @@ std::expected<IndexUpdateBindings, IndexError> IndexEngine::prepare_update(
     return bindings;
 }
 
-std::expected<void, IndexError> IndexEngine::on_update(
-    common::RecordId record_id,
-    const IndexUpdateBindings & bindings
-)
+std::expected<void, IndexError>
+IndexEngine::on_update(common::RecordId record_id, const IndexUpdateBindings & bindings)
 {
     std::vector<IndexUpdateBinding> applied_bindings;
     const auto rollback_applied = [&]() {
@@ -617,7 +670,8 @@ std::expected<void, IndexError> IndexEngine::on_update(
             if (it->old_key.has_value()) {
                 auto inserted = rollback_index->insert(*it->old_key, record_id);
                 if (!inserted.has_value()) {
-                    failure += " rollback old-key insert failed: " + inserted.error().message() + ';';
+                    failure +=
+                        " rollback old-key insert failed: " + inserted.error().message() + ';';
                 }
             }
         }
@@ -662,8 +716,8 @@ std::expected<void, IndexError> IndexEngine::on_update(
                 if (binding.new_key.has_value()) {
                     auto removed_new = store->erase(*binding.new_key, record_id);
                     if (!removed_new.has_value()) {
-                        rollback_failure += " current new-key erase failed: "
-                            + removed_new.error().message() + ';';
+                        rollback_failure +=
+                            " current new-key erase failed: " + removed_new.error().message() + ';';
                     }
                 }
                 rollback_failure += rollback_applied();
@@ -689,7 +743,11 @@ std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_delete(
 {
     IndexKeyBindings bindings;
     for (const auto * store : list_stores(collection_id)) {
-        auto key = make_key_from_record(old_record_data, store->descriptor().column_ordinal, store->descriptor().key_type);
+        auto key = make_key_from_record(
+            old_record_data,
+            store->descriptor().column_ordinal,
+            store->descriptor().key_type
+        );
         if (!key.has_value()) {
             return std::unexpected(std::move(key.error()));
         }
@@ -697,18 +755,18 @@ std::expected<IndexKeyBindings, IndexError> IndexEngine::prepare_delete(
             continue;
         }
 
-        bindings.push_back(IndexKeyBinding {
-            .index_id = store->descriptor().index_id,
-            .key = std::move(key->value()),
-        });
+        bindings.push_back(
+            IndexKeyBinding {
+                .index_id = store->descriptor().index_id,
+                .key = std::move(key->value()),
+            }
+        );
     }
     return bindings;
 }
 
-std::expected<void, IndexError> IndexEngine::on_delete(
-    common::RecordId record_id,
-    const IndexKeyBindings & bindings
-)
+std::expected<void, IndexError>
+IndexEngine::on_delete(common::RecordId record_id, const IndexKeyBindings & bindings)
 {
     IndexKeyBindings erased_bindings;
     erased_bindings.reserve(bindings.size());
@@ -788,10 +846,8 @@ std::vector<ManagedIndexView> IndexEngine::find_indexes_for_column(
     return views;
 }
 
-std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::find_equal(
-    common::IndexId index_id,
-    const ScalarIndexKey & key
-) const
+std::expected<std::vector<common::RecordId>, IndexError>
+IndexEngine::find_equal(common::IndexId index_id, const ScalarIndexKey & key) const
 {
     const auto * store = find_store(index_id);
     if (store == nullptr) {
@@ -800,10 +856,8 @@ std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::find_equal
     return store->find_equal(key);
 }
 
-std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::scan_range(
-    common::IndexId index_id,
-    const IndexRange & range
-) const
+std::expected<std::vector<common::RecordId>, IndexError>
+IndexEngine::scan_range(common::IndexId index_id, const IndexRange & range) const
 {
     const auto * store = find_store(index_id);
     if (store == nullptr) {
@@ -813,10 +867,7 @@ std::expected<std::vector<common::RecordId>, IndexError> IndexEngine::scan_range
 }
 
 std::expected<std::unique_ptr<ScalarIndexCursor>, IndexError>
-IndexEngine::scan_range_cursor(
-    common::IndexId index_id,
-    const IndexRange & range
-) const
+IndexEngine::scan_range_cursor(common::IndexId index_id, const IndexRange & range) const
 {
     const auto * store = find_store(index_id);
     if (store == nullptr) {

@@ -11,10 +11,10 @@
 #include <vector>
 
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
-#include "core/meta/meta.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_engine.hpp"
 #include "core/index/scalar_index.hpp"
+#include "core/meta/meta.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_index_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
@@ -29,10 +29,10 @@
 #include "core/physical_planner/plan/command/show_indexes_plan.hpp"
 #include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
 #include "core/physical_planner/plan/command/use_plan.hpp"
-#include "core/physical_planner/plan/mutation/insert_plan.hpp"
-#include "core/physical_planner/plan/query/query_plan.hpp"
-#include "core/physical_planner/plan/mutation/update_plan.hpp"
 #include "core/physical_planner/plan/mutation/delete_plan.hpp"
+#include "core/physical_planner/plan/mutation/insert_plan.hpp"
+#include "core/physical_planner/plan/mutation/update_plan.hpp"
+#include "core/physical_planner/plan/query/query_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/transaction/transaction_manager.hpp"
 
@@ -45,23 +45,23 @@ namespace detail
 using binder::bound::BoundExpression;
 using common::LogicalType;
 using common::LogicalTypeId;
-using physical_planner::plan::DeletePlan;
-using physical_planner::plan::DescribeCollectionPlan;
 using physical_planner::op::FilterOperator;
 using physical_planner::op::IndexLookupKind;
 using physical_planner::op::IndexScanOperator;
-using physical_planner::plan::InsertPlan;
 using physical_planner::op::LimitOperator;
 using physical_planner::op::ProjectionOperator;
-using physical_planner::plan::QueryPlan;
 using physical_planner::op::SeqScanOperator;
+using physical_planner::op::SortOperator;
+using physical_planner::op::VectorSearchOperator;
+using physical_planner::plan::DeletePlan;
+using physical_planner::plan::DescribeCollectionPlan;
+using physical_planner::plan::InsertPlan;
+using physical_planner::plan::QueryPlan;
 using physical_planner::plan::ShowCollectionsPlan;
 using physical_planner::plan::ShowIndexesPlan;
 using physical_planner::plan::ShowVectorIndexesPlan;
-using physical_planner::op::SortOperator;
 using physical_planner::plan::UpdatePlan;
 using physical_planner::plan::UsePlan;
-using physical_planner::op::VectorSearchOperator;
 
 using PipelineRow = MaterializedRow;
 using PipelineResult = MaterializedResult;
@@ -79,11 +79,7 @@ ExecutionError make_error(ExecutionErrorCode code, std::string message)
 }
 
 [[nodiscard]]
-ExecutionError make_error(
-    ExecutionErrorCode code,
-    std::string message,
-    error::Error cause
-)
+ExecutionError make_error(ExecutionErrorCode code, std::string message, error::Error cause)
 {
     return ExecutionError {code, message, std::move(cause)};
 }
@@ -129,28 +125,18 @@ ExecutionError from_transaction_error(transaction::TransactionError error)
     const auto * context = error.context<transaction::TransactionErrorContext>();
     auto message =
         "Transaction " +
-        std::to_string(context != nullptr
-                           ? context->transaction_id
-                           : transaction::InvalidTransactionId) +
+        std::to_string(
+            context != nullptr ? context->transaction_id : transaction::InvalidTransactionId
+        ) +
         ": " + error.message();
-    return make_error(
-        ExecutionErrorCode::TransactionError,
-        std::move(message),
-        std::move(error)
-    );
+    return make_error(ExecutionErrorCode::TransactionError, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
-ExecutionError from_evaluation_error(
-    evaluator::EvaluationError error
-)
+ExecutionError from_evaluation_error(evaluator::EvaluationError error)
 {
     auto message = error.message();
-    return make_error(
-        ExecutionErrorCode::EvaluationError,
-        std::move(message),
-        std::move(error)
-    );
+    return make_error(ExecutionErrorCode::EvaluationError, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
@@ -244,25 +230,20 @@ std::string vector_metric_name(meta::entry::VectorDistanceMetric metric)
 }
 
 [[nodiscard]]
-std::expected<void, ExecutionError> find_storage(
-    storage::StorageEngine & storage,
-    common::CollectionId collection_id
-)
+std::expected<void, ExecutionError>
+find_storage(storage::StorageEngine & storage, common::CollectionId collection_id)
 {
     if (!storage.contains_collection(collection_id)) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::CollectionNotFound,
-                        "Collection storage not found"
-        ));
+        return std::unexpected(
+            make_error(ExecutionErrorCode::CollectionNotFound, "Collection storage not found")
+        );
     }
     return {};
 }
 
 [[nodiscard]]
-std::expected<schema::CollectionSchema, ExecutionError> load_schema(
-    meta::CatalogView & catalog,
-    common::CollectionId collection_id
-)
+std::expected<schema::CollectionSchema, ExecutionError>
+load_schema(meta::CatalogView & catalog, common::CollectionId collection_id)
 {
     auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema.has_value()) {
@@ -271,25 +252,29 @@ std::expected<schema::CollectionSchema, ExecutionError> load_schema(
     return std::move(*collection_schema);
 }
 
-void append_pipeline_row(
-    PipelineResult & result,
-    common::Record record
-)
+void append_pipeline_row(PipelineResult & result, common::Record record)
 {
-    result.rows.push_back(PipelineRow {
-        .source_record = std::move(record),
-        .output_values = {},
-    });
+    result.rows.push_back(
+        PipelineRow {
+            .source_record = std::move(record),
+            .output_values = {},
+        }
+    );
     result.rows.back().output_values = result.rows.back().source_record.data.values;
 }
 
-void append_scan_columns(PipelineResult & result, const schema::CollectionSchema & collection_schema)
+void append_scan_columns(
+    PipelineResult & result,
+    const schema::CollectionSchema & collection_schema
+)
 {
     for (const auto & column : collection_schema.columns()) {
-        result.columns.push_back(ExecutionColumn {
-            .name = column.column_name(),
-            .type = column.type(),
-        });
+        result.columns.push_back(
+            ExecutionColumn {
+                .name = column.column_name(),
+                .type = column.type(),
+            }
+        );
     }
 }
 
@@ -314,11 +299,14 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
     append_scan_columns(result, *collection_schema);
 
     auto cursor = storage.scan(scan.collection_id());
-    if (!cursor) return std::unexpected(from_storage_error(std::move(cursor.error())));
+    if (!cursor)
+        return std::unexpected(from_storage_error(std::move(cursor.error())));
     while (true) {
         auto next = cursor->next();
-        if (!next) return std::unexpected(from_storage_error(std::move(next.error())));
-        if (!*next) break;
+        if (!next)
+            return std::unexpected(from_storage_error(std::move(next.error())));
+        if (!*next)
+            break;
         append_pipeline_row(result, std::move(**next));
     }
 
@@ -373,7 +361,8 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
             "Physical index scan target index was not found"
         ));
     }
-    if (index_view->collection_id != scan.collection_id() || index_view->kind != index::IndexKind::BTree) {
+    if (index_view->collection_id != scan.collection_id() ||
+        index_view->kind != index::IndexKind::BTree) {
         return std::unexpected(make_error(
             ExecutionErrorCode::InvalidPlan,
             "Physical index scan does not match the runtime index descriptor"
@@ -567,7 +556,8 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         ));
     }
     if (view->collection_id != search.collection_id() || view->column_id != search.column_id() ||
-        view->kind != vindex::VectorIndexKind::Hnsw || view->metric != runtime_metric(search.metric()) ||
+        view->kind != vindex::VectorIndexKind::Hnsw ||
+        view->metric != runtime_metric(search.metric()) ||
         view->dimension != query_key->dimension()) {
         return std::unexpected(make_error(
             ExecutionErrorCode::InvalidPlan,
@@ -582,13 +572,19 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
         return full_scan();
     }
 
-    auto candidate_count = !search.predicate().has_value()
-        ? search.required_count()
-        : std::min(view->entry_count, std::max(search.required_count(), saturating_multiply(search.required_count(), 4)));
+    auto candidate_count =
+        !search.predicate().has_value()
+            ? search.required_count()
+            : std::min(
+                  view->entry_count,
+                  std::max(search.required_count(), saturating_multiply(search.required_count(), 4))
+              );
 
     while (true) {
         auto matches = vector_index_engine.search(
-            search.index_id(), *query_key, vindex::VectorSearchRequest {.top_k = candidate_count}
+            search.index_id(),
+            *query_key,
+            vindex::VectorSearchRequest {.top_k = candidate_count}
         );
         if (!matches.has_value()) {
             return std::unexpected(from_vector_index_error(std::move(matches.error())));
@@ -627,7 +623,8 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(filter.child(), catalog, storage, index_engine, vector_index_engine);
+    auto input =
+        execute_physical(filter.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -652,11 +649,11 @@ std::expected<PipelineResult, ExecutionError> execute_filter(
 }
 
 [[nodiscard]]
-std::string projection_name(const binder::bound::BoundProjectionItem & projection, std::size_t index)
+std::string
+projection_name(const binder::bound::BoundProjectionItem & projection, std::size_t index)
 {
-    return projection.output_name.empty()
-        ? "expr" + std::to_string(index + 1)
-        : projection.output_name;
+    return projection.output_name.empty() ? "expr" + std::to_string(index + 1)
+                                          : projection.output_name;
 }
 
 [[nodiscard]]
@@ -668,7 +665,8 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(projection.child(), catalog, storage, index_engine, vector_index_engine);
+    auto input =
+        execute_physical(projection.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -683,10 +681,12 @@ std::expected<PipelineResult, ExecutionError> execute_projection(
                 "Physical projection expression is missing"
             ));
         }
-        input->columns.push_back(ExecutionColumn {
-            .name = projection_name(projections[index], index),
-            .type = projections[index].expression->type(),
-        });
+        input->columns.push_back(
+            ExecutionColumn {
+                .name = projection_name(projections[index], index),
+                .type = projections[index].expression->type(),
+            }
+        );
     }
 
     for (auto & row : input->rows) {
@@ -749,10 +749,8 @@ int compare_values(const common::Value & left, const common::Value & right)
 }
 
 [[nodiscard]]
-std::expected<std::vector<common::Value>, ExecutionError> evaluate_order_keys(
-    const SortOperator & order_by,
-    const PipelineRow & row
-)
+std::expected<std::vector<common::Value>, ExecutionError>
+evaluate_order_keys(const SortOperator & order_by, const PipelineRow & row)
 {
     evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
         .input_values = row.source_record.data.values,
@@ -761,10 +759,9 @@ std::expected<std::vector<common::Value>, ExecutionError> evaluate_order_keys(
     keys.reserve(order_by.order_by().size());
     for (const auto & item : order_by.order_by()) {
         if (item.expression == nullptr) {
-            return std::unexpected(make_error(
-                ExecutionErrorCode::InvalidPlan,
-                "Physical sort expression is missing"
-            ));
+            return std::unexpected(
+                make_error(ExecutionErrorCode::InvalidPlan, "Physical sort expression is missing")
+            );
         }
         auto value = evaluator.evaluate(*item.expression);
         if (!value.has_value()) {
@@ -784,7 +781,8 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(order_by.child(), catalog, storage, index_engine, vector_index_engine);
+    auto input =
+        execute_physical(order_by.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -803,11 +801,13 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
         if (!keys.has_value()) {
             return std::unexpected(std::move(keys.error()));
         }
-        sort_rows.push_back(SortRow {
-            .row = std::move(input->rows[position]),
-            .keys = std::move(*keys),
-            .position = position,
-        });
+        sort_rows.push_back(
+            SortRow {
+                .row = std::move(input->rows[position]),
+                .keys = std::move(*keys),
+                .position = position,
+            }
+        );
     }
 
     std::stable_sort(
@@ -826,8 +826,10 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
                 }
 
                 auto compared = compare_values(left.keys[index], right.keys[index]);
-                if (compared == 0 && value_rank(left.keys[index]) != value_rank(right.keys[index])) {
-                    compared = value_rank(left.keys[index]) < value_rank(right.keys[index]) ? -1 : 1;
+                if (compared == 0 &&
+                    value_rank(left.keys[index]) != value_rank(right.keys[index])) {
+                    compared =
+                        value_rank(left.keys[index]) < value_rank(right.keys[index]) ? -1 : 1;
                 }
                 if (compared == 0) {
                     continue;
@@ -856,7 +858,8 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto input = execute_physical(limit.child(), catalog, storage, index_engine, vector_index_engine);
+    auto input =
+        execute_physical(limit.child(), catalog, storage, index_engine, vector_index_engine);
     if (!input.has_value()) {
         return std::unexpected(std::move(input.error()));
     }
@@ -869,7 +872,8 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
 
     const auto count = limit.limit().value_or(input->rows.size() - offset);
     const auto begin = input->rows.begin() + static_cast<std::ptrdiff_t>(offset);
-    const auto end = begin + static_cast<std::ptrdiff_t>(std::min(count, input->rows.size() - offset));
+    const auto end =
+        begin + static_cast<std::ptrdiff_t>(std::min(count, input->rows.size() - offset));
     std::vector<PipelineRow> rows;
     rows.reserve(static_cast<std::size_t>(end - begin));
     for (auto it = begin; it != end; ++it) {
@@ -889,7 +893,8 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
     vindex::VectorIndexEngine & vector_index_engine
 )
 {
-    auto pipeline = execute_physical(plan.root_operator(), catalog, storage, index_engine, vector_index_engine);
+    auto pipeline =
+        execute_physical(plan.root_operator(), catalog, storage, index_engine, vector_index_engine);
     if (!pipeline.has_value()) {
         return std::unexpected(std::move(pipeline.error()));
     }
@@ -904,17 +909,14 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_use(
-    const UsePlan & plan,
-    meta::CatalogView & catalog
-)
+std::expected<ExecutionResult, ExecutionError>
+execute_use(const UsePlan & plan, meta::CatalogView & catalog)
 {
     const auto * database = catalog.find_database(plan.database_id());
     if (database == nullptr) {
-        return std::unexpected(make_error(
-            ExecutionErrorCode::InvalidPlan,
-            "USE target database was not found"
-        ));
+        return std::unexpected(
+            make_error(ExecutionErrorCode::InvalidPlan, "USE target database was not found")
+        );
     }
     ExecutionResult result;
     result.kind = ExecutionResultKind::UseDatabase;
@@ -924,12 +926,11 @@ std::expected<ExecutionResult, ExecutionError> execute_use(
 }
 
 [[nodiscard]]
-ExecutionError abort_failure(
-    ExecutionError operation_error,
-    transaction::TransactionError abort_error
-)
+ExecutionError
+abort_failure(ExecutionError operation_error, transaction::TransactionError abort_error)
 {
-    auto message = operation_error.message() + "; transaction abort failed: " + abort_error.message();
+    auto message =
+        operation_error.message() + "; transaction abort failed: " + abort_error.message();
     return make_error(
         ExecutionErrorCode::TransactionError,
         std::move(message),
@@ -939,10 +940,8 @@ ExecutionError abort_failure(
 
 template <typename Body>
 [[nodiscard]]
-std::expected<std::size_t, ExecutionError> run_mutation_transaction(
-    transaction::TransactionManager & transaction_manager,
-    Body && body
-)
+std::expected<std::size_t, ExecutionError>
+run_mutation_transaction(transaction::TransactionManager & transaction_manager, Body && body)
 {
     auto transaction = transaction_manager.begin_implicit();
     if (!transaction) {
@@ -1073,13 +1072,11 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
 }
 
 [[nodiscard]]
-std::optional<std::size_t> ordinal_for_column(
-    const schema::CollectionSchema & collection_schema,
-    common::ColumnId column_id
-)
+std::optional<std::size_t>
+ordinal_for_column(const schema::CollectionSchema & collection_schema, common::ColumnId column_id)
 {
-    const auto * column = collection_schema.find_column(column_id);
-    if (column == nullptr) {
+    const auto column = collection_schema.find_column(column_id);
+    if (!column.has_value()) {
         return std::nullopt;
     }
     return column->ordinal();
@@ -1122,7 +1119,12 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
 
     auto affected_rows = run_mutation_transaction(
         transaction_manager,
-        [&plan, &catalog, &storage, &index_engine, &vector_index_engine, &transaction_manager,
+        [&plan,
+         &catalog,
+         &storage,
+         &index_engine,
+         &vector_index_engine,
+         &transaction_manager,
          &collection_schema](transaction::TransactionContext & transaction)
             -> std::expected<std::size_t, ExecutionError> {
             auto rows = execute_physical(
@@ -1194,10 +1196,8 @@ std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::Cata
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_collections(
-    const ShowCollectionsPlan & plan,
-    meta::CatalogView & catalog
-)
+std::expected<ExecutionResult, ExecutionError>
+execute_show_collections(const ShowCollectionsPlan & plan, meta::CatalogView & catalog)
 {
     std::vector<ExecutionRow> rows;
     for (const auto * collection : catalog.list_collections(plan.database_id())) {
@@ -1213,10 +1213,8 @@ std::expected<ExecutionResult, ExecutionError> execute_show_collections(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
-    const ShowIndexesPlan & plan,
-    meta::CatalogView & catalog
-)
+std::expected<ExecutionResult, ExecutionError>
+execute_show_indexes(const ShowIndexesPlan & plan, meta::CatalogView & catalog)
 {
     std::vector<ExecutionRow> rows;
     for (const auto * index : catalog.list_indexes(plan.collection_id())) {
@@ -1226,14 +1224,16 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
 
         const auto column_id = index->column_id();
         const auto * column = column_id.has_value() ? catalog.find_column(*column_id) : nullptr;
-        rows.push_back(ExecutionRow {
-            .values = {
-                common::Value {index->name()},
-                column != nullptr ? common::Value {column->name()} : common::Value::null(),
-                common::Value {index_kind_name(index->kind())},
-                common::Value {index->unique()},
-            },
-        });
+        rows.push_back(
+            ExecutionRow {
+                .values = {
+                    common::Value {index->name()},
+                    column != nullptr ? common::Value {column->name()} : common::Value::null(),
+                    common::Value {index_kind_name(index->kind())},
+                    common::Value {index->unique()},
+                },
+            }
+        );
     }
 
     return rowset_result(
@@ -1248,10 +1248,8 @@ std::expected<ExecutionResult, ExecutionError> execute_show_indexes(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
-    const ShowVectorIndexesPlan & plan,
-    meta::CatalogView & catalog
-)
+std::expected<ExecutionResult, ExecutionError>
+execute_show_vector_indexes(const ShowVectorIndexesPlan & plan, meta::CatalogView & catalog)
 {
     std::vector<ExecutionRow> rows;
     for (const auto * index : catalog.list_vector_indexes(plan.collection_id())) {
@@ -1260,19 +1258,21 @@ std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
         }
 
         const auto * column = catalog.find_column(index->column_id());
-        rows.push_back(ExecutionRow {
-            .values = {
-                common::Value {index->name()},
-                column != nullptr ? common::Value {column->name()} : common::Value::null(),
-                common::Value {vector_index_kind_name(index->index_kind())},
-                common::Value {vector_metric_name(index->metric())},
-                common::Value {static_cast<std::int64_t>(index->dimension())},
-                common::Value {static_cast<std::int64_t>(index->max_neighbors())},
-                common::Value {static_cast<std::int64_t>(index->ef_construction())},
-                common::Value {static_cast<std::int64_t>(index->ef_search_default())},
-                common::Value {static_cast<std::int64_t>(index->random_seed())},
-            },
-        });
+        rows.push_back(
+            ExecutionRow {
+                .values = {
+                    common::Value {index->name()},
+                    column != nullptr ? common::Value {column->name()} : common::Value::null(),
+                    common::Value {vector_index_kind_name(index->index_kind())},
+                    common::Value {vector_metric_name(index->metric())},
+                    common::Value {static_cast<std::int64_t>(index->dimension())},
+                    common::Value {static_cast<std::int64_t>(index->max_neighbors())},
+                    common::Value {static_cast<std::int64_t>(index->ef_construction())},
+                    common::Value {static_cast<std::int64_t>(index->ef_search_default())},
+                    common::Value {static_cast<std::int64_t>(index->random_seed())},
+                },
+            }
+        );
     }
 
     return rowset_result(
@@ -1292,10 +1292,8 @@ std::expected<ExecutionResult, ExecutionError> execute_show_vector_indexes(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
-    const DescribeCollectionPlan & plan,
-    meta::CatalogView & catalog
-)
+std::expected<ExecutionResult, ExecutionError>
+execute_describe_collection(const DescribeCollectionPlan & plan, meta::CatalogView & catalog)
 {
     auto collection_schema = load_schema(catalog, plan.collection_id());
     if (!collection_schema.has_value()) {
@@ -1304,16 +1302,21 @@ std::expected<ExecutionResult, ExecutionError> execute_describe_collection(
 
     std::vector<ExecutionRow> rows;
     for (const auto & column : collection_schema->columns()) {
-        rows.push_back(ExecutionRow {
-            .values = {
-                common::Value {column.column_name()},
-                common::Value {logical_type_name(column.type())},
-                common::Value {column.nullable()},
-                common::Value {column.unique()},
-                column.comment().has_value() ? common::Value {column.comment().value()} : common::Value::null(),
-                collection_schema->comment().has_value() ? common::Value {collection_schema->comment().value()} : common::Value::null(),
-            },
-        });
+        rows.push_back(
+            ExecutionRow {
+                .values = {
+                    common::Value {column.column_name()},
+                    common::Value {logical_type_name(column.type())},
+                    common::Value {column.nullable()},
+                    common::Value {column.unique()},
+                    column.comment().has_value() ? common::Value {column.comment().value()}
+                                                 : common::Value::null(),
+                    collection_schema->comment().has_value()
+                        ? common::Value {collection_schema->comment().value()}
+                        : common::Value::null(),
+                },
+            }
+        );
     }
 
     return rowset_result(

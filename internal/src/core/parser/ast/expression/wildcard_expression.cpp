@@ -28,7 +28,7 @@ AstNodeKind WildcardExpression::kind() const noexcept
     return AstNodeKind::Wildcard;
 }
 
-const std::optional<std::string> & WildcardExpression::qualifier() const noexcept
+std::optional<const std::string &> WildcardExpression::qualifier() const noexcept
 {
     return qualifier_;
 }

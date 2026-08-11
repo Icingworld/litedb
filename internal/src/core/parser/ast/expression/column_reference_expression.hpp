@@ -26,7 +26,7 @@ public:
 
     // 获取限定符
     [[nodiscard]]
-    const std::optional<std::string> & qualifier() const noexcept;
+    std::optional<const std::string &> qualifier() const noexcept;
 
     // 获取列名
     [[nodiscard]]

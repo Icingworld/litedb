@@ -24,7 +24,7 @@ public:
 
     // 获取限定符
     [[nodiscard]]
-    const std::optional<std::string> & qualifier() const noexcept;
+    std::optional<const std::string &> qualifier() const noexcept;
 
 private:
     std::optional<std::string> qualifier_;

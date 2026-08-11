@@ -21,7 +21,7 @@ public:
 
     // 获取数据库名称
     [[nodiscard]]
-    const std::optional<std::string> & database_name() const noexcept;
+    std::optional<const std::string &> database_name() const noexcept;
 
 private:
     std::optional<std::string> database_name_;

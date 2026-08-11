@@ -77,13 +77,13 @@ void test_load_collection_schema_from_catalog()
     require(schema.comment().value() == "user collection", "collection comment mismatch");
     require(schema.columns().size() == 3, "column count mismatch");
 
-    const auto * id = schema.column_at(0);
-    const auto * name = schema.find_column("NAME");
-    const auto * embedding = schema.column_at(2);
+    const auto id = schema.column_at(0);
+    const auto name = schema.find_column("NAME");
+    const auto embedding = schema.column_at(2);
 
-    require(id != nullptr, "id column missing");
-    require(name != nullptr, "name column missing");
-    require(embedding != nullptr, "embedding column missing");
+    require(id.has_value(), "id column missing");
+    require(name.has_value(), "name column missing");
+    require(embedding.has_value(), "embedding column missing");
 
     require(id->ordinal() == 0, "id ordinal mismatch");
     require(id->column_name() == "id", "id column name mismatch");
@@ -96,11 +96,15 @@ void test_load_collection_schema_from_catalog()
     require(name->type().id == LogicalTypeId::Varchar, "varchar type mismatch");
     require(name->type().parameter.value() == 64, "varchar length mismatch");
     require(name->default_expression().has_value(), "default expression missing");
-    require(schema.find_column(name->column_id()) == name, "find by column id mismatch");
+    const auto name_by_id = schema.find_column(name->column_id());
+    require(
+        name_by_id.has_value() && &*name_by_id == &*name,
+        "find by column id mismatch"
+    );
 
     require(embedding->type().id == LogicalTypeId::Vector, "vector type mismatch");
     require(embedding->type().parameter.value() == 3, "vector dimension mismatch");
-    require(schema.column_at(3) == nullptr, "out-of-range ordinal should return null");
+    require(!schema.column_at(3).has_value(), "out-of-range ordinal should return null");
 }
 
 void test_load_missing_collection_schema_fails()

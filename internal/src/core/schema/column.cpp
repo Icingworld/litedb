@@ -25,8 +25,7 @@ ColumnSchema::ColumnSchema(
     , unique_(unique)
     , default_expression_(std::move(default_expression))
     , comment_(std::move(comment))
-{
-}
+{}
 
 common::ColumnId ColumnSchema::column_id() const noexcept
 {
@@ -68,7 +67,7 @@ const std::optional<DefaultExpression> & ColumnSchema::default_expression() cons
     return default_expression_;
 }
 
-const std::optional<std::string> & ColumnSchema::comment() const noexcept
+std::optional<const std::string &> ColumnSchema::comment() const noexcept
 {
     return comment_;
 }

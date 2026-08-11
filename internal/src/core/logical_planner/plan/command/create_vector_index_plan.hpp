@@ -33,7 +33,7 @@ public:
 
     // 获取索引名称
     [[nodiscard]]
-    const std::optional<std::string> & vector_index_name() const noexcept;
+    std::optional<const std::string &> vector_index_name() const noexcept;
 
     // 获取索引名称所有权
     // 调用后 vector_index_name() 返回 nullopt；再次调用返回 nullopt

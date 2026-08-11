@@ -23,7 +23,7 @@ common::DatabaseId CreateCollectionPlan::database_id() const noexcept
     return database_id_;
 }
 
-const std::optional<std::string> & CreateCollectionPlan::collection_name() const noexcept
+std::optional<const std::string &> CreateCollectionPlan::collection_name() const noexcept
 {
     return collection_name_;
 }
@@ -43,7 +43,7 @@ std::vector<meta::ColumnDefinition> CreateCollectionPlan::take_columns() noexcep
     return std::exchange(columns_, {});
 }
 
-const std::optional<std::string> & CreateCollectionPlan::comment() const noexcept
+std::optional<const std::string &> CreateCollectionPlan::comment() const noexcept
 {
     return comment_;
 }

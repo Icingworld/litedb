@@ -23,7 +23,7 @@ common::DatabaseId BoundCreateCollectionStatement::database_id() const noexcept
     return database_id_;
 }
 
-const std::optional<std::string> & BoundCreateCollectionStatement::collection_name() const noexcept
+std::optional<const std::string &> BoundCreateCollectionStatement::collection_name() const noexcept
 {
     return collection_name_;
 }
@@ -43,7 +43,7 @@ std::vector<meta::ColumnDefinition> BoundCreateCollectionStatement::take_columns
     return std::exchange(columns_, {});
 }
 
-const std::optional<std::string> & BoundCreateCollectionStatement::comment() const noexcept
+std::optional<const std::string &> BoundCreateCollectionStatement::comment() const noexcept
 {
     return comment_;
 }
