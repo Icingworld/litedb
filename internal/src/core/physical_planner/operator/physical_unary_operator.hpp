@@ -7,10 +7,7 @@
 namespace litedb::core::physical_planner::op
 {
 
-/**
- * @brief 物理一元算子
- * @details 只有一个子算子的算子
- */
+// 物理一元算子
 class PhysicalUnaryOperator : public PhysicalOperator
 {
 protected:
@@ -20,15 +17,12 @@ protected:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取子算子
-     * @return 子算子
-     */
+    // 获取子算子
     [[nodiscard]]
     const PhysicalOperator & child() const noexcept;
 
 private:
-    std::unique_ptr<PhysicalOperator> child_;   // 子算子
+    std::unique_ptr<PhysicalOperator> child_;
 };
 
 } // namespace litedb::core::physical_planner::op

@@ -11,6 +11,11 @@
 namespace litedb::core::physical_planner
 {
 
+PhysicalMutationWorker::PhysicalMutationWorker(const PhysicalPlannerContext & context) noexcept
+    : context_(context)
+{
+}
+
 std::unique_ptr<plan::PhysicalPlan> PhysicalMutationWorker::plan_insert(
     logical_planner::plan::InsertPlan & logical_plan
 )

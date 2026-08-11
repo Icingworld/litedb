@@ -10,9 +10,7 @@
 namespace litedb::core::physical_planner::plan
 {
 
-/**
- * @brief INSERT 语句计划
- */
+// INSERT 语句物理计划
 class InsertPlan final : public PhysicalPlan
 {
 public:
@@ -22,24 +20,19 @@ public:
     );
 
 public:
-    /**
-     * @brief 获取集合 ID
-     * @return 集合 ID
-     */
+    // 获取集合 ID
     [[nodiscard]]
     common::CollectionId collection_id() const noexcept;
 
-    /**
-     * @brief 获取插入值
-     * @return 插入值
-     */
+    // 获取插入值
     [[nodiscard]]
     const std::vector<std::unique_ptr<binder::bound::BoundExpression>> &
     values() const noexcept;
 
 private:
-    common::CollectionId collection_id_;                                        // 集合 ID
-    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;       // 插入值
+    // 保留 collection_id_，减少后续执行时需要扫描算子树查找目标集合的开销
+    common::CollectionId collection_id_;
+    std::vector<std::unique_ptr<binder::bound::BoundExpression>> values_;
 };
 
 } // namespace litedb::core::physical_planner::plan

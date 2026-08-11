@@ -8,9 +8,7 @@
 namespace litedb::core::physical_planner::plan
 {
 
-/**
- * @brief DROP DATABASE 语句计划
- */
+// DROP DATABASE 语句物理计划
 class DropDatabasePlan final : public PhysicalPlan
 {
 public:
@@ -19,15 +17,12 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
+    // 获取数据库 ID
     [[nodiscard]]
     std::optional<common::DatabaseId> database_id() const noexcept;
 
 private:
-    std::optional<common::DatabaseId> database_id_;  // 数据库 ID
+    std::optional<common::DatabaseId> database_id_;
 };
 
 } // namespace litedb::core::physical_planner::plan

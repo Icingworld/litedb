@@ -23,25 +23,28 @@ class PhysicalPlan;
 namespace litedb::core::physical_planner
 {
 
-/**
- * @brief 变更类逻辑计划 lowering worker
- */
+// 变更类物理计划工作器
 class PhysicalMutationWorker final
 {
 public:
-    explicit PhysicalMutationWorker(const PhysicalPlannerContext & context) noexcept
-        : context_(context)
-    {
-    }
+    explicit PhysicalMutationWorker(const PhysicalPlannerContext & context) noexcept;
 
 public:
-    [[nodiscard]] std::unique_ptr<plan::PhysicalPlan> plan_insert(
+    // 计划 INSERT 语句
+    [[nodiscard]]
+    std::unique_ptr<plan::PhysicalPlan> plan_insert(
         logical_planner::plan::InsertPlan & logical_plan
     );
-    [[nodiscard]] std::unique_ptr<plan::PhysicalPlan> plan_update(
+
+    // 计划 UPDATE 语句
+    [[nodiscard]]
+    std::unique_ptr<plan::PhysicalPlan> plan_update(
         logical_planner::plan::UpdatePlan & logical_plan
     );
-    [[nodiscard]] std::unique_ptr<plan::PhysicalPlan> plan_delete(
+
+    // 计划 DELETE 语句
+    [[nodiscard]]
+    std::unique_ptr<plan::PhysicalPlan> plan_delete(
         logical_planner::plan::DeletePlan & logical_plan
     );
 

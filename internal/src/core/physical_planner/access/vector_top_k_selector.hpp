@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <optional>
 
-#include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/common/value.hpp"
@@ -14,10 +13,7 @@
 namespace litedb::core::physical_planner
 {
 
-/**
- * @brief 向量 TopK 访问路径选择结果
- * @details 只包含后续 lowering 所需的值，不暴露逻辑树中的裸指针。
- */
+// 向量 TopK 访问路径选择结果
 struct VectorTopKDecision
 {
     common::CollectionId collection_id {0};
@@ -31,23 +27,15 @@ struct VectorTopKDecision
     bool has_filter {false};
 };
 
-/**
- * @brief 选择可由 HNSW 执行的向量 TopK 访问路径
- */
+// 向量 TopK 访问路径选择器
 class VectorTopKSelector final
 {
 public:
-    explicit VectorTopKSelector(const PhysicalPlannerContext & context) noexcept
-        : context_(context)
-    {
-    }
+    explicit VectorTopKSelector(const PhysicalPlannerContext & context) noexcept;
 
 public:
-    /**
-     * @brief 选择向量 TopK 访问路径
-     * @param limit 逻辑 LIMIT 算子
-     * @return 选择结果；无法安全降级为向量索引时返回 nullopt
-     */
+    // 选择向量 TopK 访问路径
+    // 无法安全降级为向量索引时返回 nullopt
     [[nodiscard]]
     std::optional<VectorTopKDecision> select(
         const logical_planner::op::LogicalLimitOperator & limit

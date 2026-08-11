@@ -8,9 +8,7 @@
 namespace litedb::core::physical_planner::plan
 {
 
-/**
- * @brief DROP INDEX 语句计划
- */
+// DROP INDEX 语句物理计划
 class DropIndexPlan final : public PhysicalPlan
 {
 public:
@@ -19,15 +17,12 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取索引 ID
-     * @return 索引 ID
-     */
+    // 获取索引 ID
     [[nodiscard]]
     std::optional<common::IndexId> index_id() const noexcept;
 
 private:
-    std::optional<common::IndexId> index_id_;  // 索引 ID
+    std::optional<common::IndexId> index_id_;
 };
 
 } // namespace litedb::core::physical_planner::plan

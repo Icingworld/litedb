@@ -28,7 +28,7 @@ public:
     }
 
 private:
-    PhysicalOperatorDebugPrinter & printer_;     // 打印器
+    PhysicalOperatorDebugPrinter & printer_;
 };
 
 PhysicalOperatorDebugPrinter::PhysicalOperatorDebugPrinter(
@@ -98,11 +98,7 @@ void PhysicalOperatorDebugPrinter::visit_vector_search_operator(
     write_field("metric", binder::bound::vector_distance_metric_name(op.metric()));
     write_field("required_count", op.required_count());
     write_expression_field("query_vector", op.query_vector());
-    if (op.predicate().has_value()) {
-        write_expression_field("predicate", op.predicate()->get());
-    } else {
-        write_field("predicate", "<none>");
-    }
+    write_expression_field("predicate", op.predicate());
 }
 
 void PhysicalOperatorDebugPrinter::visit_filter_operator(
@@ -261,6 +257,18 @@ void PhysicalOperatorDebugPrinter::write_expression_field(
         ostream_ << text.substr(start, end - start) << '\n';
         start = end + 1;
     }
+}
+
+void PhysicalOperatorDebugPrinter::write_expression_field(
+    std::string_view name,
+    std::optional<const binder::bound::BoundExpression &> expression
+)
+{
+    if (!expression.has_value()) {
+        write_field(name, "<none>");
+        return;
+    }
+    write_expression_field(name, *expression);
 }
 
 void PhysicalOperatorDebugPrinter::write_child_field(

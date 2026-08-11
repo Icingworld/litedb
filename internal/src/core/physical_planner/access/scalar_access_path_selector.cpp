@@ -21,12 +21,14 @@ using binder::bound::BoundColumnRefExpression;
 using binder::bound::BoundExpression;
 using common::BinaryOperator;
 
+// 索引候选
 struct IndexCandidate
 {
     common::ColumnId column_id {0};
     op::IndexLookup lookup;
 };
 
+// 评估常量表达式
 [[nodiscard]]
 std::optional<common::Value> evaluate_constant(const BoundExpression & expression)
 {
@@ -37,6 +39,7 @@ std::optional<common::Value> evaluate_constant(const BoundExpression & expressio
     return std::move(*value);
 }
 
+// 创建索引查找条件
 [[nodiscard]]
 std::optional<op::IndexLookup> make_lookup(
     BinaryOperator operation,
@@ -99,6 +102,7 @@ std::optional<op::IndexLookup> make_lookup(
     }
 }
 
+// 反转比较运算符
 [[nodiscard]]
 BinaryOperator reverse_comparison(BinaryOperator operation) noexcept
 {
@@ -116,6 +120,7 @@ BinaryOperator reverse_comparison(BinaryOperator operation) noexcept
     }
 }
 
+// 从谓词中选择索引候选
 [[nodiscard]]
 std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & predicate)
 {
@@ -189,6 +194,7 @@ std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & p
     return std::nullopt;
 }
 
+// 选择索引
 [[nodiscard]]
 std::optional<common::IndexId> choose_index(
     const meta::CatalogView & catalog,
@@ -216,6 +222,11 @@ std::optional<common::IndexId> choose_index(
 }
 
 } // namespace
+
+ScalarAccessPathSelector::ScalarAccessPathSelector(const PhysicalPlannerContext & context) noexcept
+    : context_(context)
+{
+}
 
 std::optional<ScalarAccessPath> ScalarAccessPathSelector::select(
     common::CollectionId collection_id,

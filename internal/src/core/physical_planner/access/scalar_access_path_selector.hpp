@@ -10,33 +10,22 @@
 namespace litedb::core::physical_planner
 {
 
-/**
- * @brief 标量索引访问路径选择结果
- */
+// 标量索引访问路径选择结果
 struct ScalarAccessPath
 {
     common::IndexId index_id {0};
     op::IndexLookup lookup;
 };
 
-/**
- * @brief 从谓词中选择可用的标量索引访问路径
- */
+// 标量索引访问路径选择器
 class ScalarAccessPathSelector final
 {
 public:
-    explicit ScalarAccessPathSelector(const PhysicalPlannerContext & context) noexcept
-        : context_(context)
-    {
-    }
+    explicit ScalarAccessPathSelector(const PhysicalPlannerContext & context) noexcept;
 
 public:
-    /**
-     * @brief 选择标量索引
-     * @param collection_id 集合 ID
-     * @param predicate 谓词
-     * @return 访问路径；无法使用索引时返回 nullopt
-     */
+    // 选择标量索引访问路径
+    // 无法使用索引时返回 nullopt
     [[nodiscard]]
     std::optional<ScalarAccessPath> select(
         common::CollectionId collection_id,

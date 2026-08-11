@@ -9,9 +9,7 @@
 namespace litedb::core::physical_planner::op
 {
 
-/**
- * @brief 投影算子
- */
+// 投影算子
 class ProjectionOperator final : public PhysicalUnaryOperator
 {
 public:
@@ -21,16 +19,13 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取投影项
-     * @return 投影项
-     */
+    // 获取投影项
     [[nodiscard]]
     const std::vector<binder::bound::BoundProjectionItem> &
     projections() const noexcept;
 
 private:
-    std::vector<binder::bound::BoundProjectionItem> projections_;   // 投影项
+    std::vector<binder::bound::BoundProjectionItem> projections_;
 };
 
 } // namespace litedb::core::physical_planner::op

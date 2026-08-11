@@ -5,9 +5,10 @@
 namespace litedb::core::physical_planner::plan
 {
 
+// 物理计划类型
 enum class PhysicalPlanKind : std::uint8_t
 {
-    Use = 0,
+    Use,
     CreateDatabase,
     CreateCollection,
     CreateIndex,
@@ -27,28 +28,26 @@ enum class PhysicalPlanKind : std::uint8_t
     Query,
 };
 
+// 物理计划
 class PhysicalPlan
 {
 public:
     PhysicalPlan(const PhysicalPlan &) = delete;
+
     PhysicalPlan & operator=(const PhysicalPlan &) = delete;
 
     PhysicalPlan(PhysicalPlan &&) noexcept = default;
+
     PhysicalPlan & operator=(PhysicalPlan &&) noexcept = default;
 
     virtual ~PhysicalPlan() noexcept = default;
 
 protected:
-    explicit PhysicalPlan(PhysicalPlanKind kind) noexcept
-        : kind_(kind)
-    {
-    }
+    explicit PhysicalPlan(PhysicalPlanKind kind) noexcept;
 
 public:
-    [[nodiscard]] PhysicalPlanKind kind() const noexcept
-    {
-        return kind_;
-    }
+    // 获取物理计划类型
+    [[nodiscard]] PhysicalPlanKind kind() const noexcept;
 
 private:
     PhysicalPlanKind kind_;

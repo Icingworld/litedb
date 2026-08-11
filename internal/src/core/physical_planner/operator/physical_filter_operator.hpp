@@ -8,9 +8,7 @@
 namespace litedb::core::physical_planner::op
 {
 
-/**
- * @brief 过滤算子
- */
+// 过滤算子
 class FilterOperator final : public PhysicalUnaryOperator
 {
 public:
@@ -20,15 +18,12 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取谓词
-     * @return 谓词
-     */
+    // 获取谓词
     [[nodiscard]]
     const binder::bound::BoundExpression & predicate() const noexcept;
 
 private:
-    std::unique_ptr<binder::bound::BoundExpression> predicate_;   // 谓词
+    std::unique_ptr<binder::bound::BoundExpression> predicate_;
 };
 
 } // namespace litedb::core::physical_planner::op

@@ -15,12 +15,7 @@
 namespace litedb::core::physical_planner::op
 {
 
-/**
- * @brief 物理算子调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- * @tparam IsConst 是否为常量
- */
+// 物理算子调度器
 template <
     typename Derived,
     typename ReturnType,
@@ -29,9 +24,7 @@ template <
 class PhysicalOperatorDispatcher
 {
 protected:
-    /**
-     * @brief 引用类型
-     */
+    // 引用类型
     template <typename T>
     using ReferenceType = std::conditional_t<
         IsConst,
@@ -40,11 +33,7 @@ protected:
     >;
 
 protected:
-    /**
-     * @brief 调度物理算子
-     * @param op 物理算子
-     * @return 返回值
-     */
+    // 调度物理算子
     [[nodiscard]]
     ReturnType dispatch_operator(ReferenceType<PhysicalOperator> op)
     {
@@ -83,10 +72,7 @@ protected:
     }
 
 private:
-    /**
-     * @brief 获取派生类引用
-     * @return 派生类引用
-     */
+    // 获取派生类引用
     [[nodiscard]]
     Derived & derived() noexcept
     {
@@ -94,11 +80,7 @@ private:
     }
 };
 
-/**
- * @brief 常量物理算子调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 常量物理算子调度器
 template <typename Derived, typename ReturnType>
 using ConstPhysicalOperatorDispatcher = PhysicalOperatorDispatcher<
     Derived,
@@ -106,11 +88,7 @@ using ConstPhysicalOperatorDispatcher = PhysicalOperatorDispatcher<
     true
 >;
 
-/**
- * @brief 可变物理算子调度器
- * @tparam Derived 派生类
- * @tparam ReturnType 返回类型
- */
+// 可变物理算子调度器
 template <typename Derived, typename ReturnType>
 using MutablePhysicalOperatorDispatcher = PhysicalOperatorDispatcher<
     Derived,

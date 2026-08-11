@@ -435,7 +435,7 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 [[nodiscard]]
 std::expected<void, ExecutionError> apply_predicate(
     PipelineResult & input,
-    std::optional<std::reference_wrapper<const BoundExpression>> predicate
+    std::optional<const BoundExpression &> predicate
 )
 {
     if (!predicate.has_value()) {
@@ -448,7 +448,7 @@ std::expected<void, ExecutionError> apply_predicate(
         evaluator::ExpressionEvaluator evaluator {evaluator::EvaluationContext {
             .input_values = row.source_record.data.values,
         }};
-        auto matched = evaluator.evaluate_filter(predicate->get());
+        auto matched = evaluator.evaluate_filter(*predicate);
         if (!matched.has_value()) {
             return std::unexpected(from_evaluation_error(std::move(matched.error())));
         }

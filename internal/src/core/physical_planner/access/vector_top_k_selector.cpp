@@ -23,6 +23,7 @@ namespace
 using binder::bound::BoundExpression;
 using binder::bound::BoundFunctionExpression;
 
+// 评估常量表达式
 [[nodiscard]]
 std::optional<common::Value> evaluate_constant(const BoundExpression & expression)
 {
@@ -33,6 +34,7 @@ std::optional<common::Value> evaluate_constant(const BoundExpression & expressio
     return std::move(*value);
 }
 
+// 转换向量距离度量
 [[nodiscard]]
 std::optional<meta::entry::VectorDistanceMetric> vector_metric(
     const BoundFunctionExpression & distance,
@@ -52,6 +54,7 @@ std::optional<meta::entry::VectorDistanceMetric> vector_metric(
     return std::nullopt;
 }
 
+// 选择向量索引
 [[nodiscard]]
 std::optional<common::VIndexId> choose_vector_index(
     const meta::CatalogView & catalog,
@@ -76,6 +79,11 @@ std::optional<common::VIndexId> choose_vector_index(
 }
 
 } // namespace
+
+VectorTopKSelector::VectorTopKSelector(const PhysicalPlannerContext & context) noexcept
+    : context_(context)
+{
+}
 
 std::optional<VectorTopKDecision> VectorTopKSelector::select(
     const logical_planner::op::LogicalLimitOperator & limit

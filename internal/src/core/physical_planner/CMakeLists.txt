@@ -11,6 +11,7 @@ set(PHYSICAL_PLANNER_SOURCES
     operator/physical_sort_operator.cpp
     operator/physical_unary_operator.cpp
     operator/physical_vector_search_operator.cpp
+    plan/physical_plan.cpp
     plan/command/create_collection_plan.cpp
     plan/command/create_database_plan.cpp
     plan/command/create_index_plan.cpp
@@ -35,6 +36,7 @@ set(PHYSICAL_PLANNER_SOURCES
     worker/physical_operator_worker.cpp
     worker/physical_planner_worker.cpp
     worker/physical_query_worker.cpp
+    physical_planner_context.cpp
     physical_planner.cpp
 )
 

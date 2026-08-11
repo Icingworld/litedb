@@ -11,7 +11,7 @@ CreateDatabasePlan::CreateDatabasePlan(std::optional<std::string> database_name)
 {
 }
 
-const std::optional<std::string> &
+std::optional<const std::string &>
 CreateDatabasePlan::database_name() const noexcept
 {
     return database_name_;

@@ -51,13 +51,13 @@ VectorSearchOperator::query_vector() const noexcept
     return *query_vector_;
 }
 
-std::optional<std::reference_wrapper<const binder::bound::BoundExpression>>
+std::optional<const binder::bound::BoundExpression &>
 VectorSearchOperator::predicate() const noexcept
 {
     if (predicate_ == nullptr) {
         return std::nullopt;
     }
-    return std::cref(*predicate_);
+    return *predicate_;
 }
 
 std::size_t VectorSearchOperator::required_count() const noexcept

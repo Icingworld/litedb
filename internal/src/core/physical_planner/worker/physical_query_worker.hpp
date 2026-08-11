@@ -21,18 +21,14 @@ class PhysicalPlan;
 namespace litedb::core::physical_planner
 {
 
-/**
- * @brief 查询类逻辑计划 lowering worker
- */
+// 查询类物理计划工作器
 class PhysicalQueryWorker final
 {
 public:
-    explicit PhysicalQueryWorker(const PhysicalPlannerContext & context) noexcept
-        : context_(context)
-    {
-    }
+    explicit PhysicalQueryWorker(const PhysicalPlannerContext & context) noexcept;
 
 public:
+    // 计划 QUERY 语句
     [[nodiscard]] std::unique_ptr<plan::PhysicalPlan> plan_query(
         logical_planner::plan::QueryPlan & logical_plan
     );

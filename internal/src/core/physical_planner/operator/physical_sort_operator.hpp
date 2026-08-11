@@ -9,9 +9,7 @@
 namespace litedb::core::physical_planner::op
 {
 
-/**
- * @brief 排序算子
- */
+// 排序算子
 class SortOperator final : public PhysicalUnaryOperator
 {
 public:
@@ -21,16 +19,13 @@ public:
     ) noexcept;
 
 public:
-    /**
-     * @brief 获取排序项
-     * @return 排序项
-     */
+    // 获取排序项
     [[nodiscard]]
     const std::vector<binder::bound::BoundOrderByItem> &
     order_by() const noexcept;
 
 private:
-    std::vector<binder::bound::BoundOrderByItem> order_by_;   // 排序项
+    std::vector<binder::bound::BoundOrderByItem> order_by_;
 };
 
 } // namespace litedb::core::physical_planner::op

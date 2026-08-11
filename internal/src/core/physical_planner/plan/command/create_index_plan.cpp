@@ -24,7 +24,7 @@ common::ColumnId CreateIndexPlan::column_id() const noexcept
     return column_id_;
 }
 
-const std::optional<std::string> &
+std::optional<const std::string &>
 CreateIndexPlan::index_name() const noexcept
 {
     return index_name_;

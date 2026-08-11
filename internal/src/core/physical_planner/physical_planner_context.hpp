@@ -5,23 +5,16 @@
 namespace litedb::core::physical_planner
 {
 
-/**
- * @brief Physical Planner worker 共享的只读上下文
- */
+// Physical Planner worker 共享的只读上下文
 class PhysicalPlannerContext final
 {
 public:
-    explicit PhysicalPlannerContext(meta::CatalogView catalog) noexcept
-        : catalog_(catalog)
-    {
-    }
+    explicit PhysicalPlannerContext(meta::CatalogView catalog) noexcept;
 
 public:
+    // 获取目录视图
     [[nodiscard]]
-    const meta::CatalogView & catalog() const noexcept
-    {
-        return catalog_;
-    }
+    const meta::CatalogView & catalog() const noexcept;
 
 private:
     meta::CatalogView catalog_;

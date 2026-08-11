@@ -20,6 +20,12 @@
 namespace litedb::core::physical_planner
 {
 
+PhysicalOperatorWorker::PhysicalOperatorWorker(const PhysicalPlannerContext & context) noexcept
+    : context_(context)
+    , scalar_selector_(context)
+    , vector_selector_(context)
+{}
+
 std::unique_ptr<op::PhysicalOperator> PhysicalOperatorWorker::lower_operator(
     std::unique_ptr<logical_planner::op::LogicalPlanOperator> logical_operator
 )
