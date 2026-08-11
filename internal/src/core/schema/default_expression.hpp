@@ -7,18 +7,14 @@
 namespace litedb::core::schema
 {
 
-/**
- * @brief 默认值表达式类型
- */
+// 默认值表达式类型
 enum class DefaultExpressionKind : std::uint8_t
 {
     Literal = 0,
     Vector,
 };
 
-/**
- * @brief 默认值字面量类型
- */
+// 默认值字面量类型
 enum class DefaultLiteralKind : std::uint8_t
 {
     Null = 0,
@@ -28,9 +24,7 @@ enum class DefaultLiteralKind : std::uint8_t
     String,
 };
 
-/**
- * @brief 可持久化的默认值表达式
- */
+// 可持久化的默认值表达式
 struct DefaultExpression
 {
     DefaultExpressionKind kind {DefaultExpressionKind::Literal};

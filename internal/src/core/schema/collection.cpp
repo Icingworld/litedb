@@ -1,8 +1,8 @@
 #include "core/schema/collection.hpp"
 
-#include "core/common/identifier.hpp"
-
 #include <utility>
+
+#include "core/common/identifier.hpp"
 
 namespace litedb::core::schema
 {
@@ -47,33 +47,33 @@ const std::vector<ColumnSchema> & CollectionSchema::columns() const noexcept
     return columns_;
 }
 
-const ColumnSchema * CollectionSchema::column_at(std::size_t ordinal) const noexcept
+std::optional<const ColumnSchema &> CollectionSchema::column_at(std::size_t ordinal) const noexcept
 {
     if (ordinal >= columns_.size()) {
-        return nullptr;
+        return std::nullopt;
     }
-    return &columns_[ordinal];
+    return columns_[ordinal];
 }
 
-const ColumnSchema * CollectionSchema::find_column(common::ColumnId column_id) const noexcept
+std::optional<const ColumnSchema &> CollectionSchema::find_column(common::ColumnId column_id) const noexcept
 {
     for (const auto & column : columns_) {
         if (column.column_id() == column_id) {
-            return &column;
+            return column;
         }
     }
-    return nullptr;
+    return std::nullopt;
 }
 
-const ColumnSchema * CollectionSchema::find_column(std::string_view column_name) const
+std::optional<const ColumnSchema &> CollectionSchema::find_column(std::string_view column_name) const
 {
     const auto key = common::normalize_identifier(column_name);
     for (const auto & column : columns_) {
         if (common::normalize_identifier(column.column_name()) == key) {
-            return &column;
+            return column;
         }
     }
-    return nullptr;
+    return std::nullopt;
 }
 
 } // namespace litedb::core::schema

@@ -7,32 +7,24 @@
 namespace litedb::core::schema
 {
 
-/**
- * @brief 数据库模型
- */
+// 数据库模型
 class DatabaseSchema
 {
 public:
     DatabaseSchema(common::DatabaseId database_id, std::string database_name);
 
 public:
-    /**
-     * @brief 获取数据库 ID
-     * @return 数据库 ID
-     */
+    // 获取数据库 ID
     [[nodiscard]]
     common::DatabaseId database_id() const noexcept;
 
-    /**
-     * @brief 获取数据库名称
-     * @return 数据库名称
-     */
+    // 获取数据库名称
     [[nodiscard]]
     const std::string & database_name() const noexcept;
 
 private:
-    common::DatabaseId database_id_;    // 数据库 ID
-    std::string database_name_;         // 数据库名称
+    common::DatabaseId database_id_;
+    std::string database_name_;
 };
 
 } // namespace litedb::core::schema
