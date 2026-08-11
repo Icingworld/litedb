@@ -17,23 +17,9 @@
 #include "core/physical_planner/operator/physical_vector_search_operator.hpp"
 #include "core/physical_planner/physical_planner.hpp"
 #include "core/physical_planner/operator/physical_seq_scan_operator.hpp"
-#include "core/physical_planner/plan/dispatcher/physical_plan_dispatcher.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 #include "core/physical_planner/plan/query/query_plan.hpp"
 #include "core/physical_planner/plan/mutation/update_plan.hpp"
-#include "core/physical_planner/plan/command/create_collection_plan.hpp"
-#include "core/physical_planner/plan/command/create_database_plan.hpp"
-#include "core/physical_planner/plan/command/create_index_plan.hpp"
-#include "core/physical_planner/plan/command/create_vector_index_plan.hpp"
-#include "core/physical_planner/plan/command/describe_collection_plan.hpp"
-#include "core/physical_planner/plan/command/drop_collection_plan.hpp"
-#include "core/physical_planner/plan/command/drop_database_plan.hpp"
-#include "core/physical_planner/plan/command/drop_index_plan.hpp"
-#include "core/physical_planner/plan/command/drop_vector_index_plan.hpp"
-#include "core/physical_planner/plan/command/show_collections_plan.hpp"
-#include "core/physical_planner/plan/command/show_databases_plan.hpp"
-#include "core/physical_planner/plan/command/show_indexes_plan.hpp"
-#include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
 #include "core/physical_planner/plan/command/use_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
@@ -127,64 +113,6 @@ struct Fixture
     }
 };
 
-class ExecutorPlanDispatcher final
-    : private physical_planner::plan::ConstPhysicalPlanDispatcher<
-          ExecutorPlanDispatcher,
-          std::expected<executor::ExecutionResult, executor::ExecutionError>
-      >
-{
-    using Result = std::expected<executor::ExecutionResult, executor::ExecutionError>;
-    using Dispatcher = physical_planner::plan::ConstPhysicalPlanDispatcher<
-        ExecutorPlanDispatcher,
-        Result
-    >;
-
-    friend Dispatcher;
-
-public:
-    explicit ExecutorPlanDispatcher(executor::Executor & executor) noexcept
-        : executor_(executor)
-    {
-    }
-
-    [[nodiscard]]
-    Result dispatch(const physical_planner::plan::PhysicalPlan & plan)
-    {
-        return dispatch_plan(plan);
-    }
-
-private:
-    Result visit_use_plan(const physical_planner::plan::UsePlan & plan) { return executor_.execute(plan); }
-    Result visit_create_database_plan(const physical_planner::plan::CreateDatabasePlan &) { return outside_executor(); }
-    Result visit_create_collection_plan(const physical_planner::plan::CreateCollectionPlan &) { return outside_executor(); }
-    Result visit_create_index_plan(const physical_planner::plan::CreateIndexPlan &) { return outside_executor(); }
-    Result visit_create_vector_index_plan(const physical_planner::plan::CreateVectorIndexPlan &) { return outside_executor(); }
-    Result visit_drop_database_plan(const physical_planner::plan::DropDatabasePlan &) { return outside_executor(); }
-    Result visit_drop_collection_plan(const physical_planner::plan::DropCollectionPlan &) { return outside_executor(); }
-    Result visit_drop_index_plan(const physical_planner::plan::DropIndexPlan &) { return outside_executor(); }
-    Result visit_drop_vector_index_plan(const physical_planner::plan::DropVectorIndexPlan &) { return outside_executor(); }
-    Result visit_show_databases_plan(const physical_planner::plan::ShowDatabasesPlan & plan) { return executor_.execute(plan); }
-    Result visit_show_collections_plan(const physical_planner::plan::ShowCollectionsPlan & plan) { return executor_.execute(plan); }
-    Result visit_show_indexes_plan(const physical_planner::plan::ShowIndexesPlan & plan) { return executor_.execute(plan); }
-    Result visit_show_vector_indexes_plan(const physical_planner::plan::ShowVectorIndexesPlan & plan) { return executor_.execute(plan); }
-    Result visit_describe_collection_plan(const physical_planner::plan::DescribeCollectionPlan & plan) { return executor_.execute(plan); }
-    Result visit_insert_plan(const physical_planner::plan::InsertPlan & plan) { return executor_.execute(plan); }
-    Result visit_update_plan(const physical_planner::plan::UpdatePlan & plan) { return executor_.execute(plan); }
-    Result visit_delete_plan(const physical_planner::plan::DeletePlan & plan) { return executor_.execute(plan); }
-    Result visit_query_plan(const physical_planner::plan::QueryPlan & plan) { return executor_.execute(plan); }
-
-    static Result outside_executor()
-    {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "DDL is outside Executor tests",
-        });
-    }
-
-private:
-    executor::Executor & executor_;
-};
-
 std::unique_ptr<parser::ast::StatementNode> parse_ok(std::string_view sql)
 {
     parser::Parser parser {std::string(sql)};
@@ -232,7 +160,7 @@ executor::ExecutionResult execute_ok(Fixture & fixture, std::string_view sql)
             .transaction_manager = *fixture.transaction_manager,
         },
     };
-    auto result = ExecutorPlanDispatcher {executor}.dispatch(*plan);
+    auto result = executor.execute(*plan);
     if (!result.has_value()) {
         throw std::runtime_error(result.error().message());
     }
@@ -251,7 +179,7 @@ executor::ExecutionError execute_error(Fixture & fixture, std::string_view sql)
             .transaction_manager = *fixture.transaction_manager,
         },
     };
-    auto result = ExecutorPlanDispatcher {executor}.dispatch(*plan);
+    auto result = executor.execute(*plan);
     require(!result.has_value(), "statement should fail to execute");
     return std::move(result.error());
 }

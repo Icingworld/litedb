@@ -13,8 +13,7 @@ PhysicalOperatorExecutor::PhysicalOperatorExecutor(
     , storage_(storage)
     , index_engine_(index_engine)
     , vector_index_engine_(vector_index_engine)
-{
-}
+{}
 
 detail::PhysicalExecutionResult PhysicalOperatorExecutor::execute(
     const physical_planner::op::PhysicalOperator & node
@@ -48,13 +47,7 @@ detail::PhysicalExecutionResult PhysicalOperatorExecutor::visit_filter_operator(
     const physical_planner::op::FilterOperator & filter
 )
 {
-    return detail::execute_filter(
-        filter,
-        catalog_,
-        storage_,
-        index_engine_,
-        vector_index_engine_
-    );
+    return detail::execute_filter(filter, catalog_, storage_, index_engine_, vector_index_engine_);
 }
 
 detail::PhysicalExecutionResult PhysicalOperatorExecutor::visit_projection_operator(
@@ -87,13 +80,7 @@ detail::PhysicalExecutionResult PhysicalOperatorExecutor::visit_limit_operator(
     const physical_planner::op::LimitOperator & limit
 )
 {
-    return detail::execute_limit(
-        limit,
-        catalog_,
-        storage_,
-        index_engine_,
-        vector_index_engine_
-    );
+    return detail::execute_limit(limit, catalog_, storage_, index_engine_, vector_index_engine_);
 }
 
 namespace detail
@@ -112,7 +99,8 @@ PhysicalExecutionResult execute_physical(
         storage,
         index_engine,
         vector_index_engine,
-    }.execute(node);
+    }
+        .execute(node);
 }
 
 } // namespace detail

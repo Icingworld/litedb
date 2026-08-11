@@ -9,10 +9,10 @@
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_engine.hpp"
 #include "core/meta/meta_engine.hpp"
-#include "core/physical_planner/operator/physical_operator.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_index_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
+#include "core/physical_planner/operator/physical_operator.hpp"
 #include "core/physical_planner/operator/physical_projection_operator.hpp"
 #include "core/physical_planner/operator/physical_seq_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_sort_operator.hpp"
@@ -52,10 +52,8 @@ struct MaterializedResult
     std::vector<MaterializedRow> rows;
 };
 
-using PhysicalExecutionResult =
-    std::expected<MaterializedResult, ExecutionError>;
-using ExecutionResultExpected =
-    std::expected<ExecutionResult, ExecutionError>;
+using PhysicalExecutionResult = std::expected<MaterializedResult, ExecutionError>;
+using ExecutionResultExpected = std::expected<ExecutionResult, ExecutionError>;
 
 [[nodiscard]]
 PhysicalExecutionResult execute_physical(
@@ -135,10 +133,8 @@ ExecutionResultExpected execute_query(
 );
 
 [[nodiscard]]
-ExecutionResultExpected execute_use(
-    const physical_planner::plan::UsePlan & plan,
-    meta::CatalogView & catalog
-);
+ExecutionResultExpected
+execute_use(const physical_planner::plan::UsePlan & plan, meta::CatalogView & catalog);
 
 [[nodiscard]]
 ExecutionResultExpected execute_insert(

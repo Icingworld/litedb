@@ -7,8 +7,7 @@ namespace litedb::core::executor
 
 MutationExecutor::MutationExecutor(ExecutionContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<ExecutionResult, ExecutionError> MutationExecutor::execute(
     const physical_planner::plan::DeletePlan & plan
@@ -28,11 +27,7 @@ std::expected<ExecutionResult, ExecutionError> MutationExecutor::execute(
     const physical_planner::plan::InsertPlan & plan
 )
 {
-    return detail::execute_insert(
-        plan,
-        context_.storage,
-        context_.transaction_manager
-    );
+    return detail::execute_insert(plan, context_.storage, context_.transaction_manager);
 }
 
 std::expected<ExecutionResult, ExecutionError> MutationExecutor::execute(

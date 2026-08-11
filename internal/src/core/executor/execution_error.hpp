@@ -7,6 +7,7 @@
 namespace litedb::core::executor
 {
 
+// 执行错误码
 enum class ExecutionErrorCode : std::uint8_t
 {
     UnsupportedStatement,

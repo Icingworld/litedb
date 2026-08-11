@@ -1,6 +1,6 @@
 set(EXECUTOR_SOURCES
     executor.cpp
-    execution_detail.cpp
+    executor_detail.cpp
     command_executor.cpp
     mutation_executor.cpp
     query_executor.cpp

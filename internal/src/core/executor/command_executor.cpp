@@ -7,8 +7,7 @@ namespace litedb::core::executor
 
 CommandExecutor::CommandExecutor(ExecutionContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<ExecutionResult, ExecutionError> CommandExecutor::execute(
     const physical_planner::plan::DescribeCollectionPlan & plan

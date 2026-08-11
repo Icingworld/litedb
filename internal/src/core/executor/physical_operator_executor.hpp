@@ -7,15 +7,11 @@ namespace litedb::core::executor
 {
 
 class PhysicalOperatorExecutor final
-    : private physical_planner::op::ConstPhysicalOperatorDispatcher<
-          PhysicalOperatorExecutor,
-          detail::PhysicalExecutionResult
-      >
+    : private physical_planner::op::
+          ConstPhysicalOperatorDispatcher<PhysicalOperatorExecutor, detail::PhysicalExecutionResult>
 {
-    friend physical_planner::op::ConstPhysicalOperatorDispatcher<
-        PhysicalOperatorExecutor,
-        detail::PhysicalExecutionResult
-    >;
+    friend physical_planner::op::
+        ConstPhysicalOperatorDispatcher<PhysicalOperatorExecutor, detail::PhysicalExecutionResult>;
 
 public:
     PhysicalOperatorExecutor(
@@ -26,36 +22,41 @@ public:
     ) noexcept;
 
     [[nodiscard]]
-    detail::PhysicalExecutionResult execute(
-        const physical_planner::op::PhysicalOperator & node
-    );
+    detail::PhysicalExecutionResult execute(const physical_planner::op::PhysicalOperator & node);
 
 private:
-    [[nodiscard]] detail::PhysicalExecutionResult visit_seq_scan_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_seq_scan_operator(
         const physical_planner::op::SeqScanOperator & scan
     );
 
-    [[nodiscard]] detail::PhysicalExecutionResult visit_index_scan_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_index_scan_operator(
         const physical_planner::op::IndexScanOperator & scan
     );
 
-    [[nodiscard]] detail::PhysicalExecutionResult visit_vector_search_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_vector_search_operator(
         const physical_planner::op::VectorSearchOperator & search
     );
 
-    [[nodiscard]] detail::PhysicalExecutionResult visit_filter_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_filter_operator(
         const physical_planner::op::FilterOperator & filter
     );
 
-    [[nodiscard]] detail::PhysicalExecutionResult visit_projection_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_projection_operator(
         const physical_planner::op::ProjectionOperator & projection
     );
 
-    [[nodiscard]] detail::PhysicalExecutionResult visit_sort_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_sort_operator(
         const physical_planner::op::SortOperator & order_by
     );
 
-    [[nodiscard]] detail::PhysicalExecutionResult visit_limit_operator(
+    [[nodiscard]]
+    detail::PhysicalExecutionResult visit_limit_operator(
         const physical_planner::op::LimitOperator & limit
     );
 

@@ -433,10 +433,8 @@ std::expected<PipelineResult, ExecutionError> execute_index_scan(
 }
 
 [[nodiscard]]
-std::expected<void, ExecutionError> apply_predicate(
-    PipelineResult & input,
-    std::optional<const BoundExpression &> predicate
-)
+std::expected<void, ExecutionError>
+apply_predicate(PipelineResult & input, std::optional<const BoundExpression &> predicate)
 {
     if (!predicate.has_value()) {
         return {};

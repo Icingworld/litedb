@@ -7,8 +7,7 @@ namespace litedb::core::executor
 
 QueryExecutor::QueryExecutor(ExecutionContext & context) noexcept
     : context_(context)
-{
-}
+{}
 
 std::expected<ExecutionResult, ExecutionError> QueryExecutor::execute(
     const physical_planner::plan::QueryPlan & plan
