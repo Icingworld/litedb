@@ -24,8 +24,7 @@ ColumnEntry::ColumnEntry(
     , nullable_(nullable)
     , default_expression_(std::move(default_expression))
     , comment_(std::move(comment))
-{
-}
+{}
 
 common::ColumnId ColumnEntry::id() const noexcept
 {

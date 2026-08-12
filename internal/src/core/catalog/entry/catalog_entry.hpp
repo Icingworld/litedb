@@ -24,13 +24,13 @@ public:
     CatalogEntry(CatalogEntryKind kind, common::CatalogEntryId id, std::string name);
 
     CatalogEntry(const CatalogEntry &) = delete;
-    
+
     CatalogEntry & operator=(const CatalogEntry &) = delete;
-    
+
     CatalogEntry(CatalogEntry &&) noexcept = default;
-    
+
     CatalogEntry & operator=(CatalogEntry &&) noexcept = default;
-    
+
     virtual ~CatalogEntry() noexcept = default;
 
 public:

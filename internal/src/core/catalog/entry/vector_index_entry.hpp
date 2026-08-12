@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <string>
 
-#include "core/common/ids.hpp"
 #include "core/catalog/entry/catalog_entry.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::catalog::entry
 {
@@ -26,10 +26,10 @@ enum class VectorDistanceMetric
 // HNSW 索引参数
 struct HnswOptions
 {
-    std::size_t max_neighbors {16};          // 最大邻居数量
-    std::size_t ef_construction {200};       // 构建候选数量
-    std::size_t ef_search_default {50};      // 默认搜索候选数量
-    std::size_t random_seed {0};             // 随机种子
+    std::size_t max_neighbors {16}; // 最大邻居数量
+    std::size_t ef_construction {200}; // 构建候选数量
+    std::size_t ef_search_default {50}; // 默认搜索候选数量
+    std::size_t random_seed {0}; // 随机种子
 };
 
 // 向量索引项
@@ -93,12 +93,12 @@ public:
     std::size_t random_seed() const noexcept;
 
 private:
-    common::CollectionId collection_id_;      // 集合 ID
-    common::ColumnId column_id_;              // 列 ID
-    VectorIndexKind index_kind_;              // 向量索引类型
-    VectorDistanceMetric metric_;             // 距离度量
-    std::size_t dimension_;                   // 向量维度
-    HnswOptions hnsw_options_;                // HNSW 参数
+    common::CollectionId collection_id_; // 集合 ID
+    common::ColumnId column_id_; // 列 ID
+    VectorIndexKind index_kind_; // 向量索引类型
+    VectorDistanceMetric metric_; // 距离度量
+    std::size_t dimension_; // 向量维度
+    HnswOptions hnsw_options_; // HNSW 参数
 };
 
 } // namespace litedb::core::catalog::entry

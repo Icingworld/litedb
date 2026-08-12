@@ -1,11 +1,11 @@
 #pragma once
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-#include <span>
 
 #include "core/catalog/entry/catalog_entry.hpp"
 
@@ -101,14 +101,15 @@ private:
     void remove_vector_index(std::string_view index_key);
 
 private:
-    common::DatabaseId database_id_;                                            // 数据库 ID
-    std::vector<common::ColumnId> column_ids_;                                  // 列 ID 列表
-    std::vector<common::IndexId> index_ids_;                                    // 索引 ID 列表
-    std::vector<common::VIndexId> vector_index_ids_;                            // 向量索引 ID 列表
-    std::unordered_map<std::string, common::ColumnId> columns_by_key_;          // 列键到 ID 的映射
-    std::unordered_map<std::string, common::IndexId> indexes_by_key_;           // 索引键到 ID 的映射
-    std::unordered_map<std::string, common::VIndexId> vector_indexes_by_key_;   // 向量索引键到 ID 的映射
-    std::optional<std::string> comment_;                                        // 集合注释
+    common::DatabaseId database_id_; // 数据库 ID
+    std::vector<common::ColumnId> column_ids_; // 列 ID 列表
+    std::vector<common::IndexId> index_ids_; // 索引 ID 列表
+    std::vector<common::VIndexId> vector_index_ids_; // 向量索引 ID 列表
+    std::unordered_map<std::string, common::ColumnId> columns_by_key_; // 列键到 ID 的映射
+    std::unordered_map<std::string, common::IndexId> indexes_by_key_; // 索引键到 ID 的映射
+    std::unordered_map<std::string, common::VIndexId>
+        vector_indexes_by_key_; // 向量索引键到 ID 的映射
+    std::optional<std::string> comment_; // 集合注释
 };
 
 } // namespace litedb::core::catalog::entry

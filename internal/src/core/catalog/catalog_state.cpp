@@ -22,7 +22,8 @@ bool empty(std::string_view value) noexcept
 [[nodiscard]]
 bool valid_logical_type(const common::LogicalType & type) noexcept
 {
-    if (static_cast<std::uint8_t>(type.id) > static_cast<std::uint8_t>(common::LogicalTypeId::Vector)) {
+    if (static_cast<std::uint8_t>(type.id) >
+        static_cast<std::uint8_t>(common::LogicalTypeId::Vector)) {
         return false;
     }
     if (type.id == common::LogicalTypeId::Varchar || type.id == common::LogicalTypeId::Vector) {
@@ -32,14 +33,17 @@ bool valid_logical_type(const common::LogicalType & type) noexcept
 }
 
 [[nodiscard]]
-bool valid_default_expression(const schema::DefaultExpression & expression, std::size_t depth = 0) noexcept
+bool valid_default_expression(
+    const schema::DefaultExpression & expression,
+    std::size_t depth = 0
+) noexcept
 {
     constexpr std::size_t MaximumDepth = 64;
-    if (depth >= MaximumDepth
-        || static_cast<std::uint8_t>(expression.kind)
-                > static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector)
-        || static_cast<std::uint8_t>(expression.literal_kind)
-                > static_cast<std::uint8_t>(schema::DefaultLiteralKind::String)) {
+    if (depth >= MaximumDepth ||
+        static_cast<std::uint8_t>(expression.kind) >
+            static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector) ||
+        static_cast<std::uint8_t>(expression.literal_kind) >
+            static_cast<std::uint8_t>(schema::DefaultLiteralKind::String)) {
         return false;
     }
     if (expression.kind == schema::DefaultExpressionKind::Literal) {
@@ -49,8 +53,8 @@ bool valid_default_expression(const schema::DefaultExpression & expression, std:
         return false;
     }
     return std::ranges::all_of(expression.elements, [depth](const auto & element) {
-        return element.kind == schema::DefaultExpressionKind::Literal
-            && valid_default_expression(element, depth + 1);
+        return element.kind == schema::DefaultExpressionKind::Literal &&
+               valid_default_expression(element, depth + 1);
     });
 }
 
@@ -97,7 +101,8 @@ std::optional<entry::DatabaseEntry &> CatalogState::find_database_mutable(common
     return *it->second.get();
 }
 
-std::optional<const entry::CollectionEntry &> CatalogState::find_collection(common::DatabaseId database_id, std::string_view name) const
+std::optional<const entry::CollectionEntry &>
+CatalogState::find_collection(common::DatabaseId database_id, std::string_view name) const
 {
     const auto database = find_database(database_id);
     if (!database) {
@@ -110,7 +115,9 @@ std::optional<const entry::CollectionEntry &> CatalogState::find_collection(comm
     return find_collection(*id);
 }
 
-std::optional<const entry::CollectionEntry &> CatalogState::find_collection(common::CollectionId id) const
+std::optional<const entry::CollectionEntry &> CatalogState::find_collection(
+    common::CollectionId id
+) const
 {
     const auto it = collections_.find(id);
     if (it == collections_.end()) {
@@ -119,7 +126,9 @@ std::optional<const entry::CollectionEntry &> CatalogState::find_collection(comm
     return *it->second.get();
 }
 
-std::optional<entry::CollectionEntry &> CatalogState::find_collection_mutable(common::CollectionId id)
+std::optional<entry::CollectionEntry &> CatalogState::find_collection_mutable(
+    common::CollectionId id
+)
 {
     const auto it = collections_.find(id);
     if (it == collections_.end()) {
@@ -128,7 +137,8 @@ std::optional<entry::CollectionEntry &> CatalogState::find_collection_mutable(co
     return *it->second.get();
 }
 
-std::optional<const entry::ColumnEntry &> CatalogState::find_column(common::CollectionId collection_id, std::string_view name) const
+std::optional<const entry::ColumnEntry &>
+CatalogState::find_column(common::CollectionId collection_id, std::string_view name) const
 {
     const auto collection = find_collection(collection_id);
     if (!collection) {
@@ -150,7 +160,8 @@ std::optional<const entry::ColumnEntry &> CatalogState::find_column(common::Colu
     return *it->second.get();
 }
 
-std::optional<const entry::IndexEntry &> CatalogState::find_index(common::CollectionId collection_id, std::string_view name) const
+std::optional<const entry::IndexEntry &>
+CatalogState::find_index(common::CollectionId collection_id, std::string_view name) const
 {
     const auto collection = find_collection(collection_id);
     if (!collection) {
@@ -172,7 +183,8 @@ std::optional<const entry::IndexEntry &> CatalogState::find_index(common::IndexI
     return *it->second.get();
 }
 
-std::optional<const entry::VectorIndexEntry &> CatalogState::find_vector_index(common::CollectionId collection_id, std::string_view name) const
+std::optional<const entry::VectorIndexEntry &>
+CatalogState::find_vector_index(common::CollectionId collection_id, std::string_view name) const
 {
     const auto collection = find_collection(collection_id);
     if (!collection) {
@@ -185,7 +197,9 @@ std::optional<const entry::VectorIndexEntry &> CatalogState::find_vector_index(c
     return find_vector_index(*id);
 }
 
-std::optional<const entry::VectorIndexEntry &> CatalogState::find_vector_index(common::VIndexId id) const
+std::optional<const entry::VectorIndexEntry &> CatalogState::find_vector_index(
+    common::VIndexId id
+) const
 {
     const auto it = vector_indexes_.find(id);
     if (it == vector_indexes_.end()) {
@@ -206,7 +220,9 @@ std::vector<std::reference_wrapper<const entry::DatabaseEntry>> CatalogState::li
     return result;
 }
 
-std::vector<std::reference_wrapper<const entry::CollectionEntry>> CatalogState::list_collections(common::DatabaseId database_id) const
+std::vector<std::reference_wrapper<const entry::CollectionEntry>> CatalogState::list_collections(
+    common::DatabaseId database_id
+) const
 {
     std::vector<std::reference_wrapper<const entry::CollectionEntry>> result;
     const auto database = find_database(database_id);
@@ -222,7 +238,9 @@ std::vector<std::reference_wrapper<const entry::CollectionEntry>> CatalogState::
     return result;
 }
 
-std::vector<std::reference_wrapper<const entry::ColumnEntry>> CatalogState::list_columns(common::CollectionId collection_id) const
+std::vector<std::reference_wrapper<const entry::ColumnEntry>> CatalogState::list_columns(
+    common::CollectionId collection_id
+) const
 {
     std::vector<std::reference_wrapper<const entry::ColumnEntry>> result;
     const auto collection = find_collection(collection_id);
@@ -238,7 +256,9 @@ std::vector<std::reference_wrapper<const entry::ColumnEntry>> CatalogState::list
     return result;
 }
 
-std::vector<std::reference_wrapper<const entry::IndexEntry>> CatalogState::list_indexes(common::CollectionId collection_id) const
+std::vector<std::reference_wrapper<const entry::IndexEntry>> CatalogState::list_indexes(
+    common::CollectionId collection_id
+) const
 {
     std::vector<std::reference_wrapper<const entry::IndexEntry>> result;
     const auto collection = find_collection(collection_id);
@@ -254,7 +274,8 @@ std::vector<std::reference_wrapper<const entry::IndexEntry>> CatalogState::list_
     return result;
 }
 
-std::vector<std::reference_wrapper<const entry::VectorIndexEntry>> CatalogState::list_vector_indexes(common::CollectionId collection_id) const
+std::vector<std::reference_wrapper<const entry::VectorIndexEntry>>
+CatalogState::list_vector_indexes(common::CollectionId collection_id) const
 {
     std::vector<std::reference_wrapper<const entry::VectorIndexEntry>> result;
     const auto collection = find_collection(collection_id);
@@ -270,17 +291,26 @@ std::vector<std::reference_wrapper<const entry::VectorIndexEntry>> CatalogState:
     return result;
 }
 
-std::expected<common::DatabaseId, CatalogError> CatalogState::create_database(const CreateDatabaseRequest & request)
+std::expected<common::DatabaseId, CatalogError> CatalogState::create_database(
+    const CreateDatabaseRequest & request
+)
 {
     if (empty(request.database_name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Database name cannot be empty"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Database name cannot be empty")
+        );
     }
     const auto key = common::normalize_identifier(request.database_name);
     if (database_keys_.contains(key)) {
-        return std::unexpected(make_error(CatalogErrorCode::DuplicateDatabase, "Database already exists: " + request.database_name));
+        return std::unexpected(make_error(
+            CatalogErrorCode::DuplicateDatabase,
+            "Database already exists: " + request.database_name
+        ));
     }
     if (!can_allocate(next_database_id_)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Database ID space is exhausted"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Database ID space is exhausted")
+        );
     }
     const auto id = next_database_id_++;
     auto database = std::make_unique<entry::DatabaseEntry>(id, request.database_name);
@@ -294,7 +324,9 @@ std::expected<void, CatalogError> CatalogState::drop_database(const DropDatabase
 {
     const auto database = find_database(request.database_id);
     if (!database) {
-        return std::unexpected(make_error(CatalogErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::DatabaseNotFound, "Database not found")
+        );
     }
     const std::string key = database->key();
     const std::vector<common::CollectionId> collection_ids {
@@ -304,15 +336,22 @@ std::expected<void, CatalogError> CatalogState::drop_database(const DropDatabase
 
     const auto database_key = database_keys_.find(key);
     if (database_key == database_keys_.end() || database_key->second != request.database_id) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Database name index is inconsistent"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Database name index is inconsistent")
+        );
     }
     if (std::ranges::count(database_ids_, request.database_id) != 1) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Database ID index is inconsistent"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Database ID index is inconsistent")
+        );
     }
     for (const auto collection_id : collection_ids) {
         const auto collection = find_collection(collection_id);
         if (!collection || collection->database_id() != request.database_id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Database collection index is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Database collection index is inconsistent"
+            ));
         }
         if (auto validated = validate_collection_for_erase(collection_id); !validated) {
             return validated;
@@ -327,14 +366,20 @@ std::expected<void, CatalogError> CatalogState::drop_database(const DropDatabase
     return {};
 }
 
-std::expected<common::CollectionId, CatalogError> CatalogState::create_collection(const CreateCollectionRequest & request)
+std::expected<common::CollectionId, CatalogError> CatalogState::create_collection(
+    const CreateCollectionRequest & request
+)
 {
     const auto database = find_database_mutable(request.database_id);
     if (!database) {
-        return std::unexpected(make_error(CatalogErrorCode::DatabaseNotFound, "Database not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::DatabaseNotFound, "Database not found")
+        );
     }
     if (empty(request.collection_name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection name cannot be empty"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Collection name cannot be empty")
+        );
     }
     const auto key = common::normalize_identifier(request.collection_name);
     if (const auto existing = database->find_collection_id(key)) {
@@ -344,19 +389,26 @@ std::expected<common::CollectionId, CatalogError> CatalogState::create_collectio
         ));
     }
     if (request.columns.empty()) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Collection must have at least one column"));
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidArgument,
+            "Collection must have at least one column"
+        ));
     }
     std::unordered_set<std::string> column_keys;
     std::size_t unique_column_count = 0;
     for (const auto & column : request.columns) {
         if (empty(column.name)) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Column name cannot be empty"));
+            return std::unexpected(
+                make_error(CatalogErrorCode::InvalidArgument, "Column name cannot be empty")
+            );
         }
         if (!column_keys.insert(common::normalize_identifier(column.name)).second) {
-            return std::unexpected(make_error(CatalogErrorCode::DuplicateColumn, "Duplicate column: " + column.name));
+            return std::unexpected(
+                make_error(CatalogErrorCode::DuplicateColumn, "Duplicate column: " + column.name)
+            );
         }
-        if (!valid_logical_type(column.type)
-            || (column.default_expression && !valid_default_expression(*column.default_expression))) {
+        if (!valid_logical_type(column.type) ||
+            (column.default_expression && !valid_default_expression(*column.default_expression))) {
             return std::unexpected(make_error(
                 CatalogErrorCode::InvalidArgument,
                 "Invalid column type or default expression: " + column.name
@@ -370,9 +422,9 @@ std::expected<common::CollectionId, CatalogError> CatalogState::create_collectio
         }
         unique_column_count += column.unique ? 1U : 0U;
     }
-    if (!can_allocate(next_collection_id_)
-        || !can_allocate(next_column_id_, request.columns.size())
-        || !can_allocate(next_index_id_, unique_column_count)) {
+    if (!can_allocate(next_collection_id_) ||
+        !can_allocate(next_column_id_, request.columns.size()) ||
+        !can_allocate(next_index_id_, unique_column_count)) {
         return std::unexpected(make_error(
             CatalogErrorCode::InvalidState,
             "Collection, column, or implicit unique index ID space is exhausted"
@@ -440,54 +492,83 @@ void CatalogState::erase_collection(common::CollectionId id)
     collections_.erase(collection);
 }
 
-std::expected<void, CatalogError> CatalogState::validate_collection_for_erase(common::CollectionId id) const
+std::expected<void, CatalogError> CatalogState::validate_collection_for_erase(
+    common::CollectionId id
+) const
 {
     const auto collection = find_collection(id);
     if (!collection) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection entry is missing"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Collection entry is missing")
+        );
     }
     for (const auto column_id : collection->column_ids()) {
         const auto column = find_column(column_id);
         if (!column || column->collection_id() != id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection column index is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Collection column index is inconsistent"
+            ));
         }
         const auto indexed_column_id = collection->find_column_id(column->key());
         if (!indexed_column_id || *indexed_column_id != column_id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection column name index is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Collection column name index is inconsistent"
+            ));
         }
     }
     for (const auto index_id : collection->index_ids()) {
         const auto index = find_index(index_id);
         if (!index || index->collection_id() != id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection index reference is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Collection index reference is inconsistent"
+            ));
         }
         const auto indexed_index_id = collection->find_index_id(index->key());
         if (!indexed_index_id || *indexed_index_id != index_id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection index name map is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Collection index name map is inconsistent"
+            ));
         }
         const auto column = find_column(index->column_id());
         if (!column || column->collection_id() != id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Index column reference is inconsistent"));
+            return std::unexpected(
+                make_error(CatalogErrorCode::InvalidState, "Index column reference is inconsistent")
+            );
         }
     }
     for (const auto vector_index_id : collection->vector_index_ids()) {
         const auto index = find_vector_index(vector_index_id);
         if (!index || index->collection_id() != id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection vector index reference is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Collection vector index reference is inconsistent"
+            ));
         }
         const auto indexed_index_id = collection->find_vector_index_id(index->key());
         if (!indexed_index_id || *indexed_index_id != vector_index_id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection vector index name map is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Collection vector index name map is inconsistent"
+            ));
         }
         const auto column = find_column(index->column_id());
         if (!column || column->collection_id() != id) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Vector index column reference is inconsistent"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidState,
+                "Vector index column reference is inconsistent"
+            ));
         }
     }
     return {};
 }
 
-std::expected<void, CatalogError> CatalogState::drop_collection(const DropCollectionRequest & request)
+std::expected<void, CatalogError> CatalogState::drop_collection(
+    const DropCollectionRequest & request
+)
 {
     const auto collection = find_collection(request.collection_id);
     if (!collection) {
@@ -520,34 +601,55 @@ std::expected<void, CatalogError> CatalogState::drop_collection(const DropCollec
     return {};
 }
 
-std::expected<common::IndexId, CatalogError> CatalogState::create_index(const CreateIndexRequest & request)
+std::expected<common::IndexId, CatalogError> CatalogState::create_index(
+    const CreateIndexRequest & request
+)
 {
     const auto collection = find_collection_mutable(request.collection_id);
     if (!collection) {
-        return std::unexpected(make_error(CatalogErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::CollectionNotFound, "Collection not found")
+        );
     }
     if (empty(request.index_name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Index name cannot be empty"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Index name cannot be empty")
+        );
     }
     const auto key = common::normalize_identifier(request.index_name);
     if (collection->contains_index(key)) {
-        return std::unexpected(make_error(CatalogErrorCode::DuplicateIndex, "Index already exists: " + request.index_name));
+        return std::unexpected(make_error(
+            CatalogErrorCode::DuplicateIndex,
+            "Index already exists: " + request.index_name
+        ));
     }
     if (collection->contains_vector_index(key)) {
-        return std::unexpected(make_error(CatalogErrorCode::DuplicateIndex, "Index name already exists: " + request.index_name));
+        return std::unexpected(make_error(
+            CatalogErrorCode::DuplicateIndex,
+            "Index name already exists: " + request.index_name
+        ));
     }
     if (request.kind != entry::IndexKind::BTree) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Scalar index kind must be BTREE"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Scalar index kind must be BTREE")
+        );
     }
     const auto column = find_column(request.column_id);
     if (!column || column->collection_id() != request.collection_id) {
-        return std::unexpected(make_error(CatalogErrorCode::ColumnNotFound, "Index column not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::ColumnNotFound, "Index column not found")
+        );
     }
     if (column->type().id == common::LogicalTypeId::Vector) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Scalar index cannot contain a VECTOR column"));
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidArgument,
+            "Scalar index cannot contain a VECTOR column"
+        ));
     }
     if (!can_allocate(next_index_id_)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Index ID space is exhausted"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Index ID space is exhausted")
+        );
     }
     const auto id = next_index_id_++;
     auto index = std::make_unique<entry::IndexEntry>(
@@ -571,19 +673,26 @@ std::expected<void, CatalogError> CatalogState::drop_index(const DropIndexReques
     }
     const auto collection = find_collection_mutable(index->collection_id());
     if (!collection) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Index parent collection not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Index parent collection not found")
+        );
     }
     const std::string key = index->key();
     const auto indexed_index_id = collection->find_index_id(key);
     if (!indexed_index_id || *indexed_index_id != request.index_id) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection index map is inconsistent"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Collection index map is inconsistent")
+        );
     }
     const auto column_id = index->column_id();
     const auto column = find_column(column_id);
     if (!column || column->collection_id() != index->collection_id()) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Index column reference is inconsistent"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Index column reference is inconsistent")
+        );
     }
-    if (column->unique() && index->unique() && index->name() == implicit_unique_index_name(column_id)) {
+    if (column->unique() && index->unique() &&
+        index->name() == implicit_unique_index_name(column_id)) {
         return std::unexpected(make_error(
             CatalogErrorCode::InvalidArgument,
             "Implicit UNIQUE indexes cannot be dropped"
@@ -594,14 +703,20 @@ std::expected<void, CatalogError> CatalogState::drop_index(const DropIndexReques
     return {};
 }
 
-std::expected<common::VIndexId, CatalogError> CatalogState::create_vector_index(const CreateVectorIndexRequest & request)
+std::expected<common::VIndexId, CatalogError> CatalogState::create_vector_index(
+    const CreateVectorIndexRequest & request
+)
 {
     const auto collection = find_collection_mutable(request.collection_id);
     if (!collection) {
-        return std::unexpected(make_error(CatalogErrorCode::CollectionNotFound, "Collection not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::CollectionNotFound, "Collection not found")
+        );
     }
     if (empty(request.vector_index_name)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Vector index name cannot be empty"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Vector index name cannot be empty")
+        );
     }
     const auto key = common::normalize_identifier(request.vector_index_name);
     if (collection->contains_vector_index(key)) {
@@ -618,23 +733,35 @@ std::expected<common::VIndexId, CatalogError> CatalogState::create_vector_index(
     }
     const auto column = find_column(request.column_id);
     if (!column || column->collection_id() != request.collection_id) {
-        return std::unexpected(make_error(CatalogErrorCode::ColumnNotFound, "Vector index column not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::ColumnNotFound, "Vector index column not found")
+        );
     }
-    if (column->type().id != common::LogicalTypeId::Vector || !column->type().parameter || *column->type().parameter == 0) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Vector index requires a VECTOR(n) column"));
+    if (column->type().id != common::LogicalTypeId::Vector || !column->type().parameter ||
+        *column->type().parameter == 0) {
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidArgument,
+            "Vector index requires a VECTOR(n) column"
+        ));
     }
-    if (request.kind != entry::VectorIndexKind::Hnsw
-        || static_cast<std::uint8_t>(request.metric)
-                > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid vector index kind or metric"));
+    if (request.kind != entry::VectorIndexKind::Hnsw ||
+        static_cast<std::uint8_t>(request.metric) >
+            static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Invalid vector index kind or metric")
+        );
     }
-    if (request.hnsw_options.max_neighbors == 0
-        || request.hnsw_options.ef_construction < request.hnsw_options.max_neighbors
-        || request.hnsw_options.ef_search_default == 0) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidArgument, "Invalid HNSW options"));
+    if (request.hnsw_options.max_neighbors == 0 ||
+        request.hnsw_options.ef_construction < request.hnsw_options.max_neighbors ||
+        request.hnsw_options.ef_search_default == 0) {
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidArgument, "Invalid HNSW options")
+        );
     }
     if (!can_allocate(next_vector_index_id_)) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Vector index ID space is exhausted"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Vector index ID space is exhausted")
+        );
     }
     const auto id = next_vector_index_id_++;
     auto index = std::make_unique<entry::VectorIndexEntry>(
@@ -652,24 +779,36 @@ std::expected<common::VIndexId, CatalogError> CatalogState::create_vector_index(
     return id;
 }
 
-std::expected<void, CatalogError> CatalogState::drop_vector_index(const DropVectorIndexRequest & request)
+std::expected<void, CatalogError> CatalogState::drop_vector_index(
+    const DropVectorIndexRequest & request
+)
 {
     const auto index = find_vector_index(request.vector_index_id);
     if (!index) {
-        return std::unexpected(make_error(CatalogErrorCode::VectorIndexNotFound, "Vector index not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::VectorIndexNotFound, "Vector index not found")
+        );
     }
     const auto collection = find_collection_mutable(index->collection_id());
     if (!collection) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Vector index parent collection not found"));
+        return std::unexpected(
+            make_error(CatalogErrorCode::InvalidState, "Vector index parent collection not found")
+        );
     }
     const std::string key = index->key();
     const auto indexed_index_id = collection->find_vector_index_id(key);
     if (!indexed_index_id || *indexed_index_id != request.vector_index_id) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Collection vector index map is inconsistent"));
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidState,
+            "Collection vector index map is inconsistent"
+        ));
     }
     const auto column = find_column(index->column_id());
     if (!column || column->collection_id() != index->collection_id()) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidState, "Vector index column reference is inconsistent"));
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidState,
+            "Vector index column reference is inconsistent"
+        ));
     }
     collection->remove_vector_index(key);
     vector_indexes_.erase(request.vector_index_id);
@@ -759,11 +898,19 @@ std::expected<void, CatalogError> CatalogState::restore(const CatalogSnapshot & 
     common::VIndexId max_vector_index = 0;
     for (const auto & database_snapshot : source.databases) {
         if (database_snapshot.id == 0 || empty(database_snapshot.name)) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid database in catalog snapshot"));
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidSnapshot,
+                "Invalid database in catalog snapshot"
+            ));
         }
-        auto database = std::make_unique<entry::DatabaseEntry>(database_snapshot.id, database_snapshot.name);
-        if (rebuilt.databases_.contains(database_snapshot.id) || rebuilt.database_keys_.contains(database->key())) {
-            return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Duplicate database in catalog snapshot"));
+        auto database =
+            std::make_unique<entry::DatabaseEntry>(database_snapshot.id, database_snapshot.name);
+        if (rebuilt.databases_.contains(database_snapshot.id) ||
+            rebuilt.database_keys_.contains(database->key())) {
+            return std::unexpected(make_error(
+                CatalogErrorCode::InvalidSnapshot,
+                "Duplicate database in catalog snapshot"
+            ));
         }
         auto * database_ptr = database.get();
         rebuilt.database_ids_.push_back(database_snapshot.id);
@@ -771,13 +918,19 @@ std::expected<void, CatalogError> CatalogState::restore(const CatalogSnapshot & 
         rebuilt.databases_.emplace(database_snapshot.id, std::move(database));
         max_database = std::max(max_database, database_snapshot.id);
         for (const auto & collection_snapshot : database_snapshot.collections) {
-            if (collection_snapshot.id == 0
-                || collection_snapshot.database_id != database_snapshot.id
-                || empty(collection_snapshot.name)) {
-                return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid collection in catalog snapshot"));
+            if (collection_snapshot.id == 0 ||
+                collection_snapshot.database_id != database_snapshot.id ||
+                empty(collection_snapshot.name)) {
+                return std::unexpected(make_error(
+                    CatalogErrorCode::InvalidSnapshot,
+                    "Invalid collection in catalog snapshot"
+                ));
             }
             if (collection_snapshot.columns.empty()) {
-                return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Collection snapshot must contain columns"));
+                return std::unexpected(make_error(
+                    CatalogErrorCode::InvalidSnapshot,
+                    "Collection snapshot must contain columns"
+                ));
             }
             auto collection = std::make_unique<entry::CollectionEntry>(
                 collection_snapshot.id,
@@ -785,23 +938,28 @@ std::expected<void, CatalogError> CatalogState::restore(const CatalogSnapshot & 
                 collection_snapshot.name,
                 collection_snapshot.comment
             );
-            if (rebuilt.collections_.contains(collection_snapshot.id)
-                || database_ptr->contains_collection(collection->key())) {
-                return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Duplicate collection in catalog snapshot"));
+            if (rebuilt.collections_.contains(collection_snapshot.id) ||
+                database_ptr->contains_collection(collection->key())) {
+                return std::unexpected(make_error(
+                    CatalogErrorCode::InvalidSnapshot,
+                    "Duplicate collection in catalog snapshot"
+                ));
             }
             auto * collection_ptr = collection.get();
             std::unordered_set<common::ColumnId> collection_columns;
             for (std::size_t ordinal = 0; ordinal < collection_snapshot.columns.size(); ++ordinal) {
                 const auto & value = collection_snapshot.columns[ordinal];
-                if (value.id == 0
-                    || empty(value.name)
-                    || rebuilt.columns_.contains(value.id)
-                    || collection_ptr->contains_column(common::normalize_identifier(value.name))) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid or duplicate column in catalog snapshot"));
+                if (value.id == 0 || empty(value.name) || rebuilt.columns_.contains(value.id) ||
+                    collection_ptr->contains_column(common::normalize_identifier(value.name))) {
+                    return std::unexpected(make_error(
+                        CatalogErrorCode::InvalidSnapshot,
+                        "Invalid or duplicate column in catalog snapshot"
+                    ));
                 }
-                if (!valid_logical_type(value.type)
-                    || (value.default_expression && !valid_default_expression(*value.default_expression))
-                    || (value.unique && value.type.id == common::LogicalTypeId::Vector)) {
+                if (!valid_logical_type(value.type) ||
+                    (value.default_expression &&
+                     !valid_default_expression(*value.default_expression)) ||
+                    (value.unique && value.type.id == common::LogicalTypeId::Vector)) {
                     return std::unexpected(make_error(
                         CatalogErrorCode::InvalidSnapshot,
                         "Invalid column type or default expression in catalog snapshot"
@@ -824,20 +982,27 @@ std::expected<void, CatalogError> CatalogState::restore(const CatalogSnapshot & 
                 max_column = std::max(max_column, value.id);
             }
             for (const auto & value : collection_snapshot.indexes) {
-                if (value.id == 0
-                    || value.column_id == 0
-                    || empty(value.name)
-                    || rebuilt.indexes_.contains(value.id)
-                    || collection_ptr->contains_index(common::normalize_identifier(value.name))
-                    || value.index_kind != entry::IndexKind::BTree) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid or duplicate index in catalog snapshot"));
+                if (value.id == 0 || value.column_id == 0 || empty(value.name) ||
+                    rebuilt.indexes_.contains(value.id) ||
+                    collection_ptr->contains_index(common::normalize_identifier(value.name)) ||
+                    value.index_kind != entry::IndexKind::BTree) {
+                    return std::unexpected(make_error(
+                        CatalogErrorCode::InvalidSnapshot,
+                        "Invalid or duplicate index in catalog snapshot"
+                    ));
                 }
                 const auto column = rebuilt.find_column(value.column_id);
                 if (!collection_columns.contains(value.column_id) || !column) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Index column not found in catalog snapshot"));
+                    return std::unexpected(make_error(
+                        CatalogErrorCode::InvalidSnapshot,
+                        "Index column not found in catalog snapshot"
+                    ));
                 }
                 if (column->type().id == common::LogicalTypeId::Vector) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid scalar index column in catalog snapshot"));
+                    return std::unexpected(make_error(
+                        CatalogErrorCode::InvalidSnapshot,
+                        "Invalid scalar index column in catalog snapshot"
+                    ));
                 }
                 auto index = std::make_unique<entry::IndexEntry>(
                     value.id,
@@ -852,26 +1017,30 @@ std::expected<void, CatalogError> CatalogState::restore(const CatalogSnapshot & 
                 max_index = std::max(max_index, value.id);
             }
             for (const auto & value : collection_snapshot.vector_indexes) {
-                if (value.id == 0
-                    || value.column_id == 0
-                    || empty(value.name)
-                    || rebuilt.vector_indexes_.contains(value.id)
-                    || collection_ptr->contains_index(common::normalize_identifier(value.name))
-                    || collection_ptr->contains_vector_index(common::normalize_identifier(value.name))
-                    || !collection_columns.contains(value.column_id)
-                    || value.index_kind != entry::VectorIndexKind::Hnsw
-                    || static_cast<std::uint8_t>(value.metric) > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid or duplicate vector index in catalog snapshot"));
+                if (value.id == 0 || value.column_id == 0 || empty(value.name) ||
+                    rebuilt.vector_indexes_.contains(value.id) ||
+                    collection_ptr->contains_index(common::normalize_identifier(value.name)) ||
+                    collection_ptr->contains_vector_index(
+                        common::normalize_identifier(value.name)
+                    ) ||
+                    !collection_columns.contains(value.column_id) ||
+                    value.index_kind != entry::VectorIndexKind::Hnsw ||
+                    static_cast<std::uint8_t>(value.metric) >
+                        static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) {
+                    return std::unexpected(make_error(
+                        CatalogErrorCode::InvalidSnapshot,
+                        "Invalid or duplicate vector index in catalog snapshot"
+                    ));
                 }
                 const auto column = rebuilt.find_column(value.column_id);
-                if (!column
-                    || column->type().id != common::LogicalTypeId::Vector
-                    || !column->type().parameter
-                    || *column->type().parameter != value.dimension
-                    || value.max_neighbors == 0
-                    || value.ef_construction < value.max_neighbors
-                    || value.ef_search_default == 0) {
-                    return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Invalid vector index options in catalog snapshot"));
+                if (!column || column->type().id != common::LogicalTypeId::Vector ||
+                    !column->type().parameter || *column->type().parameter != value.dimension ||
+                    value.max_neighbors == 0 || value.ef_construction < value.max_neighbors ||
+                    value.ef_search_default == 0) {
+                    return std::unexpected(make_error(
+                        CatalogErrorCode::InvalidSnapshot,
+                        "Invalid vector index options in catalog snapshot"
+                    ));
                 }
                 entry::HnswOptions options {
                     value.max_neighbors,
@@ -898,10 +1067,13 @@ std::expected<void, CatalogError> CatalogState::restore(const CatalogSnapshot & 
             max_collection = std::max(max_collection, collection_snapshot.id);
         }
     }
-    if (source.next_database_id <= max_database || source.next_collection_id <= max_collection
-        || source.next_column_id <= max_column || source.next_index_id <= max_index
-        || source.next_vector_index_id <= max_vector_index) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidSnapshot, "Catalog snapshot next id is behind existing ids"));
+    if (source.next_database_id <= max_database || source.next_collection_id <= max_collection ||
+        source.next_column_id <= max_column || source.next_index_id <= max_index ||
+        source.next_vector_index_id <= max_vector_index) {
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidSnapshot,
+            "Catalog snapshot next id is behind existing ids"
+        ));
     }
 
     *this = std::move(rebuilt);

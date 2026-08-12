@@ -73,11 +73,8 @@ struct CatalogErrorContext
 using CatalogError = error::Error;
 
 [[nodiscard]]
-CatalogError make_error(
-    CatalogErrorCode code,
-    std::string message,
-    CatalogErrorContext context = {}
-);
+CatalogError
+make_error(CatalogErrorCode code, std::string message, CatalogErrorContext context = {});
 
 } // namespace litedb::core::catalog
 

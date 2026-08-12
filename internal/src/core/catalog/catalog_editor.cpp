@@ -50,7 +50,9 @@ std::expected<common::CollectionId, CatalogError> CatalogEditor::create_collecti
     return state_.create_collection(request);
 }
 
-std::expected<void, CatalogError> CatalogEditor::drop_collection(const DropCollectionRequest & request)
+std::expected<void, CatalogError> CatalogEditor::drop_collection(
+    const DropCollectionRequest & request
+)
 {
     return state_.drop_collection(request);
 }

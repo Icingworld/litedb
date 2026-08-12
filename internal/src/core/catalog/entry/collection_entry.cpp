@@ -14,8 +14,7 @@ CollectionEntry::CollectionEntry(
     : CatalogEntry(CatalogEntryKind::Collection, id, std::move(name))
     , database_id_(database_id)
     , comment_(std::move(comment))
-{
-}
+{}
 
 common::CollectionId CollectionEntry::id() const noexcept
 {
@@ -65,7 +64,9 @@ std::optional<common::IndexId> CollectionEntry::find_index_id(std::string_view i
     return it->second;
 }
 
-std::optional<common::VIndexId> CollectionEntry::find_vector_index_id(std::string_view index_key) const
+std::optional<common::VIndexId> CollectionEntry::find_vector_index_id(
+    std::string_view index_key
+) const
 {
     const auto it = vector_indexes_by_key_.find(std::string(index_key));
     if (it == vector_indexes_by_key_.end()) {

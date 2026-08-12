@@ -12,8 +12,7 @@ CatalogEntry::CatalogEntry(CatalogEntryKind kind, common::CatalogEntryId id, std
     , id_(id)
     , name_(std::move(name))
     , key_(common::normalize_identifier(name_))
-{
-}
+{}
 
 CatalogEntryKind CatalogEntry::kind() const noexcept
 {

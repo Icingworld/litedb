@@ -22,8 +22,7 @@ VectorIndexEntry::VectorIndexEntry(
     , metric_(metric)
     , dimension_(dimension)
     , hnsw_options_(hnsw_options)
-{
-}
+{}
 
 common::VIndexId VectorIndexEntry::id() const noexcept
 {

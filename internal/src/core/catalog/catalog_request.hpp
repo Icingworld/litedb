@@ -4,11 +4,11 @@
 #include <string>
 #include <vector>
 
+#include "core/catalog/entry/index_entry.hpp"
+#include "core/catalog/entry/vector_index_entry.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/schema/default_expression.hpp"
-#include "core/catalog/entry/index_entry.hpp"
-#include "core/catalog/entry/vector_index_entry.hpp"
 
 namespace litedb::core::catalog
 {
@@ -25,12 +25,14 @@ struct ColumnDefinition
 };
 
 // 创建数据库请求
-struct CreateDatabaseRequest {
+struct CreateDatabaseRequest
+{
     std::string database_name;
 };
 
 // 删除数据库请求
-struct DropDatabaseRequest {
+struct DropDatabaseRequest
+{
     common::DatabaseId database_id {0};
 };
 

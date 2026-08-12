@@ -4,10 +4,10 @@
 #include <optional>
 #include <string>
 
+#include "core/catalog/entry/catalog_entry.hpp"
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/schema/default_expression.hpp"
-#include "core/catalog/entry/catalog_entry.hpp"
 
 namespace litedb::core::catalog::entry
 {

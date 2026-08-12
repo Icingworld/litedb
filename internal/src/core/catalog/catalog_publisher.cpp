@@ -5,13 +5,9 @@
 namespace litedb::core::catalog
 {
 
-CatalogPublisher::CatalogPublisher(
-    std::filesystem::path path,
-    filesystem::FileSystem & filesystem
-)
+CatalogPublisher::CatalogPublisher(std::filesystem::path path, filesystem::FileSystem & filesystem)
     : store_(std::move(path), filesystem)
-{
-}
+{}
 
 std::expected<void, CatalogError> CatalogPublisher::open_or_initialize()
 {
@@ -30,7 +26,9 @@ std::expected<void, CatalogError> CatalogPublisher::open_or_initialize()
     return publish_committed(snapshot);
 }
 
-std::expected<void, CatalogError> CatalogPublisher::publish_committed(const CatalogSnapshot & snapshot)
+std::expected<void, CatalogError> CatalogPublisher::publish_committed(
+    const CatalogSnapshot & snapshot
+)
 {
     auto rebuilt = build_catalog_state(snapshot);
     if (!rebuilt) {

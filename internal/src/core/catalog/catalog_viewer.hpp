@@ -27,10 +27,8 @@ public:
 
     // 在指定数据库中按名称查找集合
     [[nodiscard]]
-    std::optional<const entry::CollectionEntry &> find_collection(
-        common::DatabaseId database_id,
-        std::string_view name
-    ) const;
+    std::optional<const entry::CollectionEntry &>
+    find_collection(common::DatabaseId database_id, std::string_view name) const;
 
     // 按 ID 查找集合
     [[nodiscard]]
@@ -38,10 +36,8 @@ public:
 
     // 在指定集合中按名称查找列
     [[nodiscard]]
-    std::optional<const entry::ColumnEntry &> find_column(
-        common::CollectionId collection_id,
-        std::string_view name
-    ) const;
+    std::optional<const entry::ColumnEntry &>
+    find_column(common::CollectionId collection_id, std::string_view name) const;
 
     // 按 ID 查找列
     [[nodiscard]]
@@ -49,10 +45,8 @@ public:
 
     // 在指定集合中按名称查找标量索引
     [[nodiscard]]
-    std::optional<const entry::IndexEntry &> find_index(
-        common::CollectionId collection_id,
-        std::string_view name
-    ) const;
+    std::optional<const entry::IndexEntry &>
+    find_index(common::CollectionId collection_id, std::string_view name) const;
 
     // 按 ID 查找标量索引
     [[nodiscard]]
@@ -60,10 +54,8 @@ public:
 
     // 在指定集合中按名称查找向量索引
     [[nodiscard]]
-    std::optional<const entry::VectorIndexEntry &> find_vector_index(
-        common::CollectionId collection_id,
-        std::string_view name
-    ) const;
+    std::optional<const entry::VectorIndexEntry &>
+    find_vector_index(common::CollectionId collection_id, std::string_view name) const;
 
     // 按 ID 查找向量索引
     [[nodiscard]]

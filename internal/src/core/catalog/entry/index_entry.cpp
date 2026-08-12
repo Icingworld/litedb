@@ -4,7 +4,7 @@
 
 namespace litedb::core::catalog::entry
 {
-    
+
 IndexEntry::IndexEntry(
     common::IndexId id,
     common::CollectionId collection_id,
@@ -18,8 +18,7 @@ IndexEntry::IndexEntry(
     , column_id_(column_id)
     , kind_(kind)
     , unique_(unique)
-{
-}
+{}
 
 common::IndexId IndexEntry::id() const noexcept
 {

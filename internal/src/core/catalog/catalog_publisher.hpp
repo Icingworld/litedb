@@ -16,10 +16,7 @@ namespace litedb::core::catalog
 class CatalogPublisher
 {
 public:
-    CatalogPublisher(
-        std::filesystem::path path,
-        filesystem::FileSystem & filesystem
-    );
+    CatalogPublisher(std::filesystem::path path, filesystem::FileSystem & filesystem);
 
 public:
     // 打开已有目录，若不存在则初始化空目录

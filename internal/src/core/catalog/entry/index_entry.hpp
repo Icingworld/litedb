@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "core/common/ids.hpp"
 #include "core/catalog/entry/catalog_entry.hpp"
+#include "core/common/ids.hpp"
 
 namespace litedb::core::catalog::entry
 {
@@ -43,7 +43,7 @@ public:
     // 获取首个列 ID
     [[nodiscard]]
     common::ColumnId column_id() const noexcept;
-    
+
     // 是否唯一
     [[nodiscard]]
     bool unique() const noexcept;

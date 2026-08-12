@@ -1,11 +1,11 @@
 #pragma once
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-#include <span>
 
 #include "core/catalog/entry/catalog_entry.hpp"
 
@@ -18,7 +18,7 @@ class CatalogState;
 
 namespace litedb::core::catalog::entry
 {
-    
+
 // 数据库项
 class DatabaseEntry final : public CatalogEntry
 {
@@ -26,7 +26,6 @@ public:
     DatabaseEntry(common::DatabaseId id, std::string name);
 
 public:
-
     // 获取数据库 ID
     [[nodiscard]]
     common::DatabaseId id() const noexcept;
@@ -53,10 +52,9 @@ private:
     void remove_collection(std::string_view collection_key);
 
 private:
-    std::vector<common::CollectionId> collection_ids_;  // 数据库包含的集合 ID 列表
-    std::unordered_map<
-        std::string, common::CollectionId
-    > collections_by_key_;                              // 数据库包含的集合键到 ID 的映射
+    std::vector<common::CollectionId> collection_ids_; // 数据库包含的集合 ID 列表
+    std::unordered_map<std::string, common::CollectionId>
+        collections_by_key_; // 数据库包含的集合键到 ID 的映射
 };
 
 } // namespace litedb::core::catalog::entry

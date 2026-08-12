@@ -23,7 +23,7 @@ namespace litedb::core::catalog
 namespace
 {
 
-constexpr std::uint32_t CatalogMagic = 0x544d444c;         // LDMT, retained for format compatibility
+constexpr std::uint32_t CatalogMagic = 0x544d444c; // LDMT, retained for format compatibility
 constexpr std::uint16_t CatalogFormatVersion = 2;
 constexpr std::uint16_t CatalogHeaderSize = 24;
 constexpr std::uint64_t MaxPayloadSize = 64ULL * 1024ULL * 1024ULL;
@@ -36,18 +36,21 @@ class TempFileCleanup
 {
 public:
     TempFileCleanup(filesystem::FileSystem & filesystem, std::filesystem::path path)
-        : filesystem_(&filesystem), path_(std::move(path))
-    {
-    }
+        : filesystem_(&filesystem)
+        , path_(std::move(path))
+    {}
 
     ~TempFileCleanup()
     {
         if (active_) {
-            (void) filesystem_->remove(path_);
+            (void)filesystem_->remove(path_);
         }
     }
 
-    void release() noexcept { active_ = false; }
+    void release() noexcept
+    {
+        active_ = false;
+    }
 
 private:
     filesystem::FileSystem * filesystem_;
@@ -69,11 +72,15 @@ CatalogError from_filesystem_error(
 )
 {
     const auto source_code = source.encode_code();
-    return make_error(code, source.message(), {
-        .operation = operation,
-        .path = path,
-        .source_code = source_code,
-    });
+    return make_error(
+        code,
+        source.message(),
+        {
+            .operation = operation,
+            .path = path,
+            .source_code = source_code,
+        }
+    );
 }
 
 /**
@@ -89,17 +96,24 @@ CatalogError from_io_error(
 )
 {
     auto code = source.category() == error::ErrorCategory::FileSystem
-        ? CatalogErrorCode::FileSystemFailure
-        : CatalogErrorCode::IoFailure;
-    if (source.is(io::IoErrorCode::UnexpectedEof)) code = CatalogErrorCode::UnexpectedEof;
-    else if (source.is(io::IoErrorCode::InvalidData)) code = CatalogErrorCode::InvalidFormat;
-    else if (source.is(io::IoErrorCode::ValueTooLarge)) code = CatalogErrorCode::ValueTooLarge;
+                    ? CatalogErrorCode::FileSystemFailure
+                    : CatalogErrorCode::IoFailure;
+    if (source.is(io::IoErrorCode::UnexpectedEof))
+        code = CatalogErrorCode::UnexpectedEof;
+    else if (source.is(io::IoErrorCode::InvalidData))
+        code = CatalogErrorCode::InvalidFormat;
+    else if (source.is(io::IoErrorCode::ValueTooLarge))
+        code = CatalogErrorCode::ValueTooLarge;
     const auto source_code = source.encode_code();
-    return make_error(code, source.message(), {
-        .operation = operation,
-        .path = path,
-        .source_code = source_code,
-    });
+    return make_error(
+        code,
+        source.message(),
+        {
+            .operation = operation,
+            .path = path,
+            .source_code = source_code,
+        }
+    );
 }
 
 /**
@@ -122,7 +136,9 @@ io::IoError invalid_data(std::string message)
 std::expected<std::uint32_t, io::IoError> checked_count(std::size_t count)
 {
     if (count > MaxEntryCount) {
-        return std::unexpected(io::make_io_error(io::IoErrorCode::ValueTooLarge, "catalog collection is too large"));
+        return std::unexpected(
+            io::make_io_error(io::IoErrorCode::ValueTooLarge, "catalog collection is too large")
+        );
     }
     return static_cast<std::uint32_t>(count);
 }
@@ -136,8 +152,7 @@ class CodecWriter
 public:
     explicit CodecWriter(io::LittleEndianBinaryWriter & writer) noexcept
         : writer_(&writer)
-    {
-    }
+    {}
 
 public:
     /**
@@ -184,7 +199,10 @@ public:
     {
         if (value.size() > MaxStringSize) {
             if (!error_) {
-                error_ = io::make_io_error(io::IoErrorCode::ValueTooLarge, "catalog string exceeds limit");
+                error_ = io::make_io_error(
+                    io::IoErrorCode::ValueTooLarge,
+                    "catalog string exceeds limit"
+                );
             }
             return;
         }
@@ -234,8 +252,8 @@ private:
     }
 
 private:
-    io::LittleEndianBinaryWriter * writer_;           // 二进制写入器
-    std::optional<io::IoError> error_;    // 错误
+    io::LittleEndianBinaryWriter * writer_; // 二进制写入器
+    std::optional<io::IoError> error_; // 错误
 };
 
 /**
@@ -247,8 +265,7 @@ class CodecReader
 public:
     explicit CodecReader(io::LittleEndianBinaryReader & reader) noexcept
         : reader_(&reader)
-    {
-    }
+    {}
 
 public:
     /**
@@ -339,7 +356,10 @@ public:
      * @return 是否成功
      */
     [[nodiscard]]
-    bool ok() const noexcept { return !error_.has_value(); }
+    bool ok() const noexcept
+    {
+        return !error_.has_value();
+    }
 
     /**
      * @brief 获取结果
@@ -375,8 +395,8 @@ private:
     }
 
 private:
-    io::LittleEndianBinaryReader * reader_;           // 二进制读取器
-    std::optional<io::IoError> error_;    // 错误
+    io::LittleEndianBinaryReader * reader_; // 二进制读取器
+    std::optional<io::IoError> error_; // 错误
 };
 
 /**
@@ -407,8 +427,7 @@ std::optional<std::size_t> read_optional_size(CodecReader & reader)
         reader.fail("invalid optional size marker");
         return std::nullopt;
     }
-    return present == 0 ? std::nullopt
-                        : std::optional<std::size_t> {reader.read_size()};
+    return present == 0 ? std::nullopt : std::optional<std::size_t> {reader.read_size()};
 }
 
 /**
@@ -497,7 +516,10 @@ schema::DefaultExpression read_default_expression(CodecReader & reader, std::siz
  * @param writer 编码器写入器
  * @param value 值
  */
-void write_optional_expression(CodecWriter & writer, const std::optional<schema::DefaultExpression> & value)
+void write_optional_expression(
+    CodecWriter & writer,
+    const std::optional<schema::DefaultExpression> & value
+)
 {
     writer.write_u8(value ? 1U : 0U);
     if (value) {
@@ -520,7 +542,9 @@ std::optional<schema::DefaultExpression> read_optional_expression(CodecReader & 
         reader.fail("invalid optional expression marker");
         return std::nullopt;
     }
-    return present == 0 ? std::nullopt : std::optional<schema::DefaultExpression> {read_default_expression(reader)};
+    return present == 0
+               ? std::nullopt
+               : std::optional<schema::DefaultExpression> {read_default_expression(reader)};
 }
 
 /**
@@ -543,7 +567,8 @@ bool read_bool(CodecReader & reader)
  * @param snapshot 元数据快照
  * @return 结果
  */
-std::expected<void, io::IoError> write_snapshot(io::LittleEndianBinaryWriter & binary_writer, const CatalogSnapshot & snapshot)
+std::expected<void, io::IoError>
+write_snapshot(io::LittleEndianBinaryWriter & binary_writer, const CatalogSnapshot & snapshot)
 {
     CodecWriter writer {binary_writer};
     writer.write_u64(snapshot.next_database_id);
@@ -605,10 +630,8 @@ std::expected<void, io::IoError> write_snapshot(io::LittleEndianBinaryWriter & b
  * @param reader 二进制读取器
  * @return 元数据快照
  */
-std::expected<CatalogSnapshot, CatalogError> read_snapshot(
-    io::LittleEndianBinaryReader & binary_reader,
-    const std::filesystem::path & path
-)
+std::expected<CatalogSnapshot, CatalogError>
+read_snapshot(io::LittleEndianBinaryReader & binary_reader, const std::filesystem::path & path)
 {
     CodecReader reader {binary_reader};
     CatalogSnapshot snapshot;
@@ -620,7 +643,9 @@ std::expected<CatalogSnapshot, CatalogError> read_snapshot(
     const auto database_count = reader.read_count();
     if (!reader.ok()) {
         auto failed = reader.take_result();
-        return std::unexpected(from_io_error(std::move(failed.error()), CatalogOperation::Decode, path));
+        return std::unexpected(
+            from_io_error(std::move(failed.error()), CatalogOperation::Decode, path)
+        );
     }
     snapshot.databases.reserve(database_count);
     for (std::uint32_t d = 0; d < database_count && reader.ok(); ++d) {
@@ -702,7 +727,9 @@ std::expected<CatalogSnapshot, CatalogError> read_snapshot(
         snapshot.databases.push_back(std::move(database));
     }
     if (auto result = reader.take_result(); !result) {
-        return std::unexpected(from_io_error(std::move(result.error()), CatalogOperation::Decode, path));
+        return std::unexpected(
+            from_io_error(std::move(result.error()), CatalogOperation::Decode, path)
+        );
     }
     return snapshot;
 }
@@ -712,48 +739,68 @@ std::expected<CatalogSnapshot, CatalogError> read_snapshot(
 CatalogStore::CatalogStore(std::filesystem::path path, filesystem::FileSystem & filesystem)
     : path_(std::move(path))
     , filesystem_(&filesystem)
-{
-}
+{}
 
 std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load() const
 {
     auto exists = filesystem_->exists(path_);
     if (!exists) {
-        return std::unexpected(from_filesystem_error(std::move(exists.error()), CatalogOperation::Load, path_));
+        return std::unexpected(
+            from_filesystem_error(std::move(exists.error()), CatalogOperation::Load, path_)
+        );
     }
     if (!*exists) {
         return std::optional<CatalogSnapshot> {};
     }
 
-    auto file = filesystem_->open(path_, {.access = filesystem::FileAccess::ReadOnly,
-                                          .create_mode = filesystem::FileCreateMode::OpenExisting});
+    auto file = filesystem_->open(
+        path_,
+        {.access = filesystem::FileAccess::ReadOnly,
+         .create_mode = filesystem::FileCreateMode::OpenExisting}
+    );
     if (!file) {
-        return std::unexpected(from_filesystem_error(std::move(file.error()), CatalogOperation::Load, path_));
+        return std::unexpected(
+            from_filesystem_error(std::move(file.error()), CatalogOperation::Load, path_)
+        );
     }
     auto file_size = file->size();
     if (!file_size) {
-        return std::unexpected(from_filesystem_error(std::move(file_size.error()), CatalogOperation::Load, path_));
+        return std::unexpected(
+            from_filesystem_error(std::move(file_size.error()), CatalogOperation::Load, path_)
+        );
     }
     if (*file_size < CatalogHeaderSize) {
-        return std::unexpected(make_error(CatalogErrorCode::UnexpectedEof, "catalog file header is truncated", {
-            .operation = CatalogOperation::Decode,
-            .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::UnexpectedEof,
+            "catalog file header is truncated",
+            {
+                .operation = CatalogOperation::Decode,
+                .path = path_,
+            }
+        ));
     }
     if (*file_size > MaxPayloadSize + CatalogHeaderSize) {
-        return std::unexpected(make_error(CatalogErrorCode::ResourceLimitExceeded, "catalog file exceeds size limit", {
-            .operation = CatalogOperation::Decode,
-            .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::ResourceLimitExceeded,
+            "catalog file exceeds size limit",
+            {
+                .operation = CatalogOperation::Decode,
+                .path = path_,
+            }
+        ));
     }
 
     std::vector<std::byte> bytes(static_cast<std::size_t>(*file_size));
     io::FileByteReader file_reader {*file};
     if (auto read = file_reader.read_exact(bytes); !read) {
-        return std::unexpected(from_io_error(std::move(read.error()), CatalogOperation::Load, path_));
+        return std::unexpected(
+            from_io_error(std::move(read.error()), CatalogOperation::Load, path_)
+        );
     }
 
-    io::BufferByteReader header_source {std::span<const std::byte> {bytes}.first(CatalogHeaderSize)};
+    io::BufferByteReader header_source {
+        std::span<const std::byte> {bytes}.first(CatalogHeaderSize)
+    };
     io::LittleEndianBinaryReader header {
         header_source,
         {.max_total_bytes = CatalogHeaderSize, .max_string_bytes = 0},
@@ -765,41 +812,62 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
     auto payload_checksum = header.read_u32();
     auto flags = header.read_u32();
     if (!magic || !version || !header_size || !payload_size || !payload_checksum || !flags) {
-        auto * failure = !magic ? &magic.error()
-                        : !version ? &version.error()
-                        : !header_size ? &header_size.error()
-                        : !payload_size ? &payload_size.error()
-                        : !payload_checksum ? &payload_checksum.error()
-                        : &flags.error();
+        auto * failure = !magic              ? &magic.error()
+                         : !version          ? &version.error()
+                         : !header_size      ? &header_size.error()
+                         : !payload_size     ? &payload_size.error()
+                         : !payload_checksum ? &payload_checksum.error()
+                                             : &flags.error();
         return std::unexpected(from_io_error(std::move(*failure), CatalogOperation::Decode, path_));
     }
     if (*magic != CatalogMagic) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidFormat, "invalid catalog file magic", {
-            .operation = CatalogOperation::Decode, .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidFormat,
+            "invalid catalog file magic",
+            {
+                .operation = CatalogOperation::Decode,
+                .path = path_,
+            }
+        ));
     }
     if (*version != CatalogFormatVersion) {
-        return std::unexpected(make_error(CatalogErrorCode::UnsupportedVersion, "unsupported catalog format version", {
-            .operation = CatalogOperation::Decode, .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::UnsupportedVersion,
+            "unsupported catalog format version",
+            {
+                .operation = CatalogOperation::Decode,
+                .path = path_,
+            }
+        ));
     }
     if (*header_size != CatalogHeaderSize || *flags != 0) {
-        return std::unexpected(make_error(CatalogErrorCode::InvalidFormat, "invalid catalog V2 header", {
-            .operation = CatalogOperation::Decode, .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::InvalidFormat,
+            "invalid catalog V2 header",
+            {
+                .operation = CatalogOperation::Decode,
+                .path = path_,
+            }
+        ));
     }
     if (*payload_size > MaxPayloadSize || *payload_size != *file_size - CatalogHeaderSize) {
         return std::unexpected(make_error(
-            *payload_size > MaxPayloadSize ? CatalogErrorCode::ResourceLimitExceeded : CatalogErrorCode::InvalidFormat,
+            *payload_size > MaxPayloadSize ? CatalogErrorCode::ResourceLimitExceeded
+                                           : CatalogErrorCode::InvalidFormat,
             "invalid catalog payload size",
             {.operation = CatalogOperation::Decode, .path = path_}
         ));
     }
     const auto payload = std::span<const std::byte> {bytes}.subspan(CatalogHeaderSize);
     if (io::crc32(payload) != *payload_checksum) {
-        return std::unexpected(make_error(CatalogErrorCode::ChecksumMismatch, "catalog payload checksum mismatch", {
-            .operation = CatalogOperation::Decode, .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::ChecksumMismatch,
+            "catalog payload checksum mismatch",
+            {
+                .operation = CatalogOperation::Decode,
+                .path = path_,
+            }
+        ));
     }
     io::BufferByteReader payload_source {payload};
     io::LittleEndianBinaryReader reader {
@@ -818,28 +886,43 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
     io::BufferByteWriter payload_bytes {MaxPayloadSize};
     io::LittleEndianBinaryWriter payload_writer {payload_bytes};
     if (auto encoded = write_snapshot(payload_writer, snapshot); !encoded) {
-        return std::unexpected(from_io_error(std::move(encoded.error()), CatalogOperation::Encode, path_));
+        return std::unexpected(
+            from_io_error(std::move(encoded.error()), CatalogOperation::Encode, path_)
+        );
     }
     if (payload_bytes.bytes().size() > MaxPayloadSize) {
-        return std::unexpected(make_error(CatalogErrorCode::ResourceLimitExceeded, "catalog payload exceeds size limit", {
-            .operation = CatalogOperation::Encode, .path = path_,
-        }));
+        return std::unexpected(make_error(
+            CatalogErrorCode::ResourceLimitExceeded,
+            "catalog payload exceeds size limit",
+            {
+                .operation = CatalogOperation::Encode,
+                .path = path_,
+            }
+        ));
     }
 
     io::BufferByteWriter encoded_bytes {MaxPayloadSize + CatalogHeaderSize};
     io::LittleEndianBinaryWriter encoded_writer {encoded_bytes};
     const auto checksum = io::crc32(payload_bytes.bytes());
     auto write_header = [&]() -> std::expected<void, io::IoError> {
-        if (auto result = encoded_writer.write_u32(CatalogMagic); !result) return result;
-        if (auto result = encoded_writer.write_u16(CatalogFormatVersion); !result) return result;
-        if (auto result = encoded_writer.write_u16(CatalogHeaderSize); !result) return result;
-        if (auto result = encoded_writer.write_u64(payload_bytes.bytes().size()); !result) return result;
-        if (auto result = encoded_writer.write_u32(checksum); !result) return result;
-        if (auto result = encoded_writer.write_u32(0); !result) return result;
+        if (auto result = encoded_writer.write_u32(CatalogMagic); !result)
+            return result;
+        if (auto result = encoded_writer.write_u16(CatalogFormatVersion); !result)
+            return result;
+        if (auto result = encoded_writer.write_u16(CatalogHeaderSize); !result)
+            return result;
+        if (auto result = encoded_writer.write_u64(payload_bytes.bytes().size()); !result)
+            return result;
+        if (auto result = encoded_writer.write_u32(checksum); !result)
+            return result;
+        if (auto result = encoded_writer.write_u32(0); !result)
+            return result;
         return encoded_bytes.write_bytes(payload_bytes.bytes());
     };
     if (auto encoded = write_header(); !encoded) {
-        return std::unexpected(from_io_error(std::move(encoded.error()), CatalogOperation::Encode, path_));
+        return std::unexpected(
+            from_io_error(std::move(encoded.error()), CatalogOperation::Encode, path_)
+        );
     }
 
     const auto parent = path_.parent_path();
@@ -847,42 +930,55 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
         auto created = filesystem_->create_dir_all(parent);
         if (!created) {
             return std::unexpected(from_filesystem_error(
-                std::move(created.error()), CatalogOperation::SaveTemporary, path_
+                std::move(created.error()),
+                CatalogOperation::SaveTemporary,
+                path_
             ));
         }
     }
     auto temp_path = path_;
     const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-    temp_path += ".tmp." + std::to_string(timestamp) + "."
-               + std::to_string(TempSequence.fetch_add(1, std::memory_order_relaxed));
+    temp_path += ".tmp." + std::to_string(timestamp) + "." +
+                 std::to_string(TempSequence.fetch_add(1, std::memory_order_relaxed));
     TempFileCleanup cleanup {*filesystem_, temp_path};
-    auto file = filesystem_->open(temp_path, {.access = filesystem::FileAccess::ReadWrite,
-                                               .create_mode = filesystem::FileCreateMode::CreateNew});
+    auto file = filesystem_->open(
+        temp_path,
+        {.access = filesystem::FileAccess::ReadWrite,
+         .create_mode = filesystem::FileCreateMode::CreateNew}
+    );
     if (!file) {
         return std::unexpected(from_filesystem_error(
-            std::move(file.error()), CatalogOperation::SaveTemporary, temp_path
+            std::move(file.error()),
+            CatalogOperation::SaveTemporary,
+            temp_path
         ));
     }
 
     io::FileByteWriter byte_writer {*file};
     if (auto written = byte_writer.write_bytes(encoded_bytes.bytes()); !written) {
-        return std::unexpected(from_io_error(std::move(written.error()), CatalogOperation::SaveTemporary, temp_path));
+        return std::unexpected(
+            from_io_error(std::move(written.error()), CatalogOperation::SaveTemporary, temp_path)
+        );
     }
     if (auto synced = file->sync_all(); !synced) {
         return std::unexpected(from_filesystem_error(
-            std::move(synced.error()), CatalogOperation::SyncTemporary, temp_path
+            std::move(synced.error()),
+            CatalogOperation::SyncTemporary,
+            temp_path
         ));
     }
     if (auto closed = file->close(); !closed) {
         return std::unexpected(from_filesystem_error(
-            std::move(closed.error()), CatalogOperation::SyncTemporary, temp_path
+            std::move(closed.error()),
+            CatalogOperation::SyncTemporary,
+            temp_path
         ));
     }
 
     if (auto renamed = filesystem_->replace_file_atomic(temp_path, path_); !renamed) {
-        return std::unexpected(from_filesystem_error(
-            std::move(renamed.error()), CatalogOperation::PublishFile, path_
-        ));
+        return std::unexpected(
+            from_filesystem_error(std::move(renamed.error()), CatalogOperation::PublishFile, path_)
+        );
     }
     cleanup.release();
     if (!parent.empty()) {

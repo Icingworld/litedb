@@ -43,7 +43,9 @@ public:
 
     // 创建数据库
     [[nodiscard]]
-    std::expected<common::DatabaseId, CatalogError> create_database(const CreateDatabaseRequest & request);
+    std::expected<common::DatabaseId, CatalogError> create_database(
+        const CreateDatabaseRequest & request
+    );
 
     // 删除数据库
     [[nodiscard]]
@@ -51,7 +53,9 @@ public:
 
     // 创建集合
     [[nodiscard]]
-    std::expected<common::CollectionId, CatalogError> create_collection(const CreateCollectionRequest & request);
+    std::expected<common::CollectionId, CatalogError> create_collection(
+        const CreateCollectionRequest & request
+    );
 
     // 删除集合
     [[nodiscard]]
@@ -67,7 +71,9 @@ public:
 
     // 创建向量索引
     [[nodiscard]]
-    std::expected<common::VIndexId, CatalogError> create_vector_index(const CreateVectorIndexRequest & request);
+    std::expected<common::VIndexId, CatalogError> create_vector_index(
+        const CreateVectorIndexRequest & request
+    );
 
     // 删除向量索引
     [[nodiscard]]
