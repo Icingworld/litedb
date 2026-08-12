@@ -8,7 +8,7 @@ namespace litedb::core::physical_planner::plan
 CreateIndexPlan::CreateIndexPlan(
     common::ColumnId column_id,
     std::optional<std::string> index_name,
-    meta::entry::IndexKind index_kind,
+    catalog::entry::IndexKind index_kind,
     bool unique
 )
     : PhysicalPlan(PhysicalPlanKind::CreateIndex)
@@ -28,7 +28,7 @@ std::optional<const std::string &> CreateIndexPlan::index_name() const noexcept
     return index_name_;
 }
 
-meta::entry::IndexKind CreateIndexPlan::index_kind() const noexcept
+catalog::entry::IndexKind CreateIndexPlan::index_kind() const noexcept
 {
     return index_kind_;
 }

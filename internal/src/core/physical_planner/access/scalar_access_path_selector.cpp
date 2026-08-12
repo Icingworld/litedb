@@ -194,24 +194,25 @@ std::optional<IndexCandidate> candidate_from_predicate(const BoundExpression & p
 // 选择索引
 [[nodiscard]]
 std::optional<common::IndexId> choose_index(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     common::CollectionId collection_id,
     const IndexCandidate & candidate
 )
 {
     std::optional<common::IndexId> selected;
-    for (const auto * entry : catalog.list_indexes(collection_id)) {
-        if (entry == nullptr || entry->collection_id() != collection_id ||
-            entry->column_id() != candidate.column_id ||
-            entry->kind() != meta::entry::IndexKind::BTree) {
+    for (const auto & entry_reference : catalog.list_indexes(collection_id)) {
+        const auto & entry = entry_reference.get();
+        if (entry.collection_id() != collection_id ||
+            entry.column_id() != candidate.column_id ||
+            entry.kind() != catalog::entry::IndexKind::BTree) {
             continue;
         }
         if (candidate.lookup.kind == op::IndexLookupKind::Range &&
-            entry->kind() != meta::entry::IndexKind::BTree) {
+            entry.kind() != catalog::entry::IndexKind::BTree) {
             continue;
         }
-        if (!selected.has_value() || entry->id() < *selected) {
-            selected = entry->id();
+        if (!selected.has_value() || entry.id() < *selected) {
+            selected = entry.id();
         }
     }
     return selected;

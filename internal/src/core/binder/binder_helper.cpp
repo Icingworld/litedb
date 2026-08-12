@@ -84,7 +84,7 @@ cast_if_needed(std::unique_ptr<BoundExpression> expression, LogicalType target_t
     return std::make_unique<BoundCastExpression>(std::move(expression), target_type);
 }
 
-BoundColumn bound_column_from_entry(const meta::entry::ColumnEntry & column)
+BoundColumn bound_column_from_entry(const catalog::entry::ColumnEntry & column)
 {
     return BoundColumn {
         .column_id = column.id(),

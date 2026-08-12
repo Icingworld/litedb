@@ -30,8 +30,8 @@ using namespace physical_planner_test_support;
 void test_scalar_selection_and_fallback()
 {
     auto fixture = make_planner_catalog();
-    const auto * age = fixture.editor.view().find_column(fixture.age_id);
-    require(age != nullptr, "scalar fixture column missing");
+    const auto age = fixture.editor.view().find_column(fixture.age_id);
+    require(age.has_value(), "scalar fixture column missing");
     physical_planner::PhysicalPlanner planner {fixture.editor.view()};
 
     auto plan_filter = [&](std::unique_ptr<BoundExpression> predicate) {

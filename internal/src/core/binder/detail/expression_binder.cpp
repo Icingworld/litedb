@@ -104,9 +104,9 @@ ExpressionBinder::visit_column_reference_expression(const ColumnReferenceExpress
         ));
     }
 
-    const auto * column =
-        context_.meta().find_column(collection_.collection->id(), expression.column_name());
-    if (column == nullptr) [[unlikely]] {
+    const auto column =
+        context_.catalog().find_column(collection_.collection->id(), expression.column_name());
+    if (!column) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::ColumnNotFound,
             "Column not found: " + expression.column_name()

@@ -15,8 +15,8 @@
 #include "core/filesystem/filesystem.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/index_engine.hpp"
-#include "core/meta/meta_engine.hpp"
-#include "core/meta/meta_store.hpp"
+#include "core/catalog/catalog_publisher.hpp"
+#include "core/catalog/catalog_store.hpp"
 #include "core/storage/schema_load_error.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
@@ -74,7 +74,7 @@ struct DatabaseObservability
 enum class DatabaseErrorCode : std::uint8_t
 {
     ManifestError,    // 数据库 manifest 错误
-    MetaError,        // meta 引擎错误
+    CatalogError,        // catalog 引擎错误
     StorageError,     // 存储引擎错误
     IndexError,       // 索引引擎错误
     WalError,         // WAL 或恢复错误
@@ -108,11 +108,11 @@ public:
     static std::expected<std::unique_ptr<DatabaseEngine>, DatabaseError> open(DatabaseConfig config);
 
     /**
-     * @brief 获取 meta 引擎
-     * @return meta 引擎
+     * @brief 获取 catalog 引擎
+     * @return catalog 引擎
      */
     [[nodiscard]]
-    meta::CatalogView meta() const noexcept;
+    catalog::CatalogViewer catalog() const noexcept;
 
     /**
      * @brief 获取标量索引引擎
@@ -244,25 +244,25 @@ private:
 
     [[nodiscard]]
     std::expected<executor::ExecutionResult, executor::ExecutionError> commit_catalog_transaction(
-        meta::MetaSnapshot snapshot,
+        catalog::CatalogSnapshot snapshot,
         std::size_t affected_rows
     );
 
     /**
-     * @brief 从 meta 恢复存储
+     * @brief 从 catalog 恢复存储
      * @return 结果
      */
     [[nodiscard]]
-    std::expected<void, storage::StorageError> restore_storage_from_meta();
+    std::expected<void, storage::StorageError> restore_storage_from_catalog();
 
     /**
-     * @brief 从 meta 错误创建执行错误
-     * @param error meta 错误
+     * @brief 从 catalog 错误创建执行错误
+     * @param error catalog 错误
      * @return 执行错误
      */
     [[nodiscard]]
-    static executor::ExecutionError from_meta_error(
-        meta::MetaError error
+    static executor::ExecutionError from_catalog_error(
+        catalog::CatalogError error
     );
 
     /**
@@ -304,7 +304,7 @@ private:
     std::filesystem::path data_directory_; // 数据目录
     filesystem::FileSystem filesystem_;    // 文件系统
     DatabaseManifest manifest_;            // 数据库 manifest
-    meta::CatalogPublisher meta_;          // 在线 Catalog 发布者
+    catalog::CatalogPublisher catalog_;          // 在线 Catalog 发布者
     storage::StorageEngine storage_;       // 存储引擎
     index::IndexEngine index_engine_;      // 索引引擎
     vindex::VectorIndexEngine vector_index_engine_; // 向量索引引擎

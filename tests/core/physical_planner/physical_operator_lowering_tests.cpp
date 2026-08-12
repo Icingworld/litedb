@@ -11,7 +11,7 @@
 #include "core/logical_planner/operator/logical_projection_operator.hpp"
 #include "core/logical_planner/operator/logical_scan_operator.hpp"
 #include "core/logical_planner/plan/query/query_plan.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
 #include "core/physical_planner/operator/physical_projection_operator.hpp"
@@ -31,7 +31,7 @@ using namespace physical_planner_test_support;
 
 void test_recursive_lowering_and_shape()
 {
-    meta::CatalogEditor catalog;
+    catalog::CatalogEditor catalog;
     physical_planner::PhysicalPlanner planner {catalog.view()};
     std::vector<BoundProjectionItem> projections;
     projections.push_back(BoundProjectionItem {.expression = integer_literal(1), .output_name = "constant"});

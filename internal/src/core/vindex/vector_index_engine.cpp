@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "core/filesystem/filesystem.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/vindex/flat_index/flat_index.hpp"
@@ -91,7 +91,7 @@ VectorIndexEngine::VectorIndexEngine(
 {}
 
 std::expected<void, VectorIndexError> VectorIndexEngine::create_index(
-    const meta::entry::VectorIndexEntry & index_entry,
+    const catalog::entry::VectorIndexEntry & index_entry,
     const schema::CollectionSchema & collection_schema,
     const storage::StorageEngine & storage
 )
@@ -114,7 +114,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::create_index(
 }
 
 std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     const storage::StorageEngine & storage
 )
 {
@@ -123,32 +123,26 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
         return std::unexpected(std::move(cleaned.error()));
     }
     VectorIndexEngine restored {data_directory_, *filesystem_};
-    for (const auto * database : catalog.list_databases()) {
-        if (database == nullptr) {
-            continue;
-        }
-        for (const auto * collection : catalog.list_collections(database->id())) {
-            if (collection == nullptr) {
-                continue;
-            }
-            if (!storage.contains_collection(collection->id())) {
+    for (const auto & database_reference : catalog.list_databases()) {
+        const auto & database = database_reference.get();
+        for (const auto & collection_reference : catalog.list_collections(database.id())) {
+            const auto & collection = collection_reference.get();
+            if (!storage.contains_collection(collection.id())) {
                 return std::unexpected(make_error(
                     VectorIndexErrorCode::InvalidMetadata,
                     "Vector index collection is absent from storage"
                 ));
             }
-            auto collection_schema = storage::load_collection_schema(catalog, collection->id());
+            auto collection_schema = storage::load_collection_schema(catalog, collection.id());
             if (!collection_schema) {
                 return std::unexpected(make_error(
                     VectorIndexErrorCode::InvalidMetadata,
                     collection_schema.error().message()
                 ));
             }
-            for (const auto * entry : catalog.list_vector_indexes(collection->id())) {
-                if (entry == nullptr) {
-                    continue;
-                }
-                auto descriptor = make_descriptor(*entry, *collection_schema);
+            for (const auto & entry_reference : catalog.list_vector_indexes(collection.id())) {
+                const auto & entry = entry_reference.get();
+                auto descriptor = make_descriptor(entry, *collection_schema);
                 if (!descriptor) {
                     return std::unexpected(std::move(descriptor.error()));
                 }
@@ -172,7 +166,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::restore_all(
 }
 
 std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )
@@ -191,10 +185,9 @@ std::expected<void, VectorIndexError> VectorIndexEngine::reload_collection(
     }
 
     VectorIndexEngine restored {data_directory_, *filesystem_};
-    for (const auto * entry : catalog.list_vector_indexes(collection_id)) {
-        if (entry == nullptr)
-            continue;
-        auto descriptor = make_descriptor(*entry, *collection_schema);
+    for (const auto & entry_reference : catalog.list_vector_indexes(collection_id)) {
+        const auto & entry = entry_reference.get();
+        auto descriptor = make_descriptor(entry, *collection_schema);
         if (!descriptor)
             return std::unexpected(std::move(descriptor.error()));
 
@@ -743,7 +736,7 @@ void VectorIndexEngine::clear() noexcept
 }
 
 std::expected<VectorIndexDescriptor, VectorIndexError> VectorIndexEngine::make_descriptor(
-    const meta::entry::VectorIndexEntry & index_entry,
+    const catalog::entry::VectorIndexEntry & index_entry,
     const schema::CollectionSchema & collection_schema
 )
 {
@@ -780,13 +773,13 @@ std::expected<VectorIndexDescriptor, VectorIndexError> VectorIndexEngine::make_d
 
     VectorDistanceMetric metric;
     switch (index_entry.metric()) {
-    case meta::entry::VectorDistanceMetric::L2:
+    case catalog::entry::VectorDistanceMetric::L2:
         metric = VectorDistanceMetric::L2;
         break;
-    case meta::entry::VectorDistanceMetric::InnerProduct:
+    case catalog::entry::VectorDistanceMetric::InnerProduct:
         metric = VectorDistanceMetric::InnerProduct;
         break;
-    case meta::entry::VectorDistanceMetric::Cosine:
+    case catalog::entry::VectorDistanceMetric::Cosine:
         metric = VectorDistanceMetric::Cosine;
         break;
     default:
@@ -798,7 +791,7 @@ std::expected<VectorIndexDescriptor, VectorIndexError> VectorIndexEngine::make_d
 
     VectorIndexKind kind;
     switch (index_entry.index_kind()) {
-    case meta::entry::VectorIndexKind::Hnsw:
+    case catalog::entry::VectorIndexKind::Hnsw:
         kind = VectorIndexKind::Hnsw;
         break;
     default:

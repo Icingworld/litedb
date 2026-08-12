@@ -112,13 +112,13 @@ void test_committed_wal_redoes_all_participants_and_ignores_loser()
         execute_ok(session, "CREATE COLLECTION docs (id BIGINT UNIQUE, embedding VECTOR(2));");
         execute_ok(session, "CREATE INDEX idx_id ON docs (id) USING BTREE;");
         execute_ok(session, "CREATE VINDEX vidx_embedding ON docs (embedding) USING HNSW;");
-        const auto * database = engine->meta().find_database("demo");
-        require(database != nullptr, "database missing");
-        const auto * collection = engine->meta().find_collection(database->id(), "docs");
-        require(collection != nullptr, "collection missing");
+        const auto database = engine->catalog().find_database("demo");
+        require(database.has_value(), "database missing");
+        const auto collection = engine->catalog().find_collection(database->id(), "docs");
+        require(collection.has_value(), "collection missing");
         collection_id = collection->id();
-        index_id = engine->meta().find_index(collection_id, "idx_id")->id();
-        vector_index_id = engine->meta().find_vector_index(collection_id, "vidx_embedding")->id();
+        index_id = engine->catalog().find_index(collection_id, "idx_id")->id();
+        vector_index_id = engine->catalog().find_vector_index(collection_id, "vidx_embedding")->id();
     }
 
     const auto collection_path = directory / "collections" / (std::to_string(collection_id) + ".store");
@@ -258,17 +258,17 @@ void test_dml_staging_is_scoped_to_affected_collection()
         execute_ok(session, "INSERT INTO users VALUES (1, [1.0, 0.0]);");
         execute_ok(session, "INSERT INTO audit VALUES (2, [0.0, 1.0]);");
 
-        const auto * database_entry = engine->meta().find_database("demo");
-        require(database_entry != nullptr, "scoped staging database missing");
-        const auto * users = engine->meta().find_collection(database_entry->id(), "users");
-        const auto * audit = engine->meta().find_collection(database_entry->id(), "audit");
-        require(users != nullptr && audit != nullptr, "scoped staging collections missing");
+        const auto database_entry = engine->catalog().find_database("demo");
+        require(database_entry.has_value(), "scoped staging database missing");
+        const auto users = engine->catalog().find_collection(database_entry->id(), "users");
+        const auto audit = engine->catalog().find_collection(database_entry->id(), "audit");
+        require(users.has_value() && audit.has_value(), "scoped staging collections missing");
         users_id = users->id();
         audit_id = audit->id();
-        users_index_id = engine->meta().find_index(users_id, "idx_users_id")->id();
-        audit_index_id = engine->meta().find_index(audit_id, "idx_audit_id")->id();
-        users_vector_id = engine->meta().find_vector_index(users_id, "vidx_users")->id();
-        audit_vector_id = engine->meta().find_vector_index(audit_id, "vidx_audit")->id();
+        users_index_id = engine->catalog().find_index(users_id, "idx_users_id")->id();
+        audit_index_id = engine->catalog().find_index(audit_id, "idx_audit_id")->id();
+        users_vector_id = engine->catalog().find_vector_index(users_id, "vidx_users")->id();
+        audit_vector_id = engine->catalog().find_vector_index(audit_id, "vidx_audit")->id();
     }
 
     bool inspected = false;
@@ -316,10 +316,10 @@ void test_single_row_wal_write_amplification()
         for (std::int64_t id = 1; id <= 6; ++id) {
             execute_ok(session, "INSERT INTO docs VALUES (" + std::to_string(id) + ", '" + large + "');");
         }
-        const auto * database_entry = engine->meta().find_database("demo");
-        require(database_entry != nullptr, "write amplification database missing");
-        const auto * collection = engine->meta().find_collection(database_entry->id(), "docs");
-        require(collection != nullptr, "write amplification collection missing");
+        const auto database_entry = engine->catalog().find_database("demo");
+        require(database_entry.has_value(), "write amplification database missing");
+        const auto collection = engine->catalog().find_collection(database_entry->id(), "docs");
+        require(collection.has_value(), "write amplification collection missing");
         collection_id = collection->id();
         execute_ok(session, "UPDATE docs SET payload = '" + std::string(2000, 'b') + "' WHERE id = 3;");
     }

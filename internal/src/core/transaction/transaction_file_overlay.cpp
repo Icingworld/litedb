@@ -49,8 +49,8 @@ bool is_within_root(const std::filesystem::path & relative)
 std::optional<wal::FileTarget> target_for_relative(const std::filesystem::path & relative)
 {
     const auto generic = relative.generic_string();
-    if (generic == "meta.lmeta") {
-        return wal::FileTarget {.kind = wal::FileKind::MetaStore, .object_id = 0};
+    if (generic == "catalog.lcat") {
+        return wal::FileTarget {.kind = wal::FileKind::CatalogStore, .object_id = 0};
     }
     auto parse_id = [&](std::string_view prefix, std::string_view suffix) -> std::optional<std::uint64_t> {
         if (!generic.starts_with(prefix) || !generic.ends_with(suffix)) return std::nullopt;

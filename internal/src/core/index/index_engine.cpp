@@ -4,7 +4,6 @@
 #include <utility>
 
 #include "core/index/btree_index/btree_index.hpp"
-#include "core/meta/meta_engine.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
 
@@ -38,11 +37,11 @@ std::filesystem::path IndexEngine::index_path(common::IndexId index_id) const
 }
 
 std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_backend(
-    const meta::entry::IndexEntry & index_entry,
+    const catalog::entry::IndexEntry & index_entry,
     const common::LogicalType & key_type
 )
 {
-    if (index_entry.kind() != meta::entry::IndexKind::BTree) {
+    if (index_entry.kind() != catalog::entry::IndexKind::BTree) {
         return std::unexpected(
             make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind")
         );
@@ -65,11 +64,11 @@ std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::create_back
 }
 
 std::expected<std::unique_ptr<ScalarIndex>, IndexError> IndexEngine::restore_backend(
-    const meta::entry::IndexEntry & index_entry,
+    const catalog::entry::IndexEntry & index_entry,
     const common::LogicalType & key_type
 )
 {
-    if (index_entry.kind() != meta::entry::IndexKind::BTree) {
+    if (index_entry.kind() != catalog::entry::IndexKind::BTree) {
         return std::unexpected(
             make_error(IndexErrorCode::InvalidIndexColumn, "Unsupported index kind")
         );
@@ -216,7 +215,7 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
 }
 
 std::expected<void, IndexError> IndexEngine::create_index(
-    const meta::entry::IndexEntry & index_entry,
+    const catalog::entry::IndexEntry & index_entry,
     const schema::CollectionSchema & collection_schema,
     const storage::StorageEngine & storage
 )
@@ -228,12 +227,7 @@ std::expected<void, IndexError> IndexEngine::create_index(
     }
 
     const auto column_id = index_entry.column_id();
-    if (!column_id.has_value()) {
-        return std::unexpected(
-            make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns")
-        );
-    }
-    const auto column = collection_schema.find_column(*column_id);
+    const auto column = collection_schema.find_column(column_id);
     if (!column.has_value()) {
         return std::unexpected(make_error(
             IndexErrorCode::InvalidIndexColumn,
@@ -255,7 +249,7 @@ std::expected<void, IndexError> IndexEngine::create_index(
         IndexDescriptor {
             .index_id = index_entry.id(),
             .collection_id = index_entry.collection_id(),
-            .column_id = *column_id,
+            .column_id = column_id,
             .column_ordinal = column->ordinal(),
             .key_type = column->type(),
             .kind = (*index)->kind(),
@@ -267,7 +261,7 @@ std::expected<void, IndexError> IndexEngine::create_index(
     auto built = build_index_from_storage(*store, storage);
     if (!built.has_value()) {
         store.reset();
-        if (index_entry.kind() == meta::entry::IndexKind::BTree) {
+        if (index_entry.kind() == catalog::entry::IndexKind::BTree) {
             auto removed = filesystem_->remove(index_path(index_entry.id()));
             if (!removed.has_value()) {
                 return std::unexpected(make_error(
@@ -366,25 +360,20 @@ std::expected<void, IndexError> IndexEngine::drop_collection_indexes(
 }
 
 std::expected<void, IndexError>
-IndexEngine::restore_all(const meta::CatalogView & catalog, const storage::StorageEngine & storage)
+IndexEngine::restore_all(const catalog::CatalogViewer & catalog, const storage::StorageEngine & storage)
 {
     IndexEngine restored {data_directory_, *filesystem_};
 
-    for (const auto * database : catalog.list_databases()) {
-        if (database == nullptr) {
-            continue;
-        }
+    for (const auto & database_reference : catalog.list_databases()) {
+        const auto & database = database_reference.get();
+        for (const auto & collection_reference : catalog.list_collections(database.id())) {
+            const auto & collection = collection_reference.get();
 
-        for (const auto * collection : catalog.list_collections(database->id())) {
-            if (collection == nullptr) {
+            if (!storage.contains_collection(collection.id())) {
                 continue;
             }
 
-            if (!storage.contains_collection(collection->id())) {
-                continue;
-            }
-
-            auto collection_schema = storage::load_collection_schema(catalog, collection->id());
+            auto collection_schema = storage::load_collection_schema(catalog, collection.id());
             if (!collection_schema.has_value()) {
                 return std::unexpected(make_error(
                     IndexErrorCode::InvalidIndexColumn,
@@ -392,45 +381,37 @@ IndexEngine::restore_all(const meta::CatalogView & catalog, const storage::Stora
                 ));
             }
 
-            for (const auto * index_entry : catalog.list_indexes(collection->id())) {
-                if (index_entry == nullptr) {
-                    continue;
-                }
-
-                const auto column_id = index_entry->column_id();
-                if (!column_id.has_value()) {
-                    return std::unexpected(
-                        make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns")
-                    );
-                }
-                const auto column = collection_schema->find_column(*column_id);
+            for (const auto & index_reference : catalog.list_indexes(collection.id())) {
+                const auto & index_entry = index_reference.get();
+                const auto column_id = index_entry.column_id();
+                const auto column = collection_schema->find_column(column_id);
                 if (!column.has_value() || column->type().id == common::LogicalTypeId::Vector) {
                     return std::unexpected(
                         make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid")
                     );
                 }
 
-                auto backend = restored.restore_backend(*index_entry, column->type());
+                auto backend = restored.restore_backend(index_entry, column->type());
                 if (!backend.has_value()) {
                     return std::unexpected(std::move(backend.error()));
                 }
 
                 IndexStore store {
                     IndexDescriptor {
-                        .index_id = index_entry->id(),
-                        .collection_id = index_entry->collection_id(),
-                        .column_id = *column_id,
+                        .index_id = index_entry.id(),
+                        .collection_id = index_entry.collection_id(),
+                        .column_id = column_id,
                         .column_ordinal = column->ordinal(),
                         .key_type = column->type(),
                         .kind = (*backend)->kind(),
-                        .unique = index_entry->unique(),
+                        .unique = index_entry.unique(),
                     },
                     std::move(*backend)
                 };
 
-                restored.stores_by_id_.emplace(index_entry->id(), std::move(store));
-                restored.indexes_by_collection_[index_entry->collection_id()].push_back(
-                    index_entry->id()
+                restored.stores_by_id_.emplace(index_entry.id(), std::move(store));
+                restored.indexes_by_collection_[index_entry.collection_id()].push_back(
+                    index_entry.id()
                 );
             }
         }
@@ -441,7 +422,7 @@ IndexEngine::restore_all(const meta::CatalogView & catalog, const storage::Stora
 }
 
 std::expected<void, IndexError> IndexEngine::reload_collection(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     const storage::StorageEngine & storage,
     common::CollectionId collection_id
 )
@@ -460,41 +441,35 @@ std::expected<void, IndexError> IndexEngine::reload_collection(
     }
 
     IndexEngine restored {data_directory_, *filesystem_};
-    for (const auto * index_entry : catalog.list_indexes(collection_id)) {
-        if (index_entry == nullptr)
-            continue;
-        const auto column_id = index_entry->column_id();
-        if (!column_id) {
-            return std::unexpected(
-                make_error(IndexErrorCode::InvalidIndexColumn, "Index has no columns")
-            );
-        }
-        const auto column = collection_schema->find_column(*column_id);
+    for (const auto & index_reference : catalog.list_indexes(collection_id)) {
+        const auto & index_entry = index_reference.get();
+        const auto column_id = index_entry.column_id();
+        const auto column = collection_schema->find_column(column_id);
         if (!column.has_value() || column->type().id == common::LogicalTypeId::Vector) {
             return std::unexpected(
                 make_error(IndexErrorCode::InvalidIndexColumn, "Indexed column is invalid")
             );
         }
-        auto backend = restored.restore_backend(*index_entry, column->type());
+        auto backend = restored.restore_backend(index_entry, column->type());
         if (!backend)
             return std::unexpected(std::move(backend.error()));
 
         restored.stores_by_id_.emplace(
-            index_entry->id(),
+            index_entry.id(),
             IndexStore {
                 IndexDescriptor {
-                    .index_id = index_entry->id(),
-                    .collection_id = index_entry->collection_id(),
-                    .column_id = *column_id,
+                    .index_id = index_entry.id(),
+                    .collection_id = index_entry.collection_id(),
+                    .column_id = column_id,
                     .column_ordinal = column->ordinal(),
                     .key_type = column->type(),
                     .kind = (*backend)->kind(),
-                    .unique = index_entry->unique(),
+                    .unique = index_entry.unique(),
                 },
                 std::move(*backend)
             }
         );
-        restored.indexes_by_collection_[collection_id].push_back(index_entry->id());
+        restored.indexes_by_collection_[collection_id].push_back(index_entry.id());
     }
 
     if (const auto current = indexes_by_collection_.find(collection_id);

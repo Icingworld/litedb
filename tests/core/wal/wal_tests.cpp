@@ -87,7 +87,7 @@ int main()
     require(decoded->mode == wal::FileWriteMode::Overwrite, "legacy overwrite mode mismatch");
 
     const wal::FileWrite replacement {
-        .target = {.kind = wal::FileKind::MetaStore, .object_id = 0},
+        .target = {.kind = wal::FileKind::CatalogStore, .object_id = 0},
         .offset = 0,
         .after_image = {std::byte {7}, std::byte {8}},
         .mode = wal::FileWriteMode::Replace,
@@ -100,7 +100,7 @@ int main()
     wal::FileWriteBatch lifecycle;
     lifecycle.add(replacement);
     require(lifecycle.apply(directory, filesystem, true).has_value(), "replace operation apply failed");
-    require(std::filesystem::file_size(directory / "meta.lmeta") == 2, "replace operation size mismatch");
+    require(std::filesystem::file_size(directory / "catalog.lcat") == 2, "replace operation size mismatch");
     wal::FileWriteBatch deletion;
     deletion.add(wal::FileWrite {
         .target = replacement.target,
@@ -109,7 +109,7 @@ int main()
         .mode = wal::FileWriteMode::Delete,
     });
     require(deletion.apply(directory, filesystem, true).has_value(), "delete operation apply failed");
-    require(!std::filesystem::exists(directory / "meta.lmeta"), "delete operation did not remove target");
+    require(!std::filesystem::exists(directory / "catalog.lcat"), "delete operation did not remove target");
 
     wal::FileWriteBatch batch;
     batch.add(write);

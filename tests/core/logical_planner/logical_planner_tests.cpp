@@ -33,7 +33,7 @@
 #include "core/logical_planner/plan/mutation/update_plan.hpp"
 #include "core/logical_planner/plan/query/query_plan.hpp"
 #include "core/logical_planner/worker/logical_planner_worker.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 #include "core/storage/schema_loader.hpp"
@@ -52,8 +52,8 @@ namespace
 
 using namespace litedb::core::binder;
 using namespace litedb::core::binder::bound;
-using namespace litedb::core::meta;
-using namespace litedb::core::meta::entry;
+using namespace litedb::core::catalog;
+using namespace litedb::core::catalog::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::parser;
@@ -102,7 +102,9 @@ struct Fixture
 
     Fixture()
     {
-        auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
+        auto database = catalog.create_database(
+            CreateDatabaseRequest {.database_name = "demo"}
+        );
         if (!database.has_value()) {
             throw std::runtime_error(database.error().message());
         }
@@ -110,7 +112,7 @@ struct Fixture
 
         CreateCollectionRequest users;
         users.database_id = database_id;
-        users.name = "users";
+        users.collection_name = "users";
         users.columns = {
             ColumnDefinition {
                 .name = "id",
@@ -187,18 +189,18 @@ IndexId create_managed_index(
     Fixture & fixture,
     std::string name,
     std::string_view column_name,
-    litedb::core::meta::entry::IndexKind kind
+    litedb::core::catalog::entry::IndexKind kind
 )
 {
-    const auto * column =
+    const auto column =
         fixture.catalog.view().find_column(fixture.users_id, std::string(column_name));
-    require(column != nullptr, "fixture index column missing");
+    require(column.has_value(), "fixture index column missing");
 
     auto created = fixture.catalog.create_index(
         CreateIndexRequest {
             .collection_id = fixture.users_id,
-            .column_ids = {column->id()},
-            .name = std::move(name),
+            .column_id = column->id(),
+            .index_name = std::move(name),
             .kind = kind,
         }
     );
@@ -206,8 +208,8 @@ IndexId create_managed_index(
         throw std::runtime_error(std::string {created.error().message()});
     }
 
-    const auto * entry = fixture.catalog.view().find_index(*created);
-    require(entry != nullptr, "fixture index entry missing");
+    const auto entry = fixture.catalog.view().find_index(*created);
+    require(entry.has_value(), "fixture index entry missing");
 
     auto schema =
         litedb::core::storage::load_collection_schema(fixture.catalog.view(), fixture.users_id);
@@ -398,7 +400,7 @@ void test_indexes_do_not_change_logical_scan()
         fixture,
         "idx_age_btree",
         "age",
-        litedb::core::meta::entry::IndexKind::BTree
+        litedb::core::catalog::entry::IndexKind::BTree
     );
 
     auto equal = plan_ok(fixture, "SELECT id FROM users WHERE age = 18;");
@@ -453,11 +455,11 @@ void test_indexes_do_not_change_logical_scan()
 void test_admin_and_ddl_plans()
 {
     Fixture fixture;
-    const auto * age_column = fixture.catalog.view().find_column(fixture.users_id, "age");
-    require(age_column != nullptr, "age column lookup failed");
-    const auto * embedding_column =
+    const auto age_column = fixture.catalog.view().find_column(fixture.users_id, "age");
+    require(age_column.has_value(), "age column lookup failed");
+    const auto embedding_column =
         fixture.catalog.view().find_column(fixture.users_id, "embedding");
-    require(embedding_column != nullptr, "embedding column lookup failed");
+    require(embedding_column.has_value(), "embedding column lookup failed");
 
     auto use = plan_ok(fixture, "USE demo;");
     require(use->kind() == LogicalPlanKind::Use, "USE kind mismatch");
@@ -500,7 +502,7 @@ void test_admin_and_ddl_plans()
     require(create_index_node.column_id() == age_column->id(), "CREATE INDEX column id mismatch");
     require(create_index_node.index_name() == "idx_age", "CREATE INDEX index name mismatch");
     require(
-        create_index_node.index_kind() == litedb::core::meta::entry::IndexKind::BTree,
+        create_index_node.index_kind() == litedb::core::catalog::entry::IndexKind::BTree,
         "CREATE INDEX kind value mismatch"
     );
     require(!create_index_node.unique(), "CREATE INDEX unique mismatch");
@@ -559,9 +561,9 @@ void test_admin_and_ddl_plans()
     auto created_index = fixture.catalog.create_index(
         CreateIndexRequest {
             .collection_id = fixture.users_id,
-            .column_ids = {age_column->id()},
-            .name = "idx_age",
-            .kind = litedb::core::meta::entry::IndexKind::BTree,
+            .column_id = age_column->id(),
+            .index_name = "idx_age",
+            .kind = litedb::core::catalog::entry::IndexKind::BTree,
         }
     );
     require(created_index.has_value(), "fixture index create failed");
@@ -575,7 +577,7 @@ void test_admin_and_ddl_plans()
         CreateVectorIndexRequest {
             .collection_id = fixture.users_id,
             .column_id = embedding_column->id(),
-            .name = "vidx_embedding",
+            .vector_index_name = "vidx_embedding",
         }
     );
     require(created_vector_index.has_value(), "fixture vector index create failed");

@@ -4,7 +4,7 @@
 #include <string>
 
 #include "core/common/ids.hpp"
-#include "core/meta/entry/index_entry.hpp"
+#include "core/catalog/entry/index_entry.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 
 namespace litedb::core::physical_planner::plan
@@ -17,7 +17,7 @@ public:
     CreateIndexPlan(
         common::ColumnId column_id,
         std::optional<std::string> index_name,
-        meta::entry::IndexKind index_kind,
+        catalog::entry::IndexKind index_kind,
         bool unique
     );
 
@@ -32,7 +32,7 @@ public:
 
     // 获取索引类型
     [[nodiscard]]
-    meta::entry::IndexKind index_kind() const noexcept;
+    catalog::entry::IndexKind index_kind() const noexcept;
 
     // 是否唯一
     [[nodiscard]]
@@ -41,7 +41,7 @@ public:
 private:
     common::ColumnId column_id_;
     std::optional<std::string> index_name_;
-    meta::entry::IndexKind index_kind_;
+    catalog::entry::IndexKind index_kind_;
     bool unique_;
 };
 

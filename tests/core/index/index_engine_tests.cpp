@@ -1,4 +1,4 @@
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/index/index_engine.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
@@ -15,8 +15,8 @@
 namespace
 {
 
-using namespace litedb::core::meta;
-using namespace litedb::core::meta::entry;
+using namespace litedb::core::catalog;
+using namespace litedb::core::catalog::entry;
 using namespace litedb::core::common;
 using namespace litedb::core::index;
 using namespace litedb::core::schema;
@@ -67,7 +67,9 @@ struct Fixture
 
     Fixture()
     {
-        auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
+        auto database = catalog.create_database(
+            CreateDatabaseRequest {.database_name = "demo"}
+        );
         if (!database.has_value()) {
             throw std::runtime_error(database.error().message());
         }
@@ -75,7 +77,7 @@ struct Fixture
 
         auto collection = catalog.create_collection(CreateCollectionRequest {
             .database_id = database_id,
-            .name = "users",
+            .collection_name = "users",
             .columns = {
                 ColumnDefinition {
                     .name = "id",
@@ -93,8 +95,8 @@ struct Fixture
         }
         users_id = *collection;
 
-        const auto * age_column = catalog.view().find_column(users_id, "age");
-        require(age_column != nullptr, "age column missing");
+        const auto age_column = catalog.view().find_column(users_id, "age");
+        require(age_column.has_value(), "age column missing");
         age_column_id = age_column->id();
 
         auto collection_schema = load_collection_schema(catalog.view(), users_id);
@@ -119,20 +121,20 @@ struct Fixture
         return *inserted;
     }
 
-    const IndexEntry & create_catalog_index(std::string name, litedb::core::meta::entry::IndexKind kind, bool unique = false)
+    const IndexEntry & create_catalog_index(std::string name, litedb::core::catalog::entry::IndexKind kind, bool unique = false)
     {
         auto created = catalog.create_index(CreateIndexRequest {
             .collection_id = users_id,
-            .column_ids = {age_column_id},
-            .name = std::move(name),
+            .column_id = age_column_id,
+            .index_name = std::move(name),
             .kind = kind,
             .unique = unique,
         });
         if (!created.has_value()) {
             throw std::runtime_error(std::string {created.error().message()});
         }
-        const auto * index = catalog.view().find_index(*created);
-        require(index != nullptr, "catalog index missing");
+        const auto index = catalog.view().find_index(*created);
+        require(index.has_value(), "catalog index missing");
         return *index;
     }
 
@@ -152,7 +154,7 @@ void test_build_skips_nulls_and_views_index()
     fixture.insert_user(1, 18);
     fixture.insert_user(2, std::nullopt);
     fixture.insert_user(3, 20);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::catalog::entry::IndexKind::BTree);
 
     IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
@@ -185,7 +187,7 @@ void test_insert_update_delete_maintenance()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::catalog::entry::IndexKind::BTree);
 
     IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
@@ -229,7 +231,7 @@ void test_unique_index_rejects_duplicates()
     Fixture fixture;
     fixture.insert_user(1, 18);
     fixture.insert_user(2, 18);
-    const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
+    const auto & duplicate_index = fixture.create_catalog_index("idx_age_unique", litedb::core::catalog::entry::IndexKind::BTree, true);
 
     IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto duplicate_build = engine.create_index(duplicate_index, fixture.users_schema(), fixture.storage);
@@ -238,7 +240,7 @@ void test_unique_index_rejects_duplicates()
 
     Fixture clean_fixture;
     clean_fixture.insert_user(1, 18);
-    const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", litedb::core::meta::entry::IndexKind::BTree, true);
+    const auto & unique_index = clean_fixture.create_catalog_index("idx_age_unique", litedb::core::catalog::entry::IndexKind::BTree, true);
     IndexEngine clean_engine {clean_fixture.storage_directory.path(), clean_fixture.filesystem};
     auto created = clean_engine.create_index(unique_index, clean_fixture.users_schema(), clean_fixture.storage);
     require(created.has_value(), "unique index create failed");
@@ -253,14 +255,14 @@ void test_restore_all_is_atomic_on_failure()
 {
     Fixture fixture;
     fixture.insert_user(1, 18);
-    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::meta::entry::IndexKind::BTree);
+    const auto & index_entry = fixture.create_catalog_index("idx_age", litedb::core::catalog::entry::IndexKind::BTree);
 
     IndexEngine engine {fixture.storage_directory.path(), fixture.filesystem};
     auto created = engine.create_index(index_entry, fixture.users_schema(), fixture.storage);
     require(created.has_value(), "initial create index failed");
     require(engine.find_index(index_entry.id()).has_value(), "initial index missing");
 
-    const auto & missing_index = fixture.create_catalog_index("idx_age_missing", litedb::core::meta::entry::IndexKind::BTree);
+    const auto & missing_index = fixture.create_catalog_index("idx_age_missing", litedb::core::catalog::entry::IndexKind::BTree);
     auto restored = engine.restore_all(fixture.catalog.view(), fixture.storage);
     require(!restored.has_value(), "restore should fail when a persistent index file is missing");
     require(restored.error().is(IndexErrorCode::StorageError), "restore storage error mismatch");

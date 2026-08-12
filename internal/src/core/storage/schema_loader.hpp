@@ -2,7 +2,7 @@
 
 #include <expected>
 
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/schema/collection.hpp"
 #include "core/storage/schema_load_error.hpp"
 
@@ -17,7 +17,7 @@ namespace litedb::core::storage
  */
 [[nodiscard]]
 std::expected<schema::CollectionSchema, SchemaLoadError> load_collection_schema(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     common::CollectionId collection_id
 );
 

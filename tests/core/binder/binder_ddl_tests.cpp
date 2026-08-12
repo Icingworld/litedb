@@ -22,14 +22,14 @@ namespace
 {
 
 using namespace litedb::test::binder;
-using namespace litedb::core::meta::entry;
+using namespace litedb::core::catalog::entry;
 
 IndexId create_age_index(Fixture & fixture, std::string name = "idx_age")
 {
     auto index = fixture.catalog.create_index(CreateIndexRequest {
         .collection_id = fixture.users_id,
-        .column_ids = {fixture.age_column_id},
-        .name = std::move(name),
+        .column_id = fixture.age_column_id,
+        .index_name = std::move(name),
         .kind = IndexKind::BTree,
     });
     if (!index.has_value()) {
@@ -43,7 +43,7 @@ VIndexId create_embedding_index(Fixture & fixture, std::string name = "vidx_embe
     auto index = fixture.catalog.create_vector_index(CreateVectorIndexRequest {
         .collection_id = fixture.users_id,
         .column_id = fixture.embedding_column_id,
-        .name = std::move(name),
+        .vector_index_name = std::move(name),
     });
     if (!index.has_value()) {
         throw std::runtime_error(index.error().message());

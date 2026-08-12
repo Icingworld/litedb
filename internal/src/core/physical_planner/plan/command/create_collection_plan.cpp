@@ -8,7 +8,7 @@ namespace litedb::core::physical_planner::plan
 CreateCollectionPlan::CreateCollectionPlan(
     common::DatabaseId database_id,
     std::optional<std::string> collection_name,
-    std::vector<meta::ColumnDefinition> columns,
+    std::vector<catalog::ColumnDefinition> columns,
     std::optional<std::string> comment
 )
     : PhysicalPlan(PhysicalPlanKind::CreateCollection)
@@ -28,7 +28,7 @@ std::optional<const std::string &> CreateCollectionPlan::collection_name() const
     return collection_name_;
 }
 
-const std::vector<meta::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
+const std::vector<catalog::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
 {
     return columns_;
 }

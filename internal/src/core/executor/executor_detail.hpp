@@ -8,7 +8,7 @@
 #include "core/executor/execution_error.hpp"
 #include "core/executor/execution_result.hpp"
 #include "core/index/index_engine.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_index_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
@@ -58,7 +58,7 @@ using ExecutionResultExpected = std::expected<ExecutionResult, ExecutionError>;
 [[nodiscard]]
 PhysicalExecutionResult execute_physical(
     const physical_planner::op::PhysicalOperator & node,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -67,14 +67,14 @@ PhysicalExecutionResult execute_physical(
 [[nodiscard]]
 PhysicalExecutionResult execute_scan(
     const physical_planner::op::SeqScanOperator & scan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage
 );
 
 [[nodiscard]]
 PhysicalExecutionResult execute_index_scan(
     const physical_planner::op::IndexScanOperator & scan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine
 );
@@ -82,7 +82,7 @@ PhysicalExecutionResult execute_index_scan(
 [[nodiscard]]
 PhysicalExecutionResult execute_vector_search(
     const physical_planner::op::VectorSearchOperator & search,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     vindex::VectorIndexEngine & vector_index_engine
 );
@@ -90,7 +90,7 @@ PhysicalExecutionResult execute_vector_search(
 [[nodiscard]]
 PhysicalExecutionResult execute_filter(
     const physical_planner::op::FilterOperator & filter,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -99,7 +99,7 @@ PhysicalExecutionResult execute_filter(
 [[nodiscard]]
 PhysicalExecutionResult execute_projection(
     const physical_planner::op::ProjectionOperator & projection,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -108,7 +108,7 @@ PhysicalExecutionResult execute_projection(
 [[nodiscard]]
 PhysicalExecutionResult execute_order_by(
     const physical_planner::op::SortOperator & order_by,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -117,7 +117,7 @@ PhysicalExecutionResult execute_order_by(
 [[nodiscard]]
 PhysicalExecutionResult execute_limit(
     const physical_planner::op::LimitOperator & limit,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -126,7 +126,7 @@ PhysicalExecutionResult execute_limit(
 [[nodiscard]]
 ExecutionResultExpected execute_query(
     const physical_planner::plan::QueryPlan & plan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -134,7 +134,7 @@ ExecutionResultExpected execute_query(
 
 [[nodiscard]]
 ExecutionResultExpected
-execute_use(const physical_planner::plan::UsePlan & plan, meta::CatalogView & catalog);
+execute_use(const physical_planner::plan::UsePlan & plan, catalog::CatalogViewer & catalog);
 
 [[nodiscard]]
 ExecutionResultExpected execute_insert(
@@ -146,7 +146,7 @@ ExecutionResultExpected execute_insert(
 [[nodiscard]]
 ExecutionResultExpected execute_delete(
     const physical_planner::plan::DeletePlan & plan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -156,7 +156,7 @@ ExecutionResultExpected execute_delete(
 [[nodiscard]]
 ExecutionResultExpected execute_update(
     const physical_planner::plan::UpdatePlan & plan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -164,30 +164,30 @@ ExecutionResultExpected execute_update(
 );
 
 [[nodiscard]]
-ExecutionResultExpected execute_show_databases(meta::CatalogView & catalog);
+ExecutionResultExpected execute_show_databases(catalog::CatalogViewer & catalog);
 
 [[nodiscard]]
 ExecutionResultExpected execute_show_collections(
     const physical_planner::plan::ShowCollectionsPlan & plan,
-    meta::CatalogView & catalog
+    catalog::CatalogViewer & catalog
 );
 
 [[nodiscard]]
 ExecutionResultExpected execute_show_indexes(
     const physical_planner::plan::ShowIndexesPlan & plan,
-    meta::CatalogView & catalog
+    catalog::CatalogViewer & catalog
 );
 
 [[nodiscard]]
 ExecutionResultExpected execute_show_vector_indexes(
     const physical_planner::plan::ShowVectorIndexesPlan & plan,
-    meta::CatalogView & catalog
+    catalog::CatalogViewer & catalog
 );
 
 [[nodiscard]]
 ExecutionResultExpected execute_describe_collection(
     const physical_planner::plan::DescribeCollectionPlan & plan,
-    meta::CatalogView & catalog
+    catalog::CatalogViewer & catalog
 );
 
 } // namespace litedb::core::executor::detail

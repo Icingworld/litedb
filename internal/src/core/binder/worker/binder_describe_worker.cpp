@@ -30,9 +30,9 @@ BinderDescribeWorker::bind_describe_collection(const DescribeCollectionStatement
     }
 
     // 查找集合
-    const auto * collection =
-        context_.meta().find_collection(*database_id, statement.collection_name());
-    if (collection == nullptr) [[unlikely]] {
+    const auto collection =
+        context_.catalog().find_collection(*database_id, statement.collection_name());
+    if (!collection) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
             "Collection not found: " + statement.collection_name()

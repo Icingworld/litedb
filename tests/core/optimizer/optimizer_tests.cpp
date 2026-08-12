@@ -24,7 +24,7 @@
 #include "core/logical_planner/plan/mutation/update_plan.hpp"
 #include "core/logical_planner/plan/query/query_plan.hpp"
 #include "core/logical_planner/plan/logical_plan.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
@@ -51,7 +51,7 @@ using namespace litedb::core::common;
 using namespace litedb::core::logical_planner;
 using namespace litedb::core::logical_planner::op;
 using namespace litedb::core::logical_planner::plan;
-using namespace litedb::core::meta;
+using namespace litedb::core::catalog;
 using namespace litedb::core::optimizer;
 using namespace litedb::core::parser;
 
@@ -75,13 +75,15 @@ struct Fixture
 
     Fixture()
     {
-        auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
+        auto database = catalog.create_database(
+            CreateDatabaseRequest {.database_name = "demo"}
+        );
         require(database.has_value(), "fixture database create failed");
         database_id = *database;
 
         CreateCollectionRequest users;
         users.database_id = database_id;
-        users.name = "users";
+        users.collection_name = "users";
         users.columns = {
             ColumnDefinition {.name = "id", .type = type(LogicalTypeId::BigInt), .nullable = false},
             ColumnDefinition {.name = "name", .type = type(LogicalTypeId::Varchar, 64), .nullable = true},

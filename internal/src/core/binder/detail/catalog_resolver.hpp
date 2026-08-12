@@ -6,12 +6,12 @@
 #include "core/binder/binder_error.hpp"
 #include "core/common/ids.hpp"
 
-namespace litedb::core::meta::entry
+namespace litedb::core::catalog::entry
 {
 
 class CollectionEntry;
 
-} // namespace litedb::core::meta::entry
+} // namespace litedb::core::catalog::entry
 
 namespace litedb::core::binder
 {
@@ -27,7 +27,7 @@ namespace litedb::core::binder::detail
 struct BindingCollection
 {
     common::DatabaseId database_id {0};
-    const meta::entry::CollectionEntry * collection {nullptr};
+    const catalog::entry::CollectionEntry * collection {nullptr};
 };
 
 // Catalog 解析器

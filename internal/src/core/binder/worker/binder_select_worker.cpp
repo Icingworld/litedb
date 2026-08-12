@@ -90,12 +90,13 @@ std::expected<std::vector<std::unique_ptr<BoundExpression>>, BinderError> expand
     }
 
     std::vector<std::unique_ptr<BoundExpression>> expressions;
-    for (const auto * column : context.meta().list_columns(collection.collection->id())) {
+    for (const auto & column_reference : context.catalog().list_columns(collection.collection->id())) {
+        const auto & column = column_reference.get();
         expressions.push_back(
             std::make_unique<BoundColumnRefExpression>(
-                column->id(),
-                column->ordinal(),
-                column->type()
+                column.id(),
+                column.ordinal(),
+                column.type()
             )
         );
     }
@@ -184,7 +185,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
                 return std::unexpected(std::move(expanded.error()));
             }
             // 获取集合所有列
-            const auto columns = context_.meta().list_columns(collection->collection->id());
+            const auto columns = context_.catalog().list_columns(collection->collection->id());
             if (expanded->size() != columns.size()) [[unlikely]] {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::UnsupportedExpression,
@@ -195,7 +196,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderSelectWorker::
                 projections.push_back(
                     BoundProjectionItem {
                         .expression = std::move((*expanded)[index]),
-                        .output_name = columns[index]->name(),
+                        .output_name = columns[index].get().name(),
                     }
                 );
             }

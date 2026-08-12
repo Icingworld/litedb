@@ -148,12 +148,12 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
     detail::ExpressionBinder expression_binder(context_, *collection);
 
     // 获取集合所有列
-    const auto catalog_columns = context_.meta().list_columns(collection->collection->id());
+    const auto catalog_columns = context_.catalog().list_columns(collection->collection->id());
     std::vector<std::optional<std::size_t>> source_value_by_target(catalog_columns.size());
     std::unordered_map<ColumnId, std::size_t> target_index_by_column_id;
     target_index_by_column_id.reserve(catalog_columns.size());
     for (std::size_t index = 0; index < catalog_columns.size(); ++index) {
-        target_index_by_column_id.emplace(catalog_columns[index]->id(), index);
+        target_index_by_column_id.emplace(catalog_columns[index].get().id(), index);
     }
 
     if (statement.columns().empty()) {
@@ -190,11 +190,11 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
 
         // 遍历指定列，绑定列引用
         for (std::size_t index = 0; index < statement.columns().size(); ++index) {
-            const auto * column = context_.meta().find_column(
+            const auto column = context_.catalog().find_column(
                 collection->collection->id(),
                 statement.columns()[index]
             );
-            if (column == nullptr) [[unlikely]] {
+            if (!column) [[unlikely]] {
                 return std::unexpected(make_binder_error(
                     BinderErrorCode::ColumnNotFound,
                     "Column not found: " + statement.columns()[index]
@@ -217,7 +217,7 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderInsertWorker::
     bound_values.reserve(catalog_columns.size());
 
     for (std::size_t target_index = 0; target_index < catalog_columns.size(); ++target_index) {
-        const auto & column = *catalog_columns[target_index];
+        const auto & column = catalog_columns[target_index].get();
 
         std::unique_ptr<BoundExpression> value;
         if (source_value_by_target[target_index].has_value()) {

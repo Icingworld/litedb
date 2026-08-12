@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/meta/meta_request.hpp"
+#include "core/catalog/catalog_request.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 
 namespace litedb::core::physical_planner::plan
@@ -18,7 +18,7 @@ public:
     CreateCollectionPlan(
         common::DatabaseId database_id,
         std::optional<std::string> collection_name,
-        std::vector<meta::ColumnDefinition> columns,
+        std::vector<catalog::ColumnDefinition> columns,
         std::optional<std::string> comment
     );
 
@@ -33,7 +33,7 @@ public:
 
     // 获取列定义
     [[nodiscard]]
-    const std::vector<meta::ColumnDefinition> & columns() const noexcept;
+    const std::vector<catalog::ColumnDefinition> & columns() const noexcept;
 
     // 获取集合注释
     [[nodiscard]]
@@ -42,7 +42,7 @@ public:
 private:
     common::DatabaseId database_id_;
     std::optional<std::string> collection_name_;
-    std::vector<meta::ColumnDefinition> columns_;
+    std::vector<catalog::ColumnDefinition> columns_;
     std::optional<std::string> comment_;
 };
 

@@ -20,7 +20,7 @@ std::expected<common::DatabaseId, BinderError> CatalogResolver::require_database
         );
     }
 
-    if (context_.meta().find_database(context_.session().current_database_id.value()) == nullptr)
+    if (!context_.catalog().find_database(context_.session().current_database_id.value()))
         [[unlikely]] {
         return std::unexpected(
             make_binder_error(BinderErrorCode::DatabaseNotFound, "Current database not found")
@@ -39,8 +39,8 @@ std::expected<BindingCollection, BinderError> CatalogResolver::resolve_collectio
         return std::unexpected(std::move(database_id.error()));
     }
 
-    const auto * collection = context_.meta().find_collection(*database_id, collection_name);
-    if (collection == nullptr) [[unlikely]] {
+    const auto collection = context_.catalog().find_collection(*database_id, collection_name);
+    if (!collection) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::CollectionNotFound,
             "Collection not found: " + collection_name
@@ -49,7 +49,7 @@ std::expected<BindingCollection, BinderError> CatalogResolver::resolve_collectio
 
     return BindingCollection {
         .database_id = *database_id,
-        .collection = collection,
+        .collection = &*collection,
     };
 }
 

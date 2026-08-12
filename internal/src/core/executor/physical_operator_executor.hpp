@@ -15,7 +15,7 @@ class PhysicalOperatorExecutor final
 
 public:
     PhysicalOperatorExecutor(
-        meta::CatalogView & catalog,
+        catalog::CatalogViewer & catalog,
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine
@@ -61,7 +61,7 @@ private:
     );
 
 private:
-    meta::CatalogView & catalog_;
+    catalog::CatalogViewer & catalog_;
     storage::StorageEngine & storage_;
     index::IndexEngine & index_engine_;
     vindex::VectorIndexEngine & vector_index_engine_;

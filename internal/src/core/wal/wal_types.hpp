@@ -24,7 +24,7 @@ enum class FileKind : std::uint8_t
     CollectionStore = 1,    // 集合存储
     ScalarIndex = 2,        // 标量索引
     VectorIndex = 3,        // 向量索引
-    MetaStore = 4,          // 元数据快照
+    CatalogStore = 4,       // 目录快照
 };
 
 enum class FileWriteMode : std::uint8_t

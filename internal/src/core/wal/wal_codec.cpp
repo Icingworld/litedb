@@ -232,7 +232,7 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::vector<std::
 
     const auto kind_value = read_number<std::uint8_t>(payload.data());
     if (kind_value < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
-        kind_value > static_cast<std::uint8_t>(FileKind::MetaStore)) {
+        kind_value > static_cast<std::uint8_t>(FileKind::CatalogStore)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
     }
     const auto mode_value = read_number<std::uint8_t>(payload.data() + 1);
@@ -245,8 +245,8 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::vector<std::
     if ((mode == FileWriteMode::Replace && offset != 0) ||
         (mode == FileWriteMode::Delete && (offset != 0 || payload.size() != 24)) ||
         (mode == FileWriteMode::Truncate && payload.size() != 24) ||
-        (kind_value == static_cast<std::uint8_t>(FileKind::MetaStore) && object_id != 0) ||
-        (kind_value != static_cast<std::uint8_t>(FileKind::MetaStore) && object_id == 0)) {
+        (kind_value == static_cast<std::uint8_t>(FileKind::CatalogStore) && object_id != 0) ||
+        (kind_value != static_cast<std::uint8_t>(FileKind::CatalogStore) && object_id == 0)) {
         return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation"));
     }
 

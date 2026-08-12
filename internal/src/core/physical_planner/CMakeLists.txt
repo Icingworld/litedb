@@ -47,7 +47,7 @@ target_include_directories(litedb_physical_planner PUBLIC ${CMAKE_CURRENT_SOURCE
 target_link_libraries(litedb_physical_planner PUBLIC
     litedb_logical_planner
     litedb_binder
-    litedb_meta
+    litedb_catalog
     litedb_evaluator
     litedb_index
 )

@@ -22,8 +22,8 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUseWorker::bin
 )
 {
     // 查找数据库
-    const auto * database = context_.meta().find_database(statement.database_name());
-    if (database == nullptr) [[unlikely]] {
+    const auto database = context_.catalog().find_database(statement.database_name());
+    if (!database) [[unlikely]] {
         return std::unexpected(make_binder_error(
             BinderErrorCode::DatabaseNotFound,
             "Database not found: " + statement.database_name()

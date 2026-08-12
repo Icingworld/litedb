@@ -9,7 +9,7 @@
 namespace litedb::core::physical_planner
 {
 
-PhysicalPlanner::PhysicalPlanner(meta::CatalogView catalog) noexcept
+PhysicalPlanner::PhysicalPlanner(catalog::CatalogViewer catalog) noexcept
     : catalog_(catalog)
 {}
 

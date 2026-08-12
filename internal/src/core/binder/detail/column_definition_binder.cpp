@@ -59,12 +59,12 @@ std::expected<LogicalType, BinderError> validate_data_type(const LogicalType & d
 
 } // namespace
 
-std::expected<std::vector<meta::ColumnDefinition>, BinderError> bind_column_definitions(
+std::expected<std::vector<catalog::ColumnDefinition>, BinderError> bind_column_definitions(
     const std::vector<std::unique_ptr<parser::ast::ColumnDefinitionSyntax>> & columns
 )
 {
     std::unordered_set<std::string> seen_columns;
-    std::vector<meta::ColumnDefinition> result;
+    std::vector<catalog::ColumnDefinition> result;
     result.reserve(columns.size());
 
     for (const auto & column_ptr : columns) {
@@ -113,7 +113,7 @@ std::expected<std::vector<meta::ColumnDefinition>, BinderError> bind_column_defi
         }
 
         result.push_back(
-            meta::ColumnDefinition {
+            catalog::ColumnDefinition {
                 .name = column.name,
                 .type = *logical_type,
                 .unique = column.unique,

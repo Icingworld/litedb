@@ -9,7 +9,7 @@ VectorSearchOperator::VectorSearchOperator(
     common::CollectionId collection_id,
     common::VIndexId index_id,
     common::ColumnId column_id,
-    meta::entry::VectorDistanceMetric metric,
+    catalog::entry::VectorDistanceMetric metric,
     std::unique_ptr<binder::bound::BoundExpression> query_vector,
     std::unique_ptr<binder::bound::BoundExpression> predicate,
     std::size_t required_count
@@ -39,7 +39,7 @@ common::ColumnId VectorSearchOperator::column_id() const noexcept
     return column_id_;
 }
 
-meta::entry::VectorDistanceMetric VectorSearchOperator::metric() const noexcept
+catalog::entry::VectorDistanceMetric VectorSearchOperator::metric() const noexcept
 {
     return metric_;
 }

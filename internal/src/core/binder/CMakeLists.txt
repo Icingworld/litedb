@@ -58,4 +58,4 @@ add_library(litedb_binder ${BINDER_SOURCES})
 
 target_include_directories(litedb_binder PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-target_link_libraries(litedb_binder PUBLIC litedb_parser litedb_meta litedb_function)
+target_link_libraries(litedb_binder PUBLIC litedb_parser litedb_catalog litedb_function)

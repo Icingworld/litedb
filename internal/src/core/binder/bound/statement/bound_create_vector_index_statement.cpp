@@ -8,8 +8,8 @@ namespace litedb::core::binder::bound
 BoundCreateVectorIndexStatement::BoundCreateVectorIndexStatement(
     common::ColumnId column_id,
     std::optional<std::string> vector_index_name,
-    meta::entry::VectorIndexKind vector_index_kind,
-    meta::entry::VectorDistanceMetric metric,
+    catalog::entry::VectorIndexKind vector_index_kind,
+    catalog::entry::VectorDistanceMetric metric,
     std::size_t max_neighbors,
     std::size_t ef_construction,
     std::size_t ef_search_default,
@@ -42,12 +42,12 @@ common::ColumnId BoundCreateVectorIndexStatement::column_id() const noexcept
     return column_id_;
 }
 
-meta::entry::VectorIndexKind BoundCreateVectorIndexStatement::vector_index_kind() const noexcept
+catalog::entry::VectorIndexKind BoundCreateVectorIndexStatement::vector_index_kind() const noexcept
 {
     return vector_index_kind_;
 }
 
-meta::entry::VectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept
+catalog::entry::VectorDistanceMetric BoundCreateVectorIndexStatement::metric() const noexcept
 {
     return metric_;
 }

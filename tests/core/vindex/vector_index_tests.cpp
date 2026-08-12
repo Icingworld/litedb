@@ -18,7 +18,7 @@
 
 #include "core/common/logical_type.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/schema/collection.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/storage/storage_engine.hpp"
@@ -371,12 +371,12 @@ void test_vector_index_engine_lifecycle()
         require(storage.insert(20, vector_record("first", Value {VectorValue {1.0, 0.0}})).has_value(), "insert first vector failed");
         require(storage.insert(20, vector_record("second", Value {VectorValue {0.0, 2.0}})).has_value(), "insert second vector failed");
 
-        meta::entry::VectorIndexEntry entry {
+        catalog::entry::VectorIndexEntry entry {
             10, 20, 31, "vectors_embedding",
-            meta::entry::VectorIndexKind::Hnsw,
-            meta::entry::VectorDistanceMetric::InnerProduct,
+            catalog::entry::VectorIndexKind::Hnsw,
+            catalog::entry::VectorDistanceMetric::InnerProduct,
             2,
-            meta::entry::HnswOptions {
+            catalog::entry::HnswOptions {
                 .max_neighbors = 4,
                 .ef_construction = 32,
                 .ef_search_default = 32,
@@ -398,9 +398,9 @@ void test_vector_index_engine_lifecycle()
             "engine inner product search mismatch"
         );
 
-        meta::entry::VectorIndexEntry invalid {
-            11, 20, 31, "invalid", meta::entry::VectorIndexKind::Hnsw,
-            meta::entry::VectorDistanceMetric::L2, 3
+        catalog::entry::VectorIndexEntry invalid {
+            11, 20, 31, "invalid", catalog::entry::VectorIndexKind::Hnsw,
+            catalog::entry::VectorDistanceMetric::L2, 3
         };
         auto invalid_created = engine.create_index(invalid, vectors_schema(), storage);
         require(!invalid_created.has_value(), "invalid vector metadata should be rejected");
@@ -418,33 +418,35 @@ void test_vector_index_engine_restores_and_rebuilds_all()
     const auto path = temporary_path();
     const auto index_directory = path / "indexes";
     {
-        meta::CatalogEditor catalog;
-        auto database_id = catalog.create_database(meta::CreateDatabaseRequest {.name = "demo"});
+        catalog::CatalogEditor catalog;
+        auto database_id = catalog.create_database(
+            catalog::CreateDatabaseRequest {.database_name = "demo"}
+        );
         require(database_id.has_value(), "create vector catalog database failed");
-        auto collection_id = catalog.create_collection(meta::CreateCollectionRequest {
+        auto collection_id = catalog.create_collection(catalog::CreateCollectionRequest {
             .database_id = *database_id,
-            .name = "vectors",
+            .collection_name = "vectors",
             .columns = {
-                meta::ColumnDefinition {.name = "name", .type = {LogicalTypeId::Varchar, 64}},
-                meta::ColumnDefinition {.name = "embedding", .type = {LogicalTypeId::Vector, 2}},
+                catalog::ColumnDefinition {.name = "name", .type = {LogicalTypeId::Varchar, 64}},
+                catalog::ColumnDefinition {.name = "embedding", .type = {LogicalTypeId::Vector, 2}},
             },
         });
         require(collection_id.has_value(), "create vector catalog collection failed");
-        const auto * column = catalog.view().find_column(*collection_id, "embedding");
-        require(column != nullptr, "vector catalog column missing");
-        auto index_id = catalog.create_vector_index(meta::CreateVectorIndexRequest {
+        const auto column = catalog.view().find_column(*collection_id, "embedding");
+        require(column.has_value(), "vector catalog column missing");
+        auto index_id = catalog.create_vector_index(catalog::CreateVectorIndexRequest {
             .collection_id = *collection_id,
             .column_id = column->id(),
-            .name = "vectors_embedding",
-            .kind = meta::entry::VectorIndexKind::Hnsw,
-            .metric = meta::entry::VectorDistanceMetric::L2,
+            .vector_index_name = "vectors_embedding",
+            .kind = catalog::entry::VectorIndexKind::Hnsw,
+            .metric = catalog::entry::VectorDistanceMetric::L2,
             .hnsw_options = {.max_neighbors = 4, .ef_construction = 32, .ef_search_default = 32, .random_seed = 7},
         });
         require(index_id.has_value(), "create vector catalog index failed");
         auto collection_schema = storage::load_collection_schema(catalog.view(), *collection_id);
         require(collection_schema.has_value(), "load vector catalog schema failed");
-        const auto * index_entry = catalog.view().find_vector_index(*index_id);
-        require(index_entry != nullptr, "vector catalog index entry missing");
+        const auto index_entry = catalog.view().find_vector_index(*index_id);
+        require(index_entry.has_value(), "vector catalog index entry missing");
 
         storage::StorageEngine storage {
             path / "storage",
@@ -538,12 +540,12 @@ void test_vector_index_checkpoint_compacts_tombstones()
             );
         }
 
-        meta::entry::VectorIndexEntry entry {
+        catalog::entry::VectorIndexEntry entry {
             10, 20, 31, "vectors_embedding",
-            meta::entry::VectorIndexKind::Hnsw,
-            meta::entry::VectorDistanceMetric::L2,
+            catalog::entry::VectorIndexKind::Hnsw,
+            catalog::entry::VectorDistanceMetric::L2,
             2,
-            meta::entry::HnswOptions {
+            catalog::entry::HnswOptions {
                 .max_neighbors = 4,
                 .ef_construction = 32,
                 .ef_search_default = 32,

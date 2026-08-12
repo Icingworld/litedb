@@ -35,7 +35,7 @@ int main()
     std::filesystem::remove_all(directory);
     std::filesystem::create_directories(directory);
     auto filesystem = litedb::core::filesystem::create_platform_filesystem();
-    litedb::core::meta::CatalogPublisher catalog {directory / "meta.ldb", filesystem};
+    litedb::core::catalog::CatalogPublisher catalog {directory / "catalog.lcat", filesystem};
     require(catalog.open_or_initialize().has_value(), "single-writer catalog open failed");
     litedb::core::storage::StorageEngine storage {
         directory,

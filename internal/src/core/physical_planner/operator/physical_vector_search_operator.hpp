@@ -6,7 +6,7 @@
 
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/common/ids.hpp"
-#include "core/meta/entry/vector_index_entry.hpp"
+#include "core/catalog/entry/vector_index_entry.hpp"
 #include "core/physical_planner/operator/physical_operator.hpp"
 
 namespace litedb::core::physical_planner::op
@@ -20,7 +20,7 @@ public:
         common::CollectionId collection_id,
         common::VIndexId index_id,
         common::ColumnId column_id,
-        meta::entry::VectorDistanceMetric metric,
+        catalog::entry::VectorDistanceMetric metric,
         std::unique_ptr<binder::bound::BoundExpression> query_vector,
         std::unique_ptr<binder::bound::BoundExpression> predicate,
         std::size_t required_count
@@ -41,7 +41,7 @@ public:
 
     // 获取距离度量
     [[nodiscard]]
-    meta::entry::VectorDistanceMetric metric() const noexcept;
+    catalog::entry::VectorDistanceMetric metric() const noexcept;
 
     // 获取查询向量表达式
     [[nodiscard]]
@@ -59,7 +59,7 @@ private:
     common::CollectionId collection_id_;
     common::VIndexId index_id_;
     common::ColumnId column_id_;
-    meta::entry::VectorDistanceMetric metric_;
+    catalog::entry::VectorDistanceMetric metric_;
     std::unique_ptr<binder::bound::BoundExpression> query_vector_;
     std::unique_ptr<binder::bound::BoundExpression> predicate_;
     std::size_t required_count_;

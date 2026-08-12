@@ -5,7 +5,7 @@
 
 #include "core/binder/bound/statement/bound_statement.hpp"
 #include "core/common/ids.hpp"
-#include "core/meta/entry/index_entry.hpp"
+#include "core/catalog/entry/index_entry.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -17,7 +17,7 @@ public:
     BoundCreateIndexStatement(
         common::ColumnId column_id,
         std::optional<std::string> index_name,
-        meta::entry::IndexKind index_kind,
+        catalog::entry::IndexKind index_kind,
         bool unique
     );
 
@@ -37,7 +37,7 @@ public:
 
     // 获取索引类型
     [[nodiscard]]
-    meta::entry::IndexKind index_kind() const noexcept;
+    catalog::entry::IndexKind index_kind() const noexcept;
 
     // 是否唯一
     [[nodiscard]]
@@ -47,7 +47,7 @@ private:
     common::ColumnId column_id_;
     // index_name_ 为 nullopt 时表示用户传入了重复索引名但是用了 IF NOT EXISTS
     std::optional<std::string> index_name_;
-    meta::entry::IndexKind index_kind_;
+    catalog::entry::IndexKind index_kind_;
     bool unique_;
 };
 

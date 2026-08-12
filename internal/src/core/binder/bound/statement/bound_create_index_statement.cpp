@@ -8,7 +8,7 @@ namespace litedb::core::binder::bound
 BoundCreateIndexStatement::BoundCreateIndexStatement(
     common::ColumnId column_id,
     std::optional<std::string> index_name,
-    meta::entry::IndexKind index_kind,
+    catalog::entry::IndexKind index_kind,
     bool unique
 )
     : BoundStatement(BoundStatementKind::CreateIndex)
@@ -33,7 +33,7 @@ common::ColumnId BoundCreateIndexStatement::column_id() const noexcept
     return column_id_;
 }
 
-meta::entry::IndexKind BoundCreateIndexStatement::index_kind() const noexcept
+catalog::entry::IndexKind BoundCreateIndexStatement::index_kind() const noexcept
 {
     return index_kind_;
 }

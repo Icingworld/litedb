@@ -113,13 +113,13 @@ void verify_recovered_state(const std::filesystem::path & directory, const Stage
         require(selected_rows.rows.size() == 1, "durable commit was not recovered");
     }
 
-    const auto * database_entry = engine->meta().find_database("demo");
-    require(database_entry != nullptr, "database metadata missing after crash recovery");
-    const auto * collection = engine->meta().find_collection(database_entry->id(), "docs");
-    require(collection != nullptr, "collection metadata missing after crash recovery");
-    const auto * scalar_entry = engine->meta().find_index(collection->id(), "idx_id");
-    const auto * vector_entry = engine->meta().find_vector_index(collection->id(), "vidx_embedding");
-    require(scalar_entry != nullptr && vector_entry != nullptr, "index metadata missing after crash recovery");
+    const auto database_entry = engine->catalog().find_database("demo");
+    require(database_entry.has_value(), "database metadata missing after crash recovery");
+    const auto collection = engine->catalog().find_collection(database_entry->id(), "docs");
+    require(collection.has_value(), "collection metadata missing after crash recovery");
+    const auto scalar_entry = engine->catalog().find_index(collection->id(), "idx_id");
+    const auto vector_entry = engine->catalog().find_vector_index(collection->id(), "vidx_embedding");
+    require(scalar_entry.has_value() && vector_entry.has_value(), "index metadata missing after crash recovery");
 
     auto scalar_key = index::ScalarIndexKey::from_value(common::Value {std::int64_t {7}});
     require(scalar_key.has_value(), "scalar key construction failed");

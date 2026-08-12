@@ -4,18 +4,18 @@ namespace litedb::core::binder
 {
 
 BinderContext::BinderContext(
-    meta::CatalogView meta,
+    catalog::CatalogViewer catalog,
     const SessionContext & session,
     const function::FunctionCatalog & functions
 ) noexcept
-    : meta_(meta)
+    : catalog_(catalog)
     , session_(session)
     , functions_(functions)
 {}
 
-const meta::CatalogView & BinderContext::meta() const noexcept
+const catalog::CatalogViewer & BinderContext::catalog() const noexcept
 {
-    return meta_;
+    return catalog_;
 }
 
 const SessionContext & BinderContext::session() const noexcept

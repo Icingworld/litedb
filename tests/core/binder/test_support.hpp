@@ -14,7 +14,7 @@
 #include "core/common/ids.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/function/builtin/builtin_functions.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
 #include "core/parser/parser.hpp"
 #include "core/schema/default_expression.hpp"
@@ -25,7 +25,7 @@ namespace litedb::test::binder
 using namespace core::binder;
 using namespace core::binder::bound;
 using namespace core::common;
-using namespace core::meta;
+using namespace core::catalog;
 using namespace core::parser;
 
 inline void require(bool condition, std::string_view message)
@@ -67,7 +67,9 @@ struct Fixture
 
     Fixture()
     {
-        auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
+        auto database = catalog.create_database(
+            CreateDatabaseRequest {.database_name = "demo"}
+        );
         if (!database.has_value()) {
             throw std::runtime_error(database.error().message());
         }
@@ -75,7 +77,7 @@ struct Fixture
 
         CreateCollectionRequest users;
         users.database_id = database_id;
-        users.name = "users";
+        users.collection_name = "users";
         users.columns = {
             ColumnDefinition {
                 .name = "id",
@@ -114,10 +116,10 @@ struct Fixture
         embedding_column_id = require_column("embedding").id();
     }
 
-    const core::meta::entry::ColumnEntry & require_column(std::string_view name) const
+    const core::catalog::entry::ColumnEntry & require_column(std::string_view name) const
     {
-        const auto * column = catalog.view().find_column(users_id, name);
-        if (column == nullptr) {
+        const auto column = catalog.view().find_column(users_id, name);
+        if (!column.has_value()) {
             throw std::runtime_error("fixture column not found: " + std::string(name));
         }
         return *column;

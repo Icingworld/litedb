@@ -11,4 +11,4 @@ add_library(litedb_storage ${STORAGE_SOURCES})
 
 target_include_directories(litedb_storage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-target_link_libraries(litedb_storage PUBLIC litedb_schema litedb_meta litedb_filesystem litedb_io)
+target_link_libraries(litedb_storage PUBLIC litedb_schema litedb_catalog litedb_filesystem litedb_io)

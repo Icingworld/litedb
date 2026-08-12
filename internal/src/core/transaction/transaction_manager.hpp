@@ -10,7 +10,7 @@
 
 #include "core/filesystem/filesystem.hpp"
 #include "core/index/index_engine.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_publisher.hpp"
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_context.hpp"
 #include "core/transaction/transaction_error.hpp"
@@ -82,7 +82,7 @@ public:
     TransactionManager(
         std::filesystem::path data_directory,
         filesystem::FileSystem & filesystem,
-        meta::CatalogPublisher & catalog,
+        catalog::CatalogPublisher & catalog,
         storage::StorageEngine & storage,
         index::IndexEngine & index_engine,
         vindex::VectorIndexEngine & vector_index_engine,
@@ -153,7 +153,7 @@ public:
     [[nodiscard]]
     std::expected<void, TransactionError> stage_catalog(
         TransactionContext & transaction,
-        meta::MetaSnapshot snapshot
+        catalog::CatalogSnapshot snapshot
     );
 
     /**
@@ -250,7 +250,7 @@ private:
 private:
     std::filesystem::path data_directory_;                       // 数据目录
     filesystem::FileSystem * filesystem_ {nullptr};              // 文件系统
-    meta::CatalogPublisher * catalog_ {nullptr};                 // 在线 Catalog 发布者
+    catalog::CatalogPublisher * catalog_ {nullptr};                 // 在线 Catalog 发布者
     storage::StorageEngine * storage_ {nullptr};                 // 存储引擎
     index::IndexEngine * index_engine_ {nullptr};                // 标量索引引擎
     vindex::VectorIndexEngine * vector_index_engine_ {nullptr};  // 向量索引引擎

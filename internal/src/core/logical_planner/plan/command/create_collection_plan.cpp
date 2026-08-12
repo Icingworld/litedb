@@ -8,7 +8,7 @@ namespace litedb::core::logical_planner::plan
 CreateCollectionPlan::CreateCollectionPlan(
     common::DatabaseId database_id,
     std::optional<std::string> collection_name,
-    std::vector<meta::ColumnDefinition> columns,
+    std::vector<catalog::ColumnDefinition> columns,
     std::optional<std::string> comment
 )
     : LogicalPlan(LogicalPlanKind::CreateCollection)
@@ -33,12 +33,12 @@ std::optional<std::string> CreateCollectionPlan::take_collection_name() noexcept
     return std::exchange(collection_name_, std::nullopt);
 }
 
-const std::vector<meta::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
+const std::vector<catalog::ColumnDefinition> & CreateCollectionPlan::columns() const noexcept
 {
     return columns_;
 }
 
-std::vector<meta::ColumnDefinition> CreateCollectionPlan::take_columns() noexcept
+std::vector<catalog::ColumnDefinition> CreateCollectionPlan::take_columns() noexcept
 {
     return std::exchange(columns_, {});
 }

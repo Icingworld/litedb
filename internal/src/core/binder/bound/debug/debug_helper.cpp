@@ -70,34 +70,34 @@ std::string_view binary_operator_name(common::BinaryOperator op) noexcept
     return "Unknown";
 }
 
-std::string_view index_kind_name(meta::entry::IndexKind kind) noexcept
+std::string_view index_kind_name(catalog::entry::IndexKind kind) noexcept
 {
     switch (kind) {
-    case meta::entry::IndexKind::BTree:
+    case catalog::entry::IndexKind::BTree:
         return "BTree";
     }
 
     return "Unknown";
 }
 
-std::string_view vector_index_kind_name(meta::entry::VectorIndexKind kind) noexcept
+std::string_view vector_index_kind_name(catalog::entry::VectorIndexKind kind) noexcept
 {
     switch (kind) {
-    case meta::entry::VectorIndexKind::Hnsw:
+    case catalog::entry::VectorIndexKind::Hnsw:
         return "Hnsw";
     }
 
     return "Unknown";
 }
 
-std::string_view vector_distance_metric_name(meta::entry::VectorDistanceMetric metric) noexcept
+std::string_view vector_distance_metric_name(catalog::entry::VectorDistanceMetric metric) noexcept
 {
     switch (metric) {
-    case meta::entry::VectorDistanceMetric::L2:
+    case catalog::entry::VectorDistanceMetric::L2:
         return "L2";
-    case meta::entry::VectorDistanceMetric::InnerProduct:
+    case catalog::entry::VectorDistanceMetric::InnerProduct:
         return "InnerProduct";
-    case meta::entry::VectorDistanceMetric::Cosine:
+    case catalog::entry::VectorDistanceMetric::Cosine:
         return "Cosine";
     }
 

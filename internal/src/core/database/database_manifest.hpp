@@ -48,11 +48,11 @@ public:
     const std::filesystem::path & data_dir() const noexcept;
 
     /**
-     * @brief 获取 meta 文件路径
-     * @return meta 文件路径
+     * @brief 获取 catalog 文件路径
+     * @return catalog 文件路径
      */
     [[nodiscard]]
-    std::filesystem::path meta_path() const;
+    std::filesystem::path catalog_path() const;
 
     /**
      * @brief 获取 collections 目录路径

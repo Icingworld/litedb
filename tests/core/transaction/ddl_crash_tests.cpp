@@ -115,8 +115,9 @@ int run_worker(
 
 bool collection_exists(database::DatabaseEngine & engine)
 {
-    const auto * database = engine.meta().find_database("demo");
-    return database != nullptr && engine.meta().find_collection(database->id(), "docs") != nullptr;
+    const auto database = engine.catalog().find_database("demo");
+    return database.has_value()
+        && engine.catalog().find_collection(database->id(), "docs").has_value();
 }
 
 void verify_create(const std::filesystem::path & directory, const StageCase & stage)
@@ -125,7 +126,7 @@ void verify_create(const std::filesystem::path & directory, const StageCase & st
     const auto exists = collection_exists(*engine);
     if (stage.commit_must_be_durable) require(exists, "durable CREATE COLLECTION was not recovered");
     require(std::filesystem::exists(directory / "collections" / "1.store") == exists,
-            "CREATE COLLECTION meta and storage file disagree after recovery");
+            "CREATE COLLECTION catalog and storage file disagree after recovery");
 }
 
 void verify_drop(const std::filesystem::path & directory, const StageCase & stage)
@@ -137,7 +138,7 @@ void verify_drop(const std::filesystem::path & directory, const StageCase & stag
     const auto scalar_exists_on_disk = std::filesystem::exists(directory / "indexes" / "1.bti");
     const auto vector_exists_on_disk = std::filesystem::exists(directory / "vindexes" / "vindex_1.lhnsw");
     require(collection_exists_on_disk == exists && scalar_exists_on_disk == exists && vector_exists_on_disk == exists,
-            "DROP COLLECTION meta and participant files disagree after recovery");
+            "DROP COLLECTION catalog and participant files disagree after recovery");
     if (exists) {
         database::Session session {*engine};
         execute_ok(session, "USE demo;");
@@ -149,14 +150,15 @@ void verify_drop(const std::filesystem::path & directory, const StageCase & stag
 void verify_index(const std::filesystem::path & directory, const StageCase & stage)
 {
     auto engine = open_database(directory);
-    const auto * database = engine->meta().find_database("demo");
-    const auto * collection = database != nullptr ? engine->meta().find_collection(database->id(), "docs") : nullptr;
-    require(collection != nullptr, "collection missing while verifying CREATE INDEX");
-    const auto * entry = engine->meta().find_index(collection->id(), "idx_id");
-    const auto exists = entry != nullptr;
+    const auto database = engine->catalog().find_database("demo");
+    require(database.has_value(), "database missing while verifying CREATE INDEX");
+    const auto collection = engine->catalog().find_collection(database->id(), "docs");
+    require(collection.has_value(), "collection missing while verifying CREATE INDEX");
+    const auto entry = engine->catalog().find_index(collection->id(), "idx_id");
+    const auto exists = entry.has_value();
     if (stage.commit_must_be_durable) require(exists, "durable CREATE INDEX was not recovered");
     require(std::filesystem::exists(directory / "indexes" / "1.bti") == exists,
-            "CREATE INDEX meta and file disagree after recovery");
+            "CREATE INDEX catalog and file disagree after recovery");
     if (exists) {
         auto key = index::ScalarIndexKey::from_value(common::Value {std::int64_t {7}});
         require(key.has_value(), "scalar key construction failed");
@@ -168,14 +170,15 @@ void verify_index(const std::filesystem::path & directory, const StageCase & sta
 void verify_vindex(const std::filesystem::path & directory, const StageCase & stage)
 {
     auto engine = open_database(directory);
-    const auto * database = engine->meta().find_database("demo");
-    const auto * collection = database != nullptr ? engine->meta().find_collection(database->id(), "docs") : nullptr;
-    require(collection != nullptr, "collection missing while verifying CREATE VINDEX");
-    const auto * entry = engine->meta().find_vector_index(collection->id(), "vidx_embedding");
-    const auto exists = entry != nullptr;
+    const auto database = engine->catalog().find_database("demo");
+    require(database.has_value(), "database missing while verifying CREATE VINDEX");
+    const auto collection = engine->catalog().find_collection(database->id(), "docs");
+    require(collection.has_value(), "collection missing while verifying CREATE VINDEX");
+    const auto entry = engine->catalog().find_vector_index(collection->id(), "vidx_embedding");
+    const auto exists = entry.has_value();
     if (stage.commit_must_be_durable) require(exists, "durable CREATE VINDEX was not recovered");
     require(std::filesystem::exists(directory / "vindexes" / "vindex_1.lhnsw") == exists,
-            "CREATE VINDEX meta and file disagree after recovery");
+            "CREATE VINDEX catalog and file disagree after recovery");
     if (exists) {
         auto key = vindex::VectorIndexKey::from_vector({1.0, 0.0});
         require(key.has_value(), "vector key construction failed");

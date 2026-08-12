@@ -44,8 +44,8 @@ std::expected<std::vector<FileWrite>, WalError> normalize_writes(
         const auto mode = static_cast<std::uint8_t>(write.mode);
         const auto kind = static_cast<std::uint8_t>(write.target.kind);
         if (kind < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
-            kind > static_cast<std::uint8_t>(FileKind::MetaStore) ||
-            (write.target.kind == FileKind::MetaStore ? write.target.object_id != 0
+            kind > static_cast<std::uint8_t>(FileKind::CatalogStore) ||
+            (write.target.kind == FileKind::CatalogStore ? write.target.object_id != 0
                                                        : write.target.object_id == 0) ||
             mode > static_cast<std::uint8_t>(FileWriteMode::Truncate)) {
             return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Invalid file write target or mode"));
@@ -203,8 +203,8 @@ std::filesystem::path FileWriteBatch::resolve_target(
         return data_directory / "indexes" / (std::to_string(target.object_id) + ".bti");
     case FileKind::VectorIndex:
         return data_directory / "vindexes" / ("vindex_" + std::to_string(target.object_id) + ".lhnsw");
-    case FileKind::MetaStore:
-        return data_directory / "meta.lmeta";
+    case FileKind::CatalogStore:
+        return data_directory / "catalog.lcat";
     }
     return {};
 }

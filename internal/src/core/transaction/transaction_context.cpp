@@ -89,7 +89,7 @@ void TransactionContext::mark_rollback_only(std::string message)
     failure_ = TransactionFailure {.message = std::move(message)};
 }
 
-const std::optional<meta::MetaSnapshot> & TransactionContext::catalog_snapshot() const noexcept
+const std::optional<catalog::CatalogSnapshot> & TransactionContext::catalog_snapshot() const noexcept
 {
     return catalog_snapshot_;
 }

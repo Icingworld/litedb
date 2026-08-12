@@ -39,8 +39,8 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderShowWorker::bi
 
     // 如果用户指定了数据库名称，则查找数据库
     if (statement.database_name().has_value()) {
-        const auto * database = context_.meta().find_database(statement.database_name().value());
-        if (database == nullptr) [[unlikely]] {
+        const auto database = context_.catalog().find_database(statement.database_name().value());
+        if (!database) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::DatabaseNotFound,
                 "Database not found: " + statement.database_name().value()

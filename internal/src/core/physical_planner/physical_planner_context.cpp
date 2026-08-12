@@ -3,11 +3,11 @@
 namespace litedb::core::physical_planner
 {
 
-PhysicalPlannerContext::PhysicalPlannerContext(meta::CatalogView catalog) noexcept
+PhysicalPlannerContext::PhysicalPlannerContext(catalog::CatalogViewer catalog) noexcept
     : catalog_(catalog)
 {}
 
-const meta::CatalogView & PhysicalPlannerContext::catalog() const noexcept
+const catalog::CatalogViewer & PhysicalPlannerContext::catalog() const noexcept
 {
     return catalog_;
 }

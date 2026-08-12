@@ -12,7 +12,7 @@ enum class ExecutionErrorCode : std::uint8_t
 {
     UnsupportedStatement,
     InvalidPlan,
-    MetaError,
+    CatalogError,
     SchemaError,
     StorageError,
     IndexError,

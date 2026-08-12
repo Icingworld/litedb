@@ -175,8 +175,8 @@ void test_statement_debug_print()
         "  database_name: demo\n"
     );
 
-    std::vector<meta::ColumnDefinition> columns {
-        meta::ColumnDefinition {
+    std::vector<catalog::ColumnDefinition> columns {
+        catalog::ColumnDefinition {
             .name = "id",
             .type = type(common::LogicalTypeId::BigInt),
             .unique = true,
@@ -200,7 +200,7 @@ void test_statement_debug_print()
     BoundCreateIndexStatement create_index(
         7,
         std::string("idx_id"),
-        meta::entry::IndexKind::BTree,
+        catalog::entry::IndexKind::BTree,
         true
     );
     output = debug_print(create_index);
@@ -210,8 +210,8 @@ void test_statement_debug_print()
     BoundCreateVectorIndexStatement create_vector_index(
         8,
         std::string("vidx_embedding"),
-        meta::entry::VectorIndexKind::Hnsw,
-        meta::entry::VectorDistanceMetric::Cosine,
+        catalog::entry::VectorIndexKind::Hnsw,
+        catalog::entry::VectorDistanceMetric::Cosine,
         24,
         240,
         80,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 
 namespace litedb::core::physical_planner
 {
@@ -9,15 +9,15 @@ namespace litedb::core::physical_planner
 class PhysicalPlannerContext final
 {
 public:
-    explicit PhysicalPlannerContext(meta::CatalogView catalog) noexcept;
+    explicit PhysicalPlannerContext(catalog::CatalogViewer catalog) noexcept;
 
 public:
     // 获取目录视图
     [[nodiscard]]
-    const meta::CatalogView & catalog() const noexcept;
+    const catalog::CatalogViewer & catalog() const noexcept;
 
 private:
-    meta::CatalogView catalog_;
+    catalog::CatalogViewer catalog_;
 };
 
 } // namespace litedb::core::physical_planner

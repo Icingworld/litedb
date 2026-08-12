@@ -15,6 +15,6 @@ target_include_directories(litedb_index PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../..
 target_link_libraries(litedb_index PUBLIC
     litedb_io
     litedb_schema
-    litedb_meta
+    litedb_catalog
     litedb_storage
 )

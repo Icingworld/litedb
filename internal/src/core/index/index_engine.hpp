@@ -13,7 +13,7 @@
 #include "core/filesystem/filesystem.hpp"
 #include "core/index/index_error.hpp"
 #include "core/index/index_store.hpp"
-#include "core/meta/meta.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/schema/collection.hpp"
 #include "core/common/record.hpp"
 
@@ -85,7 +85,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> create_index(
-        const meta::entry::IndexEntry & index_entry,
+        const catalog::entry::IndexEntry & index_entry,
         const schema::CollectionSchema & collection_schema,
         const storage::StorageEngine & storage
     );
@@ -108,7 +108,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> restore_all(
-        const meta::CatalogView & catalog,
+        const catalog::CatalogViewer & catalog,
         const storage::StorageEngine & storage
     );
 
@@ -117,7 +117,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, IndexError> reload_collection(
-        const meta::CatalogView & catalog,
+        const catalog::CatalogViewer & catalog,
         const storage::StorageEngine & storage,
         common::CollectionId collection_id
     );
@@ -227,7 +227,7 @@ private:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<ScalarIndex>, IndexError> create_backend(
-        const meta::entry::IndexEntry & index_entry,
+        const catalog::entry::IndexEntry & index_entry,
         const common::LogicalType & key_type
     );
 
@@ -236,7 +236,7 @@ private:
      */
     [[nodiscard]]
     std::expected<std::unique_ptr<ScalarIndex>, IndexError> restore_backend(
-        const meta::entry::IndexEntry & index_entry,
+        const catalog::entry::IndexEntry & index_entry,
         const common::LogicalType & key_type
     );
 

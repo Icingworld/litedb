@@ -19,7 +19,7 @@
 #include "core/common/logical_type.hpp"
 #include "core/common/value.hpp"
 #include "core/function/builtin/builtin_functions.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 
 namespace physical_planner_test_support
 {
@@ -27,7 +27,7 @@ namespace physical_planner_test_support
 using namespace litedb::core;
 using namespace litedb::core::binder::bound;
 using namespace litedb::core::common;
-using namespace litedb::core::meta;
+using namespace litedb::core::catalog;
 
 inline void require(bool condition, const char * message)
 {
@@ -57,7 +57,7 @@ inline std::unique_ptr<BoundLiteralExpression> small_integer_literal(std::int32_
 }
 
 inline std::unique_ptr<BoundColumnRefExpression> column_ref(
-    const meta::entry::ColumnEntry & column
+    const catalog::entry::ColumnEntry & column
 )
 {
     return std::make_unique<BoundColumnRefExpression>(
@@ -83,11 +83,13 @@ struct PlannerCatalogFixture
 inline PlannerCatalogFixture make_planner_catalog()
 {
     CatalogEditor editor;
-    auto database = editor.create_database(meta::CreateDatabaseRequest {.name = "planner_db"});
+    auto database = editor.create_database(
+        catalog::CreateDatabaseRequest {.database_name = "planner_db"}
+    );
     require(database.has_value(), "planner fixture database creation failed");
-    auto collection = editor.create_collection(meta::CreateCollectionRequest {
+    auto collection = editor.create_collection(catalog::CreateCollectionRequest {
         .database_id = *database,
-        .name = "planner_collection",
+        .collection_name = "planner_collection",
         .columns = {
             ColumnDefinition {.name = "id", .type = LogicalType {LogicalTypeId::BigInt, std::nullopt}},
             ColumnDefinition {.name = "age", .type = LogicalType {LogicalTypeId::Integer, std::nullopt}},
@@ -98,28 +100,28 @@ inline PlannerCatalogFixture make_planner_catalog()
 
     const auto age = editor.view().find_column(*collection, "age");
     const auto embedding = editor.view().find_column(*collection, "embedding");
-    require(age != nullptr && embedding != nullptr, "planner fixture columns missing");
+    require(age.has_value() && embedding.has_value(), "planner fixture columns missing");
 
-    auto first_age_index = editor.create_index(meta::CreateIndexRequest {
+    auto first_age_index = editor.create_index(catalog::CreateIndexRequest {
         .collection_id = *collection,
-        .column_ids = {age->id()},
-        .name = "age_index_first",
+        .column_id = age->id(),
+        .index_name = "age_index_first",
     });
     require(first_age_index.has_value(), "planner fixture first scalar index creation failed");
-    auto second_age_index = editor.create_index(meta::CreateIndexRequest {
+    auto second_age_index = editor.create_index(catalog::CreateIndexRequest {
         .collection_id = *collection,
-        .column_ids = {age->id()},
-        .name = "age_index_second",
+        .column_id = age->id(),
+        .index_name = "age_index_second",
     });
     require(second_age_index.has_value(), "planner fixture second scalar index creation failed");
 
-    const auto make_vector_index = [&](std::string name, meta::entry::VectorDistanceMetric metric) {
-        return editor.create_vector_index(meta::CreateVectorIndexRequest {
+    const auto make_vector_index = [&](std::string name, catalog::entry::VectorDistanceMetric metric) {
+        return editor.create_vector_index(catalog::CreateVectorIndexRequest {
             .collection_id = *collection,
             .column_id = embedding->id(),
-            .name = std::move(name),
+            .vector_index_name = std::move(name),
             .metric = metric,
-            .hnsw_options = meta::entry::HnswOptions {
+            .hnsw_options = catalog::entry::HnswOptions {
                 .max_neighbors = 16,
                 .ef_construction = 32,
                 .ef_search_default = 16,
@@ -127,12 +129,12 @@ inline PlannerCatalogFixture make_planner_catalog()
             },
         });
     };
-    auto l2_index = make_vector_index("embedding_l2", meta::entry::VectorDistanceMetric::L2);
+    auto l2_index = make_vector_index("embedding_l2", catalog::entry::VectorDistanceMetric::L2);
     auto inner_product_index = make_vector_index(
         "embedding_inner_product",
-        meta::entry::VectorDistanceMetric::InnerProduct
+        catalog::entry::VectorDistanceMetric::InnerProduct
     );
-    auto cosine_index = make_vector_index("embedding_cosine", meta::entry::VectorDistanceMetric::Cosine);
+    auto cosine_index = make_vector_index("embedding_cosine", catalog::entry::VectorDistanceMetric::Cosine);
     require(l2_index.has_value() && inner_product_index.has_value() && cosine_index.has_value(),
             "planner fixture vector index creation failed");
 
@@ -150,7 +152,7 @@ inline PlannerCatalogFixture make_planner_catalog()
 }
 
 inline std::unique_ptr<BoundExpression> scalar_predicate(
-    const meta::entry::ColumnEntry & column,
+    const catalog::entry::ColumnEntry & column,
     BinaryOperator operation,
     std::unique_ptr<BoundExpression> value
 )
@@ -164,7 +166,7 @@ inline std::unique_ptr<BoundExpression> scalar_predicate(
 }
 
 inline std::unique_ptr<BoundFunctionExpression> vector_distance(
-    const meta::entry::ColumnEntry & column,
+    const catalog::entry::ColumnEntry & column,
     std::string_view name,
     std::vector<double> query
 )

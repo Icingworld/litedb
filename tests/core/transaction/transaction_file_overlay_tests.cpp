@@ -98,7 +98,7 @@ void test_unchanged_create_delete_and_atomic_replace()
     const auto logical = base / ".transactions" / "txn_2";
     const auto collection = base / "collections" / "8.store";
     write_bytes(collection, std::vector<std::byte>(4096, std::byte {0x22}));
-    write_bytes(base / "meta.lmeta", {std::byte {0x01}});
+    write_bytes(base / "catalog.lcat", {std::byte {0x01}});
 
     auto filesystem = filesystem::create_platform_filesystem();
     transaction::TransactionFileOverlay overlay {logical, base, filesystem};
@@ -117,7 +117,7 @@ void test_unchanged_create_delete_and_atomic_replace()
             "overlay delete failed");
     require(overlay.filesystem().remove(logical / "collections" / "8.store").has_value(),
             "overlay delete must be idempotent");
-    auto temporary = overlay.filesystem().open(logical / "meta.lmeta.tmp", {
+    auto temporary = overlay.filesystem().open(logical / "catalog.lcat.tmp", {
         filesystem::FileAccess::ReadWrite,
         filesystem::FileCreateMode::CreateOrTruncate,
     });
@@ -129,24 +129,24 @@ void test_unchanged_create_delete_and_atomic_replace()
     require(!closed_size && closed_size.error().is(filesystem::FileSystemErrorCode::ClosedHandle),
             "closed overlay handle must return ClosedHandle");
     require(overlay.filesystem().replace_file_atomic(
-        logical / "meta.lmeta.tmp",
-        logical / "meta.lmeta"
+        logical / "catalog.lcat.tmp",
+        logical / "catalog.lcat"
     ).has_value(), "overlay atomic replace failed");
 
     auto batch = overlay.export_batch();
     require(batch.has_value(), "lifecycle overlay export failed");
     bool deleted {false};
-    bool replaced_meta {false};
+    bool replaced_catalog {false};
     for (const auto & write : batch->writes()) {
         deleted = deleted || (write.target.kind == wal::FileKind::CollectionStore &&
                               write.mode == wal::FileWriteMode::Delete);
-        replaced_meta = replaced_meta || (write.target.kind == wal::FileKind::MetaStore &&
+        replaced_catalog = replaced_catalog || (write.target.kind == wal::FileKind::CatalogStore &&
                                           write.mode == wal::FileWriteMode::Overwrite);
     }
-    require(deleted && replaced_meta, "overlay lifecycle changes were not exported");
+    require(deleted && replaced_catalog, "overlay lifecycle changes were not exported");
     require(batch->apply(base, filesystem, false).has_value(), "lifecycle overlay apply failed");
     require(!std::filesystem::exists(collection), "overlay delete was not applied");
-    require(read_bytes(base / "meta.lmeta") ==
+    require(read_bytes(base / "catalog.lcat") ==
             std::vector<std::byte>(replacement.begin(), replacement.end()),
             "overlay atomic replacement bytes mismatch");
     std::filesystem::remove_all(base);

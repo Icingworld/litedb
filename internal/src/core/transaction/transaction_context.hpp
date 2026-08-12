@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/meta/meta_snapshot.hpp"
+#include "core/catalog/catalog_snapshot.hpp"
 #include "core/common/record.hpp"
 #include "core/transaction/transaction_id.hpp"
 #include "core/transaction/transaction_state.hpp"
@@ -126,7 +126,7 @@ public:
     const std::vector<RowMutation> & write_set() const noexcept;
 
     [[nodiscard]]
-    const std::optional<meta::MetaSnapshot> & catalog_snapshot() const noexcept;
+    const std::optional<catalog::CatalogSnapshot> & catalog_snapshot() const noexcept;
 
     /**
      * @brief 判断事务是否只能回滚
@@ -190,7 +190,7 @@ private:
     std::optional<Lsn> last_lsn_;                                // 最新 LSN
     std::optional<Lsn> commit_lsn_;                              // 提交 LSN
     std::vector<RowMutation> write_set_;                         // 写集合
-    std::optional<meta::MetaSnapshot> catalog_snapshot_;         // DDL 提交后的 catalog 快照
+    std::optional<catalog::CatalogSnapshot> catalog_snapshot_;      // DDL 提交后的 catalog 快照
     bool rollback_only_ {false};                                 // 是否只能回滚
     std::optional<TransactionFailure> failure_;                  // 失败信息
     std::unique_lock<std::mutex> writer_guard_;                  // 单写者生命周期锁

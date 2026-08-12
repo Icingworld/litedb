@@ -8,8 +8,8 @@ namespace litedb::core::physical_planner::plan
 CreateVectorIndexPlan::CreateVectorIndexPlan(
     common::ColumnId column_id,
     std::optional<std::string> index_name,
-    meta::entry::VectorIndexKind index_kind,
-    meta::entry::VectorDistanceMetric metric,
+    catalog::entry::VectorIndexKind index_kind,
+    catalog::entry::VectorDistanceMetric metric,
     std::size_t max_neighbors,
     std::size_t ef_construction,
     std::size_t ef_search_default,
@@ -36,12 +36,12 @@ std::optional<const std::string &> CreateVectorIndexPlan::index_name() const noe
     return index_name_;
 }
 
-meta::entry::VectorIndexKind CreateVectorIndexPlan::index_kind() const noexcept
+catalog::entry::VectorIndexKind CreateVectorIndexPlan::index_kind() const noexcept
 {
     return index_kind_;
 }
 
-meta::entry::VectorDistanceMetric CreateVectorIndexPlan::metric() const noexcept
+catalog::entry::VectorDistanceMetric CreateVectorIndexPlan::metric() const noexcept
 {
     return metric_;
 }

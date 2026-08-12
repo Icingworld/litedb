@@ -4,7 +4,7 @@ namespace litedb::core::executor
 {
 
 PhysicalOperatorExecutor::PhysicalOperatorExecutor(
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -88,7 +88,7 @@ namespace detail
 
 PhysicalExecutionResult execute_physical(
     const physical_planner::op::PhysicalOperator & node,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine

@@ -6,7 +6,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/logical_planner/plan/logical_plan.hpp"
-#include "core/meta/entry/vector_index_entry.hpp"
+#include "core/catalog/entry/vector_index_entry.hpp"
 
 namespace litedb::core::logical_planner::plan
 {
@@ -18,8 +18,8 @@ public:
     CreateVectorIndexPlan(
         common::ColumnId column_id,
         std::optional<std::string> vector_index_name,
-        meta::entry::VectorIndexKind vector_index_kind,
-        meta::entry::VectorDistanceMetric metric,
+        catalog::entry::VectorIndexKind vector_index_kind,
+        catalog::entry::VectorDistanceMetric metric,
         std::size_t max_neighbors,
         std::size_t ef_construction,
         std::size_t ef_search_default,
@@ -42,11 +42,11 @@ public:
 
     // 获取索引类型
     [[nodiscard]]
-    meta::entry::VectorIndexKind vector_index_kind() const noexcept;
+    catalog::entry::VectorIndexKind vector_index_kind() const noexcept;
 
     // 获取距离度量
     [[nodiscard]]
-    meta::entry::VectorDistanceMetric metric() const noexcept;
+    catalog::entry::VectorDistanceMetric metric() const noexcept;
 
     // 获取最大邻居数
     [[nodiscard]]
@@ -67,8 +67,8 @@ public:
 private:
     common::ColumnId column_id_;
     std::optional<std::string> vector_index_name_;
-    meta::entry::VectorIndexKind vector_index_kind_;
-    meta::entry::VectorDistanceMetric metric_;
+    catalog::entry::VectorIndexKind vector_index_kind_;
+    catalog::entry::VectorDistanceMetric metric_;
     std::size_t max_neighbors_;
     std::size_t ef_construction_;
     std::size_t ef_search_default_;

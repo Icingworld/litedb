@@ -23,7 +23,7 @@ using IndexId = std::uint64_t;
 // 向量索引 ID
 using VIndexId = std::uint64_t;
 
-// 元数据项 ID
-using MetaEntryId = std::uint64_t;
+// 目录项 ID
+using CatalogEntryId = std::uint64_t;
 
 } // namespace litedb::core::common

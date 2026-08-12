@@ -9,7 +9,8 @@
 #include "core/index/index_engine.hpp"
 #include "core/index/scalar_index_key.hpp"
 #include "core/logical_planner/logical_planner.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
+#include "core/catalog/catalog_publisher.hpp"
 #include "core/optimizer/optimizer.hpp"
 #include "core/parser/parser.hpp"
 #include "core/parser/ast/statement/statement_node.hpp"
@@ -26,7 +27,7 @@
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
 #include "core/wal/wal_manager.hpp"
-#include "core/meta/meta_store.hpp"
+#include "core/catalog/catalog_store.hpp"
 #include "../storage/temporary_directory.hpp"
 
 #include <exception>
@@ -60,8 +61,8 @@ struct Fixture
 {
     litedb::tests::TemporaryDirectory directory {"litedb-executor-tests"};
     filesystem::FileSystem filesystem {filesystem::create_platform_filesystem()};
-    meta::CatalogEditor catalog;
-    meta::CatalogPublisher publisher {directory.path() / "meta.ldb", filesystem};
+    catalog::CatalogEditor catalog;
+    catalog::CatalogPublisher publisher {directory.path() / "catalog.lcat", filesystem};
     storage::StorageEngine storage {
         directory.path(),
         filesystem,
@@ -76,16 +77,18 @@ struct Fixture
 
     Fixture()
     {
-        auto database = catalog.create_database(meta::CreateDatabaseRequest {.name = "demo"});
+        auto database = catalog.create_database(
+            catalog::CreateDatabaseRequest {.database_name = "demo"}
+        );
         require(database.has_value(), "executor fixture database creation failed");
         database_id = *database;
-        auto collection = catalog.create_collection(meta::CreateCollectionRequest {
+        auto collection = catalog.create_collection(catalog::CreateCollectionRequest {
             .database_id = database_id,
-            .name = "users",
+            .collection_name = "users",
             .columns = {
-                meta::ColumnDefinition {.name = "id", .type = common::LogicalType {common::LogicalTypeId::BigInt, std::nullopt}},
-                meta::ColumnDefinition {.name = "age", .type = common::LogicalType {common::LogicalTypeId::Integer, std::nullopt}},
-                meta::ColumnDefinition {.name = "embedding", .type = common::LogicalType {common::LogicalTypeId::Vector, 3}},
+                catalog::ColumnDefinition {.name = "id", .type = common::LogicalType {common::LogicalTypeId::BigInt, std::nullopt}},
+                catalog::ColumnDefinition {.name = "age", .type = common::LogicalType {common::LogicalTypeId::Integer, std::nullopt}},
+                catalog::ColumnDefinition {.name = "embedding", .type = common::LogicalType {common::LogicalTypeId::Vector, 3}},
             },
         });
         require(collection.has_value(), "executor fixture collection creation failed");
@@ -186,18 +189,18 @@ executor::ExecutionError execute_error(Fixture & fixture, std::string_view sql)
 
 common::IndexId create_age_index(Fixture & fixture, std::string name)
 {
-    const auto * age = fixture.catalog.view().find_column(fixture.collection_id, "age");
-    require(age != nullptr, "executor fixture age column missing");
-    auto created = fixture.catalog.create_index(meta::CreateIndexRequest {
+    const auto age = fixture.catalog.view().find_column(fixture.collection_id, "age");
+    require(age.has_value(), "executor fixture age column missing");
+    auto created = fixture.catalog.create_index(catalog::CreateIndexRequest {
         .collection_id = fixture.collection_id,
-        .column_ids = {age->id()},
-        .name = std::move(name),
+        .column_id = age->id(),
+        .index_name = std::move(name),
     });
     require(created.has_value(), "executor fixture index metadata creation failed");
     require(fixture.publisher.publish_committed(fixture.catalog.snapshot()).has_value(),
             "executor fixture index catalog publish failed");
-    const auto * entry = fixture.catalog.view().find_index(*created);
-    require(entry != nullptr, "executor fixture index entry missing");
+    const auto entry = fixture.catalog.view().find_index(*created);
+    require(entry.has_value(), "executor fixture index entry missing");
     auto schema = storage::load_collection_schema(fixture.catalog.view(), fixture.collection_id);
     require(schema.has_value(), "executor fixture index schema load failed");
     require(fixture.index_engine.create_index(*entry, *schema, fixture.storage).has_value(),
@@ -207,14 +210,14 @@ common::IndexId create_age_index(Fixture & fixture, std::string name)
 
 common::VIndexId create_embedding_index(Fixture & fixture)
 {
-    const auto * embedding = fixture.catalog.view().find_column(fixture.collection_id, "embedding");
-    require(embedding != nullptr, "executor fixture embedding column missing");
-    auto created = fixture.catalog.create_vector_index(meta::CreateVectorIndexRequest {
+    const auto embedding = fixture.catalog.view().find_column(fixture.collection_id, "embedding");
+    require(embedding.has_value(), "executor fixture embedding column missing");
+    auto created = fixture.catalog.create_vector_index(catalog::CreateVectorIndexRequest {
         .collection_id = fixture.collection_id,
         .column_id = embedding->id(),
-        .name = "embedding_l2",
-        .metric = meta::entry::VectorDistanceMetric::L2,
-        .hnsw_options = meta::entry::HnswOptions {
+        .vector_index_name = "embedding_l2",
+        .metric = catalog::entry::VectorDistanceMetric::L2,
+        .hnsw_options = catalog::entry::HnswOptions {
             .max_neighbors = 16,
             .ef_construction = 32,
             .ef_search_default = 16,
@@ -224,8 +227,8 @@ common::VIndexId create_embedding_index(Fixture & fixture)
     require(created.has_value(), "executor fixture vector index metadata creation failed");
     require(fixture.publisher.publish_committed(fixture.catalog.snapshot()).has_value(),
             "executor fixture vector index catalog publish failed");
-    const auto * entry = fixture.catalog.view().find_vector_index(*created);
-    require(entry != nullptr, "executor fixture vector index entry missing");
+    const auto entry = fixture.catalog.view().find_vector_index(*created);
+    require(entry.has_value(), "executor fixture vector index entry missing");
     auto schema = storage::load_collection_schema(fixture.catalog.view(), fixture.collection_id);
     require(schema.has_value(), "executor fixture vector index schema load failed");
     require(fixture.vector_index_engine.create_index(*entry, *schema, fixture.storage).has_value(),
@@ -332,8 +335,8 @@ void test_mutation_error_aborts_and_releases_writer()
     Fixture fixture;
     insert_user(fixture, 1, 18);
 
-    const auto * age = fixture.catalog.view().find_column(fixture.collection_id, "age");
-    require(age != nullptr, "executor mutation error test age column missing");
+    const auto age = fixture.catalog.view().find_column(fixture.collection_id, "age");
+    require(age.has_value(), "executor mutation error test age column missing");
     std::vector<binder::bound::BoundAssignment> assignments;
     assignments.push_back(binder::bound::BoundAssignment {
         .column_id = age->id(),

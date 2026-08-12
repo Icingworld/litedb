@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/meta/entry/vector_index_entry.hpp"
+#include "core/catalog/entry/vector_index_entry.hpp"
 #include "core/schema/collection.hpp"
 #include "core/common/record.hpp"
 #include "core/vindex/vector_index_store.hpp"
@@ -19,9 +19,9 @@ namespace litedb::core::filesystem
 class FileSystem;
 }
 
-namespace litedb::core::meta
+namespace litedb::core::catalog
 {
-class CatalogView;
+class CatalogViewer;
 }
 
 namespace litedb::core::storage
@@ -93,7 +93,7 @@ public:
 
     [[nodiscard]]
     std::expected<void, VectorIndexError> create_index(
-        const meta::entry::VectorIndexEntry & index_entry,
+        const catalog::entry::VectorIndexEntry & index_entry,
         const schema::CollectionSchema & collection_schema,
         const storage::StorageEngine & storage
     );
@@ -104,7 +104,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, VectorIndexError> restore_all(
-        const meta::CatalogView & catalog,
+        const catalog::CatalogViewer & catalog,
         const storage::StorageEngine & storage
     );
 
@@ -113,7 +113,7 @@ public:
      */
     [[nodiscard]]
     std::expected<void, VectorIndexError> reload_collection(
-        const meta::CatalogView & catalog,
+        const catalog::CatalogViewer & catalog,
         const storage::StorageEngine & storage,
         common::CollectionId collection_id
     );
@@ -171,7 +171,7 @@ private:
         common::RecordId record_id
     );
     [[nodiscard]] static std::expected<VectorIndexDescriptor, VectorIndexError> make_descriptor(
-        const meta::entry::VectorIndexEntry & index_entry,
+        const catalog::entry::VectorIndexEntry & index_entry,
         const schema::CollectionSchema & collection_schema
     );
     [[nodiscard]] std::expected<VectorIndexStore, VectorIndexError> create_store(

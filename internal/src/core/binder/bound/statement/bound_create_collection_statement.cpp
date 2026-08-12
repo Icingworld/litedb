@@ -8,7 +8,7 @@ namespace litedb::core::binder::bound
 BoundCreateCollectionStatement::BoundCreateCollectionStatement(
     common::DatabaseId database_id,
     std::optional<std::string> collection_name,
-    std::vector<meta::ColumnDefinition> columns,
+    std::vector<catalog::ColumnDefinition> columns,
     std::optional<std::string> comment
 )
     : BoundStatement(BoundStatementKind::CreateCollection)
@@ -33,12 +33,12 @@ std::optional<std::string> BoundCreateCollectionStatement::take_collection_name(
     return std::exchange(collection_name_, std::nullopt);
 }
 
-const std::vector<meta::ColumnDefinition> & BoundCreateCollectionStatement::columns() const noexcept
+const std::vector<catalog::ColumnDefinition> & BoundCreateCollectionStatement::columns() const noexcept
 {
     return columns_;
 }
 
-std::vector<meta::ColumnDefinition> BoundCreateCollectionStatement::take_columns() noexcept
+std::vector<catalog::ColumnDefinition> BoundCreateCollectionStatement::take_columns() noexcept
 {
     return std::exchange(columns_, {});
 }

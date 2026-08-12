@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "core/logical_planner/plan/logical_plan.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 
 namespace litedb::core::physical_planner
@@ -13,7 +13,7 @@ namespace litedb::core::physical_planner
 class PhysicalPlanner final
 {
 public:
-    explicit PhysicalPlanner(meta::CatalogView catalog) noexcept;
+    explicit PhysicalPlanner(catalog::CatalogViewer catalog) noexcept;
 
 public:
     // 生成物理计划
@@ -23,7 +23,7 @@ public:
     );
 
 private:
-    meta::CatalogView catalog_;
+    catalog::CatalogViewer catalog_;
 };
 
 } // namespace litedb::core::physical_planner

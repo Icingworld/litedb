@@ -47,9 +47,9 @@ std::expected<std::unique_ptr<BoundStatement>, BinderError> BinderUpdateWorker::
         }
 
         // 查找列
-        const auto * column =
-            context_.meta().find_column(collection->collection->id(), assignment.column_name);
-        if (column == nullptr) [[unlikely]] {
+        const auto column =
+            context_.catalog().find_column(collection->collection->id(), assignment.column_name);
+        if (!column) [[unlikely]] {
             return std::unexpected(make_binder_error(
                 BinderErrorCode::ColumnNotFound,
                 "Column not found: " + assignment.column_name

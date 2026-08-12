@@ -1,7 +1,5 @@
 #include "core/storage/schema_loader.hpp"
 
-#include "core/meta/meta.hpp"
-
 #include <utility>
 
 namespace litedb::core::storage
@@ -18,17 +16,17 @@ SchemaLoadError make_error(SchemaLoadErrorCode code, std::string message)
 } // namespace
 
 std::expected<schema::CollectionSchema, SchemaLoadError> load_collection_schema(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     common::CollectionId collection_id
 )
 {
-    const auto * collection = catalog.find_collection(collection_id);
-    if (collection == nullptr) {
+    const auto collection = catalog.find_collection(collection_id);
+    if (!collection) {
         return std::unexpected(make_error(SchemaLoadErrorCode::CollectionNotFound, "Collection not found"));
     }
 
-    const auto * database = catalog.find_database(collection->database_id());
-    if (database == nullptr) {
+    const auto database = catalog.find_database(collection->database_id());
+    if (!database) {
         return std::unexpected(make_error(SchemaLoadErrorCode::DatabaseNotFound, "Database not found"));
     }
 
@@ -37,21 +35,18 @@ std::expected<schema::CollectionSchema, SchemaLoadError> load_collection_schema(
     columns.reserve(catalog_columns.size());
 
     for (std::size_t ordinal = 0; ordinal < catalog_columns.size(); ++ordinal) {
-        const auto * column = catalog_columns[ordinal];
-        if (column == nullptr) {
-            continue;
-        }
+        const auto & column = catalog_columns[ordinal].get();
 
         columns.emplace_back(
-            column->id(),
-            column->collection_id(),
+            column.id(),
+            column.collection_id(),
             ordinal,
-            column->name(),
-            column->type(),
-            column->nullable(),
-            column->unique(),
-            column->default_expression(),
-            column->comment()
+            column.name(),
+            column.type(),
+            column.nullable(),
+            column.unique(),
+            column.default_expression(),
+            column.comment()
         );
     }
 

@@ -156,9 +156,9 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
         if (!version_written.has_value()) {
             return std::unexpected(from_io_error(std::move(version_written.error())));
         }
-        auto meta_path_written = writer.write_string(MetaFileName);
-        if (!meta_path_written.has_value()) {
-            return std::unexpected(from_io_error(std::move(meta_path_written.error())));
+        auto catalog_path_written = writer.write_string(CatalogFileName);
+        if (!catalog_path_written.has_value()) {
+            return std::unexpected(from_io_error(std::move(catalog_path_written.error())));
         }
         auto collections_path_written = writer.write_string(CollectionsDirName);
         if (!collections_path_written.has_value()) {
@@ -222,15 +222,15 @@ std::expected<void, ManifestError> DatabaseManifest::ensure_initialized() const
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported manifest storage format version"));
     }
 
-    auto meta_path = reader.read_string();
-    if (!meta_path.has_value()) {
-        return std::unexpected(from_io_error(std::move(meta_path.error())));
+    auto catalog_path = reader.read_string();
+    if (!catalog_path.has_value()) {
+        return std::unexpected(from_io_error(std::move(catalog_path.error())));
     }
     auto collections_path = reader.read_string();
     if (!collections_path.has_value()) {
         return std::unexpected(from_io_error(std::move(collections_path.error())));
     }
-    if (*meta_path != MetaFileName || *collections_path != CollectionsDirName) {
+    if (*catalog_path != CatalogFileName || *collections_path != CollectionsDirName) {
         return std::unexpected(make_error(ManifestErrorCode::InvalidFormat, "Unsupported manifest paths"));
     }
 
@@ -242,9 +242,9 @@ const std::filesystem::path & DatabaseManifest::data_dir() const noexcept
     return data_dir_;
 }
 
-std::filesystem::path DatabaseManifest::meta_path() const
+std::filesystem::path DatabaseManifest::catalog_path() const
 {
-    return data_dir_ / MetaFileName;
+    return data_dir_ / CatalogFileName;
 }
 
 std::filesystem::path DatabaseManifest::collections_dir() const

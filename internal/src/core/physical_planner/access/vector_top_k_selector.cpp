@@ -36,18 +36,18 @@ std::optional<common::Value> evaluate_constant(const BoundExpression & expressio
 
 // 转换向量距离度量
 [[nodiscard]]
-std::optional<meta::entry::VectorDistanceMetric>
+std::optional<catalog::entry::VectorDistanceMetric>
 vector_metric(const BoundFunctionExpression & distance, bool ascending)
 {
     const auto name = common::normalize_identifier(distance.function().name());
     if (name == "l2_distance" && ascending) {
-        return meta::entry::VectorDistanceMetric::L2;
+        return catalog::entry::VectorDistanceMetric::L2;
     }
     if (name == "cosine_distance" && ascending) {
-        return meta::entry::VectorDistanceMetric::Cosine;
+        return catalog::entry::VectorDistanceMetric::Cosine;
     }
     if (name == "inner_product" && !ascending) {
-        return meta::entry::VectorDistanceMetric::InnerProduct;
+        return catalog::entry::VectorDistanceMetric::InnerProduct;
     }
     return std::nullopt;
 }
@@ -55,21 +55,22 @@ vector_metric(const BoundFunctionExpression & distance, bool ascending)
 // 选择向量索引
 [[nodiscard]]
 std::optional<common::VIndexId> choose_vector_index(
-    const meta::CatalogView & catalog,
+    const catalog::CatalogViewer & catalog,
     common::CollectionId collection_id,
     common::ColumnId column_id,
-    meta::entry::VectorDistanceMetric metric
+    catalog::entry::VectorDistanceMetric metric
 )
 {
     std::optional<common::VIndexId> selected;
-    for (const auto * entry : catalog.list_vector_indexes(collection_id)) {
-        if (entry == nullptr || entry->column_id() != column_id ||
-            entry->index_kind() != meta::entry::VectorIndexKind::Hnsw ||
-            entry->metric() != metric) {
+    for (const auto & entry_reference : catalog.list_vector_indexes(collection_id)) {
+        const auto & entry = entry_reference.get();
+        if (entry.column_id() != column_id ||
+            entry.index_kind() != catalog::entry::VectorIndexKind::Hnsw ||
+            entry.metric() != metric) {
             continue;
         }
-        if (!selected.has_value() || entry->id() < *selected) {
-            selected = entry->id();
+        if (!selected.has_value() || entry.id() < *selected) {
+            selected = entry.id();
         }
     }
     return selected;
@@ -153,8 +154,8 @@ std::optional<VectorTopKDecision> VectorTopKSelector::select(
         const auto & column = static_cast<const binder::bound::BoundColumnRefExpression &>(
             *distance.arguments()[index]
         );
-        const auto * entry = context_.catalog().find_column(column.column_id());
-        if (entry == nullptr || entry->collection_id() != scan->collection_id() ||
+        const auto entry = context_.catalog().find_column(column.column_id());
+        if (!entry || entry->collection_id() != scan->collection_id() ||
             entry->type().id != common::LogicalTypeId::Vector) {
             continue;
         }

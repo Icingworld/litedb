@@ -7,7 +7,7 @@
 #include "core/common/logical_type.hpp"
 #include "core/common/value.hpp"
 #include "core/logical_planner/operator/logical_limit_operator.hpp"
-#include "core/meta/entry/vector_index_entry.hpp"
+#include "core/catalog/entry/vector_index_entry.hpp"
 #include "core/physical_planner/physical_planner_context.hpp"
 
 namespace litedb::core::physical_planner
@@ -19,7 +19,7 @@ struct VectorTopKDecision
     common::CollectionId collection_id {0};
     common::VIndexId index_id {0};
     common::ColumnId column_id {0};
-    meta::entry::VectorDistanceMetric metric;
+    catalog::entry::VectorDistanceMetric metric;
     common::Value query_value;
     common::LogicalType query_type;
     std::size_t query_argument_index {0};

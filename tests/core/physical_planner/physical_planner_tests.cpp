@@ -31,7 +31,7 @@
 #include "core/logical_planner/plan/mutation/insert_plan.hpp"
 #include "core/logical_planner/plan/mutation/update_plan.hpp"
 #include "core/logical_planner/plan/query/query_plan.hpp"
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/physical_planner/operator/debug/debug_printer.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
@@ -55,7 +55,7 @@ using namespace litedb::core::binder::bound;
 using namespace litedb::core::common;
 using namespace litedb::core::logical_planner::op;
 using namespace litedb::core::logical_planner::plan;
-using namespace litedb::core::meta;
+using namespace litedb::core::catalog;
 using namespace physical_planner_test_support;
 
 void test_lower_operator_chain()
@@ -161,7 +161,7 @@ void test_all_plan_dispatch_and_ownership()
             std::make_unique<CreateIndexPlan>(
                 2,
                 std::optional<std::string> {"i"},
-                meta::entry::IndexKind::BTree,
+                catalog::entry::IndexKind::BTree,
                 false
             )
         ) == physical_planner::plan::PhysicalPlanKind::CreateIndex,
@@ -172,8 +172,8 @@ void test_all_plan_dispatch_and_ownership()
             std::make_unique<CreateVectorIndexPlan>(
                 2,
                 std::optional<std::string> {"v"},
-                meta::entry::VectorIndexKind::Hnsw,
-                meta::entry::VectorDistanceMetric::L2,
+                catalog::entry::VectorIndexKind::Hnsw,
+                catalog::entry::VectorDistanceMetric::L2,
                 16,
                 64,
                 32,

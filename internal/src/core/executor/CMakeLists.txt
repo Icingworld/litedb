@@ -16,7 +16,7 @@ target_link_libraries(litedb_executor PUBLIC
     litedb_evaluator
     litedb_index
     litedb_storage
-    litedb_meta
+    litedb_catalog
     litedb_vindex
     litedb_transaction
 )

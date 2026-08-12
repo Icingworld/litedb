@@ -1,4 +1,4 @@
-#include "core/meta/meta_engine.hpp"
+#include "core/catalog/catalog_editor.hpp"
 #include "core/storage/schema_loader.hpp"
 
 #include <exception>
@@ -9,8 +9,8 @@ namespace
 {
 
 using namespace litedb::core::common;
-using namespace litedb::core::meta;
-using namespace litedb::core::meta::entry;
+using namespace litedb::core::catalog;
+using namespace litedb::core::catalog::entry;
 using namespace litedb::core::schema;
 using namespace litedb::core::storage;
 
@@ -28,14 +28,14 @@ LogicalType type(LogicalTypeId id, std::optional<std::size_t> parameter = std::n
 
 CollectionId create_users_collection(CatalogEditor & catalog)
 {
-    auto database = catalog.create_database(CreateDatabaseRequest {.name = "demo"});
+    auto database = catalog.create_database(CreateDatabaseRequest {.database_name = "demo"});
     if (!database.has_value()) {
         throw std::runtime_error(std::string {database.error().message()});
     }
 
     CreateCollectionRequest request;
     request.database_id = *database;
-    request.name = "users";
+    request.collection_name = "users";
     request.comment = "user collection";
     request.columns.push_back(ColumnDefinition {
         .name = "id",

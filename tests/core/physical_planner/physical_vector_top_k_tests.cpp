@@ -35,9 +35,9 @@ using namespace physical_planner_test_support;
 void test_vector_top_k_selection_and_fallback()
 {
     auto fixture = make_planner_catalog();
-    const auto * id = fixture.editor.view().find_column(fixture.collection_id, "id");
-    const auto * embedding = fixture.editor.view().find_column(fixture.vector_id);
-    require(id != nullptr && embedding != nullptr, "vector fixture columns missing");
+    const auto id = fixture.editor.view().find_column(fixture.collection_id, "id");
+    const auto embedding = fixture.editor.view().find_column(fixture.vector_id);
+    require(id.has_value() && embedding.has_value(), "vector fixture columns missing");
     physical_planner::PhysicalPlanner planner {fixture.editor.view()};
 
     auto make_query = [&](std::string_view function_name,
@@ -90,10 +90,10 @@ void test_vector_top_k_selection_and_fallback()
                 "vector query constant should be materialized independently from the retained sort expression");
         require(search.predicate().has_value() == with_filter, "vector filter ownership mismatch");
         require(search.metric() == (function_name == "l2_distance"
-                                        ? meta::entry::VectorDistanceMetric::L2
+                                        ? catalog::entry::VectorDistanceMetric::L2
                                         : function_name == "cosine_distance"
-                                            ? meta::entry::VectorDistanceMetric::Cosine
-                                            : meta::entry::VectorDistanceMetric::InnerProduct),
+                                            ? catalog::entry::VectorDistanceMetric::Cosine
+                                            : catalog::entry::VectorDistanceMetric::InnerProduct),
                 "vector metric mismatch");
     };
 

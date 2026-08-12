@@ -15,9 +15,9 @@ namespace litedb::core::error
 enum class ErrorCategory : std::uint8_t
 {
     Unknown = 0,
-    FileSystem = 1, // 文件系统
+    FileSystem = 1,
     Io = 2,
-    Meta = 3,
+    Catalog = 3,
     Storage = 4,
     Index = 5,
     VectorIndex = 6,

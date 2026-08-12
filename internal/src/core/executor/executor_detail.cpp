@@ -14,7 +14,7 @@
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_engine.hpp"
 #include "core/index/scalar_index.hpp"
-#include "core/meta/meta.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_index_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
@@ -85,10 +85,10 @@ ExecutionError make_error(ExecutionErrorCode code, std::string message, error::E
 }
 
 [[nodiscard]]
-ExecutionError from_meta_error(meta::MetaError error)
+ExecutionError from_catalog_error(catalog::CatalogError error)
 {
     auto message = error.message();
-    return make_error(ExecutionErrorCode::MetaError, std::move(message), std::move(error));
+    return make_error(ExecutionErrorCode::CatalogError, std::move(message), std::move(error));
 }
 
 [[nodiscard]]
@@ -196,34 +196,34 @@ std::string logical_type_name(const LogicalType & value)
 }
 
 [[nodiscard]]
-std::string index_kind_name(meta::entry::IndexKind kind)
+std::string index_kind_name(catalog::entry::IndexKind kind)
 {
     switch (kind) {
-    case meta::entry::IndexKind::BTree:
+    case catalog::entry::IndexKind::BTree:
         return "BTREE";
     }
     return "UNKNOWN";
 }
 
 [[nodiscard]]
-std::string vector_index_kind_name(meta::entry::VectorIndexKind kind)
+std::string vector_index_kind_name(catalog::entry::VectorIndexKind kind)
 {
     switch (kind) {
-    case meta::entry::VectorIndexKind::Hnsw:
+    case catalog::entry::VectorIndexKind::Hnsw:
         return "HNSW";
     }
     return "UNKNOWN";
 }
 
 [[nodiscard]]
-std::string vector_metric_name(meta::entry::VectorDistanceMetric metric)
+std::string vector_metric_name(catalog::entry::VectorDistanceMetric metric)
 {
     switch (metric) {
-    case meta::entry::VectorDistanceMetric::L2:
+    case catalog::entry::VectorDistanceMetric::L2:
         return "L2";
-    case meta::entry::VectorDistanceMetric::InnerProduct:
+    case catalog::entry::VectorDistanceMetric::InnerProduct:
         return "INNER_PRODUCT";
-    case meta::entry::VectorDistanceMetric::Cosine:
+    case catalog::entry::VectorDistanceMetric::Cosine:
         return "COSINE";
     }
     return "UNKNOWN";
@@ -243,7 +243,7 @@ find_storage(storage::StorageEngine & storage, common::CollectionId collection_i
 
 [[nodiscard]]
 std::expected<schema::CollectionSchema, ExecutionError>
-load_schema(meta::CatalogView & catalog, common::CollectionId collection_id)
+load_schema(catalog::CatalogViewer & catalog, common::CollectionId collection_id)
 {
     auto collection_schema = storage::load_collection_schema(catalog, collection_id);
     if (!collection_schema.has_value()) {
@@ -281,7 +281,7 @@ void append_scan_columns(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_scan(
     const SeqScanOperator & scan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage
 )
 {
@@ -349,7 +349,7 @@ std::expected<index::IndexRange, ExecutionError> index_range_from_lookup(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_index_scan(
     const IndexScanOperator & scan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine
 )
@@ -461,7 +461,7 @@ apply_predicate(PipelineResult & input, std::optional<const BoundExpression &> p
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
     const VectorSearchOperator & search,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage
 )
 {
@@ -498,14 +498,14 @@ std::expected<PipelineResult, ExecutionError> execute_vector_fallback_scan(
 }
 
 [[nodiscard]]
-vindex::VectorDistanceMetric runtime_metric(meta::entry::VectorDistanceMetric metric)
+vindex::VectorDistanceMetric runtime_metric(catalog::entry::VectorDistanceMetric metric)
 {
     switch (metric) {
-    case meta::entry::VectorDistanceMetric::L2:
+    case catalog::entry::VectorDistanceMetric::L2:
         return vindex::VectorDistanceMetric::L2;
-    case meta::entry::VectorDistanceMetric::InnerProduct:
+    case catalog::entry::VectorDistanceMetric::InnerProduct:
         return vindex::VectorDistanceMetric::InnerProduct;
-    case meta::entry::VectorDistanceMetric::Cosine:
+    case catalog::entry::VectorDistanceMetric::Cosine:
         return vindex::VectorDistanceMetric::Cosine;
     }
     return vindex::VectorDistanceMetric::L2;
@@ -523,7 +523,7 @@ std::size_t saturating_multiply(std::size_t value, std::size_t factor)
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_vector_search(
     const VectorSearchOperator & search,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     vindex::VectorIndexEngine & vector_index_engine
 )
@@ -615,7 +615,7 @@ std::expected<PipelineResult, ExecutionError> execute_vector_search(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_filter(
     const FilterOperator & filter,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -657,7 +657,7 @@ projection_name(const binder::bound::BoundProjectionItem & projection, std::size
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_projection(
     const ProjectionOperator & projection,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -773,7 +773,7 @@ evaluate_order_keys(const SortOperator & order_by, const PipelineRow & row)
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_order_by(
     const SortOperator & order_by,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -850,7 +850,7 @@ std::expected<PipelineResult, ExecutionError> execute_order_by(
 [[nodiscard]]
 std::expected<PipelineResult, ExecutionError> execute_limit(
     const LimitOperator & limit,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -885,7 +885,7 @@ std::expected<PipelineResult, ExecutionError> execute_limit(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_query(
     const QueryPlan & plan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine
@@ -908,10 +908,10 @@ std::expected<ExecutionResult, ExecutionError> execute_query(
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError>
-execute_use(const UsePlan & plan, meta::CatalogView & catalog)
+execute_use(const UsePlan & plan, catalog::CatalogViewer & catalog)
 {
-    const auto * database = catalog.find_database(plan.database_id());
-    if (database == nullptr) {
+    const auto database = catalog.find_database(plan.database_id());
+    if (!database) {
         return std::unexpected(
             make_error(ExecutionErrorCode::InvalidPlan, "USE target database was not found")
         );
@@ -1021,7 +1021,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_delete(
     const DeletePlan & plan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -1083,7 +1083,7 @@ ordinal_for_column(const schema::CollectionSchema & collection_schema, common::C
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError> execute_update(
     const UpdatePlan & plan,
-    meta::CatalogView & catalog,
+    catalog::CatalogViewer & catalog,
     storage::StorageEngine & storage,
     index::IndexEngine & index_engine,
     vindex::VectorIndexEngine & vector_index_engine,
@@ -1178,13 +1178,13 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::CatalogView & catalog)
+std::expected<ExecutionResult, ExecutionError> execute_show_databases(catalog::CatalogViewer & catalog)
 {
     std::vector<ExecutionRow> rows;
-    for (const auto * database : catalog.list_databases()) {
-        if (database != nullptr) {
-            rows.push_back(ExecutionRow {.values = {common::Value {database->name()}}});
-        }
+    for (const auto & database_reference : catalog.list_databases()) {
+        rows.push_back(ExecutionRow {
+            .values = {common::Value {database_reference.get().name()}},
+        });
     }
 
     return rowset_result(
@@ -1195,13 +1195,13 @@ std::expected<ExecutionResult, ExecutionError> execute_show_databases(meta::Cata
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError>
-execute_show_collections(const ShowCollectionsPlan & plan, meta::CatalogView & catalog)
+execute_show_collections(const ShowCollectionsPlan & plan, catalog::CatalogViewer & catalog)
 {
     std::vector<ExecutionRow> rows;
-    for (const auto * collection : catalog.list_collections(plan.database_id())) {
-        if (collection != nullptr) {
-            rows.push_back(ExecutionRow {.values = {common::Value {collection->name()}}});
-        }
+    for (const auto & collection_reference : catalog.list_collections(plan.database_id())) {
+        rows.push_back(ExecutionRow {
+            .values = {common::Value {collection_reference.get().name()}},
+        });
     }
 
     return rowset_result(
@@ -1212,23 +1212,19 @@ execute_show_collections(const ShowCollectionsPlan & plan, meta::CatalogView & c
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError>
-execute_show_indexes(const ShowIndexesPlan & plan, meta::CatalogView & catalog)
+execute_show_indexes(const ShowIndexesPlan & plan, catalog::CatalogViewer & catalog)
 {
     std::vector<ExecutionRow> rows;
-    for (const auto * index : catalog.list_indexes(plan.collection_id())) {
-        if (index == nullptr) {
-            continue;
-        }
-
-        const auto column_id = index->column_id();
-        const auto * column = column_id.has_value() ? catalog.find_column(*column_id) : nullptr;
+    for (const auto & index_reference : catalog.list_indexes(plan.collection_id())) {
+        const auto & index = index_reference.get();
+        const auto column = catalog.find_column(index.column_id());
         rows.push_back(
             ExecutionRow {
                 .values = {
-                    common::Value {index->name()},
-                    column != nullptr ? common::Value {column->name()} : common::Value::null(),
-                    common::Value {index_kind_name(index->kind())},
-                    common::Value {index->unique()},
+                    common::Value {index.name()},
+                    column ? common::Value {column->name()} : common::Value::null(),
+                    common::Value {index_kind_name(index.kind())},
+                    common::Value {index.unique()},
                 },
             }
         );
@@ -1247,27 +1243,24 @@ execute_show_indexes(const ShowIndexesPlan & plan, meta::CatalogView & catalog)
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError>
-execute_show_vector_indexes(const ShowVectorIndexesPlan & plan, meta::CatalogView & catalog)
+execute_show_vector_indexes(const ShowVectorIndexesPlan & plan, catalog::CatalogViewer & catalog)
 {
     std::vector<ExecutionRow> rows;
-    for (const auto * index : catalog.list_vector_indexes(plan.collection_id())) {
-        if (index == nullptr) {
-            continue;
-        }
-
-        const auto * column = catalog.find_column(index->column_id());
+    for (const auto & index_reference : catalog.list_vector_indexes(plan.collection_id())) {
+        const auto & index = index_reference.get();
+        const auto column = catalog.find_column(index.column_id());
         rows.push_back(
             ExecutionRow {
                 .values = {
-                    common::Value {index->name()},
-                    column != nullptr ? common::Value {column->name()} : common::Value::null(),
-                    common::Value {vector_index_kind_name(index->index_kind())},
-                    common::Value {vector_metric_name(index->metric())},
-                    common::Value {static_cast<std::int64_t>(index->dimension())},
-                    common::Value {static_cast<std::int64_t>(index->max_neighbors())},
-                    common::Value {static_cast<std::int64_t>(index->ef_construction())},
-                    common::Value {static_cast<std::int64_t>(index->ef_search_default())},
-                    common::Value {static_cast<std::int64_t>(index->random_seed())},
+                    common::Value {index.name()},
+                    column ? common::Value {column->name()} : common::Value::null(),
+                    common::Value {vector_index_kind_name(index.index_kind())},
+                    common::Value {vector_metric_name(index.metric())},
+                    common::Value {static_cast<std::int64_t>(index.dimension())},
+                    common::Value {static_cast<std::int64_t>(index.max_neighbors())},
+                    common::Value {static_cast<std::int64_t>(index.ef_construction())},
+                    common::Value {static_cast<std::int64_t>(index.ef_search_default())},
+                    common::Value {static_cast<std::int64_t>(index.random_seed())},
                 },
             }
         );
@@ -1291,7 +1284,7 @@ execute_show_vector_indexes(const ShowVectorIndexesPlan & plan, meta::CatalogVie
 
 [[nodiscard]]
 std::expected<ExecutionResult, ExecutionError>
-execute_describe_collection(const DescribeCollectionPlan & plan, meta::CatalogView & catalog)
+execute_describe_collection(const DescribeCollectionPlan & plan, catalog::CatalogViewer & catalog)
 {
     auto collection_schema = load_schema(catalog, plan.collection_id());
     if (!collection_schema.has_value()) {

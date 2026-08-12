@@ -205,14 +205,14 @@ void test_index_ddl_reopen()
         auto created = execute_ok(session, "CREATE INDEX idx_age ON users (age) USING BTREE;");
         require(created.affected_rows == 1, "CREATE INDEX affected rows mismatch");
 
-        const auto * database = engine->meta().find_database("demo");
-        require(database != nullptr, "created database lookup failed");
-        const auto * collection = engine->meta().find_collection(database->id(), "users");
-        require(collection != nullptr, "created collection lookup failed");
-        const auto * index = engine->meta().find_index(collection->id(), "idx_age");
-        require(index != nullptr, "created index lookup failed");
+        const auto database = engine->catalog().find_database("demo");
+        require(database.has_value(), "created database lookup failed");
+        const auto collection = engine->catalog().find_collection(database->id(), "users");
+        require(collection.has_value(), "created collection lookup failed");
+        const auto index = engine->catalog().find_index(collection->id(), "idx_age");
+        require(index.has_value(), "created index lookup failed");
         persisted_index_id = index->id();
-        require(index->kind() == meta::entry::IndexKind::BTree, "created index kind mismatch");
+        require(index->kind() == catalog::entry::IndexKind::BTree, "created index kind mismatch");
         require(find_index_equal(*engine, index->id(), common::Value {std::int32_t {18}}).size() == 1, "created index should include existing row");
         require(
             std::filesystem::exists(dir / "indexes" / (std::to_string(persisted_index_id) + ".bti")),
@@ -223,14 +223,14 @@ void test_index_ddl_reopen()
     common::CollectionId users_id {0};
     {
         auto reopened = open_database(dir);
-        const auto * database = reopened->meta().find_database("demo");
-        require(database != nullptr, "reopened database missing");
-        const auto * collection = reopened->meta().find_collection(database->id(), "users");
-        require(collection != nullptr, "reopened collection missing");
+        const auto database = reopened->catalog().find_database("demo");
+        require(database.has_value(), "reopened database missing");
+        const auto collection = reopened->catalog().find_collection(database->id(), "users");
+        require(collection.has_value(), "reopened collection missing");
         users_id = collection->id();
-        const auto * index = reopened->meta().find_index(users_id, "idx_age");
-        require(index != nullptr, "reopened index missing");
-        require(index->kind() == meta::entry::IndexKind::BTree, "reopened index kind mismatch");
+        const auto index = reopened->catalog().find_index(users_id, "idx_age");
+        require(index.has_value(), "reopened index missing");
+        require(index->kind() == catalog::entry::IndexKind::BTree, "reopened index kind mismatch");
         const auto index_id = index->id();
         require(find_index_equal(*reopened, index_id, common::Value {std::int32_t {18}}).size() == 1, "reopened persistent index lookup mismatch");
 
@@ -243,7 +243,7 @@ void test_index_ddl_reopen()
         require(find_index_equal(*reopened, index_id, common::Value {std::int32_t {19}}).empty(), "persistent DELETE should remove index key");
         auto dropped = execute_ok(session, "DROP INDEX idx_age ON users;");
         require(dropped.affected_rows == 1, "DROP INDEX affected rows mismatch");
-        require(reopened->meta().find_index(users_id, "idx_age") == nullptr, "dropped index should leave catalog");
+        require(!reopened->catalog().find_index(users_id, "idx_age").has_value(), "dropped index should leave catalog");
         require(!reopened->index_engine().find_index(index_id).has_value(), "dropped index should leave engine");
         require(
             !std::filesystem::exists(dir / "indexes" / (std::to_string(index_id) + ".bti")),
@@ -253,12 +253,12 @@ void test_index_ddl_reopen()
 
     {
         auto reopened = open_database(dir);
-        const auto * database = reopened->meta().find_database("demo");
-        require(database != nullptr, "second reopen database missing");
-        const auto * collection = reopened->meta().find_collection(database->id(), "users");
-        require(collection != nullptr, "second reopen collection missing");
+        const auto database = reopened->catalog().find_database("demo");
+        require(database.has_value(), "second reopen database missing");
+        const auto collection = reopened->catalog().find_collection(database->id(), "users");
+        require(collection.has_value(), "second reopen collection missing");
         require(collection->id() == users_id, "second reopen collection id mismatch");
-        require(reopened->meta().find_index(users_id, "idx_age") == nullptr, "dropped index should not reappear");
+        require(!reopened->catalog().find_index(users_id, "idx_age").has_value(), "dropped index should not reappear");
     }
 }
 
@@ -283,15 +283,15 @@ void test_vector_index_ddl_reopen()
         );
         require(created.affected_rows == 1, "CREATE VINDEX affected rows mismatch");
 
-        const auto * database = engine->meta().find_database("demo");
-        require(database != nullptr, "vector index database lookup failed");
-        const auto * collection = engine->meta().find_collection(database->id(), "docs");
-        require(collection != nullptr, "vector index collection lookup failed");
+        const auto database = engine->catalog().find_database("demo");
+        require(database.has_value(), "vector index database lookup failed");
+        const auto collection = engine->catalog().find_collection(database->id(), "docs");
+        require(collection.has_value(), "vector index collection lookup failed");
         docs_id = collection->id();
 
-        const auto * index = engine->meta().find_vector_index(docs_id, "vidx_embedding");
-        require(index != nullptr, "created vector index lookup failed");
-        require(index->metric() == meta::entry::VectorDistanceMetric::InnerProduct, "created vector index metric mismatch");
+        const auto index = engine->catalog().find_vector_index(docs_id, "vidx_embedding");
+        require(index.has_value(), "created vector index lookup failed");
+        require(index->metric() == catalog::entry::VectorDistanceMetric::InnerProduct, "created vector index metric mismatch");
         require(index->dimension() == 3, "created vector index dimension mismatch");
 
         auto query = vindex::VectorIndexKey::from_vector({1.0, 0.0, 0.0});
@@ -313,16 +313,16 @@ void test_vector_index_ddl_reopen()
 
     {
         auto reopened = open_database(dir);
-        const auto * database = reopened->meta().find_database("demo");
-        require(database != nullptr, "reopened vector index database missing");
-        const auto * collection = reopened->meta().find_collection(database->id(), "docs");
-        require(collection != nullptr, "reopened vector index collection missing");
+        const auto database = reopened->catalog().find_database("demo");
+        require(database.has_value(), "reopened vector index database missing");
+        const auto collection = reopened->catalog().find_collection(database->id(), "docs");
+        require(collection.has_value(), "reopened vector index collection missing");
         require(collection->id() == docs_id, "reopened vector index collection id mismatch");
 
-        const auto * index = reopened->meta().find_vector_index(docs_id, "vidx_embedding");
-        require(index != nullptr, "reopened vector index missing");
-        require(index->index_kind() == meta::entry::VectorIndexKind::Hnsw, "reopened vector index kind mismatch");
-        require(index->metric() == meta::entry::VectorDistanceMetric::InnerProduct, "reopened vector index metric mismatch");
+        const auto index = reopened->catalog().find_vector_index(docs_id, "vidx_embedding");
+        require(index.has_value(), "reopened vector index missing");
+        require(index->index_kind() == catalog::entry::VectorIndexKind::Hnsw, "reopened vector index kind mismatch");
+        require(index->metric() == catalog::entry::VectorDistanceMetric::InnerProduct, "reopened vector index metric mismatch");
         require(index->dimension() == 3, "reopened vector index dimension mismatch");
         require(index->max_neighbors() == 24, "reopened vector index max_neighbors mismatch");
         require(index->ef_construction() == 240, "reopened vector index ef_construction mismatch");
@@ -339,17 +339,17 @@ void test_vector_index_ddl_reopen()
         require(existing.affected_rows == 0, "persistent CREATE VINDEX IF NOT EXISTS affected rows mismatch");
         auto dropped = execute_ok(session, "DROP VINDEX vidx_embedding ON docs;");
         require(dropped.affected_rows == 1, "persistent DROP VINDEX affected rows mismatch");
-        require(reopened->meta().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should leave catalog");
+        require(!reopened->catalog().find_vector_index(docs_id, "vidx_embedding").has_value(), "dropped vector index should leave catalog");
     }
 
     {
         auto reopened = open_database(dir);
-        const auto * database = reopened->meta().find_database("demo");
-        require(database != nullptr, "second vector index reopen database missing");
-        const auto * collection = reopened->meta().find_collection(database->id(), "docs");
-        require(collection != nullptr, "second vector index reopen collection missing");
+        const auto database = reopened->catalog().find_database("demo");
+        require(database.has_value(), "second vector index reopen database missing");
+        const auto collection = reopened->catalog().find_collection(database->id(), "docs");
+        require(collection.has_value(), "second vector index reopen collection missing");
         require(collection->id() == docs_id, "second vector index reopen collection id mismatch");
-        require(reopened->meta().find_vector_index(docs_id, "vidx_embedding") == nullptr, "dropped vector index should not reappear");
+        require(!reopened->catalog().find_vector_index(docs_id, "vidx_embedding").has_value(), "dropped vector index should not reappear");
     }
 }
 

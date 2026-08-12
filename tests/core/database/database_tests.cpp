@@ -52,7 +52,7 @@ public:
 
     auto execute_sql(std::string_view sql) { return session_.execute_sql(sql); }
     auto current_database_id() const noexcept { return session_.current_database_id(); }
-    auto meta() const noexcept { return engine_->meta(); }
+    auto catalog() const noexcept { return engine_->catalog(); }
     const auto & index_engine() const noexcept { return engine_->index_engine(); }
 
 private:
@@ -118,10 +118,10 @@ void test_execute_sql_end_to_end()
 
     auto create_index = execute_ok(engine, "CREATE INDEX idx_age ON users (age);");
     require(create_index.affected_rows == 1, "CREATE INDEX affected rows mismatch");
-    const auto * collection = engine.meta().find_collection(engine.current_database_id().value(), "users");
-    require(collection != nullptr, "created collection lookup failed");
-    const auto * index = engine.meta().find_index(collection->id(), "idx_age");
-    require(index != nullptr, "created index missing");
+    const auto collection = engine.catalog().find_collection(engine.current_database_id().value(), "users");
+    require(collection.has_value(), "created collection lookup failed");
+    const auto index = engine.catalog().find_index(collection->id(), "idx_age");
+    require(index.has_value(), "created index missing");
     const auto index_id = index->id();
 
     auto selected = execute_ok(engine, "SELECT name, age FROM users WHERE id = 1;");
@@ -148,7 +148,7 @@ void test_execute_sql_end_to_end()
 
     auto drop_index = execute_ok(engine, "DROP INDEX idx_age ON users;");
     require(drop_index.affected_rows == 1, "DROP INDEX affected rows mismatch");
-    require(engine.meta().find_index(collection->id(), "idx_age") == nullptr, "dropped index should leave catalog");
+    require(!engine.catalog().find_index(collection->id(), "idx_age").has_value(), "dropped index should leave catalog");
     require(!engine.index_engine().find_index(index_id).has_value(), "dropped index should leave engine");
 }
 
@@ -160,15 +160,15 @@ void test_column_unique_creates_and_enforces_index()
     execute_ok(engine, "USE constraints;");
     execute_ok(engine, "CREATE COLLECTION users (id BIGINT UNIQUE, name VARCHAR(64));");
 
-    const auto * collection = engine.meta().find_collection(
+    const auto collection = engine.catalog().find_collection(
         engine.current_database_id().value(),
         "users"
     );
-    require(collection != nullptr, "UNIQUE collection lookup failed");
-    const auto indexes = engine.meta().list_indexes(collection->id());
-    require(indexes.size() == 1 && indexes.front()->unique(),
+    require(collection.has_value(), "UNIQUE collection lookup failed");
+    const auto indexes = engine.catalog().list_indexes(collection->id());
+    require(indexes.size() == 1 && indexes.front().get().unique(),
             "UNIQUE column should publish one unique index");
-    require(engine.index_engine().find_index(indexes.front()->id()).has_value(),
+    require(engine.index_engine().find_index(indexes.front().get().id()).has_value(),
             "UNIQUE column index should be loaded into the runtime engine");
 
     execute_ok(engine, "INSERT INTO users VALUES (1, 'alice');");
@@ -216,12 +216,12 @@ void test_vector_index_ddl()
     );
     require(created.affected_rows == 1, "CREATE VINDEX affected rows mismatch");
 
-    const auto * collection = engine.meta().find_collection(engine.current_database_id().value(), "docs");
-    require(collection != nullptr, "vector index collection lookup failed");
-    const auto * index = engine.meta().find_vector_index(collection->id(), "vidx_embedding");
-    require(index != nullptr, "created vector index missing");
-    require(index->index_kind() == litedb::core::meta::entry::VectorIndexKind::Hnsw, "vector index kind mismatch");
-    require(index->metric() == litedb::core::meta::entry::VectorDistanceMetric::Cosine, "vector index metric mismatch");
+    const auto collection = engine.catalog().find_collection(engine.current_database_id().value(), "docs");
+    require(collection.has_value(), "vector index collection lookup failed");
+    const auto index = engine.catalog().find_vector_index(collection->id(), "vidx_embedding");
+    require(index.has_value(), "created vector index missing");
+    require(index->index_kind() == litedb::core::catalog::entry::VectorIndexKind::Hnsw, "vector index kind mismatch");
+    require(index->metric() == litedb::core::catalog::entry::VectorDistanceMetric::Cosine, "vector index metric mismatch");
     require(index->dimension() == 3, "vector index dimension mismatch");
     require(index->max_neighbors() == 24, "vector index max_neighbors mismatch");
     require(index->ef_construction() == 240, "vector index ef_construction mismatch");
@@ -233,7 +233,7 @@ void test_vector_index_ddl()
 
     auto dropped = execute_ok(engine, "DROP VINDEX vidx_embedding ON docs;");
     require(dropped.affected_rows == 1, "DROP VINDEX affected rows mismatch");
-    require(engine.meta().find_vector_index(collection->id(), "vidx_embedding") == nullptr, "dropped vector index should leave catalog");
+    require(!engine.catalog().find_vector_index(collection->id(), "vidx_embedding").has_value(), "dropped vector index should leave catalog");
 
     auto missing = execute_ok(engine, "DROP VINDEX IF EXISTS vidx_embedding ON docs;");
     require(missing.affected_rows == 0, "DROP VINDEX IF EXISTS affected rows mismatch");

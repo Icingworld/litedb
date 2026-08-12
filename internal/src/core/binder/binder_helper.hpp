@@ -11,7 +11,7 @@
 #include "core/binder/bound/expression/bound_expression.hpp"
 #include "core/common/logical_type.hpp"
 #include "core/common/types.hpp"
-#include "core/meta/entry/column_entry.hpp"
+#include "core/catalog/entry/column_entry.hpp"
 
 namespace litedb::core::binder
 {
@@ -81,6 +81,6 @@ cast_if_needed(std::unique_ptr<bound::BoundExpression> expression, common::Logic
 
 // 从列定义创建绑定列
 [[nodiscard]]
-bound::BoundColumn bound_column_from_entry(const meta::entry::ColumnEntry & column);
+bound::BoundColumn bound_column_from_entry(const catalog::entry::ColumnEntry & column);
 
 } // namespace litedb::core::binder

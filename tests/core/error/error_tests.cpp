@@ -7,7 +7,7 @@
 #include "core/error/error.hpp"
 #include "core/filesystem/filesystem_error.hpp"
 #include "core/io/io_error.hpp"
-#include "core/meta/meta_error.hpp"
+#include "core/catalog/catalog_error.hpp"
 #include "core/storage/storage_error.hpp"
 #include "core/transaction/transaction_error.hpp"
 #include "core/vindex/vector_index_error.hpp"
@@ -20,9 +20,9 @@ using litedb::core::error::ErrorCategory;
 using litedb::core::filesystem::FileSystemErrorCode;
 using litedb::core::filesystem::FileSystemErrorContext;
 using litedb::core::io::IoErrorCode;
-using litedb::core::meta::MetaErrorCode;
-using litedb::core::meta::MetaErrorContext;
-using litedb::core::meta::MetaOperation;
+using litedb::core::catalog::CatalogErrorCode;
+using litedb::core::catalog::CatalogErrorContext;
+using litedb::core::catalog::CatalogOperation;
 using litedb::core::storage::StorageErrorCode;
 using litedb::core::storage::StorageErrorContext;
 using litedb::core::storage::StorageOperation;
@@ -35,12 +35,12 @@ using litedb::core::vindex::VectorIndexOperation;
 
 static_assert(litedb::core::error::ErrorType<FileSystemErrorCode>);
 static_assert(litedb::core::error::ErrorType<IoErrorCode>);
-static_assert(litedb::core::error::ErrorType<MetaErrorCode>);
+static_assert(litedb::core::error::ErrorType<CatalogErrorCode>);
 static_assert(litedb::core::error::ErrorType<StorageErrorCode>);
 static_assert(litedb::core::error::ErrorType<VectorIndexErrorCode>);
 static_assert(std::to_underlying(ErrorCategory::FileSystem) == 1);
 static_assert(std::to_underlying(ErrorCategory::Io) == 2);
-static_assert(std::to_underlying(ErrorCategory::Meta) == 3);
+static_assert(std::to_underlying(ErrorCategory::Catalog) == 3);
 static_assert(std::to_underlying(ErrorCategory::Storage) == 4);
 static_assert(std::to_underlying(ErrorCategory::VectorIndex) == 6);
 static_assert(std::to_underlying(ErrorCategory::Transaction) == 8);
@@ -81,41 +81,41 @@ bool test_filesystem_context()
 
 bool test_code_and_context()
 {
-    MetaErrorContext context {
-        .operation = MetaOperation::Load,
-        .path = std::filesystem::path {"meta.ldb"},
+    CatalogErrorContext context {
+        .operation = CatalogOperation::Load,
+        .path = std::filesystem::path {"catalog.lcat"},
         .source_code = static_cast<std::uint16_t>(0x0203),
     };
-    Error error {MetaErrorCode::IoFailure, "meta read failed", std::move(context)};
+    Error error {CatalogErrorCode::IoFailure, "catalog read failed", std::move(context)};
 
-    const auto * stored = error.context<MetaErrorContext>();
-    return error.category() == ErrorCategory::Meta &&
-           error.is(MetaErrorCode::IoFailure) &&
-           error.code() == std::to_underlying(MetaErrorCode::IoFailure) &&
+    const auto * stored = error.context<CatalogErrorContext>();
+    return error.category() == ErrorCategory::Catalog &&
+           error.is(CatalogErrorCode::IoFailure) &&
+           error.code() == std::to_underlying(CatalogErrorCode::IoFailure) &&
            error.encode_code() == 0x030D &&
-           error.message() == "meta read failed" &&
+           error.message() == "catalog read failed" &&
            stored != nullptr &&
-           stored->operation == MetaOperation::Load &&
-           stored->path == std::filesystem::path {"meta.ldb"} &&
+           stored->operation == CatalogOperation::Load &&
+           stored->path == std::filesystem::path {"catalog.lcat"} &&
            stored->source_code == 0x0203;
 }
 
 bool test_move_preserves_context()
 {
     Error source {
-        MetaErrorCode::FileSystemFailure,
+        CatalogErrorCode::FileSystemFailure,
         "replace failed",
-        MetaErrorContext {
-            .operation = MetaOperation::PublishFile,
-            .path = std::filesystem::path {"meta.ldb"},
+        CatalogErrorContext {
+            .operation = CatalogOperation::PublishFile,
+            .path = std::filesystem::path {"catalog.lcat"},
             .source_code = static_cast<std::uint16_t>(0x0104),
         },
     };
     Error moved {std::move(source)};
-    const auto * context = moved.context<MetaErrorContext>();
-    return moved.is(MetaErrorCode::FileSystemFailure) &&
+    const auto * context = moved.context<CatalogErrorContext>();
+    return moved.is(CatalogErrorCode::FileSystemFailure) &&
            context != nullptr &&
-           context->operation == MetaOperation::PublishFile &&
+           context->operation == CatalogOperation::PublishFile &&
            context->source_code == 0x0104;
 }
 

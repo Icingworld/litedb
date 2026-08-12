@@ -107,11 +107,11 @@ void verify_recovered_state(const std::filesystem::path & directory, const Stage
     const auto rows = execute_ok(session, "SELECT id, body FROM docs;");
     require(rows.rows.size() == 1, "checkpoint crash lost or duplicated a committed row");
 
-    const auto * database_entry = engine->meta().find_database("demo");
-    require(database_entry != nullptr, "database metadata missing after checkpoint crash");
-    const auto * collection = engine->meta().find_collection(database_entry->id(), "docs");
-    require(collection != nullptr, "collection metadata missing after checkpoint crash");
-    require(engine->meta().find_index(collection->id(), "doomed") == nullptr,
+    const auto database_entry = engine->catalog().find_database("demo");
+    require(database_entry.has_value(), "database metadata missing after checkpoint crash");
+    const auto collection = engine->catalog().find_collection(database_entry->id(), "docs");
+    require(collection.has_value(), "collection metadata missing after checkpoint crash");
+    require(!engine->catalog().find_index(collection->id(), "doomed").has_value(),
             "checkpoint crash resurrected a dropped index");
 
     if (selected.expected_generation == 2) {

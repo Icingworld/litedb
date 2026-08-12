@@ -5,8 +5,8 @@
 
 #include "core/common/logical_type.hpp"
 #include "core/common/types.hpp"
-#include "core/meta/entry/index_entry.hpp"
-#include "core/meta/entry/vector_index_entry.hpp"
+#include "core/catalog/entry/index_entry.hpp"
+#include "core/catalog/entry/vector_index_entry.hpp"
 
 namespace litedb::core::binder::bound
 {
@@ -29,14 +29,14 @@ std::string_view binary_operator_name(common::BinaryOperator op) noexcept;
 
 // 将索引类型转换为名称
 [[nodiscard]]
-std::string_view index_kind_name(meta::entry::IndexKind kind) noexcept;
+std::string_view index_kind_name(catalog::entry::IndexKind kind) noexcept;
 
 // 将向量索引类型转换为名称
 [[nodiscard]]
-std::string_view vector_index_kind_name(meta::entry::VectorIndexKind kind) noexcept;
+std::string_view vector_index_kind_name(catalog::entry::VectorIndexKind kind) noexcept;
 
 // 将向量距离度量转换为名称
 [[nodiscard]]
-std::string_view vector_distance_metric_name(meta::entry::VectorDistanceMetric metric) noexcept;
+std::string_view vector_distance_metric_name(catalog::entry::VectorDistanceMetric metric) noexcept;
 
 } // namespace litedb::core::binder::bound
