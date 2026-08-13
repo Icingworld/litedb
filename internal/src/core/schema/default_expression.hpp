@@ -11,17 +11,17 @@ namespace litedb::core::schema
 enum class DefaultExpressionKind : std::uint8_t
 {
     Literal = 0,
-    Vector,
+    Vector = 1,
 };
 
 // 默认值字面量类型
 enum class DefaultLiteralKind : std::uint8_t
 {
     Null = 0,
-    Boolean,
-    Integer,
-    Float,
-    String,
+    Boolean = 1,
+    Integer = 2,
+    Float = 3,
+    String = 4,
 };
 
 // 可持久化的默认值表达式

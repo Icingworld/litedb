@@ -12,14 +12,14 @@ CatalogPublisher::CatalogPublisher(std::filesystem::path path, filesystem::FileS
 std::expected<void, CatalogError> CatalogPublisher::open_or_initialize()
 {
     auto loaded = store_.load();
-    if (!loaded) {
+    if (!loaded) [[unlikely]] {
         return std::unexpected(std::move(loaded.error()));
     }
     CatalogSnapshot snapshot;
     if (*loaded) {
         snapshot = std::move(**loaded);
     } else {
-        if (auto saved = store_.save(snapshot); !saved) {
+        if (auto saved = store_.save(snapshot); !saved) [[unlikely]] {
             return std::unexpected(std::move(saved.error()));
         }
     }
@@ -31,7 +31,7 @@ std::expected<void, CatalogError> CatalogPublisher::publish_committed(
 )
 {
     auto rebuilt = build_catalog_state(snapshot);
-    if (!rebuilt) {
+    if (!rebuilt) [[unlikely]] {
         return std::unexpected(std::move(rebuilt.error()));
     }
     state_ = std::move(*rebuilt);

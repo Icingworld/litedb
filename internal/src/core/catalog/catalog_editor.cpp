@@ -13,7 +13,7 @@ std::expected<CatalogEditor, CatalogError> CatalogEditor::from(CatalogViewer sou
 std::expected<CatalogEditor, CatalogError> CatalogEditor::from(const CatalogSnapshot & source)
 {
     auto state = build_catalog_state(source);
-    if (!state) {
+    if (!state) [[unlikely]] {
         return std::unexpected(std::move(state.error()));
     }
     CatalogEditor editor;

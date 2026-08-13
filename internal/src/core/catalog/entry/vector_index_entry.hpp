@@ -10,17 +10,17 @@ namespace litedb::core::catalog::entry
 {
 
 // 向量索引类型
-enum class VectorIndexKind
+enum class VectorIndexKind : std::uint8_t
 {
-    Hnsw,
+    Hnsw = 0,
 };
 
 // 向量距离度量
-enum class VectorDistanceMetric
+enum class VectorDistanceMetric : std::uint8_t
 {
-    L2,
-    InnerProduct,
-    Cosine,
+    L2 = 0,
+    InnerProduct = 1,
+    Cosine = 2,
 };
 
 // HNSW 索引参数

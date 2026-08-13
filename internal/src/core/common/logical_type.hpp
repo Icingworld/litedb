@@ -10,14 +10,14 @@ namespace litedb::core::common
 // 逻辑类型 ID
 enum class LogicalTypeId : std::uint8_t
 {
-    Null,
-    Boolean,
-    Integer,
-    BigInt,
-    Float,
-    Double,
-    Varchar,
-    Vector,
+    Null = 0,
+    Boolean = 1,
+    Integer = 2,
+    BigInt = 3,
+    Float = 4,
+    Double = 5,
+    Varchar = 6,
+    Vector = 7,
 };
 
 // 逻辑类型

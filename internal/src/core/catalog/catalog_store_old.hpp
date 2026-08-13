@@ -11,17 +11,27 @@
 namespace litedb::core::catalog
 {
 
+/**
+ * @brief 元数据存储
+ */
 class CatalogStore
 {
 public:
     CatalogStore(std::filesystem::path path, filesystem::FileSystem & filesystem);
 
 public:
-    // 从磁盘加载元数据，不存在时返回 std::nullopt
+    /**
+     * @brief 加载元数据快照
+     * @return 元数据快照；文件不存在时返回 std::nullopt
+     */
     [[nodiscard]]
     std::expected<std::optional<CatalogSnapshot>, CatalogError> load() const;
 
-    // 保存快照到磁盘
+    /**
+     * @brief 原子保存元数据快照
+     * @param snapshot 元数据快照
+     * @return 是否成功
+     */
     [[nodiscard]]
     std::expected<void, CatalogError> save(const CatalogSnapshot & snapshot) const;
 
