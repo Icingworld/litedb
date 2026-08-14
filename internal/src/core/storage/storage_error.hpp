@@ -12,6 +12,7 @@
 namespace litedb::core::storage
 {
 
+// 存储错误码
 enum class StorageErrorCode : std::uint8_t
 {
     CollectionAlreadyExists = 0,
@@ -34,8 +35,10 @@ enum class StorageErrorCode : std::uint8_t
     ResourceLimitExceeded = 17,
     InvalidState = 18,
     DurabilityUnknown = 19,
+    InvalidData = 20,
 };
 
+// 存储操作
 enum class StorageOperation : std::uint8_t
 {
     Create,
@@ -56,6 +59,7 @@ enum class StorageOperation : std::uint8_t
     Reload,
 };
 
+// 存储错误上下文
 struct StorageErrorContext
 {
     StorageOperation operation {StorageOperation::Load};

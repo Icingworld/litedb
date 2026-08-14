@@ -8,23 +8,23 @@
 
 #include "core/common/ids.hpp"
 #include "core/storage/storage_error.hpp"
+#include "core/storage/storage_constant.hpp"
 
 namespace litedb::core::storage
 {
 
-inline constexpr std::size_t StoragePageSize = 4096;
-inline constexpr std::size_t StoragePageHeaderSize = 24;
-inline constexpr std::size_t StorageSlotSize = 8;
-inline constexpr std::uint16_t StorageFormatVersion = 2;
-
+// 存储文件页缓冲区
+// 存储文件中，每一页都是 StoragePageSize 大小的字节数组
 using StoragePageBuffer = std::array<std::byte, StoragePageSize>;
 
+// 存储槽状态
 enum class StorageSlotState : std::uint8_t
 {
     Active = 1,
     Deleted = 2,
 };
 
+// 存储文件头
 struct StorageFileHeader
 {
     common::CollectionId collection_id {0};
@@ -32,6 +32,7 @@ struct StorageFileHeader
     std::uint32_t page_count {0};
 };
 
+// 存储槽
 struct StorageSlot
 {
     std::uint16_t offset {0};
@@ -39,6 +40,7 @@ struct StorageSlot
     StorageSlotState state {StorageSlotState::Deleted};
 };
 
+// 存储页信息
 struct StoragePageInfo
 {
     std::uint16_t slot_count {0};
