@@ -1,21 +1,21 @@
 #include "core/catalog/catalog_store.hpp"
 
-#include <limits>
+#include <atomic>
 #include <cassert>
 #include <chrono>
-#include <atomic>
 #include <format>
+#include <limits>
 
 #include "catalog_snapshot.hpp"
 #include "core/catalog/catalog_constant.hpp"
 #include "core/catalog/catalog_snapshot.hpp"
 #include "core/io/binary_io.hpp"
 #include "core/io/buffer_byte_reader.hpp"
-#include "core/io/file_byte_reader.hpp"
-#include "core/io/checksum.hpp"
-#include "core/schema/default_expression.hpp"
 #include "core/io/buffer_byte_writer.hpp"
+#include "core/io/checksum.hpp"
+#include "core/io/file_byte_reader.hpp"
 #include "core/io/file_byte_writer.hpp"
+#include "core/schema/default_expression.hpp"
 
 namespace litedb::core::catalog
 {
@@ -83,7 +83,8 @@ std::expected<schema::DefaultExpression, CatalogError> read_default_expression(
     if (!expression_kind) [[unlikely]] {
         return std::unexpected(std::move(expression_kind.error()));
     }
-    if (*expression_kind > static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector)) [[unlikely]] {
+    if (*expression_kind > static_cast<std::uint8_t>(schema::DefaultExpressionKind::Vector))
+        [[unlikely]] {
         return std::unexpected(make_error(
             CatalogErrorCode::InvalidFormat,
             "invalid default expression kind",
@@ -99,7 +100,8 @@ std::expected<schema::DefaultExpression, CatalogError> read_default_expression(
     if (!literal_kind) [[unlikely]] {
         return std::unexpected(std::move(literal_kind.error()));
     }
-    if (*literal_kind > static_cast<std::uint8_t>(schema::DefaultLiteralKind::String)) [[unlikely]] {
+    if (*literal_kind > static_cast<std::uint8_t>(schema::DefaultLiteralKind::String))
+        [[unlikely]] {
         return std::unexpected(make_error(
             CatalogErrorCode::InvalidFormat,
             "invalid default literal kind",
@@ -110,7 +112,7 @@ std::expected<schema::DefaultExpression, CatalogError> read_default_expression(
         ));
     }
     expression.literal_kind = static_cast<schema::DefaultLiteralKind>(*literal_kind);
-    
+
     auto value = reader.read_string();
     if (!value) [[unlikely]] {
         return std::unexpected(std::move(value.error()));
@@ -122,7 +124,8 @@ std::expected<schema::DefaultExpression, CatalogError> read_default_expression(
         return std::unexpected(std::move(element_count.error()));
     }
     // 非向量类型，元素数量必须为0
-    if (*element_count > 0 && *expression_kind == static_cast<std::uint8_t>(schema::DefaultExpressionKind::Literal)) {
+    if (*element_count > 0 &&
+        *expression_kind == static_cast<std::uint8_t>(schema::DefaultExpressionKind::Literal)) {
         return std::unexpected(make_error(
             CatalogErrorCode::InvalidFormat,
             "default expression element count is not zero when expression kind is not vector",
@@ -151,7 +154,8 @@ std::expected<schema::DefaultExpression, CatalogError> read_default_expression(
     // std::uint32_t value_size: 4 bytes
     // std::uint32_t element_count: 4 bytes
     // 最小大小为 10 bytes
-    constexpr std::size_t min_element_bytes = sizeof(std::uint8_t) + sizeof(std::uint8_t) + sizeof(std::uint32_t) + sizeof(std::uint32_t);
+    constexpr std::size_t min_element_bytes =
+        sizeof(std::uint8_t) + sizeof(std::uint8_t) + sizeof(std::uint32_t) + sizeof(std::uint32_t);
     auto max_element_count = element_remaining_bytes / min_element_bytes;
     if (*element_count > max_element_count) [[unlikely]] {
         return std::unexpected(make_error(
@@ -270,10 +274,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
     // 打开目录文件
     auto file = filesystem_->open(
         path_,
-        {
-            .access = filesystem::FileAccess::ReadOnly,
-            .create_mode = filesystem::FileCreateMode::OpenExisting
-        }
+        {.access = filesystem::FileAccess::ReadOnly,
+         .create_mode = filesystem::FileCreateMode::OpenExisting}
     );
     if (!file) [[unlikely]] {
         return std::unexpected(std::move(file.error()));
@@ -309,7 +311,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
 
     // 读取目录文件头
     std::vector<std::byte> header_bytes(static_cast<std::size_t>(CatalogHeaderSize));
-    if (auto read = file_reader.read_exact(header_bytes); !read) [[unlikely]] {
+    if (auto read = file_reader.read_exact(header_bytes); !read) [[unlikely]]
+    {
         return std::unexpected(std::move(read.error()));
     }
 
@@ -375,7 +378,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
     if (!payload_size) [[unlikely]] {
         return std::unexpected(std::move(payload_size.error()));
     }
-    if (*payload_size > MaxPayloadSize || *payload_size != *file_size - CatalogHeaderSize) [[unlikely]] {
+    if (*payload_size > MaxPayloadSize || *payload_size != *file_size - CatalogHeaderSize)
+        [[unlikely]] {
         return std::unexpected(make_error(
             *payload_size > MaxPayloadSize ? CatalogErrorCode::ResourceLimitExceeded
                                            : CatalogErrorCode::InvalidFormat,
@@ -412,7 +416,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
 
     // 读取负载数据
     std::vector<std::byte> payload_bytes(static_cast<std::size_t>(*payload_size));
-    if (auto read = file_reader.read_exact(payload_bytes); !read) [[unlikely]] {
+    if (auto read = file_reader.read_exact(payload_bytes); !read) [[unlikely]]
+    {
         return std::unexpected(std::move(read.error()));
     }
     // 验证校验和
@@ -489,7 +494,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
     // 空 std::uint32_t name_size: 4 bytes
     // std::uint32_t collection_count: 4 bytes
     // 最小大小为 16 bytes
-    constexpr std::size_t min_database_bytes = sizeof(std::uint64_t) + sizeof(std::uint32_t) + sizeof(std::uint32_t);
+    constexpr std::size_t min_database_bytes =
+        sizeof(std::uint64_t) + sizeof(std::uint32_t) + sizeof(std::uint32_t);
     auto max_database_count = database_remaining_bytes / min_database_bytes;
     if (*database_count > max_database_count) [[unlikely]] {
         return std::unexpected(make_error(
@@ -548,9 +554,9 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
         // std::uint32_t vector_index_count: 4 bytes
         // 最小大小为 33 bytes
         constexpr std::size_t min_collection_bytes = sizeof(std::uint64_t) + sizeof(std::uint64_t) +
-                                                    sizeof(std::uint32_t) + sizeof(std::uint8_t) +
-                                                    sizeof(std::uint32_t) + sizeof(std::uint32_t) +
-                                                    sizeof(std::uint32_t);
+                                                     sizeof(std::uint32_t) + sizeof(std::uint8_t) +
+                                                     sizeof(std::uint32_t) + sizeof(std::uint32_t) +
+                                                     sizeof(std::uint32_t);
         auto max_collection_count = collection_remaining_bytes / min_collection_bytes;
         if (*collection_count > max_collection_count) [[unlikely]] {
             return std::unexpected(make_error(
@@ -566,7 +572,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
         database.collections.reserve(*collection_count);
 
         // 读取每个集合快照
-        for (std::uint32_t collection_index = 0; collection_index < *collection_count; ++collection_index) {
+        for (std::uint32_t collection_index = 0; collection_index < *collection_count;
+             ++collection_index) {
             CatalogCollectionSnapshot collection;
 
             auto collection_id = payload_reader.read_u64();
@@ -637,9 +644,10 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
             // std::uint8_t default_expression_present: 1 byte
             // std::uint8_t comment_present: 1 byte
             // 最小大小为 18 bytes
-            constexpr std::size_t min_column_bytes = sizeof(std::uint64_t) + sizeof(std::uint32_t) + sizeof(std::uint8_t) +
-                                                    sizeof(std::uint8_t) + sizeof(std::uint8_t) + sizeof(std::uint8_t) +
-                                                    sizeof(std::uint8_t) + sizeof(std::uint8_t);
+            constexpr std::size_t min_column_bytes = sizeof(std::uint64_t) + sizeof(std::uint32_t) +
+                                                     sizeof(std::uint8_t) + sizeof(std::uint8_t) +
+                                                     sizeof(std::uint8_t) + sizeof(std::uint8_t) +
+                                                     sizeof(std::uint8_t) + sizeof(std::uint8_t);
             auto max_column_count = column_remaining_bytes / min_column_bytes;
             if (*column_count > max_column_count) [[unlikely]] {
                 return std::unexpected(make_error(
@@ -675,7 +683,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
                     return std::unexpected(std::move(type_id.error()));
                 }
                 // 类型验证依赖当前的枚举实现
-                if (*type_id > static_cast<std::uint8_t>(common::LogicalTypeId::Vector)) [[unlikely]] {
+                if (*type_id > static_cast<std::uint8_t>(common::LogicalTypeId::Vector))
+                    [[unlikely]] {
                     return std::unexpected(make_error(
                         CatalogErrorCode::InvalidFormat,
                         "invalid logical type id",
@@ -771,7 +780,6 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
                         return std::unexpected(std::move(default_expression.error()));
                     }
                     column.default_expression = std::move(*default_expression);
-
                 }
 
                 auto comment_present = payload_reader.read_u8();
@@ -824,7 +832,9 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
             // std::uint8_t index_kind: 1 byte
             // std::uint8_t unique: 1 byte
             // 最小大小为 22 bytes
-            constexpr std::size_t min_index_bytes = sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint32_t) + sizeof(std::uint8_t) + sizeof(std::uint8_t);
+            constexpr std::size_t min_index_bytes = sizeof(std::uint64_t) + sizeof(std::uint64_t) +
+                                                    sizeof(std::uint32_t) + sizeof(std::uint8_t) +
+                                                    sizeof(std::uint8_t);
             auto max_index_count = index_remaining_bytes / min_index_bytes;
             if (*index_count > max_index_count) [[unlikely]] {
                 return std::unexpected(make_error(
@@ -927,7 +937,11 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
             // std::uint64_t ef_search_default: 8 bytes
             // std::uint64_t random_seed: 8 bytes
             // 最小大小为 62 bytes
-            constexpr std::size_t min_vector_index_bytes = sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint32_t) + sizeof(std::uint8_t) + sizeof(std::uint8_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t);
+            constexpr std::size_t min_vector_index_bytes =
+                sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint32_t) +
+                sizeof(std::uint8_t) + sizeof(std::uint8_t) + sizeof(std::uint64_t) +
+                sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t) +
+                sizeof(std::uint64_t);
             auto max_vector_index_count = vector_index_remaining_bytes / min_vector_index_bytes;
             if (*vector_index_count > max_vector_index_count) [[unlikely]] {
                 return std::unexpected(make_error(
@@ -943,7 +957,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
             collection.vector_indexes.reserve(*vector_index_count);
 
             // 读取每个向量索引快照
-            for (std::uint32_t vector_index_index = 0; vector_index_index < *vector_index_count; ++vector_index_index) {
+            for (std::uint32_t vector_index_index = 0; vector_index_index < *vector_index_count;
+                 ++vector_index_index) {
                 CatalogVectorIndexSnapshot vector_index;
 
                 auto vector_index_id = payload_reader.read_u64();
@@ -969,7 +984,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
                     return std::unexpected(std::move(index_kind.error()));
                 }
                 // 目前只支持 HNSW 向量索引，如果添加了向量索引实现，这里也需要修改
-                if (*index_kind > static_cast<std::uint8_t>(entry::VectorIndexKind::Hnsw)) [[unlikely]] {
+                if (*index_kind > static_cast<std::uint8_t>(entry::VectorIndexKind::Hnsw))
+                    [[unlikely]] {
                     return std::unexpected(make_error(
                         CatalogErrorCode::InvalidFormat,
                         "invalid vector index kind",
@@ -986,7 +1002,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
                     return std::unexpected(std::move(metric.error()));
                 }
                 // 目前只支持 L2、内积和余弦距离，如果添加了向量距离度量，这里也需要修改
-                if (*metric > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine)) [[unlikely]] {
+                if (*metric > static_cast<std::uint8_t>(entry::VectorDistanceMetric::Cosine))
+                    [[unlikely]] {
                     return std::unexpected(make_error(
                         CatalogErrorCode::InvalidFormat,
                         "invalid vector distance metric",
@@ -1282,18 +1299,22 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
                     return std::unexpected(std::move(column_name.error()));
                 }
 
-                auto column_type_id = payload_writer.write_u8(static_cast<std::uint8_t>(column.type.id));
+                auto column_type_id =
+                    payload_writer.write_u8(static_cast<std::uint8_t>(column.type.id));
                 if (!column_type_id) [[unlikely]] {
                     return std::unexpected(std::move(column_type_id.error()));
                 }
 
                 auto column_type_parameter_present_value = column.type.parameter.has_value();
-                auto column_type_parameter_present = payload_writer.write_u8(column_type_parameter_present_value ? 1U : 0U);
+                auto column_type_parameter_present =
+                    payload_writer.write_u8(column_type_parameter_present_value ? 1U : 0U);
                 if (!column_type_parameter_present) [[unlikely]] {
                     return std::unexpected(std::move(column_type_parameter_present.error()));
                 }
                 if (column_type_parameter_present_value) {
-                    auto column_type_parameter = payload_writer.write_u64(static_cast<std::uint64_t>(*column.type.parameter));
+                    auto column_type_parameter = payload_writer.write_u64(
+                        static_cast<std::uint64_t>(*column.type.parameter)
+                    );
                     if (!column_type_parameter) [[unlikely]] {
                         return std::unexpected(std::move(column_type_parameter.error()));
                     }
@@ -1309,20 +1330,24 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
                     return std::unexpected(std::move(column_nullable.error()));
                 }
 
-                auto column_default_expression_present_value = column.default_expression.has_value();
-                auto column_default_expression_present = payload_writer.write_u8(column_default_expression_present_value ? 1U : 0U);
+                auto column_default_expression_present_value =
+                    column.default_expression.has_value();
+                auto column_default_expression_present =
+                    payload_writer.write_u8(column_default_expression_present_value ? 1U : 0U);
                 if (!column_default_expression_present) [[unlikely]] {
                     return std::unexpected(std::move(column_default_expression_present.error()));
                 }
                 if (column_default_expression_present_value) {
-                    auto column_default_expression = write_default_expression(payload_writer, *column.default_expression, path_);
+                    auto column_default_expression =
+                        write_default_expression(payload_writer, *column.default_expression, path_);
                     if (!column_default_expression) [[unlikely]] {
                         return std::unexpected(std::move(column_default_expression.error()));
                     }
                 }
 
                 auto column_comment_present_value = column.comment.has_value();
-                auto column_comment_present = payload_writer.write_u8(column_comment_present_value ? 1U : 0U);
+                auto column_comment_present =
+                    payload_writer.write_u8(column_comment_present_value ? 1U : 0U);
                 if (!column_comment_present) [[unlikely]] {
                     return std::unexpected(std::move(column_comment_present.error()));
                 }
@@ -1389,7 +1414,8 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
                     return std::unexpected(std::move(index_name.error()));
                 }
 
-                auto index_kind = payload_writer.write_u8(static_cast<std::uint8_t>(index.index_kind));
+                auto index_kind =
+                    payload_writer.write_u8(static_cast<std::uint8_t>(index.index_kind));
                 if (!index_kind) [[unlikely]] {
                     return std::unexpected(std::move(index_kind.error()));
                 }
@@ -1411,7 +1437,8 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
                     }
                 ));
             }
-            auto vector_index_count_size = static_cast<std::uint32_t>(collection.vector_indexes.size());
+            auto vector_index_count_size =
+                static_cast<std::uint32_t>(collection.vector_indexes.size());
             auto vector_index_count = payload_writer.write_u32(vector_index_count_size);
             if (!vector_index_count) [[unlikely]] {
                 return std::unexpected(std::move(vector_index_count.error()));
@@ -1445,37 +1472,47 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
                     return std::unexpected(std::move(vector_index_name.error()));
                 }
 
-                auto vector_index_kind = payload_writer.write_u8(static_cast<std::uint8_t>(vector_index.index_kind));
+                auto vector_index_kind =
+                    payload_writer.write_u8(static_cast<std::uint8_t>(vector_index.index_kind));
                 if (!vector_index_kind) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_kind.error()));
                 }
-                
-                auto vector_index_metric = payload_writer.write_u8(static_cast<std::uint8_t>(vector_index.metric));
+
+                auto vector_index_metric =
+                    payload_writer.write_u8(static_cast<std::uint8_t>(vector_index.metric));
                 if (!vector_index_metric) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_metric.error()));
                 }
 
-                auto vector_index_dimension = payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.dimension));
+                auto vector_index_dimension =
+                    payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.dimension));
                 if (!vector_index_dimension) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_dimension.error()));
                 }
 
-                auto vector_index_max_neighbors = payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.max_neighbors));
+                auto vector_index_max_neighbors = payload_writer.write_u64(
+                    static_cast<std::uint64_t>(vector_index.max_neighbors)
+                );
                 if (!vector_index_max_neighbors) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_max_neighbors.error()));
                 }
 
-                auto vector_index_ef_construction = payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.ef_construction));
+                auto vector_index_ef_construction = payload_writer.write_u64(
+                    static_cast<std::uint64_t>(vector_index.ef_construction)
+                );
                 if (!vector_index_ef_construction) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_ef_construction.error()));
                 }
 
-                auto vector_index_ef_search_default = payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.ef_search_default));
+                auto vector_index_ef_search_default = payload_writer.write_u64(
+                    static_cast<std::uint64_t>(vector_index.ef_search_default)
+                );
                 if (!vector_index_ef_search_default) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_ef_search_default.error()));
                 }
 
-                auto vector_index_random_seed = payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.random_seed));
+                auto vector_index_random_seed =
+                    payload_writer.write_u64(static_cast<std::uint64_t>(vector_index.random_seed));
                 if (!vector_index_random_seed) [[unlikely]] {
                     return std::unexpected(std::move(vector_index_random_seed.error()));
                 }
@@ -1489,7 +1526,9 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
     // 计算校验和
     auto checksum = io::crc32(payload_bytes.bytes());
 
-    io::BufferByteWriter encoded_bytes {static_cast<std::size_t>(CatalogHeaderSize + MaxPayloadSize)};
+    io::BufferByteWriter encoded_bytes {
+        static_cast<std::size_t>(CatalogHeaderSize + MaxPayloadSize)
+    };
     io::LittleEndianBinaryWriter encoded_writer {encoded_bytes};
 
     // 写入头信息
@@ -1544,7 +1583,11 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
     // 生成临时文件路径
     auto tmp_path = path_;
     const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-    tmp_path += std::format(".{}.tmp.{}", timestamp, next_sequence_id.fetch_add(1, std::memory_order_relaxed));
+    tmp_path += std::format(
+        ".{}.tmp.{}",
+        timestamp,
+        next_sequence_id.fetch_add(1, std::memory_order_relaxed)
+    );
 
     // 创建临时文件
     auto file = filesystem_->open(
@@ -1590,7 +1633,9 @@ std::expected<void, CatalogError> CatalogStore::save(const CatalogSnapshot & sna
     // 同步元数据文件的父目录
     if (!parent.empty()) {
         auto directory_synced = filesystem_->sync_directory(parent);
-        if (!directory_synced && !directory_synced.error().is(filesystem::FileSystemErrorCode::Unsupported)) [[unlikely]] {
+        if (!directory_synced &&
+            !directory_synced.error().is(filesystem::FileSystemErrorCode::Unsupported))
+            [[unlikely]] {
             return std::unexpected(std::move(directory_synced.error()));
         }
     }
