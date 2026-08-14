@@ -8,7 +8,7 @@ namespace litedb::core::catalog
 
 constexpr std::uint32_t CatalogMagic = 0x544d444c; // LDMT, retained for format compatibility
 
-constexpr std::uint16_t CatalogFormatVersion = 1;
+constexpr std::uint16_t CatalogVersion = 1;
 
 constexpr std::uint16_t CatalogHeaderSize = 24;
 
