@@ -1052,7 +1052,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::build_from_storage(
         if (!key) {
             return std::unexpected(std::move(key.error()));
         }
-        auto inserted = index.insert(*key, record.record_id);
+        auto inserted = index.insert(*key, record.id);
         if (!inserted) {
             return inserted;
         }
@@ -1100,7 +1100,7 @@ std::expected<void, VectorIndexError> VectorIndexEngine::verify_against_storage(
             continue;
         }
         ++expected_size;
-        if (!index.matches_record(record.record_id, **key)) {
+        if (!index.matches_record(record.id, **key)) {
             return std::unexpected(make_error(
                 VectorIndexErrorCode::StaleIndex,
                 "Persisted HNSW index does not match collection storage"

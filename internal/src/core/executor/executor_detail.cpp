@@ -1053,7 +1053,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
                 auto staged = transaction_manager.stage_delete(
                     transaction,
                     plan.collection_id(),
-                    row.source_record.record_id,
+                    row.source_record.id,
                     row.source_record.data
                 );
                 if (!staged.has_value()) {
@@ -1160,7 +1160,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
                 auto staged = transaction_manager.stage_update(
                     transaction,
                     plan.collection_id(),
-                    row.source_record.record_id,
+                    row.source_record.id,
                     row.source_record.data,
                     std::move(record_data)
                 );

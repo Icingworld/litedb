@@ -207,7 +207,7 @@ std::expected<void, IndexError> IndexEngine::build_index_from_storage(
         entries.push_back(
             ScalarIndexEntry {
                 .key = std::move(key->value()),
-                .record_id = record.record_id,
+                .record_id = record.id,
             }
         );
     }

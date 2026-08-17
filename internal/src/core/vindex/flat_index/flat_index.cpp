@@ -143,7 +143,7 @@ std::expected<std::vector<VectorSearchResult>, VectorIndexError> FlatIndex::sear
         }
 
         VectorSearchResult candidate {
-            .record_id = record.record_id,
+            .record_id = record.id,
             .distance = *distance,
         };
         if (nearest.size() < request.top_k) {

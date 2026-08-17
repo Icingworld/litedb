@@ -17,7 +17,7 @@ struct RecordData
 // 记录
 struct Record
 {
-    RecordId record_id {0};
+    RecordId id {0};
     RecordData data;
 };
 

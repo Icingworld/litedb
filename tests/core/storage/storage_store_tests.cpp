@@ -352,7 +352,7 @@ void test_random_crud_model()
                 auto next = cursor->next();
                 require(next.has_value(), "random-model cursor failed");
                 if (!*next) break;
-                const auto expected = model.find((**next).record_id);
+                const auto expected = model.find((**next).id);
                 require(expected != model.end() &&
                         std::get<std::string>((**next).data.values[0].data()) == expected->second,
                         "random-model scan diverged");

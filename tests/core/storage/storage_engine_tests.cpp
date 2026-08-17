@@ -40,7 +40,7 @@ void contract(storage::StorageEngine & engine, bool open_existing)
     auto cursor = engine.scan(10);
     require(cursor.has_value(), "scan failed");
     auto row = cursor->next();
-    require(row && row->has_value() && (**row).record_id == *first, "cursor row mismatch");
+    require(row && row->has_value() && (**row).id == *first, "cursor row mismatch");
     auto end = cursor->next();
     require(end && !end->has_value(), "cursor eof mismatch");
     auto invalid = engine.insert(10, {{common::Value {std::int32_t {1}}}});
@@ -61,7 +61,7 @@ void test_file_reopen()
         require(snapshot.has_value(), "snapshot cursor creation failed");
         engine.clear();
         auto retained = snapshot->next();
-        require(retained && retained->has_value() && (**retained).record_id == 1,
+        require(retained && retained->has_value() && (**retained).id == 1,
                 "cursor did not retain records after engine clear");
     }
     {

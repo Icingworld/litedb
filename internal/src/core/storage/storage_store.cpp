@@ -456,19 +456,19 @@ std::expected<void, StorageError> StorageStore::load()
                     slot_id
                 ));
             }
-            if (!locations_.emplace(record->record_id, PhysicalRid {page_id, slot_id}).second) {
+            if (!locations_.emplace(record->id, PhysicalRid {page_id, slot_id}).second) {
                 return std::unexpected(make_error(
                     StorageErrorCode::InvalidFormat,
                     "Duplicate record id",
                     StorageOperation::Load,
                     path_,
                     collection_id_,
-                    record->record_id,
+                    record->id,
                     page_id,
                     slot_id
                 ));
             }
-            maximum = std::max(maximum, record->record_id);
+            maximum = std::max(maximum, record->id);
         }
         update_page_space(page_id, *info);
     }
@@ -831,7 +831,7 @@ std::expected<StorageCursor, StorageError> StorageStore::scan() const
             if (slot.state != StorageSlotState::Active) continue;
             auto record = decode_record(std::span(*page).subspan(slot.offset, slot.length));
             if (!record) return std::unexpected(std::move(record.error()));
-            const auto id = record->record_id;
+            const auto id = record->id;
             if (!decoded.emplace(id, std::move(*record)).second) {
                 return std::unexpected(make_error(
                     StorageErrorCode::InvalidFormat,
