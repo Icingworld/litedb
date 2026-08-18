@@ -1,5 +1,6 @@
 #include "core/catalog/catalog_store.hpp"
 
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -310,9 +311,8 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
     io::FileByteReader file_reader {*file};
 
     // 读取目录文件头
-    std::vector<std::byte> header_bytes(static_cast<std::size_t>(CatalogHeaderSize));
-    if (auto read = file_reader.read_exact(header_bytes); !read) [[unlikely]]
-    {
+    std::array<std::byte, CatalogHeaderSize> header_bytes {};
+    if (auto read = file_reader.read_exact(header_bytes); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
 
@@ -416,8 +416,7 @@ std::expected<std::optional<CatalogSnapshot>, CatalogError> CatalogStore::load()
 
     // 读取负载数据
     std::vector<std::byte> payload_bytes(static_cast<std::size_t>(*payload_size));
-    if (auto read = file_reader.read_exact(payload_bytes); !read) [[unlikely]]
-    {
+    if (auto read = file_reader.read_exact(payload_bytes); !read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
     // 验证校验和
