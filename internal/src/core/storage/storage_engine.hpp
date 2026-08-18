@@ -134,9 +134,6 @@ public:
     [[nodiscard]]
     std::expected<StorageCursor, StorageError> scan(common::CollectionId collection_id) const;
 
-    [[nodiscard]]
-    StorageMetrics metrics() const noexcept;
-
     /**
      * @brief 清空内存中的全部集合状态
      */

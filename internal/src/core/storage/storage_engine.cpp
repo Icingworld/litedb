@@ -4,9 +4,6 @@
 #include <utility>
 
 #include "core/common/logical_type.hpp"
-#include "core/io/binary_io.hpp"
-#include "core/io/buffer_byte_writer.hpp"
-#include "core/storage/value_codec.hpp"
 
 namespace litedb::core::storage
 {
@@ -106,7 +103,7 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
             id
         ));
     }
-    auto created = StorageStore::create(store_path(id), id, *filesystem_);
+    auto created = StorageStore::create(store_path(id), *filesystem_, id);
     if (!created) return std::unexpected(std::move(created.error()));
     collections_.emplace(id, CollectionState {std::move(schema), std::move(*created)});
     return {};
@@ -141,7 +138,7 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
             id
         ));
     }
-    auto opened = StorageStore::open(store_path(id), id, *filesystem_);
+    auto opened = StorageStore::open(store_path(id), *filesystem_, id);
     if (!opened) return std::unexpected(std::move(opened.error()));
     collections_.emplace(id, CollectionState {std::move(schema), std::move(*opened)});
     return {};
@@ -158,7 +155,7 @@ std::expected<void, StorageError> StorageEngine::reload_collection(schema::Colle
             id
         ));
     }
-    auto opened = StorageStore::open(store_path(id), id, *filesystem_);
+    auto opened = StorageStore::open(store_path(id), *filesystem_, id);
     if (!opened) return std::unexpected(std::move(opened.error()));
     collections_.insert_or_assign(id, CollectionState {std::move(schema), std::move(*opened)});
     return {};
@@ -251,28 +248,6 @@ std::expected<void, StorageError> StorageEngine::validate(
         }
     }
 
-    constexpr auto MaxEncodedRecordSize = StorageStore::PageSize - StoragePageHeaderSize - StorageSlotSize;
-    io::BufferByteWriter bytes {MaxEncodedRecordSize};
-    io::LittleEndianBinaryWriter writer {bytes};
-    if (!writer.write_u64(1) ||
-        !writer.write_u32(static_cast<std::uint32_t>(data.values.size()))) {
-        return std::unexpected(make_error(
-            StorageErrorCode::RecordTooLarge,
-            "Unable to encode record",
-            StorageOperation::Validate,
-            schema.collection_id()
-        ));
-    }
-    for (const auto & value : data.values) {
-        if (!write_value(writer, value)) {
-            return std::unexpected(make_error(
-                StorageErrorCode::RecordTooLarge,
-                "Unable to encode record",
-                StorageOperation::Validate,
-                schema.collection_id()
-            ));
-        }
-    }
     return {};
 }
 
@@ -388,23 +363,6 @@ std::expected<StorageCursor, StorageError> StorageEngine::scan(common::Collectio
         ));
     }
     return it->second.store->scan();
-}
-
-StorageMetrics StorageEngine::metrics() const noexcept
-{
-    StorageMetrics result;
-    for (const auto & [id, state] : collections_) {
-        const auto current = state.store->metrics();
-        result.page_reads += current.page_reads;
-        result.page_writes += current.page_writes;
-        result.bytes_read += current.bytes_read;
-        result.bytes_written += current.bytes_written;
-        result.compactions += current.compactions;
-        result.reused_pages += current.reused_pages;
-        result.new_pages += current.new_pages;
-        result.checksum_failures += current.checksum_failures;
-    }
-    return result;
 }
 
 void StorageEngine::clear() noexcept

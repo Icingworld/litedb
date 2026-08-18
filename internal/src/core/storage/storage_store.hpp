@@ -1,13 +1,18 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <map>
 #include <set>
+#include <vector>
 
 #include "core/common/ids.hpp"
-#include "core/filesystem/filesystem.hpp"
 #include "core/common/record.hpp"
+#include "core/filesystem/filesystem.hpp"
+#include "core/storage/storage_cursor.hpp"
 #include "core/storage/storage_error.hpp"
 
 namespace litedb::core::storage
@@ -55,7 +60,13 @@ public:
     [[nodiscard]]
     std::expected<void, StorageError> erase(common::RecordId record_id);
 
+    // 扫描所有记录，返回拥有快照数据的游标
+    [[nodiscard]]
+    std::expected<StorageCursor, StorageError> scan() const;
+
 private:
+    struct PageSpaceSummary;
+
     // 初始化存储空间
     std::expected<void, StorageError> initialize();
 
@@ -64,6 +75,9 @@ private:
 
     // 加载存储空间
     std::expected<void, StorageError> load();
+
+    // 更新页空间索引
+    void update_page_space(std::uint32_t page_id, const PageSpaceSummary & summary);
 
 private:
     // 物理记录 ID
@@ -89,8 +103,8 @@ private:
     mutable filesystem::FileHandle file_;
 
     // 以下两个成员变量将会持久化到文件头中
-    common::RecordId next_record_id_;
-    std::uint32_t page_count_;
+    common::RecordId next_record_id_ {1};
+    std::uint32_t page_count_ {0};
 
     // 用于快速定位记录的物理位置
     std::map<common::RecordId, PhysicalRid> locations_;

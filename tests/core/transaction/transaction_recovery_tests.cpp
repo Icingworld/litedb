@@ -6,6 +6,7 @@
 #include "core/wal/wal_codec.hpp"
 #include "core/wal/wal_store.hpp"
 
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -17,6 +18,8 @@
 namespace
 {
 using namespace litedb::core;
+
+constexpr std::size_t StoragePageSize = 4096;
 
 void require(bool condition, const char * message)
 {
@@ -357,7 +360,7 @@ void test_single_row_wal_write_amplification()
     }
     require(storage_writes != 0, "single-row update emitted no storage WAL");
     require(!storage_replace, "single-row update emitted a full collection replacement");
-    require(storage_after_image_bytes <= 3 * storage::StoragePageSize,
+    require(storage_after_image_bytes <= 3 * StoragePageSize,
             "single-row storage WAL exceeded header plus two data pages");
 }
 }
