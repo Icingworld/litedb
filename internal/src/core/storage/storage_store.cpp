@@ -108,7 +108,23 @@ std::expected<std::unique_ptr<StorageStore>, StorageError> StorageStore::open(
     common::CollectionId collection_id
 )
 {
+    auto file = filesystem.open(
+        path,
+        {
+            .access = filesystem::FileAccess::ReadWrite,
+            .create_mode = filesystem::FileCreateMode::OpenExisting,
+        }
+    );
+    if (!file) [[unlikely]] {
+        return std::unexpected(std::move(file.error()));
+    }
 
+    auto store = std::unique_ptr<StorageStore>(new StorageStore(path, collection_id, std::move(*file)));
+    if (auto result = store->load(); !result) [[unlikely]] {
+        return std::unexpected(std::move(result.error()));
+    }
+
+    return store;
 }
 
 
@@ -117,6 +133,8 @@ std::expected<void, StorageError> StorageStore::initialize()
     next_record_id_ = 1;
     page_count_ = 0;
     locations_.clear();
+    page_space_summaries_.clear();
+    free_space_index_.clear();
 
     return write_header();
 }
