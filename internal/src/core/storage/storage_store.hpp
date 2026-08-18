@@ -7,6 +7,7 @@
 
 #include "core/common/ids.hpp"
 #include "core/filesystem/filesystem.hpp"
+#include "core/common/record.hpp"
 #include "core/storage/storage_error.hpp"
 
 namespace litedb::core::storage
@@ -37,6 +38,22 @@ public:
         filesystem::FileSystem & filesystem,
         common::CollectionId collection_id
     );
+
+    // 获取指定记录
+    [[nodiscard]]
+    std::expected<common::Record, StorageError> get(common::RecordId record_id) const;
+
+    // 插入记录
+    [[nodiscard]]
+    std::expected<common::RecordId, StorageError> insert(common::RecordData data);
+
+    // 更新记录
+    [[nodiscard]]
+    std::expected<void, StorageError> update(common::RecordId record_id, common::RecordData data);
+
+    // 删除记录
+    [[nodiscard]]
+    std::expected<void, StorageError> erase(common::RecordId record_id);
 
 private:
     // 初始化存储空间

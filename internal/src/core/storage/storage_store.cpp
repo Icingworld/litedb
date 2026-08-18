@@ -7,6 +7,7 @@
 #include <array>
 #include <algorithm>
 
+#include "core/common/record.hpp"
 #include "core/io/buffer_byte_writer.hpp"
 #include "core/io/buffer_byte_reader.hpp"
 #include "core/io/file_byte_reader.hpp"
@@ -127,6 +128,521 @@ std::expected<std::unique_ptr<StorageStore>, StorageError> StorageStore::open(
     return store;
 }
 
+std::expected<common::Record, StorageError> StorageStore::get(common::RecordId record_id) const
+{
+    const auto it = locations_.find(record_id);
+    if (it == locations_.end()) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::RecordNotFound,
+            "Record not found",
+            {
+                .operation = StorageOperation::ReadPage,
+                .path = path_,
+                .collection_id = collection_id_,
+                .record_id = record_id,
+            }
+        ));
+    }
+
+    if (it->second.page_id == 0 || it->second.page_id > page_count_) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidState,
+            "Record page ID out of range",
+            {
+                .operation = StorageOperation::ReadPage,
+            }
+        ));
+    }
+
+    // 读取页数据
+    std::array<std::byte, StoragePageSize> page_bytes {};
+    auto read = file_.read_at(it->second.page_id * StoragePageSize, page_bytes);
+    if (!read) [[unlikely]] {
+        return std::unexpected(std::move(read.error()));
+    }
+    if (*read != StoragePageSize) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::UnexpectedEof,
+            "Truncated page data",
+            {
+                .operation = StorageOperation::ReadPage,
+            }
+        ));
+    }
+
+    io::BufferByteReader page_resource {std::span<const std::byte> {page_bytes}};
+    io::LittleEndianBinaryReader page_reader {
+        page_resource,
+        {
+            .max_total_bytes = StoragePageSize,
+            .max_string_bytes = 0,
+        }
+    };
+
+    // 验证页魔数
+    auto magic = page_reader.read_u32();
+    if (!magic) [[unlikely]] {
+        return std::unexpected(std::move(magic.error()));
+    }
+    if (*magic != StoragePageMagic) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidFormat,
+            "Invalid storage page magic",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .page_id = it->second.page_id,
+            }
+        ));
+    }
+
+    // 验证页 ID
+    auto page_id_read = page_reader.read_u32();
+    if (!page_id_read) [[unlikely]] {
+        return std::unexpected(std::move(page_id_read.error()));
+    }
+    if (*page_id_read != it->second.page_id) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidFormat,
+            "Invalid storage page ID",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .page_id = it->second.page_id,
+            }
+        ));
+    }
+
+    // 读取 free_start
+    auto free_start = page_reader.read_u16();
+    if (!free_start) [[unlikely]] {
+        return std::unexpected(std::move(free_start.error()));
+    }
+    // free_start 必须位于 [StoragePageHeaderSize, StoragePageSize] 之间，并且包含完整的 slot 数据
+    if (*free_start < StoragePageHeaderSize || *free_start > StoragePageSize || (*free_start - StoragePageHeaderSize) % StoragePageSlotSize != 0) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidFormat,
+            "Invalid storage free start",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .page_id = it->second.page_id,
+            }
+        ));
+    }
+
+    // 读取 free_end
+    auto free_end = page_reader.read_u16();
+    if (!free_end) [[unlikely]] {
+        return std::unexpected(std::move(free_end.error()));
+    }
+    if (*free_end < *free_start || *free_end > StoragePageSize) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidFormat,
+            "Invalid storage free end",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .page_id = it->second.page_id,
+            }
+        ));
+    }
+
+    // 读取页 flag
+    auto flag = page_reader.read_u16();
+    if (!flag) [[unlikely]] {
+        return std::unexpected(std::move(flag.error()));
+    }
+    if (*flag != 0) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidFormat,
+            "Invalid storage page flag",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .page_id = it->second.page_id,
+            }
+        ));
+    }
+
+    // 读取 generation
+    auto generation = page_reader.read_u32();
+    if (!generation) [[unlikely]] {
+        return std::unexpected(std::move(generation.error()));
+    }
+
+    // 获取前缀字节，用于计算校验和
+    const auto prefix_size = StoragePageSize - page_reader.remaining_bytes();
+    const auto prefix_bytes = std::span<const std::byte> {page_bytes}.first(prefix_size);
+
+    // 读取 checksum
+    auto checksum = page_reader.read_u32();
+    if (!checksum) [[unlikely]] {
+        return std::unexpected(std::move(checksum.error()));
+    }
+
+    // 获取后缀字节，用于计算校验和
+    const auto suffix_size = page_reader.remaining_bytes();
+    const auto suffix_bytes = std::span<const std::byte> {page_bytes}.last(suffix_size);
+
+    // 验证校验和
+    io::Crc32Calculator crc32_calculator;
+    crc32_calculator.update(prefix_bytes);
+    crc32_calculator.update(suffix_bytes);
+    if (*checksum != crc32_calculator.value()) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::ChecksumMismatch,
+            "Storage page checksum mismatch",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .page_id = it->second.page_id,
+            }
+        ));
+    }
+
+    // 读取并加载所有的槽
+    const auto slot_count = (*free_start - StoragePageHeaderSize) / StoragePageSlotSize;
+
+    // 验证目标槽是否存在
+    if (it->second.slot_id >= slot_count) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidState,
+            "Record slot ID out of range",
+            {
+                .operation = StorageOperation::Load,
+            }
+        ));
+    }
+
+    // 保存每条记录的区间，用于最后验证区间是否存在重叠
+    std::vector<std::pair<std::uint16_t, std::uint16_t>> record_ranges;
+    record_ranges.reserve(slot_count);
+
+    // 保存目标槽的偏移和长度
+    std::uint16_t target_offset = 0;
+    std::uint16_t target_length = 0;
+    
+    // 下标即 slot_id
+    for (std::uint16_t slot_id = 0; slot_id < slot_count; ++slot_id) {
+        // 读取记录在页内的起始偏移
+        auto offset = page_reader.read_u16();
+        if (!offset) [[unlikely]] {
+            return std::unexpected(std::move(offset.error()));
+        }
+
+        // 读取记录长度
+        auto length = page_reader.read_u16();
+        if (!length) [[unlikely]] {
+            return std::unexpected(std::move(length.error()));
+        }
+
+        if (slot_id == it->second.slot_id) {
+            target_offset = *offset;
+            target_length = *length;
+        }
+
+        // 读取槽状态
+        auto state = page_reader.read_u8();
+        if (!state) [[unlikely]] {
+            return std::unexpected(std::move(state.error()));
+        }
+        if (*state > static_cast<std::uint8_t>(StorageSlotState::Deleted)) [[unlikely]] {
+            return std::unexpected(make_storage_error(
+                StorageErrorCode::CorruptedPage,
+                "Invalid storage slot state",
+                {
+                    .operation = StorageOperation::Load,
+                    .path = path_,
+                    .collection_id = collection_id_,
+                    .page_id = it->second.page_id,
+                    .slot_id = slot_id,
+                }
+            ));
+        }
+
+        // 验证目标槽是否处于 Active 状态
+        if (slot_id == it->second.slot_id && *state != static_cast<std::uint8_t>(StorageSlotState::Active)) [[unlikely]] {
+            return std::unexpected(make_storage_error(
+                StorageErrorCode::InvalidState,
+                "Record slot is not active",
+                {
+                    .operation = StorageOperation::Load,
+                }
+            ));
+        }
+
+        if (*length == 0) {
+            // 空槽必须是 Deleted，且 offset 必须为 0
+            if (*state != static_cast<std::uint8_t>(StorageSlotState::Deleted) || *offset != 0) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::CorruptedPage,
+                    "Invalid empty storage slot",
+                    {
+                        .operation = StorageOperation::Load,
+                        .path = path_,
+                        .collection_id = collection_id_,
+                        .page_id = it->second.page_id,
+                        .slot_id = slot_id,
+                    }
+                ));
+            }
+        } else {
+            // 非空槽的 offset / length 与是否 Deleted 无关
+            // offset 必须位于 [free_end, StoragePageSize] 之间
+            if (*offset < *free_end || *offset > StoragePageSize) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::CorruptedPage,
+                    "Invalid storage slot offset",
+                    {
+                        .operation = StorageOperation::Load,
+                        .path = path_,
+                        .collection_id = collection_id_,
+                        .page_id = it->second.page_id,
+                        .slot_id = slot_id,
+                    }
+                ));
+            }
+            // length 必须大于 0，且不超过剩余预算
+            if (*length > StoragePageSize - *offset) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::CorruptedPage,
+                    "Invalid storage slot length",
+                    {
+                        .operation = StorageOperation::Load,
+                        .path = path_,
+                        .collection_id = collection_id_,
+                        .page_id = it->second.page_id,
+                        .slot_id = slot_id,
+                    }
+                ));
+            }
+            record_ranges.emplace_back(*offset, *offset + *length);
+        }
+
+        // 读取 3 字节的 reserved 区域，必须全部为零
+        for (std::size_t i = 0; i < 3; ++i) {
+            auto reserved = page_reader.read_u8();
+            if (!reserved) [[unlikely]] {
+                return std::unexpected(std::move(reserved.error()));
+            }
+            if (*reserved != 0) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::CorruptedPage,
+                    "Invalid storage slot reserved bytes",
+                    {
+                        .operation = StorageOperation::Load,
+                        .path = path_,
+                        .collection_id = collection_id_,
+                        .page_id = it->second.page_id,
+                        .slot_id = slot_id,
+                    }
+                ));
+            }
+        }
+    }
+
+    // 验证区间是否存在重叠
+    std::ranges::sort(record_ranges);
+    for (std::size_t i = 1; i < record_ranges.size(); ++i) {
+        if (record_ranges[i].first < record_ranges[i - 1].second) {
+            return std::unexpected(make_storage_error(
+                StorageErrorCode::CorruptedPage,
+                "Invalid storage record ranges",
+                {
+                    .operation = StorageOperation::Load,
+                    .path = path_,
+                    .collection_id = collection_id_,
+                    .page_id = it->second.page_id,
+                }
+            ));
+        }
+    }
+
+    // 读取目标记录
+    auto record_bytes = std::span<const std::byte> {page_bytes}.subspan(target_offset, target_length);
+    io::BufferByteReader record_resource {record_bytes};
+    io::LittleEndianBinaryReader record_reader {
+        record_resource,
+        {
+            .max_total_bytes = target_length,
+            .max_string_bytes = target_length,
+        }
+    };
+
+    // 读取 Record ID
+    auto record_id_read = record_reader.read_u64();
+    if (!record_id_read) [[unlikely]] {
+        return std::unexpected(std::move(record_id_read.error()));
+    }
+    if (*record_id_read != record_id) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::CorruptedPage,
+            "Invalid storage record ID",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .record_id = record_id,
+                .page_id = it->second.page_id,
+                .slot_id = it->second.slot_id,
+            }
+        ));
+    }
+
+    // 读取 Record 元素数量
+    auto element_count = record_reader.read_u32();
+    if (!element_count) [[unlikely]] {
+        return std::unexpected(std::move(element_count.error()));
+    }
+    if (*element_count > record_reader.remaining_bytes() / sizeof(std::uint8_t)) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::CorruptedPage,
+            "Invalid storage record element count",
+            {
+                .operation = StorageOperation::Load,
+                .path = path_,
+                .collection_id = collection_id_,
+                .record_id = record_id,
+                .page_id = it->second.page_id,
+                .slot_id = it->second.slot_id,                
+            }
+        ));
+    }
+
+    common::Record record;
+    record.id = record_id;
+    record.data.values.reserve(*element_count);
+
+    for (std::uint32_t i = 0; i < *element_count; ++i) {
+        auto kind = record_reader.read_u8();
+        if (!kind) [[unlikely]] {
+            return std::unexpected(std::move(kind.error()));
+        }
+        if (*kind > static_cast<std::uint8_t>(EncodedValueKind::Vector)) [[unlikely]] {
+            return std::unexpected(make_storage_error(
+                StorageErrorCode::InvalidData,
+                "invalid encoded value kind",
+                {
+                    .operation = StorageOperation::Load,
+                    .path = path_,
+                    .collection_id = collection_id_,
+                    .record_id = record_id,
+                    .page_id = it->second.page_id,
+                    .slot_id = it->second.slot_id,
+                }
+            ));
+        }
+
+        switch (static_cast<EncodedValueKind>(*kind)) {
+        case EncodedValueKind::Null:
+            record.data.values.push_back(common::Value::null());
+            break;
+        case EncodedValueKind::Boolean: {
+            auto value = record_reader.read_u8();
+            if (!value) [[unlikely]] {
+                return std::unexpected(std::move(value.error()));
+            }
+            if (*value > 1) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::InvalidData,
+                    "boolean value must be encoded as zero or one",
+                    {
+                        .operation = StorageOperation::Decode,
+                    }
+                ));
+            }
+            record.data.values.push_back(common::Value {*value == 1});
+            break;
+        }
+        case EncodedValueKind::Integer: {
+            auto value = record_reader.read_i32();
+            if (!value) [[unlikely]] {
+                return std::unexpected(std::move(value.error()));
+            }
+            record.data.values.push_back(common::Value {*value});
+            break;
+        }
+        case EncodedValueKind::BigInt: {
+            auto value = record_reader.read_i64();
+            if (!value) [[unlikely]] {
+                return std::unexpected(std::move(value.error()));
+            }
+            record.data.values.push_back(common::Value {*value});
+            break;
+        }
+        case EncodedValueKind::Float: {
+            auto value = record_reader.read_f32();
+            if (!value) [[unlikely]] {
+                return std::unexpected(std::move(value.error()));
+            }
+            record.data.values.push_back(common::Value {*value});
+            break;
+        }
+        case EncodedValueKind::Double: {
+            auto value = record_reader.read_f64();
+            if (!value) [[unlikely]] {
+                return std::unexpected(std::move(value.error()));
+            }
+            record.data.values.push_back(common::Value {*value});
+            break;
+        }
+        case EncodedValueKind::String: {
+            auto value = record_reader.read_string();
+            if (!value) [[unlikely]] {
+                return std::unexpected(std::move(value.error()));
+            }
+            record.data.values.push_back(common::Value {std::move(*value)});
+            break;
+        }
+        case EncodedValueKind::Vector: {
+            auto count = record_reader.read_u32();
+            if (!count) [[unlikely]] {
+                return std::unexpected(std::move(count.error()));
+            }
+            if (*count > static_cast<std::uint32_t>(record_reader.remaining_bytes() / sizeof(double))) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::ResourceLimitExceeded,
+                    "vector length exceeds the remaining binary data",
+                    {
+                        .operation = StorageOperation::Decode,
+                    }
+                ));
+            }
+            common::VectorValue values;
+            values.reserve(*count);
+            for (std::uint32_t index = 0; index < *count; ++index) {
+                auto value = record_reader.read_f64();
+                if (!value) [[unlikely]] {
+                    return std::unexpected(std::move(value.error()));
+                }
+                values.push_back(*value);
+            }
+            record.data.values.push_back(common::Value {std::move(values)});
+            break;
+        }
+        }
+    }
+
+    // 验证剩余字节是否为零
+    if (record_reader.remaining_bytes() != 0) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::CorruptedPage,
+            "Invalid storage record remaining bytes",
+            {
+                .operation = StorageOperation::Load,
+            }
+        ));
+    }
+
+    return record;
+}
 
 std::expected<void, StorageError> StorageStore::initialize()
 {
@@ -446,7 +962,7 @@ std::expected<void, StorageError> StorageStore::load()
     page_space_summaries_.resize(page_count_);
 
     // 加载页数据
-    for (std::uint32_t page_id = 0; page_id < page_count_; ++page_id) {
+    for (std::uint32_t page_id = 1; page_id <= page_count_; ++page_id) {
         std::array<std::byte, StoragePageSize> page_bytes {};
         if (auto read = file_reader.read_exact(page_bytes); !read) [[unlikely]] {
             return std::unexpected(std::move(read.error()));
