@@ -25,20 +25,26 @@ enum class StorageErrorCode : std::uint8_t
     NullConstraintViolation = 7,
     ValueTooLarge = 8,
     RecordTooLarge = 9,
-    FileSystemFailure = 10,
-    IoFailure = 11,
-    UnexpectedEof = 12,
-    InvalidFormat = 13,
-    UnsupportedVersion = 14,
-    CorruptedPage = 15,
-    ChecksumMismatch = 16,
-    ResourceLimitExceeded = 17,
-    InvalidState = 18,
-    DurabilityUnknown = 19,
-    InvalidData = 20,
+    UnexpectedEof = 10,
+    InvalidFormat = 11,
+    UnsupportedVersion = 12,
+    CorruptedPage = 13,
+    ChecksumMismatch = 14,
+    ResourceLimitExceeded = 15,
+    InvalidState = 16,
+    DurabilityUnknown = 17,
+    InvalidData = 18,
 };
 
 // 存储操作
+//
+// operation 表示错误实际发生的最具体阶段：
+// - 集合和记录的高层语义错误使用 Create/Open/Get/Insert/Update/Erase/Scan/Drop/Validate/Reload；
+// - 编解码、文件头和数据页错误使用 Encode/Decode/ReadHeader/WriteHeader/ReadPage/WritePage；
+// - Load 仅用于文件整体大小、页数、跨页唯一性等加载期全局不变量。
+//
+// 当高层操作进入更具体的阶段后，具体阶段覆盖高层操作。例如 Insert 中的数据页写入错误使用
+// WritePage，记录编码错误使用 Encode。Filesystem/IO 错误直接穿透并保留其自身错误上下文。
 enum class StorageOperation : std::uint8_t
 {
     Create,
@@ -50,6 +56,7 @@ enum class StorageOperation : std::uint8_t
     WriteHeader,
     ReadPage,
     WritePage,
+    Get,
     Insert,
     Update,
     Erase,

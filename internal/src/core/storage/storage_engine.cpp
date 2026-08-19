@@ -260,7 +260,7 @@ std::expected<common::Record, StorageError> StorageEngine::get(
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",
-            StorageOperation::ReadPage,
+            StorageOperation::Get,
             collection_id,
             record_id
         ));

@@ -34,6 +34,20 @@ void require(bool condition, const char * message)
     if (!condition) throw std::runtime_error(message);
 }
 
+const storage::StorageErrorContext & require_storage_error(
+    const error::Error & actual,
+    storage::StorageErrorCode code,
+    storage::StorageOperation operation,
+    const char * message
+)
+{
+    require(actual.is(code), message);
+    const auto * context = actual.context<storage::StorageErrorContext>();
+    require(context != nullptr, message);
+    require(context->operation == operation, message);
+    return *context;
+}
+
 std::filesystem::path temporary_directory(std::string_view suffix)
 {
     return std::filesystem::temp_directory_path() /
@@ -119,12 +133,12 @@ void test_exact_format_and_all_values()
     common::RecordData data {{
         common::Value::null(),
         common::Value {true},
-        common::Value {std::int32_t {-7}},
-        common::Value {std::int64_t {9000000000LL}},
-        common::Value {1.25F},
-        common::Value {2.5},
-        common::Value {std::string {"storage-latest"}},
-        common::Value {common::VectorValue {1.0, 2.0, 3.0}},
+        common::Value {std::int32_t {-2}},
+        common::Value {std::int64_t {7}},
+        common::Value {1.0F},
+        common::Value {1.0},
+        common::Value {std::string {"hi"}},
+        common::Value {common::VectorValue {1.0, 2.0}},
     }};
     auto id = store->insert(data);
     require(id && *id == 1, "all-values insert failed");
@@ -141,6 +155,46 @@ void test_exact_format_and_all_values()
     auto end = cursor->next();
     require(end && !*end, "all-values scan did not terminate");
 
+    auto missing = store->get(99);
+    require(!missing, "missing record was returned");
+    const auto & get_context = require_storage_error(
+        missing.error(),
+        storage::StorageErrorCode::RecordNotFound,
+        storage::StorageOperation::Get,
+        "missing get operation mismatch"
+    );
+    require(get_context.path == path && get_context.collection_id == 11 && get_context.record_id == 99,
+            "missing get context mismatch");
+
+    auto missing_update = store->update(99, data);
+    require(!missing_update, "missing record was updated");
+    require_storage_error(
+        missing_update.error(),
+        storage::StorageErrorCode::RecordNotFound,
+        storage::StorageOperation::Update,
+        "missing update operation mismatch"
+    );
+
+    auto missing_erase = store->erase(99);
+    require(!missing_erase, "missing record was erased");
+    require_storage_error(
+        missing_erase.error(),
+        storage::StorageErrorCode::RecordNotFound,
+        storage::StorageOperation::Erase,
+        "missing erase operation mismatch"
+    );
+
+    auto oversized = store->insert({{common::Value {std::string(PageSize, 'x')}}});
+    require(!oversized, "oversized record was inserted");
+    const auto & encode_context = require_storage_error(
+        oversized.error(),
+        storage::StorageErrorCode::RecordTooLarge,
+        storage::StorageOperation::Encode,
+        "oversized record operation mismatch"
+    );
+    require(encode_context.collection_id == 11 && encode_context.record_id == 2,
+            "oversized record context mismatch");
+
     store.reset();
     require(storage_file_size(path) == 2 * PageSize, "storage file is not page aligned");
     const auto header = read_header(path);
@@ -156,6 +210,34 @@ void test_exact_format_and_all_values()
     const auto free_start = read_number<std::uint16_t>(page.data() + 8);
     require(free_start == PageHeaderSize + SlotSize, "storage slot directory size mismatch");
     require(page[PageHeaderSize + 4] == std::byte {0}, "active slot state mismatch");
+    const auto record_offset = read_number<std::uint16_t>(page.data() + PageHeaderSize);
+    const auto record_length = read_number<std::uint16_t>(page.data() + PageHeaderSize + 2);
+    const std::vector<std::byte> expected_record {
+        std::byte {0x01}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x08}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00},
+        std::byte {0x01}, std::byte {0x01},
+        std::byte {0x02}, std::byte {0xfe}, std::byte {0xff}, std::byte {0xff}, std::byte {0xff},
+        std::byte {0x03}, std::byte {0x07}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x04}, std::byte {0x00}, std::byte {0x00}, std::byte {0x80}, std::byte {0x3f},
+        std::byte {0x05}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0xf0}, std::byte {0x3f},
+        std::byte {0x06}, std::byte {0x02}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x68}, std::byte {0x69},
+        std::byte {0x07}, std::byte {0x02}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0xf0}, std::byte {0x3f},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x00},
+        std::byte {0x00}, std::byte {0x00}, std::byte {0x00}, std::byte {0x40},
+    };
+    require(record_length == expected_record.size(), "encoded record length changed");
+    const std::vector<std::byte> actual_record(
+        page.begin() + record_offset,
+        page.begin() + record_offset + record_length
+    );
+    require(actual_record == expected_record, "record wire format changed");
 
     auto reopened = storage::StorageStore::open(path, filesystem, 11);
     require(reopened && (*reopened)->get(1).has_value(), "store reopen failed");
@@ -212,7 +294,13 @@ void test_compaction_reuse_scan_and_exhaustion()
     auto exhausted = storage::StorageStore::open(path, filesystem, 12);
     require(exhausted.has_value(), "exhausted-id fixture did not open");
     auto rejected = (*exhausted)->insert({{common::Value {std::string {"x"}}}});
-    require(!rejected && rejected.error().is(storage::StorageErrorCode::ResourceLimitExceeded), "record id exhaustion was not rejected");
+    require(!rejected, "record id exhaustion was not rejected");
+    require_storage_error(
+        rejected.error(),
+        storage::StorageErrorCode::ResourceLimitExceeded,
+        storage::StorageOperation::Insert,
+        "record id exhaustion operation mismatch"
+    );
     exhausted->reset();
     std::filesystem::remove_all(directory);
 }
@@ -241,7 +329,13 @@ void test_corruption_rejection()
         reseal_header(header);
         write_header(path, header);
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::UnsupportedVersion), "unsupported storage version was not rejected");
+        require(!opened, "unsupported storage version was not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::UnsupportedVersion,
+            storage::StorageOperation::ReadHeader,
+            "unsupported version operation mismatch"
+        );
     }
     {
         const auto path = copy_fixture("header-crc");
@@ -251,7 +345,13 @@ void test_corruption_rejection()
         file.write(reinterpret_cast<const char *>(&changed), 1);
         file.close();
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::ChecksumMismatch), "header checksum corruption was not rejected");
+        require(!opened, "header checksum corruption was not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::ChecksumMismatch,
+            storage::StorageOperation::ReadHeader,
+            "header checksum operation mismatch"
+        );
     }
     {
         const auto path = copy_fixture("page-crc");
@@ -259,7 +359,14 @@ void test_corruption_rejection()
         page.back() ^= std::byte {1};
         write_page(path, 1, page);
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::ChecksumMismatch), "page checksum corruption was not rejected");
+        require(!opened, "page checksum corruption was not rejected");
+        const auto & context = require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::ChecksumMismatch,
+            storage::StorageOperation::ReadPage,
+            "page checksum operation mismatch"
+        );
+        require(context.page_id == 1, "page checksum context mismatch");
     }
     {
         const auto path = copy_fixture("flags");
@@ -268,7 +375,13 @@ void test_corruption_rejection()
         reseal_page(page);
         write_page(path, 1, page);
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::CorruptedPage), "illegal page flags were not rejected");
+        require(!opened, "illegal page flags were not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::CorruptedPage,
+            storage::StorageOperation::ReadPage,
+            "illegal page flags operation mismatch"
+        );
     }
     {
         const auto path = copy_fixture("overlap");
@@ -280,7 +393,13 @@ void test_corruption_rejection()
         reseal_page(page);
         write_page(path, 1, page);
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::CorruptedPage), "overlapping payloads were not rejected");
+        require(!opened, "overlapping payloads were not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::CorruptedPage,
+            storage::StorageOperation::ReadPage,
+            "overlapping payload operation mismatch"
+        );
     }
     {
         const auto path = copy_fixture("trailing");
@@ -293,7 +412,55 @@ void test_corruption_rejection()
         auto opened = storage::StorageStore::open(path, filesystem, 13);
         require(opened.has_value(), "shallow load rejected a record-content corruption");
         auto record = (*opened)->get(1);
-        require(!record && record.error().is(storage::StorageErrorCode::CorruptedPage), "get did not reject trailing record bytes");
+        require(!record, "get did not reject trailing record bytes");
+        const auto & context = require_storage_error(
+            record.error(),
+            storage::StorageErrorCode::CorruptedPage,
+            storage::StorageOperation::Decode,
+            "trailing record operation mismatch"
+        );
+        require(context.record_id == 1 && context.page_id == 1 && context.slot_id == 0,
+                "trailing record context mismatch");
+        opened->reset();
+    }
+    {
+        const auto path = copy_fixture("invalid-bool");
+        auto page = read_page(path, 1);
+        const auto first_offset = read_number<std::uint16_t>(page.data() + PageHeaderSize);
+        page[first_offset + 12] = std::byte {0x01};
+        page[first_offset + 13] = std::byte {0x02};
+        reseal_page(page);
+        write_page(path, 1, page);
+        auto opened = storage::StorageStore::open(path, filesystem, 13);
+        require(opened.has_value(), "shallow load rejected invalid boolean payload");
+        auto record = (*opened)->get(1);
+        require(!record, "non-canonical boolean was accepted");
+        require_storage_error(
+            record.error(),
+            storage::StorageErrorCode::InvalidData,
+            storage::StorageOperation::Decode,
+            "invalid boolean operation mismatch"
+        );
+        opened->reset();
+    }
+    {
+        const auto path = copy_fixture("oversized-vector");
+        auto page = read_page(path, 1);
+        const auto first_offset = read_number<std::uint16_t>(page.data() + PageHeaderSize);
+        page[first_offset + 12] = std::byte {0x07};
+        write_number(page.data() + first_offset + 13, std::numeric_limits<std::uint32_t>::max());
+        reseal_page(page);
+        write_page(path, 1, page);
+        auto opened = storage::StorageStore::open(path, filesystem, 13);
+        require(opened.has_value(), "shallow load rejected oversized vector payload");
+        auto record = (*opened)->get(1);
+        require(!record, "oversized vector count was accepted");
+        require_storage_error(
+            record.error(),
+            storage::StorageErrorCode::ResourceLimitExceeded,
+            storage::StorageOperation::Decode,
+            "oversized vector operation mismatch"
+        );
         opened->reset();
     }
     {
@@ -307,13 +474,37 @@ void test_corruption_rejection()
         reseal_page(page);
         write_page(path, 1, page);
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::InvalidFormat), "duplicate record IDs were not rejected");
+        require(!opened, "duplicate record IDs were not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::InvalidFormat,
+            storage::StorageOperation::Load,
+            "duplicate record operation mismatch"
+        );
     }
     {
         const auto path = copy_fixture("truncated");
         std::filesystem::resize_file(path, std::filesystem::file_size(path) - 1);
         auto opened = storage::StorageStore::open(path, filesystem, 13);
-        require(!opened && opened.error().is(storage::StorageErrorCode::InvalidFormat), "truncated storage page was not rejected");
+        require(!opened, "truncated storage page was not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::InvalidFormat,
+            storage::StorageOperation::Load,
+            "truncated file operation mismatch"
+        );
+    }
+    {
+        const auto path = copy_fixture("truncated-header");
+        std::filesystem::resize_file(path, PageSize - 1);
+        auto opened = storage::StorageStore::open(path, filesystem, 13);
+        require(!opened, "truncated storage header was not rejected");
+        require_storage_error(
+            opened.error(),
+            storage::StorageErrorCode::UnexpectedEof,
+            storage::StorageOperation::ReadHeader,
+            "truncated header operation mismatch"
+        );
     }
     std::filesystem::remove_all(directory);
 }

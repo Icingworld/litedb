@@ -137,7 +137,7 @@ bool test_storage_code_and_context()
     const auto * context = error.context<StorageErrorContext>();
     return error.category() == ErrorCategory::Storage &&
            error.is(StorageErrorCode::ChecksumMismatch) &&
-           error.encode_code() == 0x0410 &&
+           error.encode_code() == 0x040E &&
            context != nullptr &&
            context->operation == StorageOperation::ReadPage &&
            context->collection_id == 7 &&
@@ -200,7 +200,7 @@ bool test_transaction_error_preserves_cause()
            context != nullptr &&
            context->operation == TransactionOperation::Prepare &&
            context->transaction_id == 11 &&
-           context->source_code == 0x0410 &&
+           context->source_code == 0x040E &&
            error.cause() != nullptr &&
            error.cause()->is(StorageErrorCode::ChecksumMismatch);
 }
