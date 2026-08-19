@@ -28,22 +28,6 @@ StorageError make_error(
     });
 }
 
-StorageError filesystem_error(
-    error::Error source,
-    StorageOperation operation,
-    common::CollectionId collection_id
-)
-{
-    return make_error(
-        StorageErrorCode::FileSystemFailure,
-        source.message(),
-        operation,
-        collection_id,
-        0,
-        source.encode_code()
-    );
-}
-
 } // namespace
 
 StorageEngine::StorageEngine(
@@ -58,7 +42,9 @@ StorageEngine::StorageEngine(
 }
 
 StorageEngine::~StorageEngine() = default;
+
 StorageEngine::StorageEngine(StorageEngine &&) noexcept = default;
+
 StorageEngine & StorageEngine::operator=(StorageEngine &&) noexcept = default;
 
 std::filesystem::path StorageEngine::store_path(common::CollectionId collection_id) const
@@ -69,7 +55,7 @@ std::filesystem::path StorageEngine::store_path(common::CollectionId collection_
 std::expected<void, StorageError> StorageEngine::create_collection(schema::CollectionSchema schema)
 {
     const auto id = schema.collection_id();
-    if (mode_ != StorageOpenMode::TransactionalStaging) {
+    if (mode_ != StorageOpenMode::TransactionalStaging) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Live storage engine is read-only",
@@ -77,7 +63,7 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
             id
         ));
     }
-    if (collections_.contains(id)) {
+    if (collections_.contains(id)) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionAlreadyExists,
             "Collection already exists",
@@ -85,7 +71,7 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
             id
         ));
     }
-    if (filesystem_ == nullptr) {
+    if (filesystem_ == nullptr) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Storage engine is not configured",
@@ -94,8 +80,10 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
         ));
     }
     auto exists = filesystem_->exists(store_path(id));
-    if (!exists) return std::unexpected(filesystem_error(std::move(exists.error()), StorageOperation::Create, id));
-    if (*exists) {
+    if (!exists) [[unlikely]] {
+        return std::unexpected(std::move(exists.error()));
+    }
+    if (*exists) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionStoreAlreadyExists,
             "Collection store already exists",
@@ -104,7 +92,9 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
         ));
     }
     auto created = StorageStore::create(store_path(id), *filesystem_, id);
-    if (!created) return std::unexpected(std::move(created.error()));
+    if (!created) [[unlikely]] {
+        return std::unexpected(std::move(created.error()));
+    }
     collections_.emplace(id, CollectionState {std::move(schema), std::move(*created)});
     return {};
 }
@@ -112,7 +102,7 @@ std::expected<void, StorageError> StorageEngine::create_collection(schema::Colle
 std::expected<void, StorageError> StorageEngine::open_collection(schema::CollectionSchema schema)
 {
     const auto id = schema.collection_id();
-    if (collections_.contains(id)) {
+    if (collections_.contains(id)) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionAlreadyExists,
             "Collection already exists",
@@ -120,7 +110,7 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
             id
         ));
     }
-    if (filesystem_ == nullptr) {
+    if (filesystem_ == nullptr) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Storage engine is not configured",
@@ -129,8 +119,10 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
         ));
     }
     auto exists = filesystem_->exists(store_path(id));
-    if (!exists) return std::unexpected(filesystem_error(std::move(exists.error()), StorageOperation::Open, id));
-    if (!*exists) {
+    if (!exists) [[unlikely]] {
+        return std::unexpected(std::move(exists.error()));
+    }
+    if (!*exists) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionStoreNotFound,
             "Collection store not found",
@@ -139,7 +131,9 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
         ));
     }
     auto opened = StorageStore::open(store_path(id), *filesystem_, id);
-    if (!opened) return std::unexpected(std::move(opened.error()));
+    if (!opened) [[unlikely]] {
+        return std::unexpected(std::move(opened.error()));
+    }
     collections_.emplace(id, CollectionState {std::move(schema), std::move(*opened)});
     return {};
 }
@@ -147,7 +141,7 @@ std::expected<void, StorageError> StorageEngine::open_collection(schema::Collect
 std::expected<void, StorageError> StorageEngine::reload_collection(schema::CollectionSchema schema)
 {
     const auto id = schema.collection_id();
-    if (filesystem_ == nullptr) {
+    if (filesystem_ == nullptr) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Storage engine is not configured",
@@ -156,14 +150,16 @@ std::expected<void, StorageError> StorageEngine::reload_collection(schema::Colle
         ));
     }
     auto opened = StorageStore::open(store_path(id), *filesystem_, id);
-    if (!opened) return std::unexpected(std::move(opened.error()));
+    if (!opened) [[unlikely]] {
+        return std::unexpected(std::move(opened.error()));
+    }
     collections_.insert_or_assign(id, CollectionState {std::move(schema), std::move(*opened)});
     return {};
 }
 
 std::expected<void, StorageError> StorageEngine::drop_collection(common::CollectionId id)
 {
-    if (mode_ != StorageOpenMode::TransactionalStaging) {
+    if (mode_ != StorageOpenMode::TransactionalStaging) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Live storage engine is read-only",
@@ -172,7 +168,7 @@ std::expected<void, StorageError> StorageEngine::drop_collection(common::Collect
         ));
     }
     const auto it = collections_.find(id);
-    if (it == collections_.end()) {
+    if (it == collections_.end()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",
@@ -180,9 +176,12 @@ std::expected<void, StorageError> StorageEngine::drop_collection(common::Collect
             id
         ));
     }
+    // 存储文件 Handle 会随着 store 被删除、析构而自动关闭，可以放心地删除存储文件
     collections_.erase(it);
     auto removed = filesystem_->remove(store_path(id));
-    if (!removed) return std::unexpected(filesystem_error(std::move(removed.error()), StorageOperation::Drop, id));
+    if (!removed) [[unlikely]] {
+        return std::unexpected(std::move(removed.error()));
+    }
     return {};
 }
 
@@ -196,7 +195,7 @@ std::expected<void, StorageError> StorageEngine::validate(
     const common::RecordData & data
 ) const
 {
-    if (data.values.size() != schema.columns().size()) {
+    if (data.values.size() != schema.columns().size()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::ValueCountMismatch,
             "Record value count does not match schema",
@@ -208,7 +207,7 @@ std::expected<void, StorageError> StorageEngine::validate(
         const auto & value = data.values[index];
         const auto & column = schema.columns()[index];
         if (value.is_null()) {
-            if (!column.nullable()) {
+            if (!column.nullable()) [[unlikely]] {
                 return std::unexpected(make_error(
                     StorageErrorCode::NullConstraintViolation,
                     "Column cannot be null: " + column.column_name(),
@@ -218,7 +217,7 @@ std::expected<void, StorageError> StorageEngine::validate(
             }
             continue;
         }
-        if (!value.matches_type(column.type())) {
+        if (!value.matches_type(column.type())) [[unlikely]] {
             return std::unexpected(make_error(
                 StorageErrorCode::TypeMismatch,
                 "Value type does not match column: " + column.column_name(),
@@ -228,7 +227,7 @@ std::expected<void, StorageError> StorageEngine::validate(
         }
         if (column.type().id == common::LogicalTypeId::Varchar &&
             column.type().parameter &&
-            std::get<std::string>(value.data()).size() > *column.type().parameter) {
+            std::get<std::string>(value.data()).size() > *column.type().parameter) [[unlikely]] {
             return std::unexpected(make_error(
                 StorageErrorCode::ValueTooLarge,
                 "VARCHAR value exceeds declared length: " + column.column_name(),
@@ -238,7 +237,7 @@ std::expected<void, StorageError> StorageEngine::validate(
         }
         if (column.type().id == common::LogicalTypeId::Vector &&
             column.type().parameter &&
-            std::get<common::VectorValue>(value.data()).size() != *column.type().parameter) {
+            std::get<common::VectorValue>(value.data()).size() != *column.type().parameter) [[unlikely]] {
             return std::unexpected(make_error(
                 StorageErrorCode::TypeMismatch,
                 "VECTOR dimension mismatch: " + column.column_name(),
@@ -257,7 +256,7 @@ std::expected<common::Record, StorageError> StorageEngine::get(
 ) const
 {
     const auto it = collections_.find(collection_id);
-    if (it == collections_.end()) {
+    if (it == collections_.end()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",
@@ -274,7 +273,7 @@ std::expected<common::RecordId, StorageError> StorageEngine::insert(
     common::RecordData data
 )
 {
-    if (mode_ != StorageOpenMode::TransactionalStaging) {
+    if (mode_ != StorageOpenMode::TransactionalStaging) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Live storage engine is read-only",
@@ -283,7 +282,7 @@ std::expected<common::RecordId, StorageError> StorageEngine::insert(
         ));
     }
     auto it = collections_.find(collection_id);
-    if (it == collections_.end()) {
+    if (it == collections_.end()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",
@@ -291,7 +290,10 @@ std::expected<common::RecordId, StorageError> StorageEngine::insert(
             collection_id
         ));
     }
-    if (auto valid = validate(it->second.schema, data); !valid) return std::unexpected(std::move(valid.error()));
+    // 在插入前先校验记录数据是否符合集合模式
+    if (auto valid = validate(it->second.schema, data); !valid) [[unlikely]] {
+        return std::unexpected(std::move(valid.error()));
+    }
     return it->second.store->insert(std::move(data));
 }
 
@@ -301,7 +303,7 @@ std::expected<void, StorageError> StorageEngine::update(
     common::RecordData data
 )
 {
-    if (mode_ != StorageOpenMode::TransactionalStaging) {
+    if (mode_ != StorageOpenMode::TransactionalStaging) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Live storage engine is read-only",
@@ -311,7 +313,7 @@ std::expected<void, StorageError> StorageEngine::update(
         ));
     }
     auto it = collections_.find(collection_id);
-    if (it == collections_.end()) {
+    if (it == collections_.end()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",
@@ -320,7 +322,10 @@ std::expected<void, StorageError> StorageEngine::update(
             record_id
         ));
     }
-    if (auto valid = validate(it->second.schema, data); !valid) return std::unexpected(std::move(valid.error()));
+    // 在更新前先校验记录数据是否符合集合模式
+    if (auto valid = validate(it->second.schema, data); !valid) [[unlikely]] {
+        return std::unexpected(std::move(valid.error()));
+    }
     return it->second.store->update(record_id, std::move(data));
 }
 
@@ -329,7 +334,7 @@ std::expected<void, StorageError> StorageEngine::erase(
     common::RecordId record_id
 )
 {
-    if (mode_ != StorageOpenMode::TransactionalStaging) {
+    if (mode_ != StorageOpenMode::TransactionalStaging) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::InvalidState,
             "Live storage engine is read-only",
@@ -339,7 +344,7 @@ std::expected<void, StorageError> StorageEngine::erase(
         ));
     }
     auto it = collections_.find(collection_id);
-    if (it == collections_.end()) {
+    if (it == collections_.end()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",
@@ -354,7 +359,7 @@ std::expected<void, StorageError> StorageEngine::erase(
 std::expected<StorageCursor, StorageError> StorageEngine::scan(common::CollectionId collection_id) const
 {
     const auto it = collections_.find(collection_id);
-    if (it == collections_.end()) {
+    if (it == collections_.end()) [[unlikely]] {
         return std::unexpected(make_error(
             StorageErrorCode::CollectionNotFound,
             "Collection not found",

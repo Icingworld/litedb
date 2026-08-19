@@ -2,18 +2,13 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
-#include <cstdint>
-#include <expected>
 #include <limits>
-#include <map>
 #include <optional>
 #include <span>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <vector>
 
 #include "core/io/binary_io.hpp"
 #include "core/io/buffer_byte_reader.hpp"
@@ -36,12 +31,14 @@ constexpr std::uint16_t StoragePageSlotSize = 8;
 constexpr std::size_t MaxEncodedRecordSize =
     StoragePageSize - StoragePageHeaderSize - StoragePageSlotSize;
 
+// 存储槽状态
 enum class StorageSlotState : std::uint8_t
 {
     Active = 0,
     Deleted = 1,
 };
 
+// 编码值类型
 enum class EncodedValueKind : std::uint8_t
 {
     Null = 0,
@@ -54,8 +51,10 @@ enum class EncodedValueKind : std::uint8_t
     Vector = 7,
 };
 
+// 存储页缓冲区
 using StoragePageBuffer = std::array<std::byte, StoragePageSize>;
 
+// 存储文件头
 struct StorageFileHeader
 {
     common::CollectionId collection_id {0};
@@ -63,6 +62,7 @@ struct StorageFileHeader
     std::uint32_t page_count {0};
 };
 
+// 存储页头
 struct StoragePageHeader
 {
     std::uint32_t page_id {0};
@@ -71,6 +71,7 @@ struct StoragePageHeader
     std::uint32_t generation {0};
 };
 
+// 存储槽
 struct StorageSlot
 {
     std::uint16_t offset {0};
@@ -78,6 +79,7 @@ struct StorageSlot
     StorageSlotState state {StorageSlotState::Deleted};
 };
 
+// 解码存储页
 struct DecodedStoragePage
 {
     StoragePageBuffer bytes {};
@@ -85,6 +87,7 @@ struct DecodedStoragePage
     std::vector<StorageSlot> slots;
 };
 
+// 页空间数据
 struct PageSpaceData
 {
     std::size_t contiguous {0};
@@ -92,6 +95,7 @@ struct PageSpaceData
     bool has_deleted_slot {false};
 };
 
+[[nodiscard]]
 StorageErrorContext page_context(
     const StorageErrorContext & base,
     std::uint32_t page_id,
@@ -106,6 +110,7 @@ StorageErrorContext page_context(
     return context;
 }
 
+[[nodiscard]]
 StorageErrorContext record_context(
     const StorageErrorContext & base,
     common::RecordId record_id,
@@ -124,8 +129,11 @@ StorageErrorContext record_context(
     return context;
 }
 
-std::expected<void, StorageError>
-write_checksum(StoragePageBuffer & bytes, std::size_t checksum_offset)
+// 写入校验和
+// 计算的范围是 StoragePageBuffer 的前 checksum_offset 个字节
+// 加上跳过校验和字段本身 (sizeof(std::uint32_t)) 后的所有字节
+[[nodiscard]]
+std::expected<void, StorageError> write_checksum(StoragePageBuffer & bytes, std::size_t checksum_offset)
 {
     io::Crc32Calculator calculator;
     calculator.update(std::span<const std::byte> {bytes}.first(checksum_offset));
@@ -135,9 +143,11 @@ write_checksum(StoragePageBuffer & bytes, std::size_t checksum_offset)
 
     io::BufferByteWriter checksum_bytes(sizeof(std::uint32_t));
     io::LittleEndianBinaryWriter checksum_writer {checksum_bytes};
-    if (auto result = checksum_writer.write_u32(calculator.value()); !result) {
+    if (auto result = checksum_writer.write_u32(calculator.value()); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
+
+    // 把校验结果写入 bytes[checksum_offset]
     std::copy(
         checksum_bytes.bytes().begin(),
         checksum_bytes.bytes().end(),
@@ -146,44 +156,51 @@ write_checksum(StoragePageBuffer & bytes, std::size_t checksum_offset)
     return {};
 }
 
+// 编码存储文件头
+// 需要注意在当前版本中，文件头也储存在单独的一页中
+// 因此函数返回值是 StoragePageBuffer
 std::expected<StoragePageBuffer, StorageError> encode_header(const StorageFileHeader & header)
 {
     io::BufferByteWriter encoded(StoragePageSize);
     io::LittleEndianBinaryWriter writer {encoded};
 
-    if (auto result = writer.write_u32(StorageFileMagic); !result) {
+    if (auto result = writer.write_u32(StorageFileMagic); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(StorageFormatVersion); !result) {
+    if (auto result = writer.write_u16(StorageFormatVersion); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(StoragePageSize); !result) {
+    if (auto result = writer.write_u16(StoragePageSize); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(StoragePageSize); !result) {
+    if (auto result = writer.write_u16(StoragePageSize); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(0); !result) {
+    // flag
+    if (auto result = writer.write_u16(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(header.collection_id); !result) {
+    if (auto result = writer.write_u64(header.collection_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(header.next_record_id); !result) {
+    if (auto result = writer.write_u64(header.next_record_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(header.page_count); !result) {
+    if (auto result = writer.write_u32(header.page_count); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
 
+    // bytes 初始化隐含了所有字节的值都是 0
+    // 因此在写入后，满足尾部字节全部为 0 的要求
     StoragePageBuffer bytes {};
     std::copy(encoded.bytes().begin(), encoded.bytes().end(), bytes.begin());
-    if (auto checksum = write_checksum(bytes, encoded.bytes().size()); !checksum) {
+    if (auto checksum = write_checksum(bytes, encoded.bytes().size()); !checksum) [[unlikely]] {
         return std::unexpected(std::move(checksum.error()));
     }
     return bytes;
 }
 
+// 解码存储文件头
 std::expected<StorageFileHeader, StorageError> decode_header(
     const StoragePageBuffer & bytes,
     common::CollectionId expected_collection_id,
@@ -200,19 +217,19 @@ std::expected<StorageFileHeader, StorageError> decode_header(
     };
 
     auto magic = reader.read_u32();
-    if (!magic) {
+    if (!magic) [[unlikely]] {
         return std::unexpected(std::move(magic.error()));
     }
-    if (*magic != StorageFileMagic) {
+    if (*magic != StorageFileMagic) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::InvalidFormat, "Invalid storage magic", context)
         );
     }
     auto version = reader.read_u16();
-    if (!version) {
+    if (!version) [[unlikely]] {
         return std::unexpected(std::move(version.error()));
     }
-    if (*version != StorageFormatVersion) {
+    if (*version != StorageFormatVersion) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::UnsupportedVersion,
             "Unsupported storage format version",
@@ -221,18 +238,18 @@ std::expected<StorageFileHeader, StorageError> decode_header(
     }
 
     auto header_page_size = reader.read_u16();
-    if (!header_page_size) {
+    if (!header_page_size) [[unlikely]] {
         return std::unexpected(std::move(header_page_size.error()));
     }
     auto page_size = reader.read_u16();
-    if (!page_size) {
+    if (!page_size) [[unlikely]] {
         return std::unexpected(std::move(page_size.error()));
     }
     auto flag = reader.read_u16();
-    if (!flag) {
+    if (!flag) [[unlikely]] {
         return std::unexpected(std::move(flag.error()));
     }
-    if (*header_page_size != StoragePageSize || *page_size != StoragePageSize || *flag != 0) {
+    if (*header_page_size != StoragePageSize || *page_size != StoragePageSize || *flag != 0) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidFormat,
             "Invalid storage header parameters",
@@ -241,28 +258,28 @@ std::expected<StorageFileHeader, StorageError> decode_header(
     }
 
     auto collection_id = reader.read_u64();
-    if (!collection_id) {
+    if (!collection_id) [[unlikely]] {
         return std::unexpected(std::move(collection_id.error()));
     }
     auto next_record_id = reader.read_u64();
-    if (!next_record_id) {
+    if (!next_record_id) [[unlikely]] {
         return std::unexpected(std::move(next_record_id.error()));
     }
     auto page_count = reader.read_u32();
-    if (!page_count) {
+    if (!page_count) [[unlikely]] {
         return std::unexpected(std::move(page_count.error()));
     }
 
     const auto prefix_size = StoragePageSize - reader.remaining_bytes();
     auto checksum = reader.read_u32();
-    if (!checksum) {
+    if (!checksum) [[unlikely]] {
         return std::unexpected(std::move(checksum.error()));
     }
     const auto suffix_size = reader.remaining_bytes();
     io::Crc32Calculator calculator;
     calculator.update(std::span<const std::byte> {bytes}.first(prefix_size));
     calculator.update(std::span<const std::byte> {bytes}.last(suffix_size));
-    if (*checksum != calculator.value()) {
+    if (*checksum != calculator.value()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ChecksumMismatch,
             "Storage header checksum mismatch",
@@ -270,7 +287,7 @@ std::expected<StorageFileHeader, StorageError> decode_header(
         ));
     }
     for (const auto byte : std::span<const std::byte> {bytes}.last(suffix_size)) {
-        if (byte != std::byte {0}) {
+        if (byte != std::byte {0}) [[unlikely]] {
             return std::unexpected(make_storage_error(
                 StorageErrorCode::InvalidFormat,
                 "Invalid storage header reserved bytes",
@@ -278,7 +295,7 @@ std::expected<StorageFileHeader, StorageError> decode_header(
             ));
         }
     }
-    if (*collection_id != expected_collection_id || *next_record_id == 0) {
+    if (*collection_id != expected_collection_id || *next_record_id == 0) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidFormat,
             "Invalid storage header identity or counters",
@@ -293,6 +310,7 @@ std::expected<StorageFileHeader, StorageError> decode_header(
     };
 }
 
+// 解码存储页
 std::expected<DecodedStoragePage, StorageError> decode_page(
     StoragePageBuffer bytes,
     std::uint32_t expected_page_id,
@@ -309,14 +327,14 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
     };
 
     auto magic = reader.read_u32();
-    if (!magic) {
+    if (!magic) [[unlikely]] {
         return std::unexpected(std::move(magic.error()));
     }
     auto page_id = reader.read_u32();
-    if (!page_id) {
+    if (!page_id) [[unlikely]] {
         return std::unexpected(std::move(page_id.error()));
     }
-    if (*magic != StoragePageMagic || *page_id != expected_page_id) {
+    if (*magic != StoragePageMagic || *page_id != expected_page_id) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::CorruptedPage,
             "Invalid storage page header",
@@ -325,43 +343,41 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
     }
 
     auto free_start = reader.read_u16();
-    if (!free_start) {
+    if (!free_start) [[unlikely]] {
         return std::unexpected(std::move(free_start.error()));
     }
     auto free_end = reader.read_u16();
-    if (!free_end) {
+    if (!free_end) [[unlikely]] {
         return std::unexpected(std::move(free_end.error()));
     }
     auto flag = reader.read_u16();
-    if (!flag) {
+    if (!flag) [[unlikely]] {
         return std::unexpected(std::move(flag.error()));
     }
     auto generation = reader.read_u32();
-    if (!generation) {
+    if (!generation) [[unlikely]] {
         return std::unexpected(std::move(generation.error()));
     }
     if (*flag != 0 || *free_start < StoragePageHeaderSize || *free_start > StoragePageSize ||
         (*free_start - StoragePageHeaderSize) % StoragePageSlotSize != 0 ||
-        *free_end < *free_start || *free_end > StoragePageSize) {
-        {
-            return std::unexpected(make_storage_error(
-                StorageErrorCode::CorruptedPage,
-                "Invalid storage page bounds",
-                page_context(context, expected_page_id)
-            ));
-        }
+        *free_end < *free_start || *free_end > StoragePageSize) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::CorruptedPage,
+            "Invalid storage page bounds",
+            page_context(context, expected_page_id)
+        ));
     }
 
     const auto prefix_size = StoragePageSize - reader.remaining_bytes();
     auto checksum = reader.read_u32();
-    if (!checksum) {
+    if (!checksum) [[unlikely]] {
         return std::unexpected(std::move(checksum.error()));
     }
     const auto suffix_size = reader.remaining_bytes();
     io::Crc32Calculator calculator;
     calculator.update(std::span<const std::byte> {bytes}.first(prefix_size));
     calculator.update(std::span<const std::byte> {bytes}.last(suffix_size));
-    if (*checksum != calculator.value()) {
+    if (*checksum != calculator.value()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ChecksumMismatch,
             "Storage page checksum mismatch",
@@ -373,28 +389,31 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
         static_cast<std::uint16_t>((*free_start - StoragePageHeaderSize) / StoragePageSlotSize);
     std::vector<StorageSlot> slots;
     slots.reserve(slot_count);
+
+    // 存储槽对应 record 的存储偏移范围，用于最后验证是否存在重叠
     std::vector<std::pair<std::size_t, std::size_t>> ranges;
     ranges.reserve(slot_count);
 
     for (std::uint16_t slot_id = 0; slot_id < slot_count; ++slot_id) {
         auto offset = reader.read_u16();
-        if (!offset) {
+        if (!offset) [[unlikely]] {
             return std::unexpected(std::move(offset.error()));
         }
         auto length = reader.read_u16();
-        if (!length) {
+        if (!length) [[unlikely]] {
             return std::unexpected(std::move(length.error()));
         }
         auto state = reader.read_u8();
-        if (!state) {
+        if (!state) [[unlikely]] {
             return std::unexpected(std::move(state.error()));
         }
+        // 验证 3 个保留字节
         for (std::size_t index = 0; index < 3; ++index) {
             auto reserved = reader.read_u8();
-            if (!reserved) {
+            if (!reserved) [[unlikely]] {
                 return std::unexpected(std::move(reserved.error()));
             }
-            if (*reserved != 0) {
+            if (*reserved != 0) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::CorruptedPage,
                     "Storage slot reserved bytes are non-zero",
@@ -402,7 +421,7 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
                 ));
             }
         }
-        if (*state > static_cast<std::uint8_t>(StorageSlotState::Deleted)) {
+        if (*state > static_cast<std::uint8_t>(StorageSlotState::Deleted)) [[unlikely]] {
             return std::unexpected(make_storage_error(
                 StorageErrorCode::CorruptedPage,
                 "Invalid storage slot state",
@@ -416,7 +435,8 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
             .state = static_cast<StorageSlotState>(*state),
         };
         if (slot.length == 0) {
-            if (slot.state != StorageSlotState::Deleted || slot.offset != 0) {
+            // 空槽必须处于删除状态，并且偏移为 0
+            if (slot.state != StorageSlotState::Deleted || slot.offset != 0) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::CorruptedPage,
                     "Invalid empty storage slot",
@@ -425,7 +445,7 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
             }
         } else {
             const auto end = static_cast<std::size_t>(slot.offset) + slot.length;
-            if (slot.offset < *free_end || end > StoragePageSize) {
+            if (slot.offset < *free_end || end > StoragePageSize) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::CorruptedPage,
                     "Storage slot payload is outside the page",
@@ -439,7 +459,7 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
 
     std::ranges::sort(ranges);
     for (std::size_t index = 1; index < ranges.size(); ++index) {
-        if (ranges[index].first < ranges[index - 1].second) {
+        if (ranges[index].first < ranges[index - 1].second) [[unlikely]] {
             return std::unexpected(make_storage_error(
                 StorageErrorCode::CorruptedPage,
                 "Storage slot payloads overlap",
@@ -450,17 +470,17 @@ std::expected<DecodedStoragePage, StorageError> decode_page(
 
     return DecodedStoragePage {
         .bytes = std::move(bytes),
-        .header =
-            {
-                .page_id = expected_page_id,
-                .free_start = *free_start,
-                .free_end = *free_end,
-                .generation = *generation,
-            },
+        .header = {
+            .page_id = expected_page_id,
+            .free_start = *free_start,
+            .free_end = *free_end,
+            .generation = *generation,
+        },
         .slots = std::move(slots),
     };
 }
 
+// 编码存储页
 std::expected<StoragePageBuffer, StorageError>
 encode_page(const DecodedStoragePage & page, const StorageErrorContext & context)
 {
@@ -468,56 +488,56 @@ encode_page(const DecodedStoragePage & page, const StorageErrorContext & context
         page.header.free_start > StoragePageSize || page.header.free_end < page.header.free_start ||
         page.header.free_end > StoragePageSize ||
         page.slots.size() !=
-            (page.header.free_start - StoragePageHeaderSize) / StoragePageSlotSize) {
-        {
-            return std::unexpected(make_storage_error(
-                StorageErrorCode::InvalidState,
-                "Invalid in-memory storage page",
-                page_context(context, page.header.page_id)
-            ));
-        }
+            (page.header.free_start - StoragePageHeaderSize) / StoragePageSlotSize) [[unlikely]] {
+        return std::unexpected(make_storage_error(
+            StorageErrorCode::InvalidState,
+            "Invalid in-memory storage page",
+            page_context(context, page.header.page_id)
+        ));
     }
 
     io::BufferByteWriter metadata(StoragePageSize);
     io::LittleEndianBinaryWriter writer {metadata};
-    if (auto result = writer.write_u32(StoragePageMagic); !result) {
+    if (auto result = writer.write_u32(StoragePageMagic); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(page.header.page_id); !result) {
+    if (auto result = writer.write_u32(page.header.page_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(page.header.free_start); !result) {
+    if (auto result = writer.write_u16(page.header.free_start); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(page.header.free_end); !result) {
+    if (auto result = writer.write_u16(page.header.free_end); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(0); !result) {
+    // flag
+    if (auto result = writer.write_u16(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(page.header.generation); !result) {
+    if (auto result = writer.write_u32(page.header.generation); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(0); !result) {
+    // checksum，暂时写为 0
+    if (auto result = writer.write_u32(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     for (const auto & slot : page.slots) {
-        if (auto result = writer.write_u16(slot.offset); !result) {
+        if (auto result = writer.write_u16(slot.offset); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
-        if (auto result = writer.write_u16(slot.length); !result) {
+        if (auto result = writer.write_u16(slot.length); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
-        if (auto result = writer.write_u8(static_cast<std::uint8_t>(slot.state)); !result) {
+        if (auto result = writer.write_u8(static_cast<std::uint8_t>(slot.state)); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
-        if (auto result = writer.write_u8(0); !result) {
+        if (auto result = writer.write_u8(0); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
-        if (auto result = writer.write_u8(0); !result) {
+        if (auto result = writer.write_u8(0); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
-        if (auto result = writer.write_u8(0); !result) {
+        if (auto result = writer.write_u8(0); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
     }
@@ -531,12 +551,13 @@ encode_page(const DecodedStoragePage & page, const StorageErrorContext & context
             bytes.begin() + page.header.free_end
         );
     }
-    if (auto checksum = write_checksum(bytes, 18); !checksum) {
+    if (auto checksum = write_checksum(bytes, 18); !checksum) [[unlikely]] {
         return std::unexpected(std::move(checksum.error()));
     }
     return bytes;
 }
 
+// 创建编码后的空存储页
 std::expected<StoragePageBuffer, StorageError> make_empty_page(std::uint32_t page_id)
 {
     const DecodedStoragePage page {
@@ -552,37 +573,26 @@ std::expected<StoragePageBuffer, StorageError> make_empty_page(std::uint32_t pag
     return encode_page(page, {});
 }
 
-std::expected<StoragePageBuffer, StorageError> read_page_bytes(
-    filesystem::FileHandle & file,
-    std::uint32_t page_id,
-    const StorageErrorContext & context
-)
+// 读取存储页
+std::expected<DecodedStoragePage, StorageError>
+read_page(filesystem::FileHandle & file, std::uint32_t page_id, const StorageErrorContext & context)
 {
     StoragePageBuffer bytes {};
     auto read = file.read_at(static_cast<std::uint64_t>(page_id) * StoragePageSize, bytes);
-    if (!read) {
+    if (!read) [[unlikely]] {
         return std::unexpected(std::move(read.error()));
     }
-    if (*read != StoragePageSize) {
+    if (*read != StoragePageSize) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::UnexpectedEof,
             "Truncated storage page",
             page_context(context, page_id)
         ));
     }
-    return bytes;
+    return decode_page(std::move(bytes), page_id, context);
 }
 
-std::expected<DecodedStoragePage, StorageError>
-read_page(filesystem::FileHandle & file, std::uint32_t page_id, const StorageErrorContext & context)
-{
-    auto bytes = read_page_bytes(file, page_id, context);
-    if (!bytes) {
-        return std::unexpected(std::move(bytes.error()));
-    }
-    return decode_page(std::move(*bytes), page_id, context);
-}
-
+// 写入存储页
 std::expected<void, StorageError> write_page(
     filesystem::FileHandle & file,
     DecodedStoragePage & page,
@@ -591,27 +601,28 @@ std::expected<void, StorageError> write_page(
 {
     ++page.header.generation;
     auto bytes = encode_page(page, context);
-    if (!bytes) {
+    if (!bytes) [[unlikely]] {
         return std::unexpected(std::move(bytes.error()));
     }
     auto written = file.write_at(
         static_cast<std::uint64_t>(page.header.page_id) * StoragePageSize,
         std::span<const std::byte> {*bytes}
     );
-    if (!written) {
+    if (!written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
     page.bytes = std::move(*bytes);
     return {};
 }
 
+// 获取指定活跃槽的记录 payload
 std::expected<std::span<const std::byte>, StorageError> active_payload(
     const DecodedStoragePage & page,
     std::uint16_t slot_id,
     const StorageErrorContext & context
 )
 {
-    if (slot_id >= page.slots.size()) {
+    if (slot_id >= page.slots.size()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidState,
             "Storage slot ID out of range",
@@ -619,7 +630,7 @@ std::expected<std::span<const std::byte>, StorageError> active_payload(
         ));
     }
     const auto & slot = page.slots[slot_id];
-    if (slot.state != StorageSlotState::Active || slot.length == 0) {
+    if (slot.state != StorageSlotState::Active || slot.length == 0) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidState,
             "Storage slot is not active",
@@ -629,6 +640,7 @@ std::expected<std::span<const std::byte>, StorageError> active_payload(
     return std::span<const std::byte> {page.bytes}.subspan(slot.offset, slot.length);
 }
 
+// 总结页空间数据情况
 PageSpaceData summarize_page(const DecodedStoragePage & page)
 {
     PageSpaceData summary {
@@ -645,6 +657,7 @@ PageSpaceData summarize_page(const DecodedStoragePage & page)
     return summary;
 }
 
+// 压缩存储页
 std::expected<void, StorageError>
 compact_page(DecodedStoragePage & page, const StorageErrorContext & context)
 {
@@ -652,7 +665,7 @@ compact_page(DecodedStoragePage & page, const StorageErrorContext & context)
     auto free_end = static_cast<std::uint16_t>(StoragePageSize);
     for (auto & slot : page.slots) {
         if (slot.state == StorageSlotState::Active) {
-            if (slot.length > free_end) {
+            if (slot.length > free_end) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::InvalidState,
                     "Storage page compaction underflow",
@@ -678,6 +691,7 @@ compact_page(DecodedStoragePage & page, const StorageErrorContext & context)
     return {};
 }
 
+// 放置编码后的记录
 std::expected<std::uint16_t, StorageError> place_encoded(
     DecodedStoragePage & page,
     std::span<const std::byte> encoded,
@@ -685,7 +699,7 @@ std::expected<std::uint16_t, StorageError> place_encoded(
 )
 {
     if (encoded.empty() || encoded.size() > MaxEncodedRecordSize ||
-        encoded.size() > std::numeric_limits<std::uint16_t>::max()) {
+        encoded.size() > std::numeric_limits<std::uint16_t>::max()) [[unlikely]] {
         {
             return std::unexpected(make_storage_error(
                 StorageErrorCode::RecordTooLarge,
@@ -694,6 +708,8 @@ std::expected<std::uint16_t, StorageError> place_encoded(
             ));
         }
     }
+
+    // 寻找是否存在可以复用的槽
     std::optional<std::uint16_t> reusable_slot;
     for (std::uint16_t slot_id = 0; slot_id < page.slots.size(); ++slot_id) {
         if (page.slots[slot_id].state == StorageSlotState::Deleted) {
@@ -703,7 +719,9 @@ std::expected<std::uint16_t, StorageError> place_encoded(
     }
     const auto directory_cost = reusable_slot ? 0U : StoragePageSlotSize;
     const auto contiguous = static_cast<std::size_t>(page.header.free_end - page.header.free_start);
-    if (contiguous < encoded.size() + directory_cost) {
+    // 检查是否存在足够的连续空间
+    // 复用槽仅仅省下了一个槽的空间，不能复用被删除槽的 payload 部分
+    if (contiguous < encoded.size() + directory_cost) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ResourceLimitExceeded,
             "Storage page has insufficient contiguous space",
@@ -730,10 +748,11 @@ std::expected<std::uint16_t, StorageError> place_encoded(
     return slot_id;
 }
 
+// 删除活跃槽
 std::expected<void, StorageError>
 erase_slot(DecodedStoragePage & page, std::uint16_t slot_id, const StorageErrorContext & context)
 {
-    if (slot_id >= page.slots.size() || page.slots[slot_id].state != StorageSlotState::Active) {
+    if (slot_id >= page.slots.size() || page.slots[slot_id].state != StorageSlotState::Active) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidState,
             "Storage slot is not active",
@@ -744,6 +763,7 @@ erase_slot(DecodedStoragePage & page, std::uint16_t slot_id, const StorageErrorC
     return {};
 }
 
+// 写入值
 std::expected<void, StorageError> write_value(
     io::LittleEndianBinaryWriter & writer,
     const common::Value & value,
@@ -757,57 +777,57 @@ std::expected<void, StorageError> write_value(
                 return writer.write_u8(static_cast<std::uint8_t>(kind));
             };
             if constexpr (std::is_same_v<T, common::NullValue>) {
-                if (auto result = write_kind(EncodedValueKind::Null); !result) {
+                if (auto result = write_kind(EncodedValueKind::Null); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return {};
             } else if constexpr (std::is_same_v<T, bool>) {
-                if (auto result = write_kind(EncodedValueKind::Boolean); !result) {
+                if (auto result = write_kind(EncodedValueKind::Boolean); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return writer.write_u8(data ? 1U : 0U);
             } else if constexpr (std::is_same_v<T, std::int32_t>) {
-                if (auto result = write_kind(EncodedValueKind::Integer); !result) {
+                if (auto result = write_kind(EncodedValueKind::Integer); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return writer.write_i32(data);
             } else if constexpr (std::is_same_v<T, std::int64_t>) {
-                if (auto result = write_kind(EncodedValueKind::BigInt); !result) {
+                if (auto result = write_kind(EncodedValueKind::BigInt); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return writer.write_i64(data);
             } else if constexpr (std::is_same_v<T, float>) {
-                if (auto result = write_kind(EncodedValueKind::Float); !result) {
+                if (auto result = write_kind(EncodedValueKind::Float); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return writer.write_f32(data);
             } else if constexpr (std::is_same_v<T, double>) {
-                if (auto result = write_kind(EncodedValueKind::Double); !result) {
+                if (auto result = write_kind(EncodedValueKind::Double); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return writer.write_f64(data);
             } else if constexpr (std::is_same_v<T, std::string>) {
-                if (auto result = write_kind(EncodedValueKind::String); !result) {
+                if (auto result = write_kind(EncodedValueKind::String); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 return writer.write_string(data);
             } else if constexpr (std::is_same_v<T, common::VectorValue>) {
-                if (data.size() > std::numeric_limits<std::uint32_t>::max()) {
+                if (data.size() > std::numeric_limits<std::uint32_t>::max()) [[unlikely]] {
                     return std::unexpected(make_storage_error(
                         StorageErrorCode::RecordTooLarge,
                         "Vector is too large to encode",
                         context
                     ));
                 }
-                if (auto result = write_kind(EncodedValueKind::Vector); !result) {
+                if (auto result = write_kind(EncodedValueKind::Vector); !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 if (auto result = writer.write_u32(static_cast<std::uint32_t>(data.size()));
-                    !result) {
+                    !result) [[unlikely]] {
                     return std::unexpected(std::move(result.error()));
                 }
                 for (const auto element : data) {
-                    if (auto result = writer.write_f64(element); !result) {
+                    if (auto result = writer.write_f64(element); !result) [[unlikely]] {
                         return std::unexpected(std::move(result.error()));
                     }
                 }
@@ -820,6 +840,7 @@ std::expected<void, StorageError> write_value(
     );
 }
 
+// 编码记录
 std::expected<std::vector<std::byte>, StorageError> encode_record(
     common::RecordId record_id,
     const common::RecordData & data,
@@ -828,17 +849,17 @@ std::expected<std::vector<std::byte>, StorageError> encode_record(
 {
     io::BufferByteWriter bytes(MaxEncodedRecordSize);
     io::LittleEndianBinaryWriter writer {bytes};
-    if (auto result = writer.write_u64(record_id); !result) {
+    if (auto result = writer.write_u64(record_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (data.values.size() > std::numeric_limits<std::uint32_t>::max()) {
+    if (data.values.size() > std::numeric_limits<std::uint32_t>::max()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::RecordTooLarge,
             "Record has too many values",
             record_context(context, record_id)
         ));
     }
-    if (auto result = writer.write_u32(static_cast<std::uint32_t>(data.values.size())); !result) {
+    if (auto result = writer.write_u32(static_cast<std::uint32_t>(data.values.size())); !result) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::RecordTooLarge,
             "Record header does not fit in a storage page",
@@ -846,8 +867,8 @@ std::expected<std::vector<std::byte>, StorageError> encode_record(
         ));
     }
     for (const auto & value : data.values) {
-        if (auto result = write_value(writer, value, record_context(context, record_id)); !result) {
-            if (result.error().category() == error::ErrorCategory::Io) {
+        if (auto result = write_value(writer, value, record_context(context, record_id)); !result) [[unlikely]] {
+            if (result.error().category() == error::ErrorCategory::Io) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::RecordTooLarge,
                     result.error().message(),
@@ -860,6 +881,7 @@ std::expected<std::vector<std::byte>, StorageError> encode_record(
     return bytes.take_bytes();
 }
 
+// 解码记录 ID
 std::expected<common::RecordId, StorageError>
 decode_record_id(std::span<const std::byte> bytes, const StorageErrorContext & context)
 {
@@ -872,21 +894,22 @@ decode_record_id(std::span<const std::byte> bytes, const StorageErrorContext & c
         },
     };
     auto record_id = reader.read_u64();
-    if (!record_id) {
+    if (!record_id) [[unlikely]] {
         return std::unexpected(std::move(record_id.error()));
     }
     (void)context;
     return *record_id;
 }
 
+// 解码值
 std::expected<common::Value, StorageError>
 decode_value(io::LittleEndianBinaryReader & reader, const StorageErrorContext & context)
 {
     auto kind = reader.read_u8();
-    if (!kind) {
+    if (!kind) [[unlikely]] {
         return std::unexpected(std::move(kind.error()));
     }
-    if (*kind > static_cast<std::uint8_t>(EncodedValueKind::Vector)) {
+    if (*kind > static_cast<std::uint8_t>(EncodedValueKind::Vector)) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::InvalidData, "Invalid encoded value kind", context)
         );
@@ -896,10 +919,10 @@ decode_value(io::LittleEndianBinaryReader & reader, const StorageErrorContext & 
         return common::Value::null();
     case EncodedValueKind::Boolean: {
         auto value = reader.read_u8();
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
-        if (*value > 1) {
+        if (*value > 1) [[unlikely]] {
             return std::unexpected(make_storage_error(
                 StorageErrorCode::InvalidData,
                 "Boolean value must be encoded as zero or one",
@@ -910,45 +933,45 @@ decode_value(io::LittleEndianBinaryReader & reader, const StorageErrorContext & 
     }
     case EncodedValueKind::Integer: {
         auto value = reader.read_i32();
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
         return common::Value {*value};
     }
     case EncodedValueKind::BigInt: {
         auto value = reader.read_i64();
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
         return common::Value {*value};
     }
     case EncodedValueKind::Float: {
         auto value = reader.read_f32();
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
         return common::Value {*value};
     }
     case EncodedValueKind::Double: {
         auto value = reader.read_f64();
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
         return common::Value {*value};
     }
     case EncodedValueKind::String: {
         auto value = reader.read_string();
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
         return common::Value {std::move(*value)};
     }
     case EncodedValueKind::Vector: {
         auto count = reader.read_u32();
-        if (!count) {
+        if (!count) [[unlikely]] {
             return std::unexpected(std::move(count.error()));
         }
-        if (*count > reader.remaining_bytes() / sizeof(double)) {
+        if (*count > reader.remaining_bytes() / sizeof(double)) [[unlikely]] {
             return std::unexpected(make_storage_error(
                 StorageErrorCode::ResourceLimitExceeded,
                 "Vector length exceeds remaining binary data",
@@ -959,7 +982,7 @@ decode_value(io::LittleEndianBinaryReader & reader, const StorageErrorContext & 
         values.reserve(*count);
         for (std::uint32_t index = 0; index < *count; ++index) {
             auto value = reader.read_f64();
-            if (!value) {
+            if (!value) [[unlikely]] {
                 return std::unexpected(std::move(value.error()));
             }
             values.push_back(*value);
@@ -972,10 +995,11 @@ decode_value(io::LittleEndianBinaryReader & reader, const StorageErrorContext & 
     );
 }
 
+// 解码记录
 std::expected<common::Record, StorageError>
 decode_record(std::span<const std::byte> bytes, const StorageErrorContext & context)
 {
-    if (bytes.size() > MaxEncodedRecordSize) {
+    if (bytes.size() > MaxEncodedRecordSize) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::RecordTooLarge,
             "Encoded record exceeds the storage page limit",
@@ -993,19 +1017,19 @@ decode_record(std::span<const std::byte> bytes, const StorageErrorContext & cont
         },
     };
     auto record_id = reader.read_u64();
-    if (!record_id) {
+    if (!record_id) [[unlikely]] {
         return std::unexpected(std::move(record_id.error()));
     }
-    if (*record_id == 0) {
+    if (*record_id == 0) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::InvalidData, "Invalid storage record ID", context)
         );
     }
     auto element_count = reader.read_u32();
-    if (!element_count) {
+    if (!element_count) [[unlikely]] {
         return std::unexpected(std::move(element_count.error()));
     }
-    if (*element_count > reader.remaining_bytes()) {
+    if (*element_count > reader.remaining_bytes()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ResourceLimitExceeded,
             "Record element count exceeds remaining binary data",
@@ -1018,12 +1042,12 @@ decode_record(std::span<const std::byte> bytes, const StorageErrorContext & cont
     record.data.values.reserve(*element_count);
     for (std::uint32_t index = 0; index < *element_count; ++index) {
         auto value = decode_value(reader, record_context(context, *record_id));
-        if (!value) {
+        if (!value) [[unlikely]] {
             return std::unexpected(std::move(value.error()));
         }
         record.data.values.push_back(std::move(*value));
     }
-    if (reader.remaining_bytes() != 0) {
+    if (reader.remaining_bytes() != 0) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::CorruptedPage,
             "Storage record contains trailing bytes",
@@ -1051,7 +1075,7 @@ std::expected<std::unique_ptr<StorageStore>, StorageError> StorageStore::create(
     common::CollectionId collection_id
 )
 {
-    if (auto created = filesystem.create_dir_all(path.parent_path()); !created) {
+    if (auto created = filesystem.create_dir_all(path.parent_path()); !created) [[unlikely]] {
         return std::unexpected(std::move(created.error()));
     }
     auto file = filesystem.open(
@@ -1061,15 +1085,19 @@ std::expected<std::unique_ptr<StorageStore>, StorageError> StorageStore::create(
             .create_mode = filesystem::FileCreateMode::CreateNew,
         }
     );
-    if (!file) {
+    if (!file) [[unlikely]] {
         return std::unexpected(std::move(file.error()));
     }
 
     auto store =
         std::unique_ptr<StorageStore>(new StorageStore(path, collection_id, std::move(*file)));
-    if (auto result = store->initialize(); !result) {
-        (void)store->file_.close();
-        (void)filesystem.remove(path);
+    if (auto result = store->initialize(); !result) [[unlikely]] {
+        if (auto closed = store->file_.close(); !closed) [[unlikely]] {
+            return std::unexpected(std::move(closed.error()));
+        }
+        if (auto removed = filesystem.remove(path); !removed) [[unlikely]] {
+            return std::unexpected(std::move(removed.error()));
+        }
         return std::unexpected(std::move(result.error()));
     }
     return store;
@@ -1088,12 +1116,12 @@ std::expected<std::unique_ptr<StorageStore>, StorageError> StorageStore::open(
             .create_mode = filesystem::FileCreateMode::OpenExisting,
         }
     );
-    if (!file) {
+    if (!file) [[unlikely]] {
         return std::unexpected(std::move(file.error()));
     }
     auto store =
         std::unique_ptr<StorageStore>(new StorageStore(path, collection_id, std::move(*file)));
-    if (auto result = store->load(); !result) {
+    if (auto result = store->load(); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     return store;
@@ -1108,29 +1136,29 @@ std::expected<common::Record, StorageError> StorageStore::get(common::RecordId r
         .collection_id = collection_id_,
         .record_id = record_id,
     };
-    if (location == locations_.end()) {
+    if (location == locations_.end()) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::RecordNotFound, "Record not found", context)
         );
     }
-    if (location->second.page_id == 0 || location->second.page_id > page_count_) {
+    if (location->second.page_id == 0 || location->second.page_id > page_count_) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::InvalidState, "Record page ID is out of range", context)
         );
     }
     auto page = read_page(file_, location->second.page_id, context);
-    if (!page) {
+    if (!page) [[unlikely]] {
         return std::unexpected(std::move(page.error()));
     }
     auto payload = active_payload(*page, location->second.slot_id, context);
-    if (!payload) {
+    if (!payload) [[unlikely]] {
         return std::unexpected(std::move(payload.error()));
     }
     auto record = decode_record(*payload, context);
-    if (!record) {
+    if (!record) [[unlikely]] {
         return std::unexpected(std::move(record.error()));
     }
-    if (record->id != record_id) {
+    if (record->id != record_id) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::CorruptedPage,
             "Storage record ID does not match its location",
@@ -1147,7 +1175,7 @@ std::expected<common::RecordId, StorageError> StorageStore::insert(common::Recor
         .path = path_,
         .collection_id = collection_id_,
     };
-    if (next_record_id_ == std::numeric_limits<common::RecordId>::max()) {
+    if (next_record_id_ == std::numeric_limits<common::RecordId>::max()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ResourceLimitExceeded,
             "Record ID space is exhausted",
@@ -1156,7 +1184,7 @@ std::expected<common::RecordId, StorageError> StorageStore::insert(common::Recor
     }
     const auto record_id = next_record_id_;
     auto encoded = encode_record(record_id, data, context);
-    if (!encoded) {
+    if (!encoded) [[unlikely]] {
         return std::unexpected(std::move(encoded.error()));
     }
     const auto next_record_id = record_id + 1;
@@ -1174,13 +1202,13 @@ std::expected<common::RecordId, StorageError> StorageStore::insert(common::Recor
     }
     for (const auto page_id : candidates) {
         auto page = read_page(file_, page_id, context);
-        if (!page) {
+        if (!page) [[unlikely]] {
             return std::unexpected(std::move(page.error()));
         }
         const auto summary = summarize_page(*page);
         const auto directory_cost = summary.has_deleted_slot ? 0U : StoragePageSlotSize;
-        if (summary.contiguous < encoded->size() + directory_cost) {
-            if (auto compacted = compact_page(*page, context); !compacted) {
+        if (summary.contiguous < encoded->size() + directory_cost) [[unlikely]] {
+            if (auto compacted = compact_page(*page, context); !compacted) [[unlikely]] {
                 return std::unexpected(std::move(compacted.error()));
             }
         }
@@ -1188,16 +1216,17 @@ std::expected<common::RecordId, StorageError> StorageStore::insert(common::Recor
         if (!slot_id) {
             continue;
         }
-        if (auto written = write_page(file_, *page, context); !written) {
+        if (auto written = write_page(file_, *page, context); !written) [[unlikely]] {
             return std::unexpected(std::move(written.error()));
         }
         auto header = encode_header({collection_id_, next_record_id, page_count_});
-        if (!header) {
+        if (!header) [[unlikely]] {
             return std::unexpected(std::move(header.error()));
         }
         if (auto written_header = file_.write_at(0, std::span<const std::byte> {*header});
-            !written_header)
+            !written_header) [[unlikely]] {
             return std::unexpected(std::move(written_header.error()));
+        }
         locations_.emplace(record_id, PhysicalRid {page_id, *slot_id});
         next_record_id_ = next_record_id;
         const auto summary_after = summarize_page(*page);
@@ -1212,7 +1241,7 @@ std::expected<common::RecordId, StorageError> StorageStore::insert(common::Recor
         return record_id;
     }
 
-    if (page_count_ == std::numeric_limits<std::uint32_t>::max()) {
+    if (page_count_ == std::numeric_limits<std::uint32_t>::max()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ResourceLimitExceeded,
             "Storage page ID space is exhausted",
@@ -1221,27 +1250,28 @@ std::expected<common::RecordId, StorageError> StorageStore::insert(common::Recor
     }
     const auto page_id = page_count_ + 1;
     auto empty = make_empty_page(page_id);
-    if (!empty) {
+    if (!empty) [[unlikely]] {
         return std::unexpected(std::move(empty.error()));
     }
     auto page = decode_page(std::move(*empty), page_id, context);
-    if (!page) {
+    if (!page) [[unlikely]] {
         return std::unexpected(std::move(page.error()));
     }
     auto slot_id = place_encoded(*page, *encoded, record_context(context, record_id, page_id));
-    if (!slot_id) {
+    if (!slot_id) [[unlikely]] {
         return std::unexpected(std::move(slot_id.error()));
     }
-    if (auto written = write_page(file_, *page, context); !written) {
+    if (auto written = write_page(file_, *page, context); !written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
     auto header = encode_header({collection_id_, next_record_id, page_id});
-    if (!header) {
+    if (!header) [[unlikely]] {
         return std::unexpected(std::move(header.error()));
     }
     if (auto written_header = file_.write_at(0, std::span<const std::byte> {*header});
-        !written_header)
+        !written_header) [[unlikely]] {
         return std::unexpected(std::move(written_header.error()));
+    }
     page_count_ = page_id;
     page_space_summaries_.resize(static_cast<std::size_t>(page_count_) + 1);
     locations_.emplace(record_id, PhysicalRid {page_id, *slot_id});
@@ -1268,30 +1298,30 @@ StorageStore::update(common::RecordId record_id, common::RecordData data)
         .record_id = record_id,
     };
     const auto location = locations_.find(record_id);
-    if (location == locations_.end()) {
+    if (location == locations_.end()) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::RecordNotFound, "Record not found", context)
         );
     }
     auto encoded = encode_record(record_id, data, context);
-    if (!encoded) {
+    if (!encoded) [[unlikely]] {
         return std::unexpected(std::move(encoded.error()));
     }
 
     const auto old_location = location->second;
     auto source = read_page(file_, old_location.page_id, context);
-    if (!source) {
+    if (!source) [[unlikely]] {
         return std::unexpected(std::move(source.error()));
     }
     auto old_payload = active_payload(*source, old_location.slot_id, context);
-    if (!old_payload) {
+    if (!old_payload) [[unlikely]] {
         return std::unexpected(std::move(old_payload.error()));
     }
     auto old_id = decode_record_id(*old_payload, context);
-    if (!old_id) {
+    if (!old_id) [[unlikely]] {
         return std::unexpected(std::move(old_id.error()));
     }
-    if (*old_id != record_id) {
+    if (*old_id != record_id) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::CorruptedPage,
             "Stored record ID does not match its location",
@@ -1299,14 +1329,14 @@ StorageStore::update(common::RecordId record_id, common::RecordData data)
         ));
     }
 
-    if (auto erased = erase_slot(*source, old_location.slot_id, context); !erased) {
+    if (auto erased = erase_slot(*source, old_location.slot_id, context); !erased) [[unlikely]] {
         return std::unexpected(std::move(erased.error()));
     }
-    if (auto compacted = compact_page(*source, context); !compacted) {
+    if (auto compacted = compact_page(*source, context); !compacted) [[unlikely]] {
         return std::unexpected(std::move(compacted.error()));
     }
     if (auto replacement = place_encoded(*source, *encoded, context); replacement) {
-        if (auto written = write_page(file_, *source, context); !written) {
+        if (auto written = write_page(file_, *source, context); !written) [[unlikely]] {
             return std::unexpected(std::move(written.error()));
         }
         location->second = PhysicalRid {old_location.page_id, *replacement};
@@ -1332,13 +1362,13 @@ StorageStore::update(common::RecordId record_id, common::RecordData data)
     }
     for (const auto page_id : candidates) {
         auto destination = read_page(file_, page_id, context);
-        if (!destination) {
+        if (!destination) [[unlikely]] {
             return std::unexpected(std::move(destination.error()));
         }
         const auto summary = summarize_page(*destination);
         const auto directory_cost = summary.has_deleted_slot ? 0U : StoragePageSlotSize;
-        if (summary.contiguous < encoded->size() + directory_cost) {
-            if (auto compacted = compact_page(*destination, context); !compacted) {
+        if (summary.contiguous < encoded->size() + directory_cost) [[unlikely]] {
+            if (auto compacted = compact_page(*destination, context); !compacted) [[unlikely]] {
                 return std::unexpected(std::move(compacted.error()));
             }
         }
@@ -1346,10 +1376,10 @@ StorageStore::update(common::RecordId record_id, common::RecordData data)
         if (!replacement) {
             continue;
         }
-        if (auto written = write_page(file_, *destination, context); !written) {
+        if (auto written = write_page(file_, *destination, context); !written) [[unlikely]] {
             return std::unexpected(std::move(written.error()));
         }
-        if (auto written_source = write_page(file_, *source, context); !written_source) {
+        if (auto written_source = write_page(file_, *source, context); !written_source) [[unlikely]] {
             return std::unexpected(std::move(written_source.error()));
         }
         location->second = PhysicalRid {page_id, *replacement};
@@ -1374,7 +1404,7 @@ StorageStore::update(common::RecordId record_id, common::RecordData data)
         return {};
     }
 
-    if (page_count_ == std::numeric_limits<std::uint32_t>::max()) {
+    if (page_count_ == std::numeric_limits<std::uint32_t>::max()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::ResourceLimitExceeded,
             "Storage page ID space is exhausted",
@@ -1383,30 +1413,31 @@ StorageStore::update(common::RecordId record_id, common::RecordData data)
     }
     const auto page_id = page_count_ + 1;
     auto empty = make_empty_page(page_id);
-    if (!empty) {
+    if (!empty) [[unlikely]] {
         return std::unexpected(std::move(empty.error()));
     }
     auto destination = decode_page(std::move(*empty), page_id, context);
-    if (!destination) {
+    if (!destination) [[unlikely]] {
         return std::unexpected(std::move(destination.error()));
     }
     auto replacement = place_encoded(*destination, *encoded, context);
-    if (!replacement) {
+    if (!replacement) [[unlikely]] {
         return std::unexpected(std::move(replacement.error()));
     }
-    if (auto written = write_page(file_, *destination, context); !written) {
+    if (auto written = write_page(file_, *destination, context); !written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
-    if (auto written_source = write_page(file_, *source, context); !written_source) {
+    if (auto written_source = write_page(file_, *source, context); !written_source) [[unlikely]] {
         return std::unexpected(std::move(written_source.error()));
     }
     auto header = encode_header({collection_id_, next_record_id_, page_id});
-    if (!header) {
+    if (!header) [[unlikely]] {
         return std::unexpected(std::move(header.error()));
     }
     if (auto written_header = file_.write_at(0, std::span<const std::byte> {*header});
-        !written_header)
+        !written_header) [[unlikely]] {
         return std::unexpected(std::move(written_header.error()));
+    }
     page_count_ = page_id;
     page_space_summaries_.resize(static_cast<std::size_t>(page_count_) + 1);
     location->second = PhysicalRid {page_id, *replacement};
@@ -1440,34 +1471,34 @@ std::expected<void, StorageError> StorageStore::erase(common::RecordId record_id
         .record_id = record_id,
     };
     const auto location = locations_.find(record_id);
-    if (location == locations_.end()) {
+    if (location == locations_.end()) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::RecordNotFound, "Record not found", context)
         );
     }
     auto page = read_page(file_, location->second.page_id, context);
-    if (!page) {
+    if (!page) [[unlikely]] {
         return std::unexpected(std::move(page.error()));
     }
     auto payload = active_payload(*page, location->second.slot_id, context);
-    if (!payload) {
+    if (!payload) [[unlikely]] {
         return std::unexpected(std::move(payload.error()));
     }
     auto stored_id = decode_record_id(*payload, context);
-    if (!stored_id) {
+    if (!stored_id) [[unlikely]] {
         return std::unexpected(std::move(stored_id.error()));
     }
-    if (*stored_id != record_id) {
+    if (*stored_id != record_id) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::CorruptedPage,
             "Stored record ID does not match its location",
             context
         ));
     }
-    if (auto erased = erase_slot(*page, location->second.slot_id, context); !erased) {
+    if (auto erased = erase_slot(*page, location->second.slot_id, context); !erased) [[unlikely]] {
         return std::unexpected(std::move(erased.error()));
     }
-    if (auto written = write_page(file_, *page, context); !written) {
+    if (auto written = write_page(file_, *page, context); !written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
     locations_.erase(location);
@@ -1494,7 +1525,7 @@ std::expected<StorageCursor, StorageError> StorageStore::scan() const
     records.reserve(locations_.size());
     for (std::uint32_t page_id = 1; page_id <= page_count_; ++page_id) {
         auto page = read_page(file_, page_id, context);
-        if (!page) {
+        if (!page) [[unlikely]] {
             return std::unexpected(std::move(page.error()));
         }
         for (std::uint16_t slot_id = 0; slot_id < page->slots.size(); ++slot_id) {
@@ -1502,28 +1533,26 @@ std::expected<StorageCursor, StorageError> StorageStore::scan() const
                 continue;
             }
             auto payload = active_payload(*page, slot_id, context);
-            if (!payload) {
+            if (!payload) [[unlikely]] {
                 return std::unexpected(std::move(payload.error()));
             }
             auto record = decode_record(*payload, page_context(context, page_id, slot_id));
-            if (!record) {
+            if (!record) [[unlikely]] {
                 return std::unexpected(std::move(record.error()));
             }
             const auto location = locations_.find(record->id);
             if (location == locations_.end() || location->second.page_id != page_id ||
-                location->second.slot_id != slot_id) {
-                {
-                    return std::unexpected(make_storage_error(
-                        StorageErrorCode::CorruptedPage,
-                        "Storage location index does not match page contents",
-                        record_context(context, record->id, page_id, slot_id)
-                    ));
-                }
+                location->second.slot_id != slot_id) [[unlikely]] {
+                return std::unexpected(make_storage_error(
+                    StorageErrorCode::CorruptedPage,
+                    "Storage location index does not match page contents",
+                    record_context(context, record->id, page_id, slot_id)
+                ));
             }
             records.push_back(std::move(*record));
         }
     }
-    if (records.size() != locations_.size()) {
+    if (records.size() != locations_.size()) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidState,
             "Storage location index contains records absent from scanned pages",
@@ -1551,11 +1580,11 @@ std::expected<void, StorageError> StorageStore::write_header()
         .collection_id = collection_id_,
     };
     auto header = encode_header({collection_id_, next_record_id_, page_count_});
-    if (!header) {
+    if (!header) [[unlikely]] {
         return std::unexpected(std::move(header.error()));
     }
     auto written = file_.write_at(0, std::span<const std::byte> {*header});
-    if (!written) {
+    if (!written) [[unlikely]] {
         return std::unexpected(std::move(written.error()));
     }
     return {};
@@ -1569,15 +1598,15 @@ std::expected<void, StorageError> StorageStore::load()
         .collection_id = collection_id_,
     };
     auto size = file_.size();
-    if (!size) {
+    if (!size) [[unlikely]] {
         return std::unexpected(std::move(size.error()));
     }
-    if (*size < StoragePageSize) {
+    if (*size < StoragePageSize) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::UnexpectedEof, "Truncated storage header", context)
         );
     }
-    if (*size % StoragePageSize != 0) {
+    if (*size % StoragePageSize != 0) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::InvalidFormat, "Invalid storage file size", context)
         );
@@ -1585,20 +1614,20 @@ std::expected<void, StorageError> StorageStore::load()
 
     StoragePageBuffer header_bytes {};
     auto header_read = file_.read_at(0, header_bytes);
-    if (!header_read) {
+    if (!header_read) [[unlikely]] {
         return std::unexpected(std::move(header_read.error()));
     }
-    if (*header_read != StoragePageSize) {
+    if (*header_read != StoragePageSize) [[unlikely]] {
         return std::unexpected(
             make_storage_error(StorageErrorCode::UnexpectedEof, "Truncated storage header", context)
         );
     }
     auto header = decode_header(header_bytes, collection_id_, context);
-    if (!header) {
+    if (!header) [[unlikely]] {
         return std::unexpected(std::move(header.error()));
     }
     const auto expected_page_count = (*size - StoragePageSize) / StoragePageSize;
-    if (header->page_count != expected_page_count) {
+    if (header->page_count != expected_page_count) [[unlikely]] {
         return std::unexpected(make_storage_error(
             StorageErrorCode::InvalidFormat,
             "Storage page count does not match file size",
@@ -1611,7 +1640,7 @@ std::expected<void, StorageError> StorageStore::load()
     std::set<std::pair<std::size_t, std::uint32_t>> free_space_index;
     for (std::uint32_t page_id = 1; page_id <= header->page_count; ++page_id) {
         auto page = read_page(file_, page_id, context);
-        if (!page) {
+        if (!page) [[unlikely]] {
             return std::unexpected(std::move(page.error()));
         }
         const auto summary = summarize_page(*page);
@@ -1623,21 +1652,21 @@ std::expected<void, StorageError> StorageStore::load()
                 continue;
             }
             auto payload = active_payload(*page, slot_id, context);
-            if (!payload) {
+            if (!payload) [[unlikely]] {
                 return std::unexpected(std::move(payload.error()));
             }
             auto record_id = decode_record_id(*payload, page_context(context, page_id, slot_id));
-            if (!record_id) {
+            if (!record_id) [[unlikely]] {
                 return std::unexpected(std::move(record_id.error()));
             }
-            if (*record_id == 0 || *record_id >= header->next_record_id) {
+            if (*record_id == 0 || *record_id >= header->next_record_id) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::InvalidFormat,
                     "Invalid storage record ID",
                     record_context(context, *record_id, page_id, slot_id)
                 ));
             }
-            if (!locations.emplace(*record_id, PhysicalRid {page_id, slot_id}).second) {
+            if (!locations.emplace(*record_id, PhysicalRid {page_id, slot_id}).second) [[unlikely]] {
                 return std::unexpected(make_storage_error(
                     StorageErrorCode::InvalidFormat,
                     "Duplicate storage record ID",
