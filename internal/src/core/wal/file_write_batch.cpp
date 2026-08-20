@@ -186,13 +186,11 @@ std::expected<std::filesystem::path, WalError> FileWriteBatch::resolve_target(
                ("vindex_" + std::to_string(target.object_id) + ".lhnsw");
     case FileKind::CatalogStore:
         return data_directory / "catalog.lcat";
-    default:
-        [[unlikely]]
-        {
-            return std::unexpected(
-                make_error(WalErrorCode::InvalidRecord, "Unknown WAL file target kind")
-            );
-        }
+    default: [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::InvalidRecord, "Unknown WAL file target kind")
+        );
+    }
     }
 }
 

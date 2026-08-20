@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "core/wal/file_write_batch.hpp"
+#include "core/wal/wal_codec.hpp"
 
 namespace litedb::core::wal
 {

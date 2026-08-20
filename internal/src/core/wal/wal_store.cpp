@@ -5,13 +5,15 @@
 #include <limits>
 #include <utility>
 
+#include "core/wal/wal_codec.hpp"
+
 namespace litedb::core::wal
 {
 
 namespace
 {
 
-// 构造文件头或段结构不合法时使用的 WAL 格式错误。
+// 构造文件头或段结构不合法时使用的 WAL 格式错误
 [[nodiscard]]
 WalError invalid_format(std::string message, const std::filesystem::path & path)
 {
@@ -25,7 +27,7 @@ WalError invalid_format(std::string message, const std::filesystem::path & path)
     );
 }
 
-// 创建 WAL 所需的父目录；空父路径表示当前目录，无需操作。
+// 创建 WAL 所需的父目录；空父路径表示当前目录，无需操作
 [[nodiscard]]
 std::expected<void, WalError>
 create_parent_directory(filesystem::FileSystem & filesystem, const std::filesystem::path & path)

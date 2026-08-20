@@ -1,5 +1,6 @@
 #include "core/filesystem/platform_filesystem.hpp"
 #include "core/wal/file_write_batch.hpp"
+#include "core/wal/wal_codec.hpp"
 #include "core/wal/wal_manager.hpp"
 #include "core/wal/wal_store.hpp"
 
@@ -531,6 +532,33 @@ int main()
     require(
         std::filesystem::file_size(store->path()) == committed_size,
         "incomplete tail not truncated"
+    );
+
+    const auto counted_directory = directory / "counted";
+    {
+        auto manager = wal::WalManager::open(counted_directory, filesystem);
+        require(manager.has_value(), "open counted WAL failed");
+        auto counted_begin = manager->append_begin(21);
+        auto counted_commit = manager->append_commit(21);
+        require(
+            counted_begin && counted_commit && manager->flush_through(*counted_commit),
+            "append counted WAL transaction failed"
+        );
+    }
+    auto counted = wal::WalManager::open(
+        counted_directory,
+        filesystem,
+        {
+            .max_record_size_bytes = 1024,
+            .max_scan_size_bytes = 1024 * 1024,
+            .max_record_count = 3,
+        }
+    );
+    require(counted.has_value(), "reopen counted WAL failed");
+    auto counted_budget = counted->validate_transaction({});
+    require(
+        !counted_budget && counted_budget.error().is(wal::WalErrorCode::ResourceLimitExceeded),
+        "reopened WAL did not initialize its record count"
     );
 
     const auto segmented_directory = directory / "segmented";

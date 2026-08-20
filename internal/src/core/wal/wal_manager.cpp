@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "core/wal/wal_codec.hpp"
+
 namespace litedb::core::wal
 {
 
@@ -52,6 +54,7 @@ WalManager::WalManager(
     filesystem::FileSystem & filesystem,
     WalStore active,
     std::size_t retained_segments,
+    std::size_t record_count,
     WalDecodeLimits limits
 ) noexcept
     : directory_(std::move(directory))
@@ -59,6 +62,7 @@ WalManager::WalManager(
     , active_(std::move(active))
     , retained_segments_(retained_segments)
     , limits_(limits)
+    , record_count_(record_count)
 {}
 
 std::filesystem::path
@@ -120,7 +124,7 @@ std::expected<WalManager, WalError> WalManager::open(
         if (!synced) [[unlikely]] {
             return std::unexpected(std::move(synced.error()));
         }
-        return WalManager {std::move(directory), filesystem, std::move(*active), 1, limits};
+        return WalManager {std::move(directory), filesystem, std::move(*active), 1, 0, limits};
     }
 
     const auto [generation, path] = segments.back();
@@ -139,11 +143,16 @@ std::expected<WalManager, WalError> WalManager::open(
             }
         ));
     }
+    auto scanned = active->scan(true, limits);
+    if (!scanned) [[unlikely]] {
+        return std::unexpected(std::move(scanned.error()));
+    }
     return WalManager {
         std::move(directory),
         filesystem,
         std::move(*active),
         segments.size(),
+        scanned->records.size(),
         limits,
     };
 }
@@ -152,7 +161,6 @@ std::expected<void, WalError> WalManager::validate_transaction(
     std::span<const FileWrite> writes
 ) const
 {
-    constexpr std::uint64_t FileWritePayloadHeaderSize = 24;
     if (limits_.max_record_size_bytes < WalCodec::RecordHeaderSize) [[unlikely]] {
         return std::unexpected(make_error(
             WalErrorCode::ResourceLimitExceeded,
@@ -188,7 +196,8 @@ std::expected<void, WalError> WalManager::validate_transaction(
     std::uint64_t additional_bytes = 2 * WalCodec::RecordHeaderSize;
     for (const auto & write : writes) {
         if (write.after_image.size() > std::numeric_limits<std::uint64_t>::max() -
-                                           FileWritePayloadHeaderSize - WalCodec::RecordHeaderSize)
+                                           WalCodec::FileWritePayloadHeaderSize -
+                                           WalCodec::RecordHeaderSize)
             [[unlikely]] {
             return std::unexpected(make_error(
                 WalErrorCode::ResourceLimitExceeded,
@@ -200,7 +209,7 @@ std::expected<void, WalError> WalManager::validate_transaction(
             ));
         }
         const auto record_size = static_cast<std::uint64_t>(WalCodec::RecordHeaderSize) +
-                                 FileWritePayloadHeaderSize +
+                                 WalCodec::FileWritePayloadHeaderSize +
                                  static_cast<std::uint64_t>(write.after_image.size());
         if (record_size > limits_.max_record_size_bytes) [[unlikely]] {
             return std::unexpected(make_error(

@@ -18,7 +18,6 @@ namespace
 constexpr std::uint32_t FileMagic = 0x4c57444cU;
 constexpr std::uint32_t RecordMagic = 0x3152574cU;
 constexpr std::uint16_t Version = 2;
-constexpr std::size_t FileWritePayloadHeaderSize = 24;
 
 // 判断记录类型是否属于 WAL v2 支持的连续枚举范围。
 [[nodiscard]]
@@ -49,33 +48,26 @@ encode_file_header_bytes(const WalFileHeader & header, std::uint32_t checksum)
 {
     io::BufferByteWriter bytes(WalCodec::FileHeaderSize);
     io::LittleEndianBinaryWriter writer(bytes);
-    if (auto result = writer.write_u32(FileMagic); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(FileMagic); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(Version); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u16(Version); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     if (auto result = writer.write_u16(static_cast<std::uint16_t>(WalCodec::FileHeaderSize));
-        !result) [[unlikely]]
-    {
+        !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(header.generation); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(header.generation); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(header.checkpoint_transaction_id); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(header.checkpoint_transaction_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(checksum); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(checksum); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(0); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     return bytes.take_bytes();
@@ -94,49 +86,38 @@ std::expected<std::vector<std::byte>, WalError> encode_record_bytes(
     const auto total_size = WalCodec::RecordHeaderSize + payload.size();
     io::BufferByteWriter bytes(total_size);
     io::LittleEndianBinaryWriter writer(bytes);
-    if (auto result = writer.write_u32(RecordMagic); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(RecordMagic); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(Version); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u16(Version); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u8(static_cast<std::uint8_t>(type)); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u8(static_cast<std::uint8_t>(type)); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u8(0); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u8(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(total_size); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(total_size); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(lsn); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(lsn); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(transaction_id); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(transaction_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(payload.size()); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(payload.size()); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(checksum); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(checksum); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(0); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     if (!payload.empty()) {
-        if (auto result = bytes.write_bytes(payload); !result) [[unlikely]]
-        {
+        if (auto result = bytes.write_bytes(payload); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
     }
@@ -404,44 +385,39 @@ std::expected<std::vector<std::byte>, WalError> WalCodec::encode_file_write(cons
         (write.mode == FileWriteMode::Truncate && !write.after_image.empty()) ||
         (write.mode == FileWriteMode::Replace && write.offset != 0) ||
         write.after_image.size() >
-            std::numeric_limits<std::size_t>::max() - FileWritePayloadHeaderSize ||
-        write.offset > std::numeric_limits<std::uint64_t>::max() - FileWritePayloadHeaderSize ||
+            std::numeric_limits<std::size_t>::max() - WalCodec::FileWritePayloadHeaderSize ||
+        write.offset >
+            std::numeric_limits<std::uint64_t>::max() - WalCodec::FileWritePayloadHeaderSize ||
         write.after_image.size() > std::numeric_limits<std::uint64_t>::max() -
-                                       FileWritePayloadHeaderSize - write.offset) [[unlikely]] {
+                                       WalCodec::FileWritePayloadHeaderSize - write.offset)
+        [[unlikely]] {
         return std::unexpected(
             make_error(WalErrorCode::InvalidRecord, "Invalid WAL file-write operation")
         );
     }
-    const auto payload_size = FileWritePayloadHeaderSize + write.after_image.size();
+    const auto payload_size = WalCodec::FileWritePayloadHeaderSize + write.after_image.size();
     io::BufferByteWriter bytes(payload_size);
     io::LittleEndianBinaryWriter writer(bytes);
-    if (auto result = writer.write_u8(kind); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u8(kind); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u8(mode); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u8(mode); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u32(0); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u32(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u16(0); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u16(0); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(write.target.object_id); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(write.target.object_id); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
-    if (auto result = writer.write_u64(write.offset); !result) [[unlikely]]
-    {
+    if (auto result = writer.write_u64(write.offset); !result) [[unlikely]] {
         return std::unexpected(std::move(result.error()));
     }
     if (!write.after_image.empty()) {
-        if (auto result = bytes.write_bytes(write.after_image); !result) [[unlikely]]
-        {
+        if (auto result = bytes.write_bytes(write.after_image); !result) [[unlikely]] {
             return std::unexpected(std::move(result.error()));
         }
     }
@@ -450,7 +426,7 @@ std::expected<std::vector<std::byte>, WalError> WalCodec::encode_file_write(cons
 
 std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::vector<std::byte> payload)
 {
-    if (payload.size() < FileWritePayloadHeaderSize) [[unlikely]] {
+    if (payload.size() < WalCodec::FileWritePayloadHeaderSize) [[unlikely]] {
         return std::unexpected(
             make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload")
         );
@@ -484,15 +460,16 @@ std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::vector<std::
     const auto mode = static_cast<FileWriteMode>(*mode_value);
     if ((mode == FileWriteMode::Replace && *offset != 0) ||
         (mode == FileWriteMode::Delete &&
-         (*offset != 0 || payload.size() != FileWritePayloadHeaderSize)) ||
-        (mode == FileWriteMode::Truncate && payload.size() != FileWritePayloadHeaderSize) ||
+         (*offset != 0 || payload.size() != WalCodec::FileWritePayloadHeaderSize)) ||
+        (mode == FileWriteMode::Truncate &&
+         payload.size() != WalCodec::FileWritePayloadHeaderSize) ||
         (kind == FileKind::CatalogStore && *object_id != 0) ||
         (kind != FileKind::CatalogStore && *object_id == 0)) [[unlikely]] {
         return std::unexpected(
             make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation")
         );
     }
-    std::vector<std::byte> after_image(payload.size() - FileWritePayloadHeaderSize);
+    std::vector<std::byte> after_image(payload.size() - WalCodec::FileWritePayloadHeaderSize);
     if (!after_image.empty()) {
         auto read = buffer.read_some(after_image);
         if (!read || *read != after_image.size()) [[unlikely]] {

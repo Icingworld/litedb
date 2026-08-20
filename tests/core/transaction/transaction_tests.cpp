@@ -1,5 +1,6 @@
 #include "core/transaction/transaction_context.hpp"
 #include "core/transaction/transaction_manager.hpp"
+#include "core/wal/wal_codec.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
 
 #include <chrono>

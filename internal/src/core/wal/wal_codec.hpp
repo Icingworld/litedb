@@ -19,6 +19,7 @@ class WalCodec final
 public:
     static constexpr std::size_t FileHeaderSize = 32;
     static constexpr std::size_t RecordHeaderSize = 48;
+    static constexpr std::size_t FileWritePayloadHeaderSize = 24;
 
     using FileHeader = std::array<std::byte, FileHeaderSize>;
 

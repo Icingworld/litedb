@@ -39,6 +39,7 @@ private:
         filesystem::FileSystem & filesystem,
         WalStore active,
         std::size_t retained_segments,
+        std::size_t record_count,
         WalDecodeLimits limits
     ) noexcept;
 
@@ -48,7 +49,7 @@ public:
     WalManager(WalManager &&) noexcept = default;
     WalManager & operator=(WalManager &&) noexcept = default;
 
-    // 打开 WAL 目录；目录为空时创建第一代段，否则只打开最高代段。
+    // 打开 WAL 目录；目录为空时创建第一代段，否则扫描并打开最高代段。
     [[nodiscard]]
     static std::expected<WalManager, WalError> open(
         std::filesystem::path directory,

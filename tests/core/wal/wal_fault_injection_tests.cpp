@@ -8,6 +8,7 @@
 #include "core/storage/storage_engine.hpp"
 #include "core/transaction/transaction_manager.hpp"
 #include "core/vindex/vector_index_engine.hpp"
+#include "core/wal/wal_codec.hpp"
 #include "core/wal/wal_manager.hpp"
 #include "core/wal/wal_store.hpp"
 

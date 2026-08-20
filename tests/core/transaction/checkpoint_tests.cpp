@@ -1,6 +1,7 @@
 #include "core/database/database_engine.hpp"
 #include "core/database/session.hpp"
 #include "core/filesystem/platform_filesystem.hpp"
+#include "core/wal/wal_codec.hpp"
 #include "core/wal/wal_manager.hpp"
 
 #include <filesystem>
