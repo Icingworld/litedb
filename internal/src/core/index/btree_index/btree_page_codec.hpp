@@ -13,9 +13,7 @@
 namespace litedb::core::index::btree_index
 {
 
-/**
- * @brief B+ 树页编解码错误码
- */
+// B+ 树页编解码错误码
 enum class BTreePageCodecErrorCode : std::uint8_t
 {
     UnsupportedKeyType,      // 不支持的索引键类型
@@ -28,15 +26,11 @@ enum class BTreePageCodecErrorCode : std::uint8_t
     CorruptedPage,           // 物理页内容损坏
 };
 
-/**
- * @brief B+ 树页编解码错误
- */
+// B+ 树页编解码错误
 using BTreePageCodecError = error::Error;
 
-/**
- * @brief B+ 树逻辑页与固定大小物理页之间的编解码器
- * @details 编解码器只定义页内格式，不负责文件读写、页分配、缓存或树结构修改。
- */
+// B+ 树逻辑页与固定大小物理页之间的编解码器
+// 编解码器只定义页内格式，不负责文件读写、页分配、缓存或树结构修改。
 class BTreePageCodec final
 {
 public:
@@ -47,39 +41,28 @@ public:
     using PageBuffer = std::array<std::byte, PageSize>; // 物理页缓冲区类型
 
 public:
-    /**
-     * @brief 计算逻辑页编码后的实际占用字节数
-     */
+    // 计算逻辑页编码后的实际占用字节数
     [[nodiscard]]
     static std::expected<std::size_t, BTreePageCodecError> encoded_size(
         const BTreePage & page,
         const common::LogicalType & key_type
     );
 
-    /**
-     * @brief 判断逻辑页是否能放入一个物理页
-     */
+    // 判断逻辑页是否能放入一个物理页
     [[nodiscard]]
     static std::expected<bool, BTreePageCodecError> can_fit(
         const BTreePage & page,
         const common::LogicalType & key_type
     );
 
-    /**
-     * @brief 将逻辑页编码为固定大小物理页
-     */
+    // 将逻辑页编码为固定大小物理页
     [[nodiscard]]
     static std::expected<PageBuffer, BTreePageCodecError> encode(
         const BTreePage & page,
         const common::LogicalType & key_type
     );
 
-    /**
-     * @brief 将固定大小物理页解码为逻辑页
-     * @param bytes 完整物理页字节
-     * @param key_type 索引键类型
-     * @param expected_page_id 调用方请求的页 ID
-     */
+    // 将固定大小物理页解码为逻辑页
     [[nodiscard]]
     static std::expected<BTreePage, BTreePageCodecError> decode(
         std::span<const std::byte> bytes,

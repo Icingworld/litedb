@@ -11,9 +11,7 @@ namespace litedb::core::index
 namespace
 {
 
-/**
- * @brief 键类型
- */
+// 键类型
 enum class KeyType
 {
     Boolean,        // 布尔值
@@ -24,34 +22,22 @@ enum class KeyType
     Varchar,        // 字符串
 };
 
-/**
- * @brief 创建索引错误
- * @param code 错误码
- * @param message 错误消息
- * @return 索引错误
- */
+// 创建索引错误
 [[nodiscard]]
 IndexError make_index_error(IndexErrorCode code, std::string message)
 {
     return IndexError {code, std::move(message)};
 }
 
-/**
- * @brief 是否是向量值
- * @param value 值
- * @return 是否是向量值
- */
+// 是否是向量值
 [[nodiscard]]
 bool is_vector(const common::Value & value) noexcept
 {
     return std::holds_alternative<common::VectorValue>(value.data());
 }
 
-/**
- * @brief 是否是无效浮点键值
- * @param value 值
- * @return 是否是 NaN
- */
+// 是否是无效浮点键值
+// 是否是 NaN
 [[nodiscard]]
 bool is_nan(const common::Value & value) noexcept
 {
@@ -64,11 +50,7 @@ bool is_nan(const common::Value & value) noexcept
     return false;
 }
 
-/**
- * @brief 获取键类型
- * @param value 值
- * @return 键类型
- */
+// 获取键类型
 [[nodiscard]]
 KeyType key_type(const common::Value & value) noexcept
 {
@@ -90,12 +72,7 @@ KeyType key_type(const common::Value & value) noexcept
     return KeyType::Varchar;
 }
 
-/**
- * @brief 合并哈希值
- * @param seed 种子
- * @param value 值
- * @return 合并后的哈希值
- */
+// 合并哈希值
 [[nodiscard]]
 std::size_t hash_combine(std::size_t seed, std::size_t value) noexcept
 {

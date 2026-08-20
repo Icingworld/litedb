@@ -27,18 +27,14 @@ class StorageEngine;
 namespace litedb::core::index
 {
 
-/**
- * @brief 索引键绑定
- */
+// 索引键绑定
 struct IndexKeyBinding
 {
     common::IndexId index_id;               // 索引 ID
     ScalarIndexKey key;                     // 索引键
 };
 
-/**
- * @brief 索引更新绑定
- */
+// 索引更新绑定
 struct IndexUpdateBinding
 {
     common::IndexId index_id;               // 索引 ID
@@ -50,9 +46,7 @@ struct IndexUpdateBinding
 using IndexKeyBindings = std::vector<IndexKeyBinding>;
 using IndexUpdateBindings = std::vector<IndexUpdateBinding>;
 
-/**
- * @brief 管理索引视图
- */
+// 管理索引视图
 struct ManagedIndexView
 {
     common::IndexId index_id;               // 索引 ID
@@ -65,10 +59,8 @@ struct ManagedIndexView
     std::size_t entry_count {0};            // 索引条目数量
 };
 
-/**
- * @brief 标量索引引擎
- * @details 管理多个 IndexStore，负责索引生命周期、记录键提取和跨索引写入编排。
- */
+// 标量索引引擎
+// 管理多个 IndexStore，负责索引生命周期、记录键提取和跨索引写入编排。
 class IndexEngine
 {
 public:
@@ -80,9 +72,7 @@ public:
     IndexEngine & operator=(IndexEngine &&) noexcept = default;
 
 public:
-    /**
-     * @brief 创建索引
-     */
+    // 创建索引
     [[nodiscard]]
     std::expected<void, IndexError> create_index(
         const catalog::entry::IndexEntry & index_entry,
@@ -90,31 +80,23 @@ public:
         const storage::StorageEngine & storage
     );
 
-    /**
-     * @brief 删除索引
-     */
+    // 删除索引
     [[nodiscard]]
     std::expected<void, IndexError> drop_index(common::IndexId index_id);
 
-    /**
-     * @brief 删除集合所有索引
-     */
+    // 删除集合所有索引
     [[nodiscard]]
     std::expected<void, IndexError> drop_collection_indexes(common::CollectionId collection_id);
 
-    /**
-     * @brief 从索引目录恢复所有索引
-     * @details 持久化 BTREE 直接打开索引文件。
-     */
+    // 从索引目录恢复所有索引
+    // 持久化 BTREE 直接打开索引文件。
     [[nodiscard]]
     std::expected<void, IndexError> restore_all(
         const catalog::CatalogViewer & catalog,
         const storage::StorageEngine & storage
     );
 
-    /**
-     * @brief 从正式索引文件原子刷新一个集合的全部标量索引
-     */
+    // 从正式索引文件原子刷新一个集合的全部标量索引
     [[nodiscard]]
     std::expected<void, IndexError> reload_collection(
         const catalog::CatalogViewer & catalog,
@@ -122,24 +104,18 @@ public:
         common::CollectionId collection_id
     );
 
-    /**
-     * @brief 准备插入
-     */
+    // 准备插入
     [[nodiscard]]
     std::expected<IndexKeyBindings, IndexError> prepare_insert(
         common::CollectionId collection_id,
         const common::RecordData & record_data
     ) const;
 
-    /**
-     * @brief 执行插入
-     */
+    // 执行插入
     [[nodiscard]]
     std::expected<void, IndexError> on_insert(common::RecordId record_id, const IndexKeyBindings & bindings);
 
-    /**
-     * @brief 准备更新
-     */
+    // 准备更新
     [[nodiscard]]
     std::expected<IndexUpdateBindings, IndexError> prepare_update(
         common::CollectionId collection_id,
@@ -147,63 +123,47 @@ public:
         const common::RecordData & new_record_data
     ) const;
 
-    /**
-     * @brief 执行更新
-     */
+    // 执行更新
     [[nodiscard]]
     std::expected<void, IndexError> on_update(
         common::RecordId record_id,
         const IndexUpdateBindings & bindings
     );
 
-    /**
-     * @brief 准备删除
-     */
+    // 准备删除
     [[nodiscard]]
     std::expected<IndexKeyBindings, IndexError> prepare_delete(
         common::CollectionId collection_id,
         const common::RecordData & old_record_data
     ) const;
 
-    /**
-     * @brief 执行删除
-     */
+    // 执行删除
     [[nodiscard]]
     std::expected<void, IndexError> on_delete(common::RecordId record_id, const IndexKeyBindings & bindings);
 
-    /**
-     * @brief 查找索引
-     */
+    // 查找索引
     [[nodiscard]]
     std::optional<ManagedIndexView> find_index(common::IndexId index_id) const noexcept;
 
-    /**
-     * @brief 列出集合所有索引
-     */
+    // 列出集合所有索引
     [[nodiscard]]
     std::vector<ManagedIndexView> list_indexes(common::CollectionId collection_id) const;
 
-    /**
-     * @brief 查找列所有索引
-     */
+    // 查找列所有索引
     [[nodiscard]]
     std::vector<ManagedIndexView> find_indexes_for_column(
         common::CollectionId collection_id,
         common::ColumnId column_id
     ) const;
 
-    /**
-     * @brief 查找等于给定键的记录 ID 列表
-     */
+    // 查找等于给定键的记录 ID 列表
     [[nodiscard]]
     std::expected<std::vector<common::RecordId>, IndexError> find_equal(
         common::IndexId index_id,
         const ScalarIndexKey & key
     ) const;
 
-    /**
-     * @brief 扫描范围查询
-     */
+    // 扫描范围查询
     [[nodiscard]]
     std::expected<std::vector<common::RecordId>, IndexError> scan_range(
         common::IndexId index_id,
@@ -216,39 +176,29 @@ public:
         const IndexRange & range
     ) const;
 
-    /**
-     * @brief 清空所有索引
-     */
+    // 清空所有索引
     void clear() noexcept;
 
 private:
-    /**
-     * @brief 创建新的底层索引实现
-     */
+    // 创建新的底层索引实现
     [[nodiscard]]
     std::expected<std::unique_ptr<ScalarIndex>, IndexError> create_backend(
         const catalog::entry::IndexEntry & index_entry,
         const common::LogicalType & key_type
     );
 
-    /**
-     * @brief 打开已有的底层索引实现
-     */
+    // 打开已有的底层索引实现
     [[nodiscard]]
     std::expected<std::unique_ptr<ScalarIndex>, IndexError> restore_backend(
         const catalog::entry::IndexEntry & index_entry,
         const common::LogicalType & key_type
     );
 
-    /**
-     * @brief 获取索引文件路径
-     */
+    // 获取索引文件路径
     [[nodiscard]]
     std::filesystem::path index_path(common::IndexId index_id) const;
 
-    /**
-     * @brief 从记录数据创建索引键
-     */
+    // 从记录数据创建索引键
     [[nodiscard]]
     static std::expected<std::optional<ScalarIndexKey>, IndexError> make_key_from_record(
         const common::RecordData & record_data,
@@ -256,36 +206,26 @@ private:
         const common::LogicalType & key_type
     );
 
-    /**
-     * @brief 从存储引擎构建索引
-     */
+    // 从存储引擎构建索引
     [[nodiscard]]
     std::expected<void, IndexError> build_index_from_storage(
         IndexStore & store,
         const storage::StorageEngine & storage
     ) const;
 
-    /**
-     * @brief 创建管理索引视图
-     */
+    // 创建管理索引视图
     [[nodiscard]]
     static ManagedIndexView make_view(const IndexStore & store) noexcept;
 
-    /**
-     * @brief 查找索引存储
-     */
+    // 查找索引存储
     [[nodiscard]]
     const IndexStore * find_store(common::IndexId index_id) const noexcept;
 
-    /**
-     * @brief 查找索引存储
-     */
+    // 查找索引存储
     [[nodiscard]]
     IndexStore * find_store(common::IndexId index_id) noexcept;
 
-    /**
-     * @brief 列出集合所有索引存储
-     */
+    // 列出集合所有索引存储
     [[nodiscard]]
     std::vector<const IndexStore *> list_stores(common::CollectionId collection_id) const;
 

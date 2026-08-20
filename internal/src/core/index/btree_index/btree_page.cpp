@@ -10,9 +10,7 @@ namespace litedb::core::index::btree_index
 namespace
 {
 
-/**
- * @brief 比较两个 B+ 树内部排序键是否相等
- */
+// 比较两个 B+ 树内部排序键是否相等
 [[nodiscard]]
 bool equal_entry_keys(const BTreeEntryKey & left, const BTreeEntryKey & right) noexcept
 {

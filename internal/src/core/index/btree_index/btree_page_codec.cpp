@@ -45,9 +45,7 @@ BTreePageCodecError make_codec_error(BTreePageCodecErrorCode code, std::string m
     return BTreePageCodecError {code, std::move(message)};
 }
 
-/**
- * @brief 写入数字到目标缓冲区
- */
+// 写入数字到目标缓冲区
 template <typename T>
 requires std::is_integral_v<T>
 void write_number(std::byte * target, T value) noexcept
@@ -59,9 +57,7 @@ void write_number(std::byte * target, T value) noexcept
     }
 }
 
-/**
- * @brief 从源缓冲区读取数字
- */
+// 从源缓冲区读取数字
 template <typename T>
 requires std::is_integral_v<T>
 [[nodiscard]]
@@ -84,9 +80,7 @@ std::uint32_t checksum_with_zeroed_field(std::span<const std::byte> bytes)
     return io::crc32(checked);
 }
 
-/**
- * @brief 追加数字到目标缓冲区
- */
+// 追加数字到目标缓冲区
 template <typename T>
 requires std::is_integral_v<T>
 void append_number(std::vector<std::byte> & target, T value)
@@ -96,9 +90,7 @@ void append_number(std::vector<std::byte> & target, T value)
     write_number(target.data() + offset, value);
 }
 
-/**
- * @brief 判断键类型是否支持
- */
+// 判断键类型是否支持
 [[nodiscard]]
 bool is_supported_key_type(const common::LogicalType & key_type) noexcept
 {
@@ -117,9 +109,7 @@ bool is_supported_key_type(const common::LogicalType & key_type) noexcept
     return false;
 }
 
-/**
- * @brief 验证键是否有效
- */
+// 验证键是否有效
 [[nodiscard]]
 std::expected<void, BTreePageCodecError> validate_key(
     const ScalarIndexKey & key,
@@ -141,9 +131,7 @@ std::expected<void, BTreePageCodecError> validate_key(
     return {};
 }
 
-/**
- * @brief 编码键
- */
+// 编码键
 [[nodiscard]]
 std::expected<std::vector<std::byte>, BTreePageCodecError> encode_key(
     const ScalarIndexKey & key,
@@ -187,9 +175,7 @@ std::expected<std::vector<std::byte>, BTreePageCodecError> encode_key(
     return bytes;
 }
 
-/**
- * @brief 获取固定键大小
- */
+// 获取固定键大小
 [[nodiscard]]
 std::optional<std::size_t> fixed_key_size(const common::LogicalType & key_type) noexcept
 {
@@ -210,9 +196,7 @@ std::optional<std::size_t> fixed_key_size(const common::LogicalType & key_type) 
     return std::nullopt;
 }
 
-/**
- * @brief 解码键
- */
+// 解码键
 [[nodiscard]]
 std::expected<ScalarIndexKey, BTreePageCodecError> decode_key(
     std::span<const std::byte> bytes,
@@ -275,9 +259,7 @@ std::expected<ScalarIndexKey, BTreePageCodecError> decode_key(
     return std::move(*key);
 }
 
-/**
- * @brief 编码条目
- */
+// 编码条目
 [[nodiscard]]
 std::expected<std::vector<std::byte>, BTreePageCodecError> encode_entry(
     const BTreeEntryKey & entry,
@@ -299,18 +281,14 @@ std::expected<std::vector<std::byte>, BTreePageCodecError> encode_entry(
     return bytes;
 }
 
-/**
- * @brief 解码条目
- */
+// 解码条目
 struct DecodedEntry
 {
     BTreeEntryKey key;                             // 条目键
     std::optional<BTreePageId> right_child_id;     // 右子页 ID
 };
 
-/**
- * @brief 解码条目
- */
+// 解码条目
 [[nodiscard]]
 std::expected<DecodedEntry, BTreePageCodecError> decode_entry(
     std::span<const std::byte> bytes,
@@ -347,9 +325,7 @@ std::expected<DecodedEntry, BTreePageCodecError> decode_entry(
     };
 }
 
-/**
- * @brief 验证页身份
- */
+// 验证页身份
 [[nodiscard]]
 std::expected<void, BTreePageCodecError> validate_page_identity(const BTreePage & page)
 {
@@ -376,9 +352,7 @@ std::expected<void, BTreePageCodecError> validate_page_identity(const BTreePage 
     return {};
 }
 
-/**
- * @brief 编码条目
- */
+// 编码条目
 [[nodiscard]]
 std::expected<std::vector<std::vector<std::byte>>, BTreePageCodecError> encode_entries(
     const BTreePage & page,
@@ -417,9 +391,7 @@ std::expected<std::vector<std::vector<std::byte>>, BTreePageCodecError> encode_e
     return encoded;
 }
 
-/**
- * @brief 从条目计算编码后的实际占用字节数
- */
+// 从条目计算编码后的实际占用字节数
 [[nodiscard]]
 std::expected<std::size_t, BTreePageCodecError> encoded_size_from_entries(
     const std::vector<std::vector<std::byte>> & entries
@@ -439,9 +411,7 @@ std::expected<std::size_t, BTreePageCodecError> encoded_size_from_entries(
     return size;
 }
 
-/**
- * @brief 写入物理页头部
- */
+// 写入物理页头部
 void write_header(
     BTreePageCodec::PageBuffer & buffer,
     const BTreePage & page,

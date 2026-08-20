@@ -9,9 +9,7 @@ namespace litedb::core::index
 namespace
 {
 
-/**
- * @brief 创建索引错误
- */
+// 创建索引错误
 IndexError make_error(IndexErrorCode code, std::string message)
 {
     return IndexError {code, std::move(message)};
