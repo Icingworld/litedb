@@ -10,9 +10,7 @@
 namespace litedb::core::wal
 {
 
-/**
- * @brief 恢复结果
- */
+// 恢复结果
 struct RecoveryResult
 {
     transaction::TransactionId maximum_transaction_id {transaction::InvalidTransactionId}; // 最大事务 ID
@@ -20,19 +18,11 @@ struct RecoveryResult
     std::size_t replayed_writes {0};         // 重放写入数
 };
 
-/**
- * @brief WAL 恢复管理器
- */
+// WAL 恢复管理器
 class RecoveryManager final
 {
 public:
-    /**
-     * @brief 从 WAL 恢复数据目录
-     * @param data_directory 数据目录
-     * @param filesystem 文件系统
-     * @param wal WAL 存储
-     * @return 恢复结果
-     */
+    // 从 WAL 恢复数据目录
     [[nodiscard]]
     static std::expected<RecoveryResult, WalError> recover(
         const std::filesystem::path & data_directory,

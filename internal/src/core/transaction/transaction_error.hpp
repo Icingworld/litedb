@@ -16,14 +16,13 @@ namespace litedb::core::transaction
  */
 enum class TransactionErrorCode : std::uint8_t
 {
-    InvalidState,              // 无效状态
-    RollbackOnly,              // 回滚状态
-    PrepareFailed,             // 准备失败
-    WalError,                  // WAL 写入失败
-    ApplyFailed,               // 应用失败
-    CommittedApplyFailed,      // 提交应用失败
-    RecoveryRequired,          // 需要恢复
-    FaultInjected,             // 测试故障注入
+    InvalidState = 0, // 无效状态
+    RollbackOnly = 1, // 回滚状态
+    PrepareFailed = 2, // 准备失败
+    ApplyFailed = 4, // 应用失败
+    CommittedApplyFailed = 5, // 提交应用失败
+    RecoveryRequired = 6, // 需要恢复
+    FaultInjected = 7, // 测试故障注入
 };
 
 /**
@@ -71,11 +70,8 @@ namespace litedb::core::transaction
 {
 
 [[nodiscard]]
-inline TransactionError make_error(
-    TransactionErrorCode code,
-    std::string message,
-    TransactionErrorContext context = {}
-)
+inline TransactionError
+make_error(TransactionErrorCode code, std::string message, TransactionErrorContext context = {})
 {
     return TransactionError {code, message, std::move(context)};
 }

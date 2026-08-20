@@ -13,9 +13,7 @@
 namespace litedb::core::wal
 {
 
-/**
- * @brief WAL 编解码器
- */
+// WAL 编解码器
 class WalCodec final
 {
 public:
@@ -25,29 +23,17 @@ public:
     using FileHeader = std::array<std::byte, FileHeaderSize>;
 
 public:
-    /**
-     * @brief 编码文件头
-     * @return 文件头字节
-     */
+    // 编码文件头
     [[nodiscard]]
-    static FileHeader encode_file_header(const WalFileHeader & header) noexcept;
+    static std::expected<FileHeader, WalError> encode_file_header(const WalFileHeader & header);
 
-    /**
-     * @brief 解码并校验文件头
-     * @param bytes 文件头字节
-     * @return 结果
-     */
+    // 解码并校验文件头
     [[nodiscard]]
-    static std::expected<WalFileHeader, WalError> decode_file_header(std::span<const std::byte> bytes);
+    static std::expected<WalFileHeader, WalError> decode_file_header(
+        std::span<const std::byte> bytes
+    );
 
-    /**
-     * @brief 编码 WAL 记录
-     * @param type 记录类型
-     * @param lsn 日志序列号
-     * @param transaction_id 事务 ID
-     * @param payload 负载数据
-     * @return 编码后的记录
-     */
+    // 编码 WAL 记录
     [[nodiscard]]
     static std::expected<std::vector<std::byte>, WalError> encode_record(
         WalRecordType type,
@@ -56,31 +42,24 @@ public:
         std::span<const std::byte> payload
     );
 
-    /**
-     * @brief 解码 WAL 记录
-     * @param bytes 记录字节
-     * @param expected_lsn 期望的日志序列号
-     * @return 解码后的记录
-     */
+    // 解码记录头并返回完整记录尺寸。
+    // WAL 存储只需要通过该接口确定下一次读取的边界，避免依赖持久化字段偏移。
     [[nodiscard]]
-    static std::expected<WalRecord, WalError> decode_record(
-        std::vector<std::byte> bytes,
-        transaction::Lsn expected_lsn
+    static std::expected<std::uint64_t, WalError>
+    decode_record_size(std::span<const std::byte> bytes, transaction::Lsn expected_lsn);
+
+    // 解码 WAL 记录
+    [[nodiscard]]
+    static std::expected<WalRecord, WalError>
+    decode_record(std::vector<std::byte> bytes, transaction::Lsn expected_lsn);
+
+    // 编码文件写入负载
+    [[nodiscard]]
+    static std::expected<std::vector<std::byte>, WalError> encode_file_write(
+        const FileWrite & write
     );
 
-    /**
-     * @brief 编码文件写入负载
-     * @param write 文件写入记录
-     * @return 编码后的负载
-     */
-    [[nodiscard]]
-    static std::vector<std::byte> encode_file_write(const FileWrite & write);
-
-    /**
-     * @brief 解码文件写入负载
-     * @param payload 负载数据
-     * @return 文件写入记录
-     */
+    // 解码文件写入负载
     [[nodiscard]]
     static std::expected<FileWrite, WalError> decode_file_write(std::vector<std::byte> payload);
 };

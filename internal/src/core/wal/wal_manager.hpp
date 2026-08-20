@@ -30,9 +30,7 @@ enum class WalRotationStage
 
 using WalRotationHook = std::function<void(WalRotationStage)>;
 
-/**
- * @brief 管理 WAL 分段的发现、当前段与轮换
- */
+// 管理 WAL 分段的发现、当前段与轮换
 class WalManager final
 {
 private:
@@ -50,6 +48,7 @@ public:
     WalManager(WalManager &&) noexcept = default;
     WalManager & operator=(WalManager &&) noexcept = default;
 
+    // 打开 WAL 目录；目录为空时创建第一代段，否则只打开最高代段。
     [[nodiscard]]
     static std::expected<WalManager, WalError> open(
         std::filesystem::path directory,
@@ -57,56 +56,62 @@ public:
         WalDecodeLimits limits = {}
     );
 
-    /**
-     * @brief 在追加 Begin/FileWrite/Commit 前验证整个事务是否仍可由相同预算恢复
-     */
+    // 在追加 Begin/FileWrite/Commit 前验证整个事务是否仍可由相同预算恢复
     [[nodiscard]]
-    std::expected<void, WalError> validate_transaction(
-        std::span<const FileWrite> writes
-    ) const;
+    std::expected<void, WalError> validate_transaction(std::span<const FileWrite> writes) const;
 
+    // 追加事务开始标记，并更新当前段的记录计数。
     [[nodiscard]]
-    std::expected<transaction::Lsn, WalError> append_begin(transaction::TransactionId transaction_id);
-
-    [[nodiscard]]
-    std::expected<transaction::Lsn, WalError> append_write(
-        transaction::TransactionId transaction_id,
-        const FileWrite & write
+    std::expected<transaction::Lsn, WalError> append_begin(
+        transaction::TransactionId transaction_id
     );
 
+    // 追加文件写入记录，并更新当前段的记录计数。
     [[nodiscard]]
-    std::expected<transaction::Lsn, WalError> append_commit(transaction::TransactionId transaction_id);
+    std::expected<transaction::Lsn, WalError>
+    append_write(transaction::TransactionId transaction_id, const FileWrite & write);
 
+    // 追加事务提交标记，并更新当前段的记录计数。
+    [[nodiscard]]
+    std::expected<transaction::Lsn, WalError> append_commit(
+        transaction::TransactionId transaction_id
+    );
+
+    // 刷盘并确认指定 LSN 之前的 WAL 数据。
     [[nodiscard]]
     std::expected<void, WalError> flush_through(transaction::Lsn lsn);
 
+    // 刷盘当前段的数据和元数据。
     [[nodiscard]]
     std::expected<void, WalError> flush_all();
 
+    // 扫描当前段，并按要求处理不完整尾部。
     [[nodiscard]]
-    std::expected<WalScanResult, WalError> scan(
-        bool truncate_incomplete_tail = true,
-        const WalDecodeLimits & limits = {}
-    );
+    std::expected<WalScanResult, WalError>
+    scan(bool truncate_incomplete_tail = true, const WalDecodeLimits & limits = {});
 
-    /**
-     * @brief 发布下一代空 WAL，并清理旧的正式段
-     */
+    // 轮换到下一代 WAL 段，并在发布后清理旧段。
     [[nodiscard]]
-    std::expected<std::uint64_t, WalError> rotate(
-        transaction::TransactionId checkpoint_transaction_id,
-        const WalRotationHook & hook = {}
-    );
+    std::expected<std::uint64_t, WalError>
+    rotate(transaction::TransactionId checkpoint_transaction_id, const WalRotationHook & hook = {});
 
+    // 返回当前 WAL 段及保留段数量等运行指标。
     [[nodiscard]]
     WalManagerMetrics metrics() const noexcept;
 
+    // 返回当前活动段的已校验文件头。
     [[nodiscard]]
     const WalFileHeader & header() const noexcept;
 
-private:
+    // 返回当前段是否已经进入只读恢复要求状态。
     [[nodiscard]]
-    static std::filesystem::path segment_path(const std::filesystem::path & directory, std::uint64_t generation);
+    bool recovery_required() const noexcept;
+
+private:
+    // 按固定宽度生成 WAL 段文件名。
+    [[nodiscard]]
+    static std::filesystem::path
+    segment_path(const std::filesystem::path & directory, std::uint64_t generation);
 
 private:
     std::filesystem::path directory_;

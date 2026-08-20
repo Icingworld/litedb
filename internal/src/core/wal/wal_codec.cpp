@@ -1,9 +1,13 @@
 #include "core/wal/wal_codec.hpp"
 
 #include <algorithm>
-#include <cstring>
 #include <limits>
-#include <string>
+#include <utility>
+
+#include "core/io/binary_io.hpp"
+#include "core/io/buffer_byte_reader.hpp"
+#include "core/io/buffer_byte_writer.hpp"
+#include "core/io/checksum.hpp"
 
 namespace litedb::core::wal
 {
@@ -11,62 +15,12 @@ namespace litedb::core::wal
 namespace
 {
 
-constexpr std::uint32_t FileMagic = 0x4c57444cU;    // LDWL
-constexpr std::uint32_t RecordMagic = 0x3152574cU;  // LWR1
+constexpr std::uint32_t FileMagic = 0x4c57444cU;
+constexpr std::uint32_t RecordMagic = 0x3152574cU;
 constexpr std::uint16_t Version = 2;
+constexpr std::size_t FileWritePayloadHeaderSize = 24;
 
-/**
- * @brief 写入数字
- * @param target 目标数据
- * @param value 数字
- */
-template <typename T>
-void write_number(std::byte * target, T value) noexcept
-{
-    for (std::size_t index = 0; index < sizeof(T); ++index) {
-        target[index] = static_cast<std::byte>((value >> (index * 8U)) & static_cast<T>(0xffU));
-    }
-}
-
-/**
- * @brief 读取数字
- * @param source 源数据
- * @return 数字
- */
-template <typename T>
-T read_number(const std::byte * source) noexcept
-{
-    T value {};
-    for (std::size_t index = 0; index < sizeof(T); ++index) {
-        value |= static_cast<T>(std::to_integer<std::uint8_t>(source[index])) << (index * 8U);
-    }
-    return value;
-}
-
-/**
- * @brief 计算 CRC32
- * @param bytes 字节数据
- * @return 校验和
- */
-[[nodiscard]]
-std::uint32_t crc32(std::span<const std::byte> bytes) noexcept
-{
-    std::uint32_t crc = 0xffffffffU;
-    for (const auto byte : bytes) {
-        crc ^= std::to_integer<std::uint8_t>(byte);
-        for (std::uint32_t bit = 0; bit < 8; ++bit) {
-            const auto mask = static_cast<std::uint32_t>(-(static_cast<std::int32_t>(crc & 1U)));
-            crc = (crc >> 1U) ^ (0xedb88320U & mask);
-        }
-    }
-    return ~crc;
-}
-
-/**
- * @brief 判断记录类型是否有效
- * @param value 类型值
- * @return 是否有效
- */
+// 判断记录类型是否属于 WAL v2 支持的连续枚举范围。
 [[nodiscard]]
 bool valid_type(std::uint8_t value) noexcept
 {
@@ -74,46 +28,229 @@ bool valid_type(std::uint8_t value) noexcept
            value <= static_cast<std::uint8_t>(WalRecordType::Commit);
 }
 
-} // namespace
-
-WalCodec::FileHeader WalCodec::encode_file_header(const WalFileHeader & value) noexcept
+// 构造带解码上下文的记录损坏错误。
+[[nodiscard]]
+WalError invalid_record(std::string message, transaction::Lsn lsn = transaction::InvalidLsn)
 {
-    FileHeader header {};
-    write_number(header.data(), FileMagic);
-    write_number(header.data() + 4, Version);
-    write_number(header.data() + 6, static_cast<std::uint16_t>(FileHeaderSize));
-    write_number(header.data() + 8, value.generation);
-    write_number(header.data() + 16, value.checkpoint_transaction_id);
-    write_number(header.data() + 24, static_cast<std::uint32_t>(0));
-    write_number(header.data() + 28, static_cast<std::uint32_t>(0));
-    write_number(header.data() + 24, crc32(header));
-    return header;
+    return make_error(
+        WalErrorCode::CorruptedRecord,
+        std::move(message),
+        {
+            .operation = WalOperation::Decode,
+            .lsn = lsn,
+        }
+    );
 }
 
-std::expected<WalFileHeader, WalError> WalCodec::decode_file_header(std::span<const std::byte> bytes)
+// 使用小端序写入固定大小的 WAL 文件头。
+[[nodiscard]]
+std::expected<std::vector<std::byte>, WalError>
+encode_file_header_bytes(const WalFileHeader & header, std::uint32_t checksum)
 {
-    if (bytes.size() != FileHeaderSize || read_number<std::uint32_t>(bytes.data()) != FileMagic) {
-        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header"));
+    io::BufferByteWriter bytes(WalCodec::FileHeaderSize);
+    io::LittleEndianBinaryWriter writer(bytes);
+    if (auto result = writer.write_u32(FileMagic); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
     }
-    if (read_number<std::uint16_t>(bytes.data() + 4) != Version) {
-        return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL version"));
+    if (auto result = writer.write_u16(Version); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
     }
-    if (read_number<std::uint16_t>(bytes.data() + 6) != FileHeaderSize ||
-        read_number<std::uint64_t>(bytes.data() + 8) == 0 ||
-        read_number<std::uint32_t>(bytes.data() + 28) != 0) {
-        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header fields"));
+    if (auto result = writer.write_u16(static_cast<std::uint16_t>(WalCodec::FileHeaderSize));
+        !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
     }
-    auto checked = FileHeader {};
-    std::copy(bytes.begin(), bytes.end(), checked.begin());
-    const auto stored_checksum = read_number<std::uint32_t>(checked.data() + 24);
-    write_number(checked.data() + 24, static_cast<std::uint32_t>(0));
-    if (stored_checksum != crc32(checked)) {
-        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "WAL file header checksum mismatch"));
+    if (auto result = writer.write_u64(header.generation); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
     }
-    return WalFileHeader {
-        .generation = read_number<std::uint64_t>(bytes.data() + 8),
-        .checkpoint_transaction_id = read_number<transaction::TransactionId>(bytes.data() + 16),
-    };
+    if (auto result = writer.write_u64(header.checkpoint_transaction_id); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u32(checksum); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u32(0); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    return bytes.take_bytes();
+}
+
+// 使用小端序写入记录头和负载，checksum 字段由调用方提供。
+[[nodiscard]]
+std::expected<std::vector<std::byte>, WalError> encode_record_bytes(
+    WalRecordType type,
+    transaction::Lsn lsn,
+    transaction::TransactionId transaction_id,
+    std::span<const std::byte> payload,
+    std::uint32_t checksum
+)
+{
+    const auto total_size = WalCodec::RecordHeaderSize + payload.size();
+    io::BufferByteWriter bytes(total_size);
+    io::LittleEndianBinaryWriter writer(bytes);
+    if (auto result = writer.write_u32(RecordMagic); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u16(Version); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u8(static_cast<std::uint8_t>(type)); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u8(0); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u64(total_size); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u64(lsn); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u64(transaction_id); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u64(payload.size()); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u32(checksum); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u32(0); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (!payload.empty()) {
+        if (auto result = bytes.write_bytes(payload); !result) [[unlikely]]
+        {
+            return std::unexpected(std::move(result.error()));
+        }
+    }
+    return bytes.take_bytes();
+}
+
+// 从固定偏移读取小端序 checksum 字段。
+[[nodiscard]]
+std::expected<std::uint32_t, WalError> read_checksum(std::span<const std::byte> bytes)
+{
+    io::BufferByteReader buffer(bytes);
+    io::LittleEndianBinaryReader reader(
+        buffer,
+        {.max_total_bytes = bytes.size(), .max_string_bytes = 0}
+    );
+    auto checksum = reader.read_u32();
+    if (!checksum) [[unlikely]] {
+        return std::unexpected(std::move(checksum.error()));
+    }
+    return *checksum;
+}
+
+// 将 checksum 字段置零后重新计算 CRC32 并比较。
+[[nodiscard]]
+bool checksum_matches(
+    std::span<const std::byte> bytes,
+    std::size_t checksum_offset,
+    std::uint32_t expected
+)
+{
+    std::vector<std::byte> checked(bytes.begin(), bytes.end());
+    std::fill(
+        checked.begin() + static_cast<std::ptrdiff_t>(checksum_offset),
+        checked.begin() + static_cast<std::ptrdiff_t>(checksum_offset + sizeof(std::uint32_t)),
+        std::byte {0}
+    );
+    return io::crc32(checked) == expected;
+}
+
+} // namespace
+
+std::expected<WalCodec::FileHeader, WalError> WalCodec::encode_file_header(
+    const WalFileHeader & value
+)
+{
+    if (value.generation == 0) [[unlikely]] {
+        return std::unexpected(make_error(
+            WalErrorCode::InvalidFormat,
+            "WAL generation must be non-zero",
+            {
+                .operation = WalOperation::Encode,
+                .generation = value.generation,
+            }
+        ));
+    }
+    auto without_checksum = encode_file_header_bytes(value, 0);
+    if (!without_checksum) [[unlikely]] {
+        return std::unexpected(std::move(without_checksum.error()));
+    }
+    auto encoded = encode_file_header_bytes(value, io::crc32(*without_checksum));
+    if (!encoded) [[unlikely]] {
+        return std::unexpected(std::move(encoded.error()));
+    }
+    FileHeader result {};
+    std::copy(encoded->begin(), encoded->end(), result.begin());
+    return result;
+}
+
+std::expected<WalFileHeader, WalError> WalCodec::decode_file_header(
+    std::span<const std::byte> bytes
+)
+{
+    if (bytes.size() != FileHeaderSize) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header size")
+        );
+    }
+    io::BufferByteReader buffer(bytes);
+    io::LittleEndianBinaryReader reader(
+        buffer,
+        {.max_total_bytes = bytes.size(), .max_string_bytes = 0}
+    );
+    auto magic = reader.read_u32();
+    auto version = reader.read_u16();
+    auto header_size = reader.read_u16();
+    auto generation = reader.read_u64();
+    auto checkpoint = reader.read_u64();
+    auto checksum = reader.read_u32();
+    auto reserved = reader.read_u32();
+    if (!magic || !version || !header_size || !generation || !checkpoint || !checksum || !reserved)
+        [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::InvalidFormat, "Truncated WAL file header")
+        );
+    }
+    if (*magic != FileMagic) [[unlikely]] {
+        return std::unexpected(make_error(WalErrorCode::InvalidFormat, "Invalid WAL file magic"));
+    }
+    if (*version != Version) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL version")
+        );
+    }
+    if (*header_size != FileHeaderSize || *generation == 0 || *reserved != 0) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::InvalidFormat, "Invalid WAL file header fields")
+        );
+    }
+    if (!checksum_matches(bytes, 24, *checksum)) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::InvalidFormat, "WAL file header checksum mismatch")
+        );
+    }
+    return WalFileHeader {.generation = *generation, .checkpoint_transaction_id = *checkpoint};
 }
 
 std::expected<std::vector<std::byte>, WalError> WalCodec::encode_record(
@@ -125,139 +262,249 @@ std::expected<std::vector<std::byte>, WalError> WalCodec::encode_record(
 {
     if (!valid_type(static_cast<std::uint8_t>(type)) ||
         transaction_id == transaction::InvalidTransactionId ||
-        payload.size() > std::numeric_limits<std::uint32_t>::max()) {
-        return std::unexpected(make_error(WalErrorCode::InvalidRecord, "Invalid WAL record", {
-            .operation = WalOperation::Encode,
-            .transaction_id = transaction_id,
-            .lsn = lsn,
-        }));
-    }
-
-    const auto total_size = RecordHeaderSize + payload.size();
-    std::vector<std::byte> encoded(total_size);
-    write_number(encoded.data(), RecordMagic);
-    write_number(encoded.data() + 4, Version);
-    write_number(encoded.data() + 6, static_cast<std::uint8_t>(type));
-    write_number(encoded.data() + 7, static_cast<std::uint8_t>(0));
-    write_number(encoded.data() + 8, static_cast<std::uint64_t>(total_size));
-    write_number(encoded.data() + 16, lsn);
-    write_number(encoded.data() + 24, transaction_id);
-    write_number(encoded.data() + 32, static_cast<std::uint64_t>(payload.size()));
-    write_number(encoded.data() + 40, static_cast<std::uint32_t>(0));
-    write_number(encoded.data() + 44, static_cast<std::uint32_t>(0));
-    std::copy(payload.begin(), payload.end(), encoded.begin() + RecordHeaderSize);
-    write_number(encoded.data() + 40, crc32(encoded));
-    return encoded;
-}
-
-std::expected<WalRecord, WalError> WalCodec::decode_record(
-    std::vector<std::byte> bytes,
-    transaction::Lsn expected_lsn
-)
-{
-    if (bytes.size() < RecordHeaderSize || read_number<std::uint32_t>(bytes.data()) != RecordMagic) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record header", {
-            .operation = WalOperation::Decode,
-            .lsn = expected_lsn,
-        }));
-    }
-    if (read_number<std::uint16_t>(bytes.data() + 4) != Version) {
-        return std::unexpected(make_error(WalErrorCode::UnsupportedVersion, "Unsupported WAL record version", {
-            .operation = WalOperation::Decode,
-            .lsn = expected_lsn,
-        }));
-    }
-
-    const auto type_value = read_number<std::uint8_t>(bytes.data() + 6);
-    const auto total_size = read_number<std::uint64_t>(bytes.data() + 8);
-    const auto payload_size = read_number<std::uint64_t>(bytes.data() + 32);
-    if (!valid_type(type_value) ||
-        read_number<std::uint8_t>(bytes.data() + 7) != 0 ||
-        read_number<std::uint32_t>(bytes.data() + 44) != 0 ||
-        total_size != bytes.size() ||
-        payload_size != bytes.size() - RecordHeaderSize ||
-        read_number<transaction::Lsn>(bytes.data() + 16) != expected_lsn) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL record fields", {
-            .operation = WalOperation::Decode,
-            .lsn = expected_lsn,
-        }));
-    }
-
-    const auto stored_checksum = read_number<std::uint32_t>(bytes.data() + 40);
-    write_number(bytes.data() + 40, static_cast<std::uint32_t>(0));
-    if (stored_checksum != crc32(bytes)) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "WAL record checksum mismatch", {
-            .operation = WalOperation::Decode,
-            .lsn = expected_lsn,
-        }));
-    }
-
-    const auto transaction_id = read_number<transaction::TransactionId>(bytes.data() + 24);
-    if (transaction_id == transaction::InvalidTransactionId) {
+        payload.size() > std::numeric_limits<std::uint32_t>::max() ||
+        payload.size() > std::numeric_limits<std::size_t>::max() - RecordHeaderSize ||
+        payload.size() > std::numeric_limits<std::uint64_t>::max() - RecordHeaderSize)
+        [[unlikely]] {
         return std::unexpected(make_error(
-            WalErrorCode::CorruptedRecord,
-            "WAL record has invalid transaction ID",
-            {.operation = WalOperation::Decode, .lsn = expected_lsn}
+            WalErrorCode::InvalidRecord,
+            "Invalid WAL record",
+            {
+                .operation = WalOperation::Encode,
+                .transaction_id = transaction_id,
+                .lsn = lsn,
+            }
         ));
     }
+    auto without_checksum = encode_record_bytes(type, lsn, transaction_id, payload, 0);
+    if (!without_checksum) [[unlikely]] {
+        return std::unexpected(std::move(without_checksum.error()));
+    }
+    return encode_record_bytes(type, lsn, transaction_id, payload, io::crc32(*without_checksum));
+}
 
-    bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(RecordHeaderSize));
+std::expected<std::uint64_t, WalError>
+WalCodec::decode_record_size(std::span<const std::byte> bytes, transaction::Lsn expected_lsn)
+{
+    if (bytes.size() < RecordHeaderSize) [[unlikely]] {
+        return std::unexpected(invalid_record("WAL record header is truncated", expected_lsn));
+    }
+    io::BufferByteReader buffer(bytes.first(RecordHeaderSize));
+    io::LittleEndianBinaryReader reader(
+        buffer,
+        {.max_total_bytes = RecordHeaderSize, .max_string_bytes = 0}
+    );
+    auto magic = reader.read_u32();
+    auto version = reader.read_u16();
+    auto type = reader.read_u8();
+    auto flags = reader.read_u8();
+    auto total_size = reader.read_u64();
+    auto lsn = reader.read_u64();
+    auto transaction_id = reader.read_u64();
+    auto payload_size = reader.read_u64();
+    auto checksum = reader.read_u32();
+    auto reserved = reader.read_u32();
+    if (!magic || !version || !type || !flags || !total_size || !lsn || !transaction_id ||
+        !payload_size || !checksum || !reserved) [[unlikely]] {
+        return std::unexpected(invalid_record("WAL record header is truncated", expected_lsn));
+    }
+    if (*magic != RecordMagic) [[unlikely]] {
+        return std::unexpected(invalid_record("Invalid WAL record magic", expected_lsn));
+    }
+    if (*version != Version) [[unlikely]] {
+        return std::unexpected(make_error(
+            WalErrorCode::UnsupportedVersion,
+            "Unsupported WAL record version",
+            {
+                .operation = WalOperation::Decode,
+                .lsn = expected_lsn,
+            }
+        ));
+    }
+    if (!valid_type(*type) || *flags != 0 || *reserved != 0 || *total_size < RecordHeaderSize ||
+        *payload_size != *total_size - RecordHeaderSize || *lsn != expected_lsn ||
+        *transaction_id == transaction::InvalidTransactionId) [[unlikely]] {
+        return std::unexpected(invalid_record("Invalid WAL record header fields", expected_lsn));
+    }
+    return *total_size;
+}
+
+std::expected<WalRecord, WalError>
+WalCodec::decode_record(std::vector<std::byte> bytes, transaction::Lsn expected_lsn)
+{
+    auto record_size = decode_record_size(bytes, expected_lsn);
+    if (!record_size) [[unlikely]] {
+        return std::unexpected(std::move(record_size.error()));
+    }
+    if (*record_size != bytes.size()) [[unlikely]] {
+        return std::unexpected(
+            invalid_record("WAL record size does not match its buffer", expected_lsn)
+        );
+    }
+    auto stored_checksum = read_checksum(std::span<const std::byte>(bytes).subspan(40, 4));
+    if (!stored_checksum) [[unlikely]] {
+        return std::unexpected(std::move(stored_checksum.error()));
+    }
+    if (!checksum_matches(bytes, 40, *stored_checksum)) [[unlikely]] {
+        return std::unexpected(make_error(
+            WalErrorCode::CorruptedRecord,
+            "WAL record checksum mismatch",
+            {
+                .operation = WalOperation::Decode,
+                .lsn = expected_lsn,
+            }
+        ));
+    }
+    io::BufferByteReader buffer(bytes);
+    io::LittleEndianBinaryReader reader(
+        buffer,
+        {.max_total_bytes = bytes.size(), .max_string_bytes = 0}
+    );
+    auto ignored_magic = reader.read_u32();
+    auto ignored_version = reader.read_u16();
+    auto type = reader.read_u8();
+    auto ignored_flags = reader.read_u8();
+    auto ignored_total_size = reader.read_u64();
+    auto lsn = reader.read_u64();
+    auto transaction_id = reader.read_u64();
+    auto payload_size = reader.read_u64();
+    auto ignored_checksum = reader.read_u32();
+    auto ignored_reserved = reader.read_u32();
+    if (!ignored_magic || !ignored_version || !type || !ignored_flags || !ignored_total_size ||
+        !lsn || !transaction_id || !payload_size || !ignored_checksum || !ignored_reserved)
+        [[unlikely]] {
+        return std::unexpected(invalid_record("WAL record header is truncated", expected_lsn));
+    }
+    std::vector<std::byte> payload(*payload_size);
+    if (!payload.empty()) {
+        auto read = buffer.read_some(payload);
+        if (!read || *read != payload.size()) [[unlikely]] {
+            return std::unexpected(invalid_record("WAL record payload is truncated", expected_lsn));
+        }
+    }
     return WalRecord {
-        .type = static_cast<WalRecordType>(type_value),
-        .lsn = expected_lsn,
-        .transaction_id = transaction_id,
-        .payload = std::move(bytes),
+        .type = static_cast<WalRecordType>(*type),
+        .lsn = *lsn,
+        .transaction_id = *transaction_id,
+        .payload = std::move(payload),
     };
 }
 
-std::vector<std::byte> WalCodec::encode_file_write(const FileWrite & write)
+std::expected<std::vector<std::byte>, WalError> WalCodec::encode_file_write(const FileWrite & write)
 {
-    std::vector<std::byte> payload(24 + write.after_image.size());
-    write_number(payload.data(), static_cast<std::uint8_t>(write.target.kind));
-    write_number(payload.data() + 1, static_cast<std::uint8_t>(write.mode));
-    write_number(payload.data() + 8, write.target.object_id);
-    write_number(payload.data() + 16, write.offset);
-    std::copy(write.after_image.begin(), write.after_image.end(), payload.begin() + 24);
-    return payload;
+    const auto kind = static_cast<std::uint8_t>(write.target.kind);
+    const auto mode = static_cast<std::uint8_t>(write.mode);
+    if (kind < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
+        kind > static_cast<std::uint8_t>(FileKind::CatalogStore) ||
+        mode > static_cast<std::uint8_t>(FileWriteMode::Truncate) ||
+        (write.target.kind == FileKind::CatalogStore ? write.target.object_id != 0
+                                                     : write.target.object_id == 0) ||
+        (write.mode == FileWriteMode::Delete &&
+         (!write.after_image.empty() || write.offset != 0)) ||
+        (write.mode == FileWriteMode::Truncate && !write.after_image.empty()) ||
+        (write.mode == FileWriteMode::Replace && write.offset != 0) ||
+        write.after_image.size() >
+            std::numeric_limits<std::size_t>::max() - FileWritePayloadHeaderSize ||
+        write.offset > std::numeric_limits<std::uint64_t>::max() - FileWritePayloadHeaderSize ||
+        write.after_image.size() > std::numeric_limits<std::uint64_t>::max() -
+                                       FileWritePayloadHeaderSize - write.offset) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::InvalidRecord, "Invalid WAL file-write operation")
+        );
+    }
+    const auto payload_size = FileWritePayloadHeaderSize + write.after_image.size();
+    io::BufferByteWriter bytes(payload_size);
+    io::LittleEndianBinaryWriter writer(bytes);
+    if (auto result = writer.write_u8(kind); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u8(mode); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u32(0); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u16(0); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u64(write.target.object_id); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (auto result = writer.write_u64(write.offset); !result) [[unlikely]]
+    {
+        return std::unexpected(std::move(result.error()));
+    }
+    if (!write.after_image.empty()) {
+        if (auto result = bytes.write_bytes(write.after_image); !result) [[unlikely]]
+        {
+            return std::unexpected(std::move(result.error()));
+        }
+    }
+    return bytes.take_bytes();
 }
 
 std::expected<FileWrite, WalError> WalCodec::decode_file_write(std::vector<std::byte> payload)
 {
-    if (payload.size() < 24 ||
-        std::any_of(payload.begin() + 2, payload.begin() + 8, [](std::byte value) {
-            return value != std::byte {0};
-        })) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload"));
+    if (payload.size() < FileWritePayloadHeaderSize) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload")
+        );
     }
-
-    const auto kind_value = read_number<std::uint8_t>(payload.data());
-    if (kind_value < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
-        kind_value > static_cast<std::uint8_t>(FileKind::CatalogStore)) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target kind"));
+    io::BufferByteReader buffer(payload);
+    io::LittleEndianBinaryReader reader(
+        buffer,
+        {.max_total_bytes = payload.size(), .max_string_bytes = 0}
+    );
+    auto kind_value = reader.read_u8();
+    auto mode_value = reader.read_u8();
+    auto reserved = reader.read_u32();
+    auto reserved_tail = reader.read_u16();
+    auto object_id = reader.read_u64();
+    auto offset = reader.read_u64();
+    if (!kind_value || !mode_value || !reserved || !reserved_tail || !object_id || !offset)
+        [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file-write payload")
+        );
     }
-    const auto mode_value = read_number<std::uint8_t>(payload.data() + 1);
-    if (mode_value > static_cast<std::uint8_t>(FileWriteMode::Truncate)) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file-write mode"));
+    if (*reserved != 0 || *reserved_tail != 0 ||
+        *kind_value < static_cast<std::uint8_t>(FileKind::CollectionStore) ||
+        *kind_value > static_cast<std::uint8_t>(FileKind::CatalogStore) ||
+        *mode_value > static_cast<std::uint8_t>(FileWriteMode::Truncate)) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::CorruptedRecord, "Unknown WAL file target or mode")
+        );
     }
-    const auto mode = static_cast<FileWriteMode>(mode_value);
-    const auto offset = read_number<std::uint64_t>(payload.data() + 16);
-    const auto object_id = read_number<std::uint64_t>(payload.data() + 8);
-    if ((mode == FileWriteMode::Replace && offset != 0) ||
-        (mode == FileWriteMode::Delete && (offset != 0 || payload.size() != 24)) ||
-        (mode == FileWriteMode::Truncate && payload.size() != 24) ||
-        (kind_value == static_cast<std::uint8_t>(FileKind::CatalogStore) && object_id != 0) ||
-        (kind_value != static_cast<std::uint8_t>(FileKind::CatalogStore) && object_id == 0)) {
-        return std::unexpected(make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation"));
+    const auto kind = static_cast<FileKind>(*kind_value);
+    const auto mode = static_cast<FileWriteMode>(*mode_value);
+    if ((mode == FileWriteMode::Replace && *offset != 0) ||
+        (mode == FileWriteMode::Delete &&
+         (*offset != 0 || payload.size() != FileWritePayloadHeaderSize)) ||
+        (mode == FileWriteMode::Truncate && payload.size() != FileWritePayloadHeaderSize) ||
+        (kind == FileKind::CatalogStore && *object_id != 0) ||
+        (kind != FileKind::CatalogStore && *object_id == 0)) [[unlikely]] {
+        return std::unexpected(
+            make_error(WalErrorCode::CorruptedRecord, "Invalid WAL file operation")
+        );
     }
-
-    payload.erase(payload.begin(), payload.begin() + 24);
+    std::vector<std::byte> after_image(payload.size() - FileWritePayloadHeaderSize);
+    if (!after_image.empty()) {
+        auto read = buffer.read_some(after_image);
+        if (!read || *read != after_image.size()) [[unlikely]] {
+            return std::unexpected(
+                make_error(WalErrorCode::CorruptedRecord, "Truncated WAL file-write payload")
+            );
+        }
+    }
     return FileWrite {
-        .target = FileTarget {
-            .kind = static_cast<FileKind>(kind_value),
-            .object_id = object_id,
-        },
-        .offset = offset,
-        .after_image = std::move(payload),
+        .target = FileTarget {.kind = kind, .object_id = *object_id},
+        .offset = *offset,
+        .after_image = std::move(after_image),
         .mode = mode,
     };
 }

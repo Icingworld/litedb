@@ -16,53 +16,23 @@ namespace litedb::core::wal
 
 using FileWriteAppliedHook = std::function<bool(std::size_t, const FileWrite &)>;
 
-/**
- * @brief 文件写入批处理
- */
+// 文件写入批处理
 class FileWriteBatch final
 {
 public:
-    /**
-     * @brief 添加文件写入
-     * @param write 文件写入记录
-     */
+    // 添加文件写入
     void add(FileWrite write);
 
-    /**
-     * @brief 获取写入列表
-     * @return 写入列表
-     */
+    // 获取写入列表
     [[nodiscard]]
     const std::vector<FileWrite> & writes() const noexcept;
 
-    /**
-     * @brief 判断批处理是否为空
-     * @return 是否为空
-     */
+    // 原地规范化并校验写入批次。
+    // 该操作在 WAL 追加前执行，确保冲突、重叠、范围和生命周期约束先于持久化检查。
     [[nodiscard]]
-    bool empty() const noexcept;
+    std::expected<void, WalError> normalize();
 
-    /**
-     * @brief 按批处理覆盖结果读取目标范围
-     * @param target 文件目标
-     * @param offset 起始偏移
-     * @param base 基础数据
-     * @return 覆盖后的数据
-     */
-    [[nodiscard]]
-    std::expected<std::vector<std::byte>, WalError> read(
-        const FileTarget & target,
-        std::uint64_t offset,
-        std::span<const std::byte> base
-    ) const;
-
-    /**
-     * @brief 将批处理应用到数据目录
-     * @param data_directory 数据目录
-     * @param filesystem 文件系统
-     * @param sync 是否同步刷盘
-     * @return 结果
-     */
+    // 将批处理应用到数据目录
     [[nodiscard]]
     std::expected<void, WalError> apply(
         const std::filesystem::path & data_directory,
@@ -71,20 +41,13 @@ public:
         const FileWriteAppliedHook & applied_hook = {}
     ) const;
 
-    /**
-     * @brief 解析文件目标路径
-     * @param data_directory 数据目录
-     * @param target 文件目标
-     * @return 目标路径
-     */
+    // 解析文件目标路径
     [[nodiscard]]
-    static std::filesystem::path resolve_target(
-        const std::filesystem::path & data_directory,
-        const FileTarget & target
-    );
+    static std::expected<std::filesystem::path, WalError>
+    resolve_target(const std::filesystem::path & data_directory, const FileTarget & target);
 
 private:
-    std::vector<FileWrite> writes_;    // 写入列表
+    std::vector<FileWrite> writes_; // 写入列表
 };
 
 } // namespace litedb::core::wal

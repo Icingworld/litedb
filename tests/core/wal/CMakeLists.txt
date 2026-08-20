@@ -1,3 +1,7 @@
 add_executable(wal_tests wal_tests.cpp)
 target_link_libraries(wal_tests PRIVATE litedb_wal litedb_filesystem)
 add_test(NAME wal_tests COMMAND wal_tests)
+
+add_executable(wal_fault_injection_tests wal_fault_injection_tests.cpp)
+target_link_libraries(wal_fault_injection_tests PRIVATE litedb_transaction)
+add_test(NAME wal_fault_injection_tests COMMAND wal_fault_injection_tests)

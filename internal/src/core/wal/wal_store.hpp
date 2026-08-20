@@ -13,9 +13,9 @@
 namespace litedb::core::wal
 {
 
-/**
- * @brief WAL 持久化存储
- */
+// 一个 WAL 段文件的持久化存储。
+// WalStore 只负责单个已校验段的生命周期、追加、刷盘和扫描；段发现与轮换由
+// WalManager 负责。create() 与 open() 有意保持严格区分，避免恢复流程意外创建文件。
 class WalStore final
 {
 private:
@@ -28,113 +28,77 @@ private:
 
 public:
     WalStore(const WalStore &) = delete;
-
     WalStore & operator=(const WalStore &) = delete;
-
     WalStore(WalStore &&) noexcept = default;
-
     WalStore & operator=(WalStore &&) noexcept = default;
 
-public:
-    /**
-     * @brief 打开或创建 WAL 文件
-     * @param path 文件路径
-     * @param filesystem 文件系统
-     * @return WAL 存储
-     */
+    // 创建一个新的 WAL 段并持久化文件头。
     [[nodiscard]]
-    static std::expected<WalStore, WalError> open(
-        std::filesystem::path path,
-        filesystem::FileSystem & filesystem,
-        std::optional<WalFileHeader> create_header = std::nullopt
+    static std::expected<WalStore, WalError>
+    create(std::filesystem::path path, filesystem::FileSystem & filesystem, WalFileHeader header);
+
+    // 仅打开并校验已存在的 WAL 段。
+    [[nodiscard]]
+    static std::expected<WalStore, WalError>
+    open(std::filesystem::path path, filesystem::FileSystem & filesystem);
+
+    // 追加事务开始记录。
+    [[nodiscard]]
+    std::expected<transaction::Lsn, WalError> append_begin(
+        transaction::TransactionId transaction_id
     );
 
-    /**
-     * @brief 追加事务开始记录
-     * @param transaction_id 事务 ID
-     * @return 日志序列号
-     */
+    // 追加文件写入记录。
     [[nodiscard]]
-    std::expected<transaction::Lsn, WalError> append_begin(transaction::TransactionId transaction_id);
+    std::expected<transaction::Lsn, WalError>
+    append_write(transaction::TransactionId transaction_id, const FileWrite & write);
 
-    /**
-     * @brief 追加文件写入记录
-     * @param transaction_id 事务 ID
-     * @param write 文件写入
-     * @return 日志序列号
-     */
+    // 追加事务提交记录。
     [[nodiscard]]
-    std::expected<transaction::Lsn, WalError> append_write(
-        transaction::TransactionId transaction_id,
-        const FileWrite & write
+    std::expected<transaction::Lsn, WalError> append_commit(
+        transaction::TransactionId transaction_id
     );
 
-    /**
-     * @brief 追加事务提交记录
-     * @param transaction_id 事务 ID
-     * @return 日志序列号
-     */
-    [[nodiscard]]
-    std::expected<transaction::Lsn, WalError> append_commit(transaction::TransactionId transaction_id);
-
-    /**
-     * @brief 刷盘至指定 LSN
-     * @param lsn 日志序列号
-     * @return 结果
-     */
+    // 刷盘并确认指定 LSN 已提交到文件系统。
     [[nodiscard]]
     std::expected<void, WalError> flush_through(transaction::Lsn lsn);
 
+    // 刷盘文件数据及元数据。
     [[nodiscard]]
     std::expected<void, WalError> flush_all();
 
-    /**
-     * @brief 扫描 WAL 记录
-     * @param truncate_incomplete_tail 是否截断不完整尾部
-     * @return 扫描结果
-     */
+    // 扫描段内容。
+    // truncate_incomplete_tail 指定是否截断不完整尾部；RecoveryRequired 时必须为 false。
     [[nodiscard]]
-    std::expected<WalScanResult, WalError> scan(
-        bool truncate_incomplete_tail = true,
-        const WalDecodeLimits & limits = {}
-    );
+    std::expected<WalScanResult, WalError>
+    scan(bool truncate_incomplete_tail = true, const WalDecodeLimits & limits = {});
 
-    /**
-     * @brief 截断 WAL 尾部
-     * @param valid_size 有效大小
-     * @return 结果
-     */
+    // 将段截断到指定的有效长度并同步。
     [[nodiscard]]
     std::expected<void, WalError> truncate_tail(std::uint64_t valid_size);
 
-    /**
-     * @brief 获取 WAL 文件路径
-     * @return 文件路径
-     */
+    // 返回该段文件路径。
     [[nodiscard]]
     const std::filesystem::path & path() const noexcept;
 
-    /**
-     * @brief 获取已刷盘的最大 LSN
-     * @return 已刷盘 LSN
-     */
+    // 返回最近一次成功确认的 LSN。
     [[nodiscard]]
     std::optional<transaction::Lsn> flushed_lsn() const noexcept;
 
+    // 返回缓存的文件长度。
     [[nodiscard]]
     std::uint64_t size_bytes() const noexcept;
 
+    // 返回已校验的文件头。
     [[nodiscard]]
     const WalFileHeader & header() const noexcept;
 
+    // 返回段是否因无法确认回滚或持久性而需要恢复。
+    [[nodiscard]]
+    bool recovery_required() const noexcept;
+
 private:
-    /**
-     * @brief 追加 WAL 记录
-     * @param type 记录类型
-     * @param transaction_id 事务 ID
-     * @param payload 负载数据
-     * @return 日志序列号
-     */
+    // 追加一条记录，并在部分写入后尝试恢复旧尾部。
     [[nodiscard]]
     std::expected<transaction::Lsn, WalError> append(
         WalRecordType type,
@@ -142,12 +106,17 @@ private:
         std::span<const std::byte> payload
     );
 
+    // 生成 RecoveryRequired 错误。
+    [[nodiscard]]
+    WalError recovery_error(WalOperation operation, std::optional<transaction::Lsn> lsn = {}) const;
+
 private:
-    std::filesystem::path path_;                        // 文件路径
-    filesystem::FileHandle file_;                       // 文件句柄
-    WalFileHeader header_;                              // WAL 段文件头
-    std::optional<transaction::Lsn> flushed_lsn_;       // 已刷盘 LSN
-    std::uint64_t size_bytes_ {0};                      // 当前 WAL 大小
+    std::filesystem::path path_;
+    filesystem::FileHandle file_;
+    WalFileHeader header_;
+    std::optional<transaction::Lsn> flushed_lsn_;
+    std::uint64_t size_bytes_ {0};
+    bool recovery_required_ {false};
 };
 
 } // namespace litedb::core::wal

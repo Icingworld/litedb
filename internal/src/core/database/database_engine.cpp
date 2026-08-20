@@ -8,9 +8,8 @@
 #include <vector>
 
 #include "core/catalog/catalog_editor.hpp"
-#include "core/filesystem/platform_filesystem.hpp"
 #include "core/executor/executor.hpp"
-#include "core/physical_planner/plan/dispatcher/physical_plan_dispatcher.hpp"
+#include "core/filesystem/platform_filesystem.hpp"
 #include "core/physical_planner/plan/command/create_collection_plan.hpp"
 #include "core/physical_planner/plan/command/create_database_plan.hpp"
 #include "core/physical_planner/plan/command/create_index_plan.hpp"
@@ -25,6 +24,7 @@
 #include "core/physical_planner/plan/command/show_indexes_plan.hpp"
 #include "core/physical_planner/plan/command/show_vector_indexes_plan.hpp"
 #include "core/physical_planner/plan/command/use_plan.hpp"
+#include "core/physical_planner/plan/dispatcher/physical_plan_dispatcher.hpp"
 #include "core/physical_planner/plan/physical_plan.hpp"
 #include "core/storage/schema_loader.hpp"
 #include "core/wal/recovery_manager.hpp"
@@ -86,11 +86,6 @@ DatabaseError vector_error_to_database(vindex::VectorIndexError error)
     return wrap_database_error(DatabaseErrorCode::IndexError, std::move(error));
 }
 
-DatabaseError wal_error_to_database(wal::WalError error)
-{
-    return wrap_database_error(DatabaseErrorCode::WalError, std::move(error));
-}
-
 /**
  * @brief 鍒涘缓鍛戒护鎵ц缁撴灉
  * @param affected_rows 鍙楀奖鍝嶇殑琛屾暟
@@ -137,14 +132,11 @@ bool writes_wal(physical_planner::plan::PhysicalPlanKind kind) noexcept
 class DatabaseEngine::PlanExecutionDispatcher final
     : private physical_planner::plan::ConstPhysicalPlanDispatcher<
           DatabaseEngine::PlanExecutionDispatcher,
-          std::expected<executor::ExecutionResult, executor::ExecutionError>
-      >
+          std::expected<executor::ExecutionResult, executor::ExecutionError>>
 {
     using Result = std::expected<executor::ExecutionResult, executor::ExecutionError>;
-    using Dispatcher = physical_planner::plan::ConstPhysicalPlanDispatcher<
-        PlanExecutionDispatcher,
-        Result
-    >;
+    using Dispatcher =
+        physical_planner::plan::ConstPhysicalPlanDispatcher<PlanExecutionDispatcher, Result>;
 
     friend Dispatcher;
 
@@ -152,8 +144,7 @@ public:
     PlanExecutionDispatcher(DatabaseEngine & database, executor::Executor & executor) noexcept
         : database_(database)
         , executor_(executor)
-    {
-    }
+    {}
 
     [[nodiscard]]
     Result dispatch(const physical_planner::plan::PhysicalPlan & plan)
@@ -182,7 +173,9 @@ private:
         return database_.execute_create_index(plan);
     }
 
-    Result visit_create_vector_index_plan(const physical_planner::plan::CreateVectorIndexPlan & plan)
+    Result visit_create_vector_index_plan(
+        const physical_planner::plan::CreateVectorIndexPlan & plan
+    )
     {
         return database_.execute_create_vector_index(plan);
     }
@@ -222,12 +215,16 @@ private:
         return executor_.execute(plan);
     }
 
-    Result visit_show_vector_indexes_plan(const physical_planner::plan::ShowVectorIndexesPlan & plan)
+    Result visit_show_vector_indexes_plan(
+        const physical_planner::plan::ShowVectorIndexesPlan & plan
+    )
     {
         return executor_.execute(plan);
     }
 
-    Result visit_describe_collection_plan(const physical_planner::plan::DescribeCollectionPlan & plan)
+    Result visit_describe_collection_plan(
+        const physical_planner::plan::DescribeCollectionPlan & plan
+    )
     {
         return executor_.execute(plan);
     }
@@ -268,10 +265,11 @@ DatabaseEngine::DatabaseEngine(DatabaseConfig config)
     , transaction_options_(std::move(config.transaction_options))
     , automatic_checkpoint_(config.automatic_checkpoint)
     , wal_decode_limits_(config.wal_decode_limits)
-{
-}
+{}
 
-std::expected<std::unique_ptr<DatabaseEngine>, DatabaseError> DatabaseEngine::open(DatabaseConfig config)
+std::expected<std::unique_ptr<DatabaseEngine>, DatabaseError> DatabaseEngine::open(
+    DatabaseConfig config
+)
 {
     auto engine = std::unique_ptr<DatabaseEngine> {new DatabaseEngine(std::move(config))};
     auto initialized = engine->initialize();
@@ -296,22 +294,25 @@ const vindex::VectorIndexEngine & DatabaseEngine::vector_index_engine() const no
     return vector_index_engine_;
 }
 
-executor::ExecutionError from_transaction_error(
-    transaction::TransactionError error
-)
+executor::ExecutionError transaction_failure(transaction::TransactionError value)
 {
-    const auto * context = error.context<transaction::TransactionErrorContext>();
+    if (value.category() == error::ErrorCategory::Wal ||
+        value.category() == error::ErrorCategory::FileSystem ||
+        value.category() == error::ErrorCategory::Io) {
+        return std::move(value);
+    }
+    const auto * context = value.context<transaction::TransactionErrorContext>();
     auto message =
         "Transaction " +
-        std::to_string(context != nullptr
-                           ? context->transaction_id
-                           : transaction::InvalidTransactionId) +
-        ": " + error.message();
+        std::to_string(
+            context != nullptr ? context->transaction_id : transaction::InvalidTransactionId
+        ) +
+        ": " + value.message();
     return executor::ExecutionError {
         executor::ExecutionErrorCode::TransactionError,
         message,
 
-        std::move(error),
+        std::move(value),
     };
 }
 
@@ -319,21 +320,28 @@ DatabaseObservability DatabaseEngine::observability() const noexcept
 {
     std::scoped_lock lock {mutex_};
     return DatabaseObservability {
-        .transaction = transaction_manager_ != nullptr
-                           ? transaction_manager_->metrics()
-                           : transaction::TransactionMetrics {},
+        .transaction = transaction_manager_ != nullptr ? transaction_manager_->metrics()
+                                                       : transaction::TransactionMetrics {},
         .recovered_committed_transactions = recovered_committed_transactions_,
         .replayed_writes = replayed_writes_,
-        .automatic_checkpoint_attempts = automatic_checkpoint_attempts_.load(std::memory_order_relaxed),
-        .completed_automatic_checkpoints = completed_automatic_checkpoints_.load(std::memory_order_relaxed),
-        .failed_automatic_checkpoints = failed_automatic_checkpoints_.load(std::memory_order_relaxed),
+        .automatic_checkpoint_attempts =
+            automatic_checkpoint_attempts_.load(std::memory_order_relaxed),
+        .completed_automatic_checkpoints =
+            completed_automatic_checkpoints_.load(std::memory_order_relaxed),
+        .failed_automatic_checkpoints =
+            failed_automatic_checkpoints_.load(std::memory_order_relaxed),
     };
 }
 
 void DatabaseEngine::maybe_run_automatic_checkpoint()
 {
-    if (transaction_manager_ == nullptr || automatic_checkpoint_.wal_size_threshold_bytes == 0) return;
-    if (transaction_manager_->metrics().wal_size_bytes < automatic_checkpoint_.wal_size_threshold_bytes) return;
+    if (transaction_manager_ == nullptr || automatic_checkpoint_.wal_size_threshold_bytes == 0) {
+        return;
+    }
+    if (transaction_manager_->metrics().wal_size_bytes <
+        automatic_checkpoint_.wal_size_threshold_bytes) {
+        return;
+    }
 
     automatic_checkpoint_attempts_.fetch_add(1, std::memory_order_relaxed);
     auto checkpointed = transaction_manager_->checkpoint();
@@ -351,18 +359,16 @@ std::expected<void, DatabaseError> DatabaseEngine::checkpoint()
 {
     std::scoped_lock lock {mutex_};
     if (transaction_manager_ == nullptr) {
-        return std::unexpected(DatabaseError {
-            DatabaseErrorCode::TransactionError,
-            "Database transaction manager is not initialized",
-        });
+        return std::unexpected(
+            DatabaseError {
+                DatabaseErrorCode::TransactionError,
+                "Database transaction manager is not initialized",
+            }
+        );
     }
     auto checkpointed = transaction_manager_->checkpoint();
-    if (!checkpointed) {
-        const auto code = checkpointed.error().is(transaction::TransactionErrorCode::WalError)
-            ? DatabaseErrorCode::WalError
-            : DatabaseErrorCode::TransactionError;
-        auto message = checkpointed.error().message();
-        return std::unexpected(DatabaseError {code, message, std::move(checkpointed.error())});
+    if (!checkpointed) [[unlikely]] {
+        return std::unexpected(std::move(checkpointed.error()));
     }
     return {};
 }
@@ -372,10 +378,12 @@ std::expected<void, DatabaseError> DatabaseEngine::cleanup_transaction_staging()
     std::error_code error;
     std::filesystem::remove_all(data_directory_ / ".transactions", error);
     if (error) {
-        return std::unexpected(DatabaseError {
-            DatabaseErrorCode::TransactionError,
-            "Failed to clean stale transaction staging: " + error.message(),
-        });
+        return std::unexpected(
+            DatabaseError {
+                DatabaseErrorCode::TransactionError,
+                "Failed to clean stale transaction staging: " + error.message(),
+            }
+        );
     }
     return {};
 }
@@ -392,13 +400,10 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         return std::unexpected(manifest_error_to_database(std::move(initialized.error())));
     }
 
-    auto opened_wal = wal::WalManager::open(
-        data_directory_ / "wal",
-        filesystem_,
-        wal_decode_limits_
-    );
-    if (!opened_wal) {
-        return std::unexpected(wal_error_to_database(std::move(opened_wal.error())));
+    auto opened_wal =
+        wal::WalManager::open(data_directory_ / "wal", filesystem_, wal_decode_limits_);
+    if (!opened_wal) [[unlikely]] {
+        return std::unexpected(std::move(opened_wal.error()));
     }
     wal_manager_ = std::move(*opened_wal);
 
@@ -408,8 +413,8 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
         *wal_manager_,
         wal_decode_limits_
     );
-    if (!recovered) {
-        return std::unexpected(wal_error_to_database(std::move(recovered.error())));
+    if (!recovered) [[unlikely]] {
+        return std::unexpected(std::move(recovered.error()));
     }
     recovered_committed_transactions_ = recovered->committed_transactions;
     replayed_writes_ = recovered->replayed_writes;
@@ -431,12 +436,21 @@ std::expected<void, DatabaseError> DatabaseEngine::initialize()
 
     auto vector_indexes_restored = vector_index_engine_.restore_all(catalog(), storage_);
     if (!vector_indexes_restored.has_value()) {
-        return std::unexpected(vector_error_to_database(std::move(vector_indexes_restored.error())));
+        return std::unexpected(
+            vector_error_to_database(std::move(vector_indexes_restored.error()))
+        );
     }
 
     transaction_manager_ = std::make_unique<transaction::TransactionManager>(
-        data_directory_, filesystem_, catalog_, storage_, index_engine_, vector_index_engine_, *wal_manager_,
-        recovered->maximum_transaction_id, std::move(transaction_options_)
+        data_directory_,
+        filesystem_,
+        catalog_,
+        storage_,
+        index_engine_,
+        vector_index_engine_,
+        *wal_manager_,
+        recovered->maximum_transaction_id,
+        std::move(transaction_options_)
     );
 
     return {};
@@ -447,16 +461,20 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
 )
 {
     if (transaction_manager_ == nullptr) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::TransactionError,
-            "Database transaction manager is not initialized",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::TransactionError,
+                "Database transaction manager is not initialized",
+            }
+        );
     }
     if (transaction_manager_->recovery_required()) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::TransactionError,
-            "Database requires WAL recovery before accepting more requests",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::TransactionError,
+                "Database requires WAL recovery before accepting more requests",
+            }
+        );
     }
 
     executor::Executor executor {
@@ -476,26 +494,30 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return executed;
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::commit_catalog_transaction(
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::commit_catalog_transaction(
     catalog::CatalogSnapshot snapshot,
     std::size_t affected_rows
 )
 {
     auto transaction = transaction_manager_->begin_implicit();
-    if (!transaction) return std::unexpected(from_transaction_error(std::move(transaction.error())));
+    if (!transaction) [[unlikely]] {
+        return std::unexpected(transaction_failure(std::move(transaction.error())));
+    }
     auto staged = transaction_manager_->stage_catalog(*transaction, std::move(snapshot));
     if (!staged) {
-        (void) transaction_manager_->abort(*transaction);
-        return std::unexpected(from_transaction_error(std::move(staged.error())));
+        (void)transaction_manager_->abort(*transaction);
+        return std::unexpected(transaction_failure(std::move(staged.error())));
     }
     auto committed = transaction_manager_->commit(*transaction);
-    if (!committed) return std::unexpected(from_transaction_error(std::move(committed.error())));
+    if (!committed) [[unlikely]] {
+        return std::unexpected(transaction_failure(std::move(committed.error())));
+    }
     return command_result(affected_rows);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_database(
-    const physical_planner::plan::CreateDatabasePlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_create_database(const physical_planner::plan::CreateDatabasePlan & plan)
 {
     if (!plan.database_name().has_value()) {
         return command_result(0);
@@ -508,19 +530,22 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto created = staged.create_database(catalog::CreateDatabaseRequest {
-        .database_name = *plan.database_name(),
-    });
+    auto created = staged.create_database(
+        catalog::CreateDatabaseRequest {
+            .database_name = *plan.database_name(),
+        }
+    );
     if (!created.has_value()) {
         return std::unexpected(from_catalog_error(std::move(created.error())));
     }
-    if (existed) return command_result(0);
+    if (existed) {
+        return command_result(0);
+    }
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_collection(
-    const physical_planner::plan::CreateCollectionPlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_create_collection(const physical_planner::plan::CreateCollectionPlan & plan)
 {
     if (!plan.collection_name().has_value()) {
         return command_result(0);
@@ -533,12 +558,14 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto created = staged.create_collection(catalog::CreateCollectionRequest {
-        .database_id = plan.database_id(),
-        .collection_name = *plan.collection_name(),
-        .columns = plan.columns(),
-        .comment = plan.comment(),
-    });
+    auto created = staged.create_collection(
+        catalog::CreateCollectionRequest {
+            .database_id = plan.database_id(),
+            .collection_name = *plan.collection_name(),
+            .columns = plan.columns(),
+            .comment = plan.comment(),
+        }
+    );
     if (!created.has_value()) {
         return std::unexpected(from_catalog_error(std::move(created.error())));
     }
@@ -550,19 +577,20 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_index(
-    const physical_planner::plan::CreateIndexPlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_create_index(const physical_planner::plan::CreateIndexPlan & plan)
 {
     if (!plan.index_name().has_value()) {
         return command_result(0);
     }
     const auto column = catalog().find_column(plan.column_id());
     if (!column) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "CREATE INDEX column was not found",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::InvalidPlan,
+                "CREATE INDEX column was not found",
+            }
+        );
     }
     const auto collection_id = column->collection_id();
     const auto existing = catalog().find_index(collection_id, *plan.index_name());
@@ -573,13 +601,15 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto created = staged.create_index(catalog::CreateIndexRequest {
-        .collection_id = collection_id,
-        .column_id = plan.column_id(),
-        .index_name = *plan.index_name(),
-        .kind = plan.index_kind(),
-        .unique = plan.unique(),
-    });
+    auto created = staged.create_index(
+        catalog::CreateIndexRequest {
+            .collection_id = collection_id,
+            .column_id = plan.column_id(),
+            .index_name = *plan.index_name(),
+            .kind = plan.index_kind(),
+            .unique = plan.unique(),
+        }
+    );
     if (!created.has_value()) {
         return std::unexpected(from_catalog_error(std::move(created.error())));
     }
@@ -591,7 +621,8 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_create_vector_index(
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_create_vector_index(
     const physical_planner::plan::CreateVectorIndexPlan & plan
 )
 {
@@ -600,10 +631,12 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     const auto column = catalog().find_column(plan.column_id());
     if (!column) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "CREATE VECTOR INDEX column was not found",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::InvalidPlan,
+                "CREATE VECTOR INDEX column was not found",
+            }
+        );
     }
     const auto collection_id = column->collection_id();
     const auto existing = catalog().find_vector_index(collection_id, *plan.index_name());
@@ -614,19 +647,21 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto created = staged.create_vector_index(catalog::CreateVectorIndexRequest {
-        .collection_id = collection_id,
-        .column_id = plan.column_id(),
-        .vector_index_name = *plan.index_name(),
-        .kind = plan.index_kind(),
-        .metric = plan.metric(),
-        .hnsw_options = {
-            .max_neighbors = plan.max_neighbors(),
-            .ef_construction = plan.ef_construction(),
-            .ef_search_default = plan.ef_search_default(),
-            .random_seed = plan.random_seed(),
-        },
-    });
+    auto created = staged.create_vector_index(
+        catalog::CreateVectorIndexRequest {
+            .collection_id = collection_id,
+            .column_id = plan.column_id(),
+            .vector_index_name = *plan.index_name(),
+            .kind = plan.index_kind(),
+            .metric = plan.metric(),
+            .hnsw_options = {
+                .max_neighbors = plan.max_neighbors(),
+                .ef_construction = plan.ef_construction(),
+                .ef_search_default = plan.ef_search_default(),
+                .random_seed = plan.random_seed(),
+            },
+        }
+    );
     if (!created.has_value()) {
         return std::unexpected(from_catalog_error(std::move(created.error())));
     }
@@ -638,19 +673,20 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_database(
-    const physical_planner::plan::DropDatabasePlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_drop_database(const physical_planner::plan::DropDatabasePlan & plan)
 {
     if (!plan.database_id().has_value()) {
         return command_result(0);
     }
     const auto database = catalog().find_database(*plan.database_id());
     if (!database) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "DROP DATABASE target was not found",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::InvalidPlan,
+                "DROP DATABASE target was not found",
+            }
+        );
     }
 
     auto editor = catalog::CatalogEditor::from(catalog());
@@ -659,9 +695,11 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto dropped = staged.drop_database(catalog::DropDatabaseRequest {
-        .database_id = database->id(),
-    });
+    auto dropped = staged.drop_database(
+        catalog::DropDatabaseRequest {
+            .database_id = database->id(),
+        }
+    );
     if (!dropped.has_value()) {
         return std::unexpected(from_catalog_error(std::move(dropped.error())));
     }
@@ -669,19 +707,20 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_collection(
-    const physical_planner::plan::DropCollectionPlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_drop_collection(const physical_planner::plan::DropCollectionPlan & plan)
 {
     if (!plan.collection_id().has_value()) {
         return command_result(0);
     }
     const auto collection = catalog().find_collection(*plan.collection_id());
     if (!collection) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "DROP COLLECTION target was not found",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::InvalidPlan,
+                "DROP COLLECTION target was not found",
+            }
+        );
     }
 
     auto editor = catalog::CatalogEditor::from(catalog());
@@ -690,9 +729,11 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto dropped = staged.drop_collection(catalog::DropCollectionRequest {
-        .collection_id = collection->id(),
-    });
+    auto dropped = staged.drop_collection(
+        catalog::DropCollectionRequest {
+            .collection_id = collection->id(),
+        }
+    );
     if (!dropped.has_value()) {
         return std::unexpected(from_catalog_error(std::move(dropped.error())));
     }
@@ -700,19 +741,20 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_index(
-    const physical_planner::plan::DropIndexPlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_drop_index(const physical_planner::plan::DropIndexPlan & plan)
 {
     if (!plan.index_id().has_value()) {
         return command_result(0);
     }
     const auto existing = catalog().find_index(*plan.index_id());
     if (!existing) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "DROP INDEX target was not found",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::InvalidPlan,
+                "DROP INDEX target was not found",
+            }
+        );
     }
     auto editor = catalog::CatalogEditor::from(catalog());
     if (!editor) {
@@ -720,9 +762,11 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto dropped = staged.drop_index(catalog::DropIndexRequest {
-        .index_id = existing->id(),
-    });
+    auto dropped = staged.drop_index(
+        catalog::DropIndexRequest {
+            .index_id = existing->id(),
+        }
+    );
     if (!dropped.has_value()) {
         return std::unexpected(from_catalog_error(std::move(dropped.error())));
     }
@@ -730,19 +774,20 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     return commit_catalog_transaction(staged.snapshot(), 1);
 }
 
-std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngine::execute_drop_vector_index(
-    const physical_planner::plan::DropVectorIndexPlan & plan
-)
+std::expected<executor::ExecutionResult, executor::ExecutionError>
+DatabaseEngine::execute_drop_vector_index(const physical_planner::plan::DropVectorIndexPlan & plan)
 {
     if (!plan.index_id().has_value()) {
         return command_result(0);
     }
     const auto existing = catalog().find_vector_index(*plan.index_id());
     if (!existing) {
-        return std::unexpected(executor::ExecutionError {
-            executor::ExecutionErrorCode::InvalidPlan,
-            "DROP VECTOR INDEX target was not found",
-        });
+        return std::unexpected(
+            executor::ExecutionError {
+                executor::ExecutionErrorCode::InvalidPlan,
+                "DROP VECTOR INDEX target was not found",
+            }
+        );
     }
 
     auto editor = catalog::CatalogEditor::from(catalog());
@@ -751,9 +796,11 @@ std::expected<executor::ExecutionResult, executor::ExecutionError> DatabaseEngin
     }
     auto staged = std::move(*editor);
 
-    auto dropped = staged.drop_vector_index(catalog::DropVectorIndexRequest {
-        .vector_index_id = existing->id(),
-    });
+    auto dropped = staged.drop_vector_index(
+        catalog::DropVectorIndexRequest {
+            .vector_index_id = existing->id(),
+        }
+    );
     if (!dropped.has_value()) {
         return std::unexpected(from_catalog_error(std::move(dropped.error())));
     }
@@ -771,14 +818,16 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
 
             auto collection_schema = storage::load_collection_schema(catalog(), collection.id());
             if (!collection_schema.has_value()) {
-                return std::unexpected(storage::make_storage_error(
-                    storage::StorageErrorCode::InvalidFormat,
-                    std::move(collection_schema.error().message()),
-                    {
-                        .operation = storage::StorageOperation::Load,
-                        .collection_id = collection.id(),
-                    }
-                ));
+                return std::unexpected(
+                    storage::make_storage_error(
+                        storage::StorageErrorCode::InvalidFormat,
+                        std::move(collection_schema.error().message()),
+                        {
+                            .operation = storage::StorageOperation::Load,
+                            .collection_id = collection.id(),
+                        }
+                    )
+                );
             }
 
             auto opened = storage_.open_collection(std::move(*collection_schema));
@@ -790,9 +839,7 @@ std::expected<void, storage::StorageError> DatabaseEngine::restore_storage_from_
     return {};
 }
 
-executor::ExecutionError DatabaseEngine::from_catalog_error(
-    catalog::CatalogError error
-)
+executor::ExecutionError DatabaseEngine::from_catalog_error(catalog::CatalogError error)
 {
     auto message = error.message();
     return executor::ExecutionError {
@@ -803,9 +850,7 @@ executor::ExecutionError DatabaseEngine::from_catalog_error(
     };
 }
 
-executor::ExecutionError DatabaseEngine::from_schema_error(
-    storage::SchemaLoadError error
-)
+executor::ExecutionError DatabaseEngine::from_schema_error(storage::SchemaLoadError error)
 {
     auto message = error.message();
     return executor::ExecutionError {
@@ -816,9 +861,7 @@ executor::ExecutionError DatabaseEngine::from_schema_error(
     };
 }
 
-executor::ExecutionError DatabaseEngine::from_storage_error(
-    storage::StorageError error
-)
+executor::ExecutionError DatabaseEngine::from_storage_error(storage::StorageError error)
 {
     auto message = error.message();
     return executor::ExecutionError {
@@ -829,9 +872,7 @@ executor::ExecutionError DatabaseEngine::from_storage_error(
     };
 }
 
-executor::ExecutionError DatabaseEngine::from_index_error(
-    index::IndexError error
-)
+executor::ExecutionError DatabaseEngine::from_index_error(index::IndexError error)
 {
     auto message = error.message();
     return executor::ExecutionError {
@@ -842,9 +883,7 @@ executor::ExecutionError DatabaseEngine::from_index_error(
     };
 }
 
-executor::ExecutionError DatabaseEngine::from_vector_index_error(
-    vindex::VectorIndexError error
-)
+executor::ExecutionError DatabaseEngine::from_vector_index_error(vindex::VectorIndexError error)
 {
     auto message = error.message();
     return executor::ExecutionError {

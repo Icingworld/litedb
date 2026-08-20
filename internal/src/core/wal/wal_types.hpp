@@ -16,9 +16,7 @@ struct WalFileHeader
     transaction::TransactionId checkpoint_transaction_id {transaction::InvalidTransactionId};
 };
 
-/**
- * @brief 文件目标类型
- */
+// 文件目标类型
 enum class FileKind : std::uint8_t
 {
     CollectionStore = 1,    // 集合存储
@@ -35,11 +33,8 @@ enum class FileWriteMode : std::uint8_t
     Truncate = 3,           // 将文件调整为 offset 指定的长度
 };
 
-/**
- * @brief WAL 扫描与恢复资源预算
- *
- * 所有限制都可以由嵌入方显式放宽，但默认值会阻止损坏日志触发无界分配。
- */
+// WAL 扫描与恢复资源预算。
+// 所有限制都可以由嵌入方显式放宽，但默认值会阻止损坏日志触发无界分配。
 struct WalDecodeLimits
 {
     std::uint64_t max_record_size_bytes {512ULL * 1024ULL * 1024ULL};
@@ -47,9 +42,7 @@ struct WalDecodeLimits
     std::size_t max_record_count {2'000'000};
 };
 
-/**
- * @brief 文件写入目标
- */
+// 文件写入目标
 struct FileTarget
 {
     FileKind kind;           // 文件类型
@@ -58,9 +51,7 @@ struct FileTarget
     friend bool operator==(const FileTarget &, const FileTarget &) = default;
 };
 
-/**
- * @brief 文件写入记录
- */
+// 文件写入记录
 struct FileWrite
 {
     FileTarget target;                   // 文件目标
@@ -69,9 +60,7 @@ struct FileWrite
     FileWriteMode mode {FileWriteMode::Overwrite}; // 文件操作模式
 };
 
-/**
- * @brief WAL 记录类型
- */
+// WAL 记录类型
 enum class WalRecordType : std::uint8_t
 {
     Begin = 1,        // 开始
@@ -79,9 +68,7 @@ enum class WalRecordType : std::uint8_t
     Commit = 3,       // 提交
 };
 
-/**
- * @brief WAL 记录
- */
+// WAL 记录
 struct WalRecord
 {
     WalRecordType type;                         // 记录类型
@@ -90,9 +77,7 @@ struct WalRecord
     std::vector<std::byte> payload;             // 负载数据
 };
 
-/**
- * @brief WAL 扫描结果
- */
+// WAL 扫描结果
 struct WalScanResult
 {
     std::vector<WalRecord> records;             // 记录

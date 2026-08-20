@@ -14,13 +14,14 @@ namespace litedb::core::wal
 
 enum class WalErrorCode : std::uint8_t
 {
-    FileSystemError = 0,
     InvalidFormat = 1,
     UnsupportedVersion = 2,
     CorruptedRecord = 3,
     InvalidRecord = 4,
     MissingTarget = 5,
     ResourceLimitExceeded = 6,
+    RecoveryRequired = 7,
+    ApplyInterrupted = 8,
 };
 
 enum class WalOperation : std::uint8_t
@@ -36,6 +37,7 @@ enum class WalOperation : std::uint8_t
     Rotate,
     Apply,
     Recover,
+    Create,
 };
 
 struct WalErrorContext
@@ -45,7 +47,6 @@ struct WalErrorContext
     transaction::TransactionId transaction_id {transaction::InvalidTransactionId};
     std::optional<transaction::Lsn> lsn;
     std::optional<std::uint64_t> generation;
-    std::optional<std::uint16_t> source_code;
 };
 
 using WalError = error::Error;
@@ -66,12 +67,9 @@ struct ErrorTraits<wal::WalErrorCode>
 namespace litedb::core::wal
 {
 
+// 创建携带 WAL 操作上下文的错误对象。
 [[nodiscard]]
-inline WalError make_error(
-    WalErrorCode code,
-    std::string message,
-    WalErrorContext context = {}
-)
+inline WalError make_error(WalErrorCode code, std::string message, WalErrorContext context = {})
 {
     return WalError {code, message, std::move(context)};
 }

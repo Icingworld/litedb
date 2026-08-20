@@ -11,10 +11,10 @@
 #include <vector>
 
 #include "core/binder/bound/expression/bound_column_ref_expression.hpp"
+#include "core/catalog/catalog_viewer.hpp"
 #include "core/evaluator/expression_evaluator.hpp"
 #include "core/index/index_engine.hpp"
 #include "core/index/scalar_index.hpp"
-#include "core/catalog/catalog_viewer.hpp"
 #include "core/physical_planner/operator/physical_filter_operator.hpp"
 #include "core/physical_planner/operator/physical_index_scan_operator.hpp"
 #include "core/physical_planner/operator/physical_limit_operator.hpp"
@@ -120,16 +120,21 @@ ExecutionError from_vector_index_error(vindex::VectorIndexError error)
 }
 
 [[nodiscard]]
-ExecutionError from_transaction_error(transaction::TransactionError error)
+ExecutionError transaction_failure(transaction::TransactionError value)
 {
-    const auto * context = error.context<transaction::TransactionErrorContext>();
+    if (value.category() == error::ErrorCategory::Wal ||
+        value.category() == error::ErrorCategory::FileSystem ||
+        value.category() == error::ErrorCategory::Io) {
+        return std::move(value);
+    }
+    const auto * context = value.context<transaction::TransactionErrorContext>();
     auto message =
         "Transaction " +
         std::to_string(
             context != nullptr ? context->transaction_id : transaction::InvalidTransactionId
         ) +
-        ": " + error.message();
-    return make_error(ExecutionErrorCode::TransactionError, std::move(message), std::move(error));
+        ": " + value.message();
+    return make_error(ExecutionErrorCode::TransactionError, std::move(message), std::move(value));
 }
 
 [[nodiscard]]
@@ -299,14 +304,17 @@ std::expected<PipelineResult, ExecutionError> execute_scan(
     append_scan_columns(result, *collection_schema);
 
     auto cursor = storage.scan(scan.collection_id());
-    if (!cursor)
+    if (!cursor) [[unlikely]] {
         return std::unexpected(from_storage_error(std::move(cursor.error())));
+    }
     while (true) {
         auto next = cursor->next();
-        if (!next)
+        if (!next) [[unlikely]] {
             return std::unexpected(from_storage_error(std::move(next.error())));
-        if (!*next)
+        }
+        if (!*next) {
             break;
+        }
         append_pipeline_row(result, std::move(**next));
     }
 
@@ -943,7 +951,7 @@ run_mutation_transaction(transaction::TransactionManager & transaction_manager, 
 {
     auto transaction = transaction_manager.begin_implicit();
     if (!transaction) {
-        return std::unexpected(from_transaction_error(std::move(transaction.error())));
+        return std::unexpected(transaction_failure(std::move(transaction.error())));
     }
 
     auto affected_rows = body(*transaction);
@@ -964,7 +972,7 @@ run_mutation_transaction(transaction::TransactionManager & transaction_manager, 
 
     auto committed = transaction_manager.commit(*transaction);
     if (!committed.has_value()) {
-        return std::unexpected(from_transaction_error(std::move(committed.error())));
+        return std::unexpected(transaction_failure(std::move(committed.error())));
     }
     return *affected_rows;
 }
@@ -1007,7 +1015,7 @@ std::expected<ExecutionResult, ExecutionError> execute_insert(
                 std::move(record_data)
             );
             if (!staged.has_value()) {
-                return std::unexpected(from_transaction_error(std::move(staged.error())));
+                return std::unexpected(transaction_failure(std::move(staged.error())));
             }
             return std::size_t {1};
         }
@@ -1057,7 +1065,7 @@ std::expected<ExecutionResult, ExecutionError> execute_delete(
                     row.source_record.data
                 );
                 if (!staged.has_value()) {
-                    return std::unexpected(from_transaction_error(std::move(staged.error())));
+                    return std::unexpected(transaction_failure(std::move(staged.error())));
                 }
             }
             return rows->rows.size();
@@ -1165,7 +1173,7 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
                     std::move(record_data)
                 );
                 if (!staged.has_value()) {
-                    return std::unexpected(from_transaction_error(std::move(staged.error())));
+                    return std::unexpected(transaction_failure(std::move(staged.error())));
                 }
             }
             return rows->rows.size();
@@ -1178,13 +1186,17 @@ std::expected<ExecutionResult, ExecutionError> execute_update(
 }
 
 [[nodiscard]]
-std::expected<ExecutionResult, ExecutionError> execute_show_databases(catalog::CatalogViewer & catalog)
+std::expected<ExecutionResult, ExecutionError> execute_show_databases(
+    catalog::CatalogViewer & catalog
+)
 {
     std::vector<ExecutionRow> rows;
     for (const auto & database_reference : catalog.list_databases()) {
-        rows.push_back(ExecutionRow {
-            .values = {common::Value {database_reference.get().name()}},
-        });
+        rows.push_back(
+            ExecutionRow {
+                .values = {common::Value {database_reference.get().name()}},
+            }
+        );
     }
 
     return rowset_result(
@@ -1199,9 +1211,11 @@ execute_show_collections(const ShowCollectionsPlan & plan, catalog::CatalogViewe
 {
     std::vector<ExecutionRow> rows;
     for (const auto & collection_reference : catalog.list_collections(plan.database_id())) {
-        rows.push_back(ExecutionRow {
-            .values = {common::Value {collection_reference.get().name()}},
-        });
+        rows.push_back(
+            ExecutionRow {
+                .values = {common::Value {collection_reference.get().name()}},
+            }
+        );
     }
 
     return rowset_result(
